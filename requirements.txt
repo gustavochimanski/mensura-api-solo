@@ -1,0 +1,18 @@
+fastapi==0.111.0
+uvicorn[standard]==0.29.0
+SQLAlchemy==2.0.29
+psycopg2-binary==2.9.9
+pydantic==2.7.1
+pandas==2.2.2
+scikit-learn==1.5.0
+requests==2.32.3
+python-dateutil==2.9.0
+asyncpg==0.27.0
+gunicorn[uvicorn]==21.2.0
+minio==7.2.5
+pytest==7.4.2
+
+# Para segurança e JWT:
+bcrypt==4.0.1
+passlib[bcrypt]==1.7.4
+python-jose[cryptography]==3.3.0
