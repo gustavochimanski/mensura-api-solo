@@ -1,10 +1,12 @@
 # app/api/mensura/controllers/categoriasDeliveryController.py
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, Form, File, UploadFile, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import Optional, List
 
 from app.database.db_connection import get_db
-from app.api.mensura.repositories.categorias.categoriasDeliveryRepository import CategoriaDeliveryRepository
+from app.api.mensura.repositories.categorias.categoriasDeliveryRepository import (
+    CategoriaDeliveryRepository
+)
 from app.api.mensura.schemas.delivery.categorias.categoria_schema import (
     CategoriaDeliveryIn,
     CategoriaDeliveryOut
@@ -14,80 +16,83 @@ from app.utils.minio_client import upload_file_to_minio
 
 router = APIRouter(prefix="/categorias/delivery", tags=["Delivery - Categorias"])
 
-@router.get("", response_model=List[CategoriaDeliveryOut])
-def listar_categorias(db: Session = Depends(get_db)):
-    logger.info("Listando categorias de delivery...")
-    repositorio = CategoriaDeliveryRepository(db)
-    categorias = repositorio.listar()
-    logger.info(f"{len(categorias)} categorias encontradas")
 
+@router.get("", response_model=List[CategoriaDeliveryOut])
+def list_categorias(db: Session = Depends(get_db)):
+    repos = CategoriaDeliveryRepository(db)
+    logger.info("Listando todas as categorias de delivery")
+    cats = repos.list_all()
     return [
         CategoriaDeliveryOut(
-            id=cat.id,
-            label=cat.descricao,
-            imagem=cat.imagem,
-            slug=cat.slug,
-            slug_pai=cat.slug_pai,
-            href=cat.href,
-            posicao=cat.posicao   # ⬅️ mapeando
+            id=c.id,
+            label=c.descricao,
+            imagem=c.imagem,
+            slug=c.slug,
+            slug_pai=c.slug_pai,
+            href=c.href,
+            posicao=c.posicao,
         )
-        for cat in categorias
+        for c in cats
     ]
+
+
+@router.get("/{cat_id}", response_model=CategoriaDeliveryOut)
+def get_categoria(cat_id: int, db: Session = Depends(get_db)):
+    repos = CategoriaDeliveryRepository(db)
+    logger.info(f"Buscando categoria ID={cat_id}")
+    c = repos.get_by_id(cat_id)
+    return CategoriaDeliveryOut(
+        id=c.id,
+        label=c.descricao,
+        imagem=c.imagem,
+        slug=c.slug,
+        slug_pai=c.slug_pai,
+        href=c.href,
+        posicao=c.posicao,
+    )
+
 
 @router.post("", response_model=CategoriaDeliveryOut, status_code=status.HTTP_201_CREATED)
 async def criar_categoria(
     descricao: str = Form(...),
     slug: str = Form(...),
     slug_pai: Optional[str] = Form(None),
-    posicao: Optional[int] = Form(None),             # ⬅️ recebendo do formulário
+    posicao: Optional[int] = Form(None),
     imagem: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
 ):
-    logger.info(f"Criando categoria: descricao={descricao}, slug={slug}, slug_pai={slug_pai}, posicao={posicao}")
+    repos = CategoriaDeliveryRepository(db)
+    logger.info(f"Criando categoria: {descricao}")
     imagem_url = None
 
     if imagem:
         permitidos = {"image/jpeg", "image/png", "image/webp"}
         if imagem.content_type not in permitidos:
-            logger.warning(f"Formato inválido: {imagem.content_type}")
             raise HTTPException(400, "Formato de imagem inválido")
         try:
-            imagem_url = upload_file_to_minio(file=imagem, slug=slug, bucket="categorias")
+            imagem_url = upload_file_to_minio(imagem, slug, bucket="categorias")
         except RuntimeError as e:
-            logger.error(f"Falha no upload: {e}")
+            logger.error(f"Upload falhou: {e}")
             raise HTTPException(500, "Erro ao enviar imagem")
 
-    repositorio = CategoriaDeliveryRepository(db)
-    try:
-        cat_in = CategoriaDeliveryIn(
-            descricao=descricao,
-            slug=slug,
-            slug_pai=slug_pai,
-            imagem=imagem_url,
-            posicao=posicao             # ⬅️ passando para o schema de input
-        )
-        cat = repositorio.create(cat_in)
-        logger.info(f"Categoria criada com ID={cat.id}")
-    except Exception as e:
-        logger.error(f"Erro ao criar categoria: {e}")
-        raise HTTPException(500, "Erro ao criar categoria")
-
-    return CategoriaDeliveryOut(
-        id=cat.id,
-        label=cat.descricao,
-        imagem=cat.imagem,
-        slug=cat.slug,
-        slug_pai=cat.slug_pai,
-        href=cat.href,
-        posicao=cat.posicao         # ⬅️ retornando no output
+    cat_in = CategoriaDeliveryIn(
+        descricao=descricao,
+        slug=slug,
+        slug_pai=slug_pai,
+        imagem=imagem_url,
+        posicao=posicao,
     )
-
-@router.delete("/{cat_id}", status_code=status.HTTP_204_NO_CONTENT)
-def deletar_categoria(cat_id: int, db: Session = Depends(get_db)):
-    logger.info(f"Deletando categoria ID={cat_id}")
-    repositorio = CategoriaDeliveryRepository(db)
-    repositorio.delete(cat_id)
-    return None
+    c = repos.create(cat_in)
+    logger.info(f"Categoria criada com ID={c.id}")
+    return CategoriaDeliveryOut(
+        id=c.id,
+        label=c.descricao,
+        imagem=c.imagem,
+        slug=c.slug,
+        slug_pai=c.slug_pai,
+        href=c.href,
+        posicao=c.posicao,
+    )
 
 
 @router.put("/{cat_id}", response_model=CategoriaDeliveryOut)
@@ -100,46 +105,75 @@ async def editar_categoria(
     imagem: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
 ):
+    repos = CategoriaDeliveryRepository(db)
     logger.info(f"Editando categoria ID={cat_id}")
-
     imagem_url = None
 
     if imagem:
         permitidos = {"image/jpeg", "image/png", "image/webp"}
         if imagem.content_type not in permitidos:
-            logger.warning(f"Formato inválido: {imagem.content_type}")
             raise HTTPException(400, "Formato de imagem inválido")
         try:
-            imagem_url = upload_file_to_minio(file=imagem, slug=slug, bucket="categorias")
+            imagem_url = upload_file_to_minio(imagem, slug, bucket="categorias")
         except RuntimeError as e:
-            logger.error(f"Falha no upload: {e}")
+            logger.error(f"Upload falhou: {e}")
             raise HTTPException(500, "Erro ao enviar imagem")
 
-    repositorio = CategoriaDeliveryRepository(db)
-
-    try:
-        # Atualiza os campos
-        cat = repositorio.update(
-            cat_id=cat_id,
-            update_data={
-                "descricao": descricao,
-                "slug": slug,
-                "slug_pai": slug_pai,
-                "posicao": posicao,
-                "imagem": imagem_url,  # pode ser None se não for atualizada
-            }
-        )
-        logger.info(f"Categoria ID={cat_id} atualizada com sucesso")
-    except Exception as e:
-        logger.error(f"Erro ao atualizar categoria: {e}")
-        raise HTTPException(500, "Erro ao atualizar categoria")
-
+    updates = {
+        "descricao": descricao,
+        "slug": slug,
+        "slug_pai": slug_pai,
+        "posicao": posicao,
+        "imagem": imagem_url,
+    }
+    c = repos.update(cat_id, updates)
+    logger.info(f"Categoria ID={cat_id} atualizada")
     return CategoriaDeliveryOut(
-        id=cat.id,
-        label=cat.descricao,
-        imagem=cat.imagem,
-        slug=cat.slug,
-        slug_pai=cat.slug_pai,
-        href=cat.href,
-        posicao=cat.posicao,
+        id=c.id,
+        label=c.descricao,
+        imagem=c.imagem,
+        slug=c.slug,
+        slug_pai=c.slug_pai,
+        href=c.href,
+        posicao=c.posicao,
+    )
+
+
+@router.delete("/{cat_id}", status_code=status.HTTP_204_NO_CONTENT)
+def deletar_categoria(cat_id: int, db: Session = Depends(get_db)):
+    repos = CategoriaDeliveryRepository(db)
+    repos.delete(cat_id)
+    logger.info(f"Categoria ID={cat_id} deletada")
+    return None
+
+
+@router.post("/{cat_id}/move-right", response_model=CategoriaDeliveryOut)
+def move_categoria_direita(cat_id: int, db: Session = Depends(get_db)):
+    repos = CategoriaDeliveryRepository(db)
+    c = repos.move_right(cat_id)
+    logger.info(f"Categoria ID={cat_id} movida para direita")
+    return CategoriaDeliveryOut(
+        id=c.id,
+        label=c.descricao,
+        imagem=c.imagem,
+        slug=c.slug,
+        slug_pai=c.slug_pai,
+        href=c.href,
+        posicao=c.posicao,
+    )
+
+
+@router.post("/{cat_id}/move-left", response_model=CategoriaDeliveryOut)
+def move_categoria_esquerda(cat_id: int, db: Session = Depends(get_db)):
+    repos = CategoriaDeliveryRepository(db)
+    c = repos.move_left(cat_id)
+    logger.info(f"Categoria ID={cat_id} movida para esquerda")
+    return CategoriaDeliveryOut(
+        id=c.id,
+        label=c.descricao,
+        imagem=c.imagem,
+        slug=c.slug,
+        slug_pai=c.slug_pai,
+        href=c.href,
+        posicao=c.posicao,
     )

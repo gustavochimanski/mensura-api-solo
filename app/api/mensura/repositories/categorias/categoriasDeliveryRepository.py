@@ -1,3 +1,5 @@
+# app/api/mensura/repositories/categorias/categoriasDeliveryRepository.py
+
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 
@@ -8,10 +10,30 @@ class CategoriaDeliveryRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def listar(self) -> list[CategoriaDeliveryModel]:
-        """
-        Retorna todas as categorias, ordenadas por posição (posicao asc).
-        """
+    # --- CREATE ---
+    def create(self, dados: CategoriaDeliveryIn) -> CategoriaDeliveryModel:
+        slug_value = dados.slug or dados.descricao.lower().replace(" ", "-")
+        nova = CategoriaDeliveryModel(
+            descricao=dados.descricao,
+            slug=slug_value,
+            slug_pai=dados.slug_pai,
+            imagem=dados.imagem,
+            posicao=dados.posicao,
+        )
+        self.db.add(nova)
+        try:
+            self.db.commit()
+            self.db.refresh(nova)
+            return nova
+        except Exception:
+            self.db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Erro ao criar categoria"
+            )
+
+    # --- READ ALL ---
+    def list_all(self) -> list[CategoriaDeliveryModel]:
         return (
             self.db
             .query(CategoriaDeliveryModel)
@@ -19,72 +41,26 @@ class CategoriaDeliveryRepository:
             .all()
         )
 
-    def create(self, dados: CategoriaDeliveryIn) -> CategoriaDeliveryModel:
-        """
-        Cria uma nova categoria de delivery.
-        Se `dados.slug` estiver vazio, gera a partir de `descricao`.
-        Usa o campo `posicao` caso seja informado.
-        """
-        # Gera slug automático se não vier
-        slug_value = dados.slug or dados.descricao.lower().replace(" ", "-")
-
-        nova = CategoriaDeliveryModel(
-            descricao=dados.descricao,
-            slug=slug_value,
-            slug_pai=dados.slug_pai,
-            imagem=dados.imagem,
-            posicao=dados.posicao
-        )
-        self.db.add(nova)
-        try:
-            self.db.commit()
-            self.db.refresh(nova)
-        except Exception:
-            self.db.rollback()
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Erro ao criar categoria"
-            )
-        return nova
-
-
-
-    def delete(self, id: int) -> None:
-        """
-        Deleta a categoria pelo ID.
-        Lança 404 se não encontrar.
-        """
-        cat = self.db.query(CategoriaDeliveryModel).filter_by(id=id).first()
-        if not cat:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Categoria não encontrada"
-            )
-        self.db.delete(cat)
-        self.db.commit()
-
-
-
-    def update(self, cat_id: int, update_data: dict) -> CategoriaDeliveryModel:
-        """
-        Atualiza os campos da categoria com base no ID.
-        Apenas campos presentes em `update_data` são atualizados.
-        """
+    # --- READ ONE ---
+    def get_by_id(self, cat_id: int) -> CategoriaDeliveryModel:
         cat = self.db.query(CategoriaDeliveryModel).filter_by(id=cat_id).first()
         if not cat:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Categoria não encontrada"
             )
+        return cat
 
-        # Atualiza apenas os campos fornecidos
+    # --- UPDATE ---
+    def update(self, cat_id: int, update_data: dict) -> CategoriaDeliveryModel:
+        cat = self.get_by_id(cat_id)
         for key, value in update_data.items():
-            if value is not None:  # Ignora campos nulos (como imagem se não for enviada)
+            if value is not None:
                 setattr(cat, key, value)
-
         try:
             self.db.commit()
             self.db.refresh(cat)
+            return cat
         except Exception:
             self.db.rollback()
             raise HTTPException(
@@ -92,5 +68,64 @@ class CategoriaDeliveryRepository:
                 detail="Erro ao atualizar categoria"
             )
 
-        return cat
+    # --- DELETE ---
+    def delete(self, cat_id: int) -> None:
+        cat = self.get_by_id(cat_id)
+        self.db.delete(cat)
+        self.db.commit()
 
+    # --- MOVE RIGHT ---
+    def move_right(self, cat_id: int) -> CategoriaDeliveryModel:
+        cat = self.get_by_id(cat_id)
+        irmas = (
+            self.db.query(CategoriaDeliveryModel)
+            .filter_by(slug_pai=cat.slug_pai)
+            .order_by(CategoriaDeliveryModel.posicao)
+            .all()
+        )
+        idx = next((i for i, c in enumerate(irmas) if c.id == cat_id), None)
+        if idx is None or idx == len(irmas) - 1:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Não é possível mover para a direita"
+            )
+        proxima = irmas[idx + 1]
+        cat.posicao, proxima.posicao = proxima.posicao, cat.posicao
+        try:
+            self.db.commit()
+            self.db.refresh(cat)
+            return cat
+        except Exception:
+            self.db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Erro ao mover categoria para a direita"
+            )
+
+    # --- MOVE LEFT ---
+    def move_left(self, cat_id: int) -> CategoriaDeliveryModel:
+        cat = self.get_by_id(cat_id)
+        irmas = (
+            self.db.query(CategoriaDeliveryModel)
+            .filter_by(slug_pai=cat.slug_pai)
+            .order_by(CategoriaDeliveryModel.posicao)
+            .all()
+        )
+        idx = next((i for i, c in enumerate(irmas) if c.id == cat_id), None)
+        if idx is None or idx == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Não é possível mover para a esquerda"
+            )
+        anterior = irmas[idx - 1]
+        cat.posicao, anterior.posicao = anterior.posicao, cat.posicao
+        try:
+            self.db.commit()
+            self.db.refresh(cat)
+            return cat
+        except Exception:
+            self.db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Erro ao mover categoria para a esquerda"
+            )
