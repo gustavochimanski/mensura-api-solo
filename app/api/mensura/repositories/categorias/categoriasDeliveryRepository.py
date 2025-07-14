@@ -1,5 +1,7 @@
 # app/api/mensura/repositories/categorias/categoriasDeliveryRepository.py
+from typing import Optional
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 
@@ -34,12 +36,23 @@ class CategoriaDeliveryRepository:
 
     # --- READ ALL ---
     def list_all(self) -> list[CategoriaDeliveryModel]:
-        return (
-            self.db
-            .query(CategoriaDeliveryModel)
+        """
+        Retorna todas as categorias, ordenadas por posicao asc,
+        garantindo que o tipo retornado seja List[CategoriaDeliveryModel].
+        """
+        stmt = select(CategoriaDeliveryModel).order_by(CategoriaDeliveryModel.posicao)
+        result = self.db.execute(stmt).scalars().all()
+        return result
+
+    # (se precisar de filtro por slug_pai)
+    def list_by_parent(self, slug_pai: Optional[str]) -> list[CategoriaDeliveryModel]:
+        stmt = (
+            select(CategoriaDeliveryModel)
+            .where(CategoriaDeliveryModel.slug_pai == slug_pai)
             .order_by(CategoriaDeliveryModel.posicao)
-            .all()
         )
+        return self.db.execute(stmt).scalars().all()
+
 
     # --- READ ONE ---
     def get_by_id(self, cat_id: int) -> CategoriaDeliveryModel:
