@@ -47,6 +47,8 @@ class CategoriaDeliveryRepository:
             )
         return nova
 
+
+
     def delete(self, id: int) -> None:
         """
         Deleta a categoria pelo ID.
@@ -60,3 +62,35 @@ class CategoriaDeliveryRepository:
             )
         self.db.delete(cat)
         self.db.commit()
+
+
+
+    def update(self, cat_id: int, update_data: dict) -> CategoriaDeliveryModel:
+        """
+        Atualiza os campos da categoria com base no ID.
+        Apenas campos presentes em `update_data` são atualizados.
+        """
+        cat = self.db.query(CategoriaDeliveryModel).filter_by(id=cat_id).first()
+        if not cat:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Categoria não encontrada"
+            )
+
+        # Atualiza apenas os campos fornecidos
+        for key, value in update_data.items():
+            if value is not None:  # Ignora campos nulos (como imagem se não for enviada)
+                setattr(cat, key, value)
+
+        try:
+            self.db.commit()
+            self.db.refresh(cat)
+        except Exception:
+            self.db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Erro ao atualizar categoria"
+            )
+
+        return cat
+
