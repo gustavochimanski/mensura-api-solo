@@ -1,6 +1,7 @@
 # services/produtos_service.py
 from datetime import datetime
 
+from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.mensura.repositories.delivery.produtosDeliveryRepository import ProdutoDeliveryRepository
@@ -65,3 +66,29 @@ class ProdutosDeliveryService:
 
         produto = self.produto_repo.criar_novo_produto(produto)
         return CriarNovoProdutoResponse.model_validate(produto, from_attributes=True)
+
+
+    def atualizar_produto(self, cod_barras: str, data: CriarNovoProdutoRequest) -> CriarNovoProdutoResponse:
+        # valida existência
+        if not self.produto_repo.buscar_por_cod_barras(cod_barras):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Produto não encontrado")
+
+        # monta dict de atualização
+        update_data = {
+            "descricao": data.descricao,
+            "cod_categoria": data.cod_categoria,
+            "imagem": data.imagem,
+            "data_cadastro": data.data_cadastro or datetime.utcnow(),
+            "preco_venda": data.preco_venda,
+            "custo": data.custo or 0,
+            "subcategoria_id": data.subcategoria_id,
+        }
+
+        prod = self.produto_repo.update_produto(cod_barras, update_data)
+        return CriarNovoProdutoResponse.model_validate(prod, from_attributes=True)
+
+    def deletar_produto(self, cod_barras: str) -> None:
+        # valida existência
+        if not self.produto_repo.buscar_por_cod_barras(cod_barras):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Produto não encontrado")
+        self.produto_repo.delete_produto(cod_barras)

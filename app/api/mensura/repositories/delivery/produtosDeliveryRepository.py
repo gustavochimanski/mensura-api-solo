@@ -1,4 +1,5 @@
 # repositories/produto_repository.py
+from fastapi import HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
@@ -45,3 +46,50 @@ class ProdutoDeliveryRepository:
         self.db.commit()
         self.db.refresh(produto)
         return produto
+
+
+    def update_produto(self, cod_barras: str, update_data: dict) -> ProdutoDeliveryModel:
+        """
+        Atualiza o produto e seus dados na tabela de relação com empresa.
+        update_data deve conter as chaves:
+         - descricao, cod_categoria, imagem, data_cadastro
+         - preco_venda, custo, subcategoria_id
+        """
+        prod = self.db.query(ProdutoDeliveryModel).filter_by(cod_barras=cod_barras).first()
+        if not prod:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Produto não encontrado")
+
+        # Atualiza campos do próprio produto
+        for attr in ("descricao","cod_categoria","imagem","data_cadastro"):
+            if attr in update_data and update_data[attr] is not None:
+                setattr(prod, attr, update_data[attr])
+
+        # Atualiza preço, custo e subcategoria na relação ProdutosEmpDeliveryModel
+        for pe in prod.produtos_empresa:
+            if "preco_venda" in update_data:
+                pe.preco_venda = update_data["preco_venda"]
+            if "custo" in update_data:
+                pe.custo = update_data["custo"]
+            if "subcategoria_id" in update_data:
+                pe.subcategoria_id = update_data["subcategoria_id"]
+
+        try:
+            self.db.commit()
+            self.db.refresh(prod)
+            return prod
+        except Exception as e:
+            self.db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Erro ao atualizar produto"
+            )
+
+    def delete_produto(self, cod_barras: str) -> None:
+        """
+        Deleta o produto e cascata na tabela de relação.
+        """
+        prod = self.db.query(ProdutoDeliveryModel).filter_by(cod_barras=cod_barras).first()
+        if not prod:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Produto não encontrado")
+        self.db.delete(prod)
+        self.db.commit()
