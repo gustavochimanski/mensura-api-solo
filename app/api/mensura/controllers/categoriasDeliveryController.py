@@ -88,3 +88,58 @@ def deletar_categoria(cat_id: int, db: Session = Depends(get_db)):
     repositorio = CategoriaDeliveryRepository(db)
     repositorio.delete(cat_id)
     return None
+
+
+@router.put("/{cat_id}", response_model=CategoriaDeliveryOut)
+async def editar_categoria(
+    cat_id: int,
+    descricao: str = Form(...),
+    slug: str = Form(...),
+    slug_pai: Optional[str] = Form(None),
+    posicao: Optional[int] = Form(None),
+    imagem: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db),
+):
+    logger.info(f"Editando categoria ID={cat_id}")
+
+    imagem_url = None
+
+    if imagem:
+        permitidos = {"image/jpeg", "image/png", "image/webp"}
+        if imagem.content_type not in permitidos:
+            logger.warning(f"Formato inválido: {imagem.content_type}")
+            raise HTTPException(400, "Formato de imagem inválido")
+        try:
+            imagem_url = upload_file_to_minio(file=imagem, slug=slug, bucket="categorias")
+        except RuntimeError as e:
+            logger.error(f"Falha no upload: {e}")
+            raise HTTPException(500, "Erro ao enviar imagem")
+
+    repositorio = CategoriaDeliveryRepository(db)
+
+    try:
+        # Atualiza os campos
+        cat = repositorio.update(
+            cat_id=cat_id,
+            update_data={
+                "descricao": descricao,
+                "slug": slug,
+                "slug_pai": slug_pai,
+                "posicao": posicao,
+                "imagem": imagem_url,  # pode ser None se não for atualizada
+            }
+        )
+        logger.info(f"Categoria ID={cat_id} atualizada com sucesso")
+    except Exception as e:
+        logger.error(f"Erro ao atualizar categoria: {e}")
+        raise HTTPException(500, "Erro ao atualizar categoria")
+
+    return CategoriaDeliveryOut(
+        id=cat.id,
+        label=cat.descricao,
+        imagem=cat.imagem,
+        slug=cat.slug,
+        slug_pai=cat.slug_pai,
+        href=cat.href,
+        posicao=cat.posicao,
+    )
