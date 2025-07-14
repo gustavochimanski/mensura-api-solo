@@ -13,7 +13,6 @@ from app.api.mensura.schemas.delivery.produtos.produtosDelivery_schema import (
     CriarNovoProdutoRequest
 )
 from app.utils.minio_client import upload_file_to_minio
-from psycopg2.errors import NotNullViolation
 from sqlalchemy.exc import IntegrityError
 
 router = APIRouter(tags=["Produtos - Delivery"])
@@ -68,7 +67,7 @@ async def criar_produto(
         raise HTTPException(status_code=400, detail=str(e))
     except IntegrityError as ie:
         db.rollback()
-        if isinstance(ie.orig, NotNullViolation):
+        if isinstance(ie.orig):
             raise HTTPException(400, detail="Campo obrigatório ausente")
         raise HTTPException(500, detail="Erro de integridade")
 
@@ -111,7 +110,7 @@ async def atualizar_produto(
         raise
     except IntegrityError as ie:
         db.rollback()
-        if isinstance(ie.orig, NotNullViolation):
+        if isinstance(ie.orig):
             raise HTTPException(400, detail="Campo obrigatório ausente")
         raise HTTPException(500, detail="Erro de integridade")
 
