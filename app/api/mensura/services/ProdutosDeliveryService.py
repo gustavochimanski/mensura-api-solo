@@ -87,8 +87,6 @@ class ProdutosDeliveryService:
         prod = self.produto_repo.update_produto(cod_barras, update_data)
         return CriarNovoProdutoResponse.model_validate(prod, from_attributes=True)
 
-    def deletar_produto(self, cod_barras: str) -> None:
-        # valida existência
-        if not self.produto_repo.buscar_por_cod_barras(cod_barras):
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Produto não encontrado")
-        self.produto_repo.delete_produto(cod_barras)
+    def deletar_produto(self, cod_barras: str) -> bool:
+        deleted = self.produto_repo.delete_produto(cod_barras)
+        return deleted

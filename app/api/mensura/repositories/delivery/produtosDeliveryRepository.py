@@ -84,12 +84,15 @@ class ProdutoDeliveryRepository:
                 detail="Erro ao atualizar produto"
             )
 
-    def delete_produto(self, cod_barras: str) -> None:
+    def delete_produto(self, cod_barras: str) -> bool:
         """
-        Deleta o produto e cascata na tabela de relação.
+        Tenta deletar o produto; retorna True se encontrado e deletado,
+        False se não havia produto com esse cod_barras.
         """
         prod = self.db.query(ProdutoDeliveryModel).filter_by(cod_barras=cod_barras).first()
         if not prod:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Produto não encontrado")
+            return False
+
         self.db.delete(prod)
         self.db.commit()
+        return True

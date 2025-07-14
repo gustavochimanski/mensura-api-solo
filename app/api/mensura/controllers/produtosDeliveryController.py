@@ -118,5 +118,5 @@ async def atualizar_produto(
 @router.delete("/produtos/delivery/{cod_barras}", status_code=status.HTTP_204_NO_CONTENT)
 def deletar_produto(cod_barras: str, db: Session = Depends(get_db)):
     service = ProdutosDeliveryService(db)
-    service.deletar_produto(cod_barras)
-    return None
+    sucesso = service.deletar_produto(cod_barras)
+    return { "success": sucesso }
