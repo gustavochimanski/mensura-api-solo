@@ -1,7 +1,7 @@
 # app/api/mensura/repositories/categorias/categoriasDeliveryRepository.py
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 
@@ -15,6 +15,14 @@ class CategoriaDeliveryRepository:
     # --- CREATE ---
     def create(self, dados: CategoriaDeliveryIn) -> CategoriaDeliveryModel:
         slug_value = dados.slug or dados.descricao.lower().replace(" ", "-")
+        if dados.posicao is None:
+            max_posicao = (
+                self.db.query(func.max(CategoriaDeliveryModel.posicao))
+                .filter(CategoriaDeliveryModel.slug_pai == dados.slug_pai)
+                .scalar()
+            )
+            dados.posicao = (max_posicao or 0) + 1
+
         nova = CategoriaDeliveryModel(
             descricao=dados.descricao,
             slug=slug_value,

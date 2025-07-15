@@ -13,7 +13,7 @@ class CategoriaDeliveryModel(Base):
     slug = Column(String(100), nullable=False, unique=True)
     slug_pai = Column(String(100), nullable=True)
     imagem = Column(String(255), nullable=True)
-    posicao = Column(Integer, nullable=True)
+    posicao = Column(Integer, nullable=False)
 
     produtos = relationship(
         "ProdutoDeliveryModel",
