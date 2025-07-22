@@ -3,33 +3,34 @@ from collections import defaultdict
 
 from app.api.mensura.repositories.cardapio.CardapioRepository import CardapioRepository
 from app.api.mensura.schemas.delivery.cardapio.cardapio_schema import (
-    CardapioCategProdutosResponse, ProdutoEmpMiniDTO, ProdutoMiniDTO, VitrineConfigSchema, VitrineComProdutosResponse
+     ProdutoEmpMiniDTO, ProdutoMiniDTO, VitrineConfigSchema, VitrineComProdutosResponse
 )
+from app.api.mensura.schemas.delivery.categorias.categoria_schema import CategoriaDeliveryOut
+
 
 class CardapioService:
     def __init__(self, repository: CardapioRepository):
         self.repository = repository
 
-    def listar_cardapio(self, cod_empresa: int) -> List[CardapioCategProdutosResponse]:
+    def listar_cardapio(self, cod_empresa: int) -> List[CategoriaDeliveryOut]:
         categorias = self.repository.listar_categorias()
         vitrines = self.repository.listar_vitrines(cod_empresa)
 
         vitrines_schema = [VitrineConfigSchema.model_validate(v) for v in vitrines]
 
-        resultado: List[CardapioCategProdutosResponse] = []
+        resultado: List[CategoriaDeliveryOut] = []
         for cat in categorias:
 
             vitrines_para_cat = [v for v in vitrines_schema if v.cod_categoria == cat.id]
 
-            resp = CardapioCategProdutosResponse(
+            resp = CategoriaDeliveryOut(
                 id=cat.id,
                 slug=cat.slug,
                 slug_pai=cat.slug_pai,
-                descricao=cat.descricao,
+                label=cat.descricao,
                 imagem=cat.imagem,
-                destacar_em_slug=getattr(cat, "destacar_em_slug", None),
                 href=cat.href,
-                vitrines=vitrines_para_cat,
+                posicao=cat.posicao,
             )
             resultado.append(resp)
 

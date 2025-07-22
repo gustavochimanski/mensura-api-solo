@@ -40,19 +40,6 @@ class VitrineConfigSchema(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-class CardapioCategProdutosResponse(BaseModel):
-    id: int
-    slug: str
-    slug_pai: Optional[str]
-    descricao: str
-    imagem: Optional[str]
-    destacar_em_slug: Optional[str]
-    href: str
-    produtos: List[ProdutoEmpMiniDTO]
-    vitrines: Optional[List[VitrineConfigSchema]] = None
-
-    model_config = ConfigDict(from_attributes=True)
-
 
 class VitrineComProdutosResponse(BaseModel):
     id: int
