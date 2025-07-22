@@ -1,9 +1,9 @@
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 
+from app.api.mensura.models.cad_prod_delivery_model import ProdutoDeliveryModel
 from app.api.mensura.models.sub_categoria_model import SubCategoriaModel
 from app.api.mensura.schemas.delivery.categorias.sub_categoria_schema import CriarSubCategoriaRequest
-from app.api.public.models.produtos.cadprod import ProdutoModel
 
 
 class SubCategoriaRepository:
@@ -62,8 +62,8 @@ class SubCategoriaRepository:
 
         # 🔎 Verificar se existem produtos vinculados via ORM
         produto_vinculado = (
-            self.db.query(ProdutoModel)
-            .filter(ProdutoModel.subcategoria_id == sub_id)
+            self.db.query(ProdutoDeliveryModel)
+            .filter(ProdutoDeliveryModel.subcategoria_id == sub_id)
             .first()
         )
 
