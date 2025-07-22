@@ -52,3 +52,9 @@ class CardapioCategProdutosResponse(BaseModel):
     vitrines: Optional[List[VitrineConfigSchema]] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class VitrineComProdutosResponse(BaseModel):
+    id: int
+    titulo: str
+    produtos: List[ProdutoEmpMiniDTO]

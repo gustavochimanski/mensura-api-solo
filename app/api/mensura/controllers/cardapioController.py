@@ -3,8 +3,10 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from app.api.mensura.repositories.cardapio.CardapioRepository import CardapioRepository
-from app.api.mensura.schemas.delivery.cardapio.cardapio_schema import ProdutoEmpMiniDTO, CardapioCategProdutosResponse
+from app.api.mensura.schemas.delivery.cardapio.cardapio_schema import ProdutoEmpMiniDTO, CardapioCategProdutosResponse, \
+    VitrineComProdutosResponse
 from app.api.mensura.services.CardapioService import CardapioService
+from app.api.mensura.services.ProdutosDeliveryService import ProdutosDeliveryService
 from app.database.db_connection import get_db
 
 router = APIRouter(tags=["Cardapio"])
@@ -15,13 +17,13 @@ def listar_cardapio(cod_empresa: int = 1, db: Session = Depends(get_db)):
     service = CardapioService(repo)
     return service.listar_cardapio(cod_empresa)
 
-@router.get("/produtos/vitrine", response_model=List[ProdutoEmpMiniDTO])
-def listar_produtos_por_vitrine(
+
+@router.get("/produtos/vitrine-por-categoria", response_model=List[VitrineComProdutosResponse])
+def listar_vitrines_e_produtos_por_categoria(
+    cod_empresa: int = Query(...),
     cod_categoria: int = Query(...),
-    subcategoria_id: int = Query(...),
-    cod_empresa: int = Query(..., description="Empresa que está sendo consultada"),
     db: Session = Depends(get_db)
 ):
     repo = CardapioRepository(db)
     service = CardapioService(repo)
-    return service.buscar_produtos_por_vitrine(cod_empresa, cod_categoria, subcategoria_id)
+    return service.buscar_vitrines_com_produtos(cod_empresa, cod_categoria)

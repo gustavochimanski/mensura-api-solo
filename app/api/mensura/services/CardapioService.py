@@ -3,7 +3,7 @@ from collections import defaultdict
 
 from app.api.mensura.repositories.cardapio.CardapioRepository import CardapioRepository
 from app.api.mensura.schemas.delivery.cardapio.cardapio_schema import (
-    CardapioCategProdutosResponse, ProdutoEmpMiniDTO, ProdutoMiniDTO, VitrineConfigSchema
+    CardapioCategProdutosResponse, ProdutoEmpMiniDTO, ProdutoMiniDTO, VitrineConfigSchema, VitrineComProdutosResponse
 )
 
 class CardapioService:
@@ -59,18 +59,23 @@ class CardapioService:
 
         return resultado
 
-    def buscar_produtos_por_vitrine(
-            self, cod_empresa: int, cod_categoria: int, subcategoria_id: int
-    ) -> List[ProdutoEmpMiniDTO]:
-        itens_emp = self.repository.listar_produtos_emp_por_categoria_e_sub(
-            cod_empresa, cod_categoria, subcategoria_id
-        )
+    from app.api.mensura.schemas.delivery.cardapio.cardapio_schema import VitrineComProdutosResponse
 
-        resultado: List[ProdutoEmpMiniDTO] = []
+    def buscar_vitrines_com_produtos(
+            self, cod_empresa: int, cod_categoria: int
+    ) -> List[VitrineComProdutosResponse]:
+        vitrines = self.repository.listar_vitrines(cod_empresa)
+        produtos = self.repository.listar_produtos_emp(cod_empresa)
 
-        for ie in itens_emp:
+        # Filtrar vitrines da categoria desejada
+        vitrines_cat = [v for v in vitrines if v.cod_categoria == cod_categoria]
+
+        # Agrupar produtos por subcategoria_id
+        produtos_por_sub: dict[int, List[ProdutoEmpMiniDTO]] = defaultdict(list)
+
+        for ie in produtos:
             base = ie.produto
-            if not base:
+            if not base or base.cod_categoria != cod_categoria:
                 continue
 
             prod_mini = ProdutoMiniDTO(
@@ -86,7 +91,15 @@ class CardapioService:
                 subcategoria_id=ie.subcategoria_id,
                 produto=prod_mini,
             )
-            resultado.append(emp_mini)
+            produtos_por_sub[ie.subcategoria_id].append(emp_mini)
+
+        # Construir a resposta
+        resultado: List[VitrineComProdutosResponse] = []
+        for vitrine in vitrines_cat:
+            resultado.append(VitrineComProdutosResponse(
+                id=vitrine.id,
+                titulo=vitrine.titulo,
+                produtos=produtos_por_sub.get(vitrine.id, [])
+            ))
 
         return resultado
-
