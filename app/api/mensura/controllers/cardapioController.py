@@ -24,4 +24,4 @@ def listar_produtos_por_vitrine(
 ):
     repo = CardapioRepository(db)
     service = CardapioService(repo)
-    return service.buscar_produto
+    return service.buscar_produtos_por_vitrine(cod_empresa, cod_categoria, subcategoria_id)
