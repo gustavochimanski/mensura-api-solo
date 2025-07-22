@@ -18,7 +18,7 @@ from app.api.mensura.models.user_model import UserModel
 router = APIRouter(tags=["auth"])
 
 @router.post("/mensura/auth/token", response_model=TokenResponse)
-def login(
+def login_usuario(
     payload: LoginRequest,
     db: Session = Depends(get_db),
 ):
@@ -50,7 +50,7 @@ def login(
     response_model=UserResponse,
     summary="Retorna o usuário atual baseado no token JWT"
 )
-def read_current_user(
+def obter_usuario_atual(
     current_user: UserModel = Depends(get_current_user),
     db: Session        = Depends(get_db),  # opcional, se depois quiser buscar algo extra
 ):
