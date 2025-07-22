@@ -66,4 +66,3 @@ app.include_router(bi_router, prefix="/bi", dependencies=[Depends(get_current_us
 app.include_router(mensura_router, prefix="/mensura")
 app.include_router(public_router, prefix="/public", dependencies=[Depends(get_current_user)])
 app.include_router(auth_controller.router)
-app.include_router(auth_controller.router)
