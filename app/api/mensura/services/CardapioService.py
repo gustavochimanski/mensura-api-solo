@@ -58,3 +58,35 @@ class CardapioService:
             resultado.append(resp)
 
         return resultado
+
+    def buscar_produtos_por_vitrine(
+            self, cod_empresa: int, cod_categoria: int, subcategoria_id: int
+    ) -> List[ProdutoEmpMiniDTO]:
+        itens_emp = self.repository.listar_produtos_emp_por_categoria_e_sub(
+            cod_empresa, cod_categoria, subcategoria_id
+        )
+
+        resultado: List[ProdutoEmpMiniDTO] = []
+
+        for ie in itens_emp:
+            base = ie.produto
+            if not base:
+                continue
+
+            prod_mini = ProdutoMiniDTO(
+                id=base.id,
+                descricao=base.descricao,
+                imagem=base.imagem,
+                cod_categoria=base.cod_categoria,
+            )
+            emp_mini = ProdutoEmpMiniDTO(
+                empresa=ie.empresa,
+                cod_barras=ie.cod_barras,
+                preco_venda=float(ie.preco_venda),
+                subcategoria_id=ie.subcategoria_id,
+                produto=prod_mini,
+            )
+            resultado.append(emp_mini)
+
+        return resultado
+

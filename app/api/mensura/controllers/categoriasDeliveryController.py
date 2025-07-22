@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, Form, File, UploadFile, HTTPException, s
 from sqlalchemy.orm import Session
 from typing import Optional, List
 
+from app.api.mensura.repositories.empresasRepository import EmpresasRepository
 from app.database.db_connection import get_db
 from app.api.mensura.repositories.categorias.categoriasDeliveryRepository import (
     CategoriaDeliveryRepository
@@ -35,7 +36,6 @@ def list_categorias(db: Session = Depends(get_db)):
         for c in cats
     ]
 
-
 @router.get("/{cat_id}", response_model=CategoriaDeliveryOut)
 def get_categoria(cat_id: int, db: Session = Depends(get_db)):
     repos = CategoriaDeliveryRepository(db)
@@ -54,6 +54,7 @@ def get_categoria(cat_id: int, db: Session = Depends(get_db)):
 
 @router.post("", response_model=CategoriaDeliveryOut, status_code=status.HTTP_201_CREATED)
 async def criar_categoria(
+    cod_empresa: int = Form(...),
     descricao: str = Form(...),
     slug: str = Form(...),
     slug_pai: Optional[str] = Form(None),
@@ -70,7 +71,7 @@ async def criar_categoria(
         if imagem.content_type not in permitidos:
             raise HTTPException(400, "Formato de imagem inválido")
         try:
-            imagem_url = upload_file_to_minio(imagem, slug, bucket="categorias")
+            imagem_url = upload_file_to_minio(db, cod_empresa, imagem, slug)
         except RuntimeError as e:
             logger.error(f"Upload falhou: {e}")
             raise HTTPException(500, "Erro ao enviar imagem")

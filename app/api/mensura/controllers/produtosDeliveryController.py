@@ -31,6 +31,7 @@ def listar_delivery(
 
 @router.post("/produtos/delivery", response_model=CriarNovoProdutoResponse, status_code=status.HTTP_201_CREATED)
 async def criar_produto(
+    cod_empresa: int = Form(...),
     cod_barras: str = Form(...),
     descricao: str = Form(...),
     cod_categoria: int = Form(...),
@@ -46,7 +47,7 @@ async def criar_produto(
         if imagem.content_type not in {"image/jpeg","image/png","image/webp"}:
             raise HTTPException(status_code=400, detail="Formato de imagem inválido")
         try:
-            imagem_url = upload_file_to_minio(imagem, cod_barras, bucket="produtos")
+            imagem_url = upload_file_to_minio(db, cod_empresa,  imagem, "produtos")
         except RuntimeError as e:
             raise HTTPException(status_code=500, detail=str(e))
 
@@ -74,7 +75,8 @@ async def criar_produto(
 
 @router.put("/produtos/delivery/{cod_barras}", response_model=CriarNovoProdutoResponse)
 async def atualizar_produto(
-    cod_barras: str,
+    cod_empresa: int = Form(...),
+    cod_barras: str = Form(...),
     descricao: str = Form(...),
     cod_categoria: int = Form(...),
     subcategoria_id: Optional[int] = Form(None),
@@ -89,7 +91,7 @@ async def atualizar_produto(
         if imagem.content_type not in {"image/jpeg","image/png","image/webp"}:
             raise HTTPException(status_code=400, detail="Formato de imagem inválido")
         try:
-            imagem_url = upload_file_to_minio(imagem, cod_barras, bucket="produtos")
+            imagem_url = upload_file_to_minio(db, cod_empresa,  imagem, "produtos")
         except RuntimeError as e:
             raise HTTPException(status_code=500, detail=str(e))
 

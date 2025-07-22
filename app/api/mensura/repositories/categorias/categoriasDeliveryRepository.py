@@ -15,6 +15,14 @@ class CategoriaDeliveryRepository:
     # --- CREATE ---
     def create(self, dados: CategoriaDeliveryIn) -> CategoriaDeliveryModel:
         slug_value = dados.slug or dados.descricao.lower().replace(" ", "-")
+
+        existe = self.db.query(CategoriaDeliveryModel).filter_by(slug=slug_value).first()
+        if existe:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Já existe uma categoria com esse slug."
+            )
+
         if dados.posicao is None:
             max_posicao = (
                 self.db.query(func.max(CategoriaDeliveryModel.posicao))

@@ -35,3 +35,17 @@ class CardapioRepository:
             .order_by(SubCategoriaModel.ordem)
             .all()
         )
+
+    def listar_produtos_emp_por_categoria_e_sub(
+            self, cod_empresa: int, cod_categoria: int, subcategoria_id: int
+    ) -> List[ProdutosEmpDeliveryModel]:
+        return (
+            self.db.query(ProdutosEmpDeliveryModel)
+            .join(ProdutosEmpDeliveryModel.produto)
+            .options(joinedload(ProdutosEmpDeliveryModel.produto))
+            .filter(ProdutosEmpDeliveryModel.empresa == cod_empresa)
+            .filter(ProdutosEmpDeliveryModel.subcategoria_id == subcategoria_id)
+            .filter(ProdutosEmpDeliveryModel.produto.has(cod_categoria=cod_categoria))
+            .all()
+        )
+
