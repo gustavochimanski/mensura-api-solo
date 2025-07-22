@@ -1,6 +1,6 @@
 # app/api/mensura/controllers/produtosDeliveryController.py
 
-from fastapi import APIRouter, Depends, Form, File, UploadFile, HTTPException, status, Query
+from fastapi import APIRouter, Depends, Form, File, UploadFile, HTTPException, status, Query, Path
 from sqlalchemy.orm import Session
 from datetime import datetime
 from typing import Optional
@@ -76,7 +76,7 @@ async def criar_produto(
 @router.put("/produtos/delivery/{cod_barras}", response_model=CriarNovoProdutoResponse)
 async def atualizar_produto(
     cod_empresa: int = Form(...),
-    cod_barras: str = Form(...),
+    cod_barras: str = Path(...),
     descricao: str = Form(...),
     cod_categoria: int = Form(...),
     subcategoria_id: Optional[int] = Form(None),
