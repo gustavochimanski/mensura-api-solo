@@ -7,7 +7,6 @@ from app.api.mensura.schemas.delivery.cardapio.cardapio_schema import  \
     VitrineComProdutosResponse
 from app.api.mensura.schemas.delivery.categorias.categoria_schema import CategoriaDeliveryOut
 from app.api.mensura.services.CardapioService import CardapioService
-from app.api.mensura.services.ProdutosDeliveryService import ProdutosDeliveryService
 from app.database.db_connection import get_db
 
 router = APIRouter(tags=["Cardapio"])

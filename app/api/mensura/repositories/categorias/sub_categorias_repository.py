@@ -3,6 +3,7 @@ from fastapi import HTTPException, status
 
 from app.api.mensura.models.sub_categoria_model import SubCategoriaModel
 from app.api.mensura.schemas.delivery.categorias.sub_categoria_schema import CriarSubCategoriaRequest
+from app.api.public.models.produtos.cadprod import ProdutoModel
 
 
 class SubCategoriaRepository:
@@ -49,8 +50,8 @@ class SubCategoriaRepository:
 
     def delete(self, sub_id: int):
         """
-        Deleta a subcategoria pelo ID.
-        Lança 404 se não encontrar.
+        Deleta a subcategoria pelo ID, se não houver produtos relacionados.
+        Lança 404 se não encontrar, e 400 se houver produtos vinculados.
         """
         sub = self.db.query(SubCategoriaModel).filter_by(id=sub_id).first()
         if not sub:
@@ -58,5 +59,20 @@ class SubCategoriaRepository:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Subcategoria não encontrada"
             )
+
+        # 🔎 Verificar se existem produtos vinculados via ORM
+        produto_vinculado = (
+            self.db.query(ProdutoModel)
+            .filter(ProdutoModel.subcategoria_id == sub_id)
+            .first()
+        )
+
+        if produto_vinculado:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Não é possível excluir. Existem produtos vinculados a esta subcategoria."
+            )
+
         self.db.delete(sub)
         self.db.commit()
+
