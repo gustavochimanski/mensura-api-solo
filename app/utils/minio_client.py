@@ -8,7 +8,7 @@ from minio import Minio
 from minio.error import S3Error
 from sqlalchemy.orm import Session
 
-from app.api.mensura.repositories.empresaRepository import EmpresasRepository
+from app.api.mensura.repositories.empresaRepository import EmpresaRepository
 from app.utils.logger import logger
 
 # Só carrega .env se não estiver em Docker
@@ -37,7 +37,7 @@ def upload_file_to_minio(
     slug: str
 ) -> str:
     # 1️⃣ Busca e limpa o CNPJ
-    repo = EmpresasRepository(db)
+    repo = EmpresaRepository(db)
     cnpj = repo.get_cnpj_by_id(cod_empresa)
 
     # 2️⃣ Garante bucket com nome igual ao CNPJ

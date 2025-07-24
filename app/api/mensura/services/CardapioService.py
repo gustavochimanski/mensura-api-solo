@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from app.api.mensura.repositories.cardapio.CardapioRepository import CardapioRepository
 from app.api.mensura.repositories.empresaRepository import EmpresaRepository
 from app.api.mensura.schemas.delivery.cardapio.cardapio_schema import (
-     ProdutoEmpMiniDTO, ProdutoMiniDTO, VitrineConfigSchema, VitrineComProdutosResponse
+     ProdutoEmpMiniDTO, ProdutoMiniDTO, VitrineComProdutosResponse
 )
 from app.api.mensura.schemas.delivery.categorias.categoria_schema import CategoriaDeliveryOut
 
