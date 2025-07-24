@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime
 from typing import Optional
 
+from app.api.mensura.repositories.empresaRepository import EmpresaRepository
 from app.database.db_connection import get_db
 from app.api.mensura.services.ProdutosDeliveryService import ProdutosDeliveryService
 from app.api.mensura.schemas.delivery.produtos.produtosDelivery_schema import (
@@ -61,9 +62,11 @@ async def criar_produto(
         data_cadastro=datetime.fromisoformat(data_cadastro) if data_cadastro else None,
         imagem=imagem_url,
     )
-    service = ProdutosDeliveryService(db)
+    empresa_repo = EmpresaRepository(db)
+    service = ProdutosDeliveryService(db, empresa_repo)
+
     try:
-        return service.criar_novo_produto(dto)
+        return service.criar_novo_produto(cod_empresa, dto)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except IntegrityError as ie:

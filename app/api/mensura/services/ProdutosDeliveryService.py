@@ -5,18 +5,19 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.mensura.repositories.delivery.produtosDeliveryRepository import ProdutoDeliveryRepository
+from app.api.mensura.repositories.empresaRepository import EmpresaRepository
 from app.api.mensura.schemas.delivery.produtos.produtosDelivery_schema import ProdutoListItem, CriarNovoProdutoResponse, \
     CriarNovoProdutoRequest
 from app.api.mensura.models.cad_prod_delivery_model import ProdutoDeliveryModel
 from app.api.mensura.models.cad_prod_emp_delivery_model import ProdutosEmpDeliveryModel
-from app.api.public.repositories.empresas.consultaEmpresas import EmpresasRepository
 from app.utils.logger import logger
 
 
 class ProdutosDeliveryService:
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, repo_empresa: EmpresaRepository):
         self.db = db
         self.produto_repo = ProdutoDeliveryRepository(db)
+        self.emp_repo = repo_empresa
 
     def listar_paginado(self, cod_empresa: int, page: int, limit: int):
         offset = (page - 1) * limit
@@ -38,7 +39,11 @@ class ProdutosDeliveryService:
 
         return {"data": data, "total": total, "page": page, "limit": limit, "has_more": offset + limit < total}
 
-    def criar_novo_produto(self, produto_data: CriarNovoProdutoRequest) -> CriarNovoProdutoResponse:
+    def criar_novo_produto(self, cod_empresa: int, produto_data: CriarNovoProdutoRequest) -> CriarNovoProdutoResponse:
+        empresa = self.emp_repo.get_empresa_by_id(cod_empresa)
+        if not empresa:
+            raise HTTPException(status_code=404, detail="Empresa não encontrada")
+
         if self.produto_repo.buscar_por_cod_barras(produto_data.cod_barras):
             raise ValueError("Produto já existe.")
 
@@ -50,9 +55,8 @@ class ProdutosDeliveryService:
             data_cadastro=produto_data.data_cadastro or datetime.utcnow(),
         )
 
-        # empresas = EmpresasRepository(self.db).buscar_codigos_ativos()
-        empresas = [1]
-        logger.info(f"Empresas: {empresas}")
+        empresas = [cod_empresa]
+
         produto.produtos_empresa = [
             ProdutosEmpDeliveryModel(
                 empresa=int(emp),

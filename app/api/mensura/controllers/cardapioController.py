@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from app.api.mensura.repositories.cardapio.CardapioRepository import CardapioRepository
+from app.api.mensura.repositories.empresaRepository import EmpresaRepository
 from app.api.mensura.schemas.delivery.cardapio.cardapio_schema import  \
     VitrineComProdutosResponse
 from app.api.mensura.schemas.delivery.categorias.categoria_schema import CategoriaDeliveryOut
@@ -13,8 +14,9 @@ router = APIRouter(tags=["Cardapio"])
 
 @router.get("/cardapio", response_model=List[CategoriaDeliveryOut])
 def listar_cardapio(empresa_id: int, db: Session = Depends(get_db)):
-    repo = CardapioRepository(db)
-    service = CardapioService(repo)
+    repo_cardapio = CardapioRepository(db)
+    repo_emp = EmpresaRepository(db)
+    service = CardapioService(repo_cardapio, repo_emp)
     return service.listar_cardapio(empresa_id)
 
 
@@ -24,6 +26,7 @@ def listar_vitrines_e_produtos_por_categoria(
     cod_categoria: int = Query(...),
     db: Session = Depends(get_db)
 ):
-    repo = CardapioRepository(db)
-    service = CardapioService(repo)
+    repo_cardapio = CardapioRepository(db)
+    repo_emp = EmpresaRepository(db)
+    service = CardapioService(repo_cardapio, repo_emp)
     return service.buscar_vitrines_com_produtos(empresa_id, cod_categoria)

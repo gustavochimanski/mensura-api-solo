@@ -8,7 +8,7 @@ from minio import Minio
 from minio.error import S3Error
 from sqlalchemy.orm import Session
 
-from app.api.mensura.repositories.empresasRepository import EmpresasRepository
+from app.api.mensura.repositories.empresaRepository import EmpresasRepository
 from app.utils.logger import logger
 
 # Só carrega .env se não estiver em Docker
