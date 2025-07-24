@@ -12,9 +12,9 @@ class CardapioService:
     def __init__(self, repository: CardapioRepository):
         self.repository = repository
 
-    def listar_cardapio(self, cod_empresa: int) -> List[CategoriaDeliveryOut]:
+    def listar_cardapio(self, empresa_id: int) -> List[CategoriaDeliveryOut]:
         categorias = self.repository.listar_categorias()
-        vitrines = self.repository.listar_vitrines(cod_empresa)
+        vitrines = self.repository.listar_vitrines(empresa_id)
 
         vitrines_schema = [VitrineConfigSchema.model_validate(v) for v in vitrines]
 

@@ -28,10 +28,10 @@ class CardapioRepository:
             .all()
         )
 
-    def listar_vitrines(self, cod_empresa: int) -> List[SubCategoriaModel]:
+    def listar_vitrines(self, empresa_id: int) -> List[SubCategoriaModel]:
         return (
             self.db.query(SubCategoriaModel)
-            .filter(SubCategoriaModel.cod_empresa == cod_empresa)
+            .filter(SubCategoriaModel.cod_empresa == empresa_id)
             .order_by(SubCategoriaModel.ordem)
             .all()
         )
