@@ -17,13 +17,3 @@ def listar_cardapio(empresa_id: int, db: Session = Depends(get_db)):
     service = CardapioService(repo)
     return service.listar_cardapio(empresa_id)
 
-
-@router.get("/produtos/vitrine-por-categoria", response_model=List[VitrineComProdutosResponse])
-def listar_vitrines_e_produtos_por_categoria(
-    empresa_id: int = Query(...),
-    cod_categoria: int = Query(...),
-    db: Session = Depends(get_db)
-):
-    repo = CardapioRepository(db)
-    service = CardapioService(repo)
-    return service.buscar_vitrines_com_produtos(cod_empresa, cod_categoria)
