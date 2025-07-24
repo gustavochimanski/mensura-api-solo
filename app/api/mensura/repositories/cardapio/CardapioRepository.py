@@ -21,9 +21,10 @@ class CardapioRepository:
             .all()
         )
 
-    def listar_categorias(self) -> List[CategoriaDeliveryModel]:
+    def listar_categorias(self, empresa_id: int) -> List[CategoriaDeliveryModel]:
         return (
             self.db.query(CategoriaDeliveryModel)
+            .filter(CategoriaDeliveryModel.empresa_id == empresa_id)
             .order_by(CategoriaDeliveryModel.posicao)
             .all()
         )
