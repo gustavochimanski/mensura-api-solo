@@ -12,7 +12,7 @@ from app.database.db_connection import get_db
 router = APIRouter(tags=["Cardapio"])
 
 @router.get("/cardapio", response_model=List[CategoriaDeliveryOut])
-def listar_cardapio(cod_empresa: int = 1, db: Session = Depends(get_db)):
+def listar_cardapio(cod_empresa: int, db: Session = Depends(get_db)):
     repo = CardapioRepository(db)
     service = CardapioService(repo)
     return service.listar_cardapio(cod_empresa)

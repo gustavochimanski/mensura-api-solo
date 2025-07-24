@@ -1,5 +1,3 @@
-# app/models/mensura/empresa.py
-
 from sqlalchemy import Column, Integer, String
 from sqlalchemy.orm import relationship
 from app.database.db_connection import Base
@@ -16,7 +14,16 @@ class EmpresaModel(Base):
     slug = Column(String(50), nullable=False, unique=True)
     logo = Column(String(255), nullable=True)
 
-    # Relacionamentos (reversos)
+    # Campos de endereço
+    cep = Column(String(10), nullable=True)
+    logradouro = Column(String(100), nullable=True)
+    numero = Column(String(10), nullable=True)
+    complemento = Column(String(50), nullable=True)
+    bairro = Column(String(50), nullable=True)
+    cidade = Column(String(50), nullable=True)
+    estado = Column(String(2), nullable=True)  # UF: PR, SP, RJ, etc
+
+    # Relacionamentos
     produtos = relationship("ProdutosEmpDeliveryModel", back_populates="empresa_rel")
     sub_categorias = relationship("SubCategoriaModel", back_populates="empresa_rel")
 
