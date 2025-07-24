@@ -14,14 +14,9 @@ class CardapioService:
 
     def listar_cardapio(self, empresa_id: int) -> List[CategoriaDeliveryOut]:
         categorias = self.repository.listar_categorias()
-        vitrines = self.repository.listar_vitrines(empresa_id)
-
-        vitrines_schema = [VitrineConfigSchema.model_validate(v) for v in vitrines]
 
         resultado: List[CategoriaDeliveryOut] = []
         for cat in categorias:
-
-            vitrines_para_cat = [v for v in vitrines_schema if v.cod_categoria == cat.id]
 
             resp = CategoriaDeliveryOut(
                 id=cat.id,
