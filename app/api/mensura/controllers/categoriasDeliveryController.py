@@ -3,7 +3,6 @@ from fastapi import APIRouter, Depends, Form, File, UploadFile, HTTPException, s
 from sqlalchemy.orm import Session
 from typing import Optional, List
 
-from app.api.mensura.repositories.empresasRepository import EmpresasRepository
 from app.database.db_connection import get_db
 from app.api.mensura.repositories.categorias.categoriasDeliveryRepository import (
     CategoriaDeliveryRepository
