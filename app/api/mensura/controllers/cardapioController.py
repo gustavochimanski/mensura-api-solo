@@ -12,15 +12,15 @@ from app.database.db_connection import get_db
 router = APIRouter(tags=["Cardapio"])
 
 @router.get("/cardapio", response_model=List[CategoriaDeliveryOut])
-def listar_cardapio(cod_empresa: int, db: Session = Depends(get_db)):
+def listar_cardapio(empresa_id: int, db: Session = Depends(get_db)):
     repo = CardapioRepository(db)
     service = CardapioService(repo)
-    return service.listar_cardapio(cod_empresa)
+    return service.listar_cardapio(empresa_id)
 
 
 @router.get("/produtos/vitrine-por-categoria", response_model=List[VitrineComProdutosResponse])
 def listar_vitrines_e_produtos_por_categoria(
-    cod_empresa: int = Query(...),
+    empresa_id: int = Query(...),
     cod_categoria: int = Query(...),
     db: Session = Depends(get_db)
 ):
