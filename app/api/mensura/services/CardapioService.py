@@ -1,7 +1,10 @@
 from typing import List
 from collections import defaultdict
 
+from fastapi import HTTPException
+
 from app.api.mensura.repositories.cardapio.CardapioRepository import CardapioRepository
+from app.api.mensura.repositories.empresasRepository import EmpresaRepository
 from app.api.mensura.schemas.delivery.cardapio.cardapio_schema import (
      ProdutoEmpMiniDTO, ProdutoMiniDTO, VitrineConfigSchema, VitrineComProdutosResponse
 )
@@ -9,15 +12,20 @@ from app.api.mensura.schemas.delivery.categorias.categoria_schema import Categor
 
 
 class CardapioService:
-    def __init__(self, repository: CardapioRepository):
-        self.repository = repository
+    def __init__(self, repo_cardapio: CardapioRepository, repo_empresa: EmpresaRepository):
+        self.repo_cardapio = repo_cardapio
+        self.repo_empresa = repo_empresa
 
     def listar_cardapio(self, empresa_id: int) -> List[CategoriaDeliveryOut]:
-        categorias = self.repository.listar_categorias()
+        # VALIDAÇÃO EMPRESA
+        empresa = self.repo_empresa.get_empresa_by_id(empresa_id)
+        if not empresa:
+            raise HTTPException(status_code=404, detail="Empresa não encontrada")
 
+        categorias = self.repo_cardapio.listar_categorias()
         resultado: List[CategoriaDeliveryOut] = []
-        for cat in categorias:
 
+        for cat in categorias:
             resp = CategoriaDeliveryOut(
                 id=cat.id,
                 slug=cat.slug,
@@ -34,10 +42,15 @@ class CardapioService:
     from app.api.mensura.schemas.delivery.cardapio.cardapio_schema import VitrineComProdutosResponse
 
     def buscar_vitrines_com_produtos(
-            self, cod_empresa: int, cod_categoria: int
+            self, empresa_id: int, cod_categoria: int
     ) -> List[VitrineComProdutosResponse]:
-        vitrines = self.repository.listar_vitrines(cod_empresa)
-        produtos = self.repository.listar_produtos_emp(cod_empresa)
+        # VALIDAÇÃO EMPRESA
+        empresa = self.repo_empresa.get_empresa_by_id(empresa_id)
+        if not empresa:
+            raise HTTPException(status_code=404, detail="Empresa não encontrada")
+
+        vitrines = self.repo_cardapio.listar_vitrines(empresa_id)
+        produtos = self.repo_cardapio.listar_produtos_emp(empresa_id)
 
         # Filtrar vitrines da categoria desejada
         vitrines_cat = [v for v in vitrines if v.cod_categoria == cod_categoria]
