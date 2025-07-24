@@ -2,7 +2,7 @@ from app.api.mensura.models.empresas_model import EmpresaModel
 from sqlalchemy.orm import Session
 from typing import Optional
 
-class EmpresasRepository:
+class EmpresaRepository:
     def __init__(self, db: Session):
         self.db = db
 
