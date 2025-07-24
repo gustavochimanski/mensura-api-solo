@@ -5,12 +5,9 @@ import os
 
 from fastapi import UploadFile
 from minio import Minio
-from minio.error import S3Error
 from sqlalchemy.orm import Session
 
 from app.api.mensura.repositories.empresaRepository import EmpresaRepository
-from app.utils.logger import logger
-
 # Só carrega .env se não estiver em Docker
 if not os.getenv("RUNNING_IN_DOCKER"):
     from dotenv import load_dotenv
