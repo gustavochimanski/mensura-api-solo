@@ -99,8 +99,8 @@ class CardapioService:
         subcategorias = self.repo_cardapio.listar_vitrines(empresa_id)
         produtos = self.repo_cardapio.listar_produtos_emp(empresa_id)
 
-        # Agrupar produtos por subcategoria_id
-        produtos_por_vitrine: dict[int, List[ProdutoEmpMiniDTO]] = defaultdict(list)
+        # Agrupa produtos por subcategoria_id
+        produtos_por_subcategoria: dict[int, List[ProdutoEmpMiniDTO]] = defaultdict(list)
         for ie in produtos:
             base = ie.produto
             if not base:
@@ -119,28 +119,29 @@ class CardapioService:
                 subcategoria_id=ie.subcategoria_id,
                 produto=prod_mini,
             )
-            produtos_por_vitrine[ie.subcategoria_id].append(emp_mini)
+            produtos_por_subcategoria[ie.subcategoria_id].append(emp_mini)
 
-        # Pegar categorias raiz (sem pai)
         categorias_raiz = [cat for cat in categorias if not cat.slug_pai]
-
         resultado: List[VitrineComProdutosResponse] = []
 
         for categoria in categorias_raiz:
-            # Filtrar vitrines (subcategorias) dessa categoria
-            vitrines_da_categoria = [v for v in subcategorias if v.cod_categoria == categoria.id]
-            if not vitrines_da_categoria:
-                continue
+            produtos_categoria = []
 
-            # Pegar qualquer vitrine (ex: a primeira)
-            vitrine = vitrines_da_categoria[0]
-            produtos_vitrine = produtos_por_vitrine.get(vitrine.id, [])
+            # Busca vitrines (subcategorias) da categoria
+            vitrines_da_categoria = [v for v in subcategorias if v.cod_categoria == categoria.id]
+
+            for vitrine in vitrines_da_categoria:
+                produtos_vitrine = produtos_por_subcategoria.get(vitrine.id, [])
+                if produtos_vitrine:
+                    produtos_categoria = produtos_vitrine[:3]
+                    break  # achou vitrine com produtos, sai do for
 
             resultado.append(VitrineComProdutosResponse(
                 id=categoria.id,
                 titulo=categoria.descricao,
-                produtos=produtos_vitrine[:3]
+                produtos=produtos_categoria
             ))
 
         return resultado
+
 
