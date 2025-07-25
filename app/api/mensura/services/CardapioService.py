@@ -91,87 +91,59 @@ class CardapioService:
         return resultado
 
     def buscar_vitrines_home(self, empresa_id: int) -> List[VitrineComProdutosResponse]:
-        # Validação da empresa
+        # Valida empresa
         empresa = self.repo_empresa.get_empresa_by_id(empresa_id)
         if not empresa:
             raise HTTPException(status_code=404, detail="Empresa não encontrada")
 
-        # Busca dados
+        # Busca todas categorias, vitrines e produtos
         categorias = self.repo_cardapio.listar_categorias()
         produtos = self.repo_cardapio.listar_produtos_emp(empresa_id)
+        vitrines = self.repo_cardapio.listar_vitrines(empresa_id)
 
-        # Indexar categorias por id
-        categorias_por_id = {cat.id: cat for cat in categorias}
+        # Agrupar produtos por vitrine_id (subcategoria_id)
+        from collections import defaultdict
+        produtos_por_vitrine: dict[int, List[ProdutoEmpMiniDTO]] = defaultdict(list)
 
-        # Categorias raiz (sem pai)
+        for ie in produtos:
+            base = ie.produto
+            if not base:
+                continue
+
+            prod_mini = ProdutoMiniDTO(
+                id=base.id,
+                descricao=base.descricao,
+                imagem=base.imagem,
+                cod_categoria=base.cod_categoria,
+            )
+            emp_mini = ProdutoEmpMiniDTO(
+                empresa=ie.empresa,
+                cod_barras=ie.cod_barras,
+                preco_venda=float(ie.preco_venda),
+                subcategoria_id=ie.subcategoria_id,
+                produto=prod_mini,
+            )
+            produtos_por_vitrine[ie.subcategoria_id].append(emp_mini)
+
+        # Categorias raiz
         categorias_raiz = [cat for cat in categorias if cat.slug_pai is None]
 
         resultado: List[VitrineComProdutosResponse] = []
 
-        for cat_raiz in categorias_raiz:
-            produtos_da_raiz: List[ProdutoEmpMiniDTO] = []
+        for cat in categorias_raiz:
+            # Filtrar vitrines que pertencem à categoria atual
+            vitrines_cat = [v for v in vitrines if v.cod_categoria == cat.id]
 
-            for ie in produtos:
-                base = ie.produto
-                if not base or base.cod_categoria != cat_raiz.id:
-                    continue
-
-                prod_mini = ProdutoMiniDTO(
-                    id=base.id,
-                    descricao=base.descricao,
-                    imagem=base.imagem,
-                    cod_categoria=base.cod_categoria,
-                )
-                emp_mini = ProdutoEmpMiniDTO(
-                    empresa=ie.empresa,
-                    cod_barras=ie.cod_barras,
-                    preco_venda=float(ie.preco_venda),
-                    subcategoria_id=ie.subcategoria_id,
-                    produto=prod_mini,
-                )
-                produtos_da_raiz.append(emp_mini)
-
-            # Se a categoria raiz tiver produtos, adiciona como uma vitrine
-            if produtos_da_raiz:
-                resultado.append(VitrineComProdutosResponse(
-                    id=cat_raiz.id,
-                    titulo=cat_raiz.descricao,
-                    produtos=produtos_da_raiz[:3]
-                ))
-                continue  # vai pra próxima raiz
-
-            # Senão, buscar produtos das subcategorias
-            subcategorias = [cat for cat in categorias if cat.slug_pai == cat_raiz.slug]
-
-            for subcat in subcategorias:
-                produtos_subcat: List[ProdutoEmpMiniDTO] = []
-
-                for ie in produtos:
-                    base = ie.produto
-                    if not base or base.cod_categoria != subcat.id:
-                        continue
-
-                    prod_mini = ProdutoMiniDTO(
-                        id=base.id,
-                        descricao=base.descricao,
-                        imagem=base.imagem,
-                        cod_categoria=base.cod_categoria,
-                    )
-                    emp_mini = ProdutoEmpMiniDTO(
-                        empresa=ie.empresa,
-                        cod_barras=ie.cod_barras,
-                        preco_venda=float(ie.preco_venda),
-                        subcategoria_id=ie.subcategoria_id,
-                        produto=prod_mini,
-                    )
-                    produtos_subcat.append(emp_mini)
-
-                if produtos_subcat:
+            for vitrine in vitrines_cat:
+                produtos_da_vitrine = produtos_por_vitrine.get(vitrine.id, [])
+                if produtos_da_vitrine:
                     resultado.append(VitrineComProdutosResponse(
-                        id=subcat.id,
-                        titulo=subcat.descricao,
-                        produtos=produtos_subcat[:3]
+                        id=cat.id,  # usa o ID da categoria raiz como ID da vitrine
+                        titulo=cat.descricao,
+                        produtos=produtos_da_vitrine[:3]
                     ))
+                    break  # só a primeira vitrine com produtos
+            # se não achar nenhuma vitrine com produto → ignora
 
         return resultado
 
