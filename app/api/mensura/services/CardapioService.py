@@ -10,7 +10,6 @@ from app.api.mensura.schemas.delivery.cardapio.cardapio_schema import (
      ProdutoEmpMiniDTO, ProdutoMiniDTO, VitrineComProdutosResponse
 )
 from app.api.mensura.schemas.delivery.categorias.categoria_schema import CategoriaDeliveryOut
-from app.utils.logger import logger
 
 
 class CardapioService:
@@ -127,20 +126,23 @@ class CardapioService:
             )
             produtos_por_vitrine[ie.subcategoria_id].append(emp_mini)
 
-        # Categorias raiz (slug_pai vazio ou None)
-        categorias_raiz = [cat for cat in categorias if not cat.slug_pai]
-
         resultado: List[VitrineComProdutosResponse] = []
 
         for categoria in categorias_raiz:
-            # Pega a primeira vitrine da categoria
             vitrine = next((v for v in vitrines if v.cod_categoria == categoria.id), None)
+
             if not vitrine:
+                logger.info(f"[{categoria.descricao}] Sem vitrine cadastrada.")
                 continue
 
             produtos_da_vitrine = produtos_por_vitrine.get(vitrine.id, [])
+
             if not produtos_da_vitrine:
+                logger.info(f"[{categoria.descricao}] Vitrine ({vitrine.titulo}) sem produtos.")
                 continue
+
+            logger.info(
+                f"[{categoria.descricao}] Vitrine: {vitrine.titulo} - Produtos encontrados: {len(produtos_da_vitrine)}")
 
             resultado.append(VitrineComProdutosResponse(
                 id=categoria.id,
@@ -148,6 +150,7 @@ class CardapioService:
                 produtos=produtos_da_vitrine[:3]
             ))
 
+        logger.info(f"Total de categorias com produtos na home: {len(resultado)}")
         return resultado
 
 
