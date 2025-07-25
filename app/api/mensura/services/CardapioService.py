@@ -2,6 +2,7 @@ from typing import List
 from collections import defaultdict
 
 from fastapi import HTTPException
+from sqlalchemy.orm import Session
 
 from app.api.mensura.repositories.cardapio.CardapioRepository import CardapioRepository
 from app.api.mensura.repositories.empresaRepository import EmpresaRepository
@@ -12,9 +13,9 @@ from app.api.mensura.schemas.delivery.categorias.categoria_schema import Categor
 
 
 class CardapioService:
-    def __init__(self, repo_cardapio: CardapioRepository, repo_empresa: EmpresaRepository):
-        self.repo_cardapio = repo_cardapio
-        self.repo_empresa = repo_empresa
+    def __init__(self, db: Session, is_home: bool = False):
+        self.repo_cardapio = CardapioRepository(db)
+        self.repo_empresa = EmpresaRepository(db)
 
     def listar_cardapio(self, empresa_id: int) -> List[CategoriaDeliveryOut]:
         # VALIDAÇÃO EMPRESA
@@ -88,3 +89,51 @@ class CardapioService:
             ))
 
         return resultado
+
+    def buscar_vitrines_home(self, empresa_id: int) -> List[VitrineComProdutosResponse]:
+        # Validação da empresa
+        empresa = self.repo_empresa.get_empresa_by_id(empresa_id)
+        if not empresa:
+            raise HTTPException(status_code=404, detail="Empresa não encontrada")
+
+        # Busca dados
+        categorias = self.repo_cardapio.listar_categorias()
+        produtos = self.repo_cardapio.listar_produtos_emp(empresa_id)
+
+        # Filtrar categorias raiz (slug_pai é None)
+        categorias_raiz = [cat for cat in categorias if cat.slug_pai is None]
+
+        resultado: List[VitrineComProdutosResponse] = []
+
+        for cat in categorias_raiz:
+            produtos_da_categoria: List[ProdutoEmpMiniDTO] = []
+
+            for ie in produtos:
+                base = ie.produto
+                if not base or base.cod_categoria != cat.id:
+                    continue
+
+                prod_mini = ProdutoMiniDTO(
+                    id=base.id,
+                    descricao=base.descricao,
+                    imagem=base.imagem,
+                    cod_categoria=base.cod_categoria,
+                )
+                emp_mini = ProdutoEmpMiniDTO(
+                    empresa=ie.empresa,
+                    cod_barras=ie.cod_barras,
+                    preco_venda=float(ie.preco_venda),
+                    subcategoria_id=ie.subcategoria_id,
+                    produto=prod_mini,
+                )
+                produtos_da_categoria.append(emp_mini)
+
+            if produtos_da_categoria:
+                resultado.append(VitrineComProdutosResponse(
+                    id=cat.id,
+                    titulo=cat.descricao,
+                    produtos=produtos_da_categoria[:3]  # pega até 3 produtos
+                ))
+
+        return resultado
+
