@@ -91,23 +91,20 @@ class CardapioService:
         return resultado
 
     def buscar_vitrines_home(self, empresa_id: int) -> List[VitrineComProdutosResponse]:
-        # Valida empresa
+        from collections import defaultdict
+
+        # Validação empresa
         empresa = self.repo_empresa.get_empresa_by_id(empresa_id)
         if not empresa:
             raise HTTPException(status_code=404, detail="Empresa não encontrada")
 
-        # Busca dados
+        # Dados necessários
         categorias = self.repo_cardapio.listar_categorias()
         vitrines = self.repo_cardapio.listar_vitrines(empresa_id)
         produtos = self.repo_cardapio.listar_produtos_emp(empresa_id)
 
-        # Categorias raiz
-        categorias_raiz = [cat for cat in categorias if cat.slug_pai is None]
-
-        # Agrupar produtos por vitrine_id (subcategoria_id)
-        from collections import defaultdict
+        # Agrupa produtos por vitrine_id
         produtos_por_vitrine: dict[int, List[ProdutoEmpMiniDTO]] = defaultdict(list)
-
         for ie in produtos:
             base = ie.produto
             if not base:
@@ -128,11 +125,14 @@ class CardapioService:
             )
             produtos_por_vitrine[ie.subcategoria_id].append(emp_mini)
 
+        # Pega categorias raiz (sem pai)
+        categorias_raiz = [cat for cat in categorias if cat.slug_pai is None]
+
         resultado: List[VitrineComProdutosResponse] = []
 
-        for cat in categorias_raiz:
-            # Pega a primeira vitrine dessa categoria
-            vitrine = next((v for v in vitrines if v.cod_categoria == cat.id), None)
+        for categoria in categorias_raiz:
+            # Pega a primeira vitrine da categoria
+            vitrine = next((v for v in vitrines if v.cod_categoria == categoria.id), None)
             if not vitrine:
                 continue
 
@@ -141,8 +141,8 @@ class CardapioService:
                 continue
 
             resultado.append(VitrineComProdutosResponse(
-                id=vitrine.id,
-                titulo=vitrine.titulo,
+                id=categoria.id,  # usa ID da categoria raiz
+                titulo=categoria.descricao,
                 produtos=produtos_da_vitrine[:3]
             ))
 
