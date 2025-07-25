@@ -99,8 +99,8 @@ class CardapioService:
         subcategorias = self.repo_cardapio.listar_vitrines(empresa_id)
         produtos = self.repo_cardapio.listar_produtos_emp(empresa_id)
 
-        # ✅ Agrupa produtos por subcategoria_id (vitrine.id)
-        produtos_por_sub_id: dict[int, List[ProdutoEmpMiniDTO]] = defaultdict(list)
+        # Agrupar produtos por subcategoria_id
+        produtos_por_vitrine: dict[int, List[ProdutoEmpMiniDTO]] = defaultdict(list)
         for ie in produtos:
             base = ie.produto
             if not base:
@@ -119,29 +119,28 @@ class CardapioService:
                 subcategoria_id=ie.subcategoria_id,
                 produto=prod_mini,
             )
-            produtos_por_sub_id[ie.subcategoria_id].append(emp_mini)
+            produtos_por_vitrine[ie.subcategoria_id].append(emp_mini)
 
-        # ✅ Filtra só categorias raiz
+        # Pegar categorias raiz (sem pai)
         categorias_raiz = [cat for cat in categorias if not cat.slug_pai]
 
         resultado: List[VitrineComProdutosResponse] = []
 
         for categoria in categorias_raiz:
-            # 🟢 Busca a primeira subcategoria (vitrine) dessa categoria
+            # Filtrar vitrines (subcategorias) dessa categoria
             vitrines_da_categoria = [v for v in subcategorias if v.cod_categoria == categoria.id]
-            primeira_vitrine = vitrines_da_categoria[0] if vitrines_da_categoria else None
+            if not vitrines_da_categoria:
+                continue
 
-            produtos = []
-            if primeira_vitrine:
-                produtos = produtos_por_sub_id.get(primeira_vitrine.id, [])
+            # Pegar qualquer vitrine (ex: a primeira)
+            vitrine = vitrines_da_categoria[0]
+            produtos_vitrine = produtos_por_vitrine.get(vitrine.id, [])
 
-            # 🟢 Sempre adiciona a categoria, mesmo que não tenha produtos
             resultado.append(VitrineComProdutosResponse(
                 id=categoria.id,
                 titulo=categoria.descricao,
-                produtos=produtos[:3]  # até 3 produtos
+                produtos=produtos_vitrine[:3]
             ))
 
         return resultado
-
 
