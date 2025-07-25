@@ -10,6 +10,7 @@ from app.api.mensura.schemas.delivery.cardapio.cardapio_schema import (
      ProdutoEmpMiniDTO, ProdutoMiniDTO, VitrineComProdutosResponse
 )
 from app.api.mensura.schemas.delivery.categorias.categoria_schema import CategoriaDeliveryOut
+from app.utils.logger import logger
 
 
 class CardapioService:
@@ -101,13 +102,16 @@ class CardapioService:
         vitrines = self.repo_cardapio.listar_vitrines(empresa_id)
         produtos = self.repo_cardapio.listar_produtos_emp(empresa_id)
 
+        categorias_raiz = [cat for cat in categorias if not cat.slug_pai]
+        logger.info(f"Categorias raiz encontradas: {[cat.descricao for cat in categorias_raiz]}")
+
         # Agrupa produtos por vitrine_id
         produtos_por_vitrine: dict[int, List[ProdutoEmpMiniDTO]] = defaultdict(list)
         for ie in produtos:
             base = ie.produto
             if not base:
                 continue
-
+""
             prod_mini = ProdutoMiniDTO(
                 id=base.id,
                 descricao=base.descricao,
