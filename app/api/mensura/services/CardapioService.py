@@ -10,7 +10,6 @@ from app.api.mensura.schemas.delivery.cardapio.cardapio_schema import (
      ProdutoEmpMiniDTO, ProdutoMiniDTO, VitrineComProdutosResponse
 )
 from app.api.mensura.schemas.delivery.categorias.categoria_schema import CategoriaDeliveryOut
-from app.utils.logger import logger
 
 
 class CardapioService:
@@ -92,21 +91,17 @@ class CardapioService:
         return resultado
 
     def buscar_vitrines_home(self, empresa_id: int) -> List[VitrineComProdutosResponse]:
-        from collections import defaultdict
-
         empresa = self.repo_empresa.get_empresa_by_id(empresa_id)
         if not empresa:
             raise HTTPException(status_code=404, detail="Empresa não encontrada")
 
         categorias = self.repo_cardapio.listar_categorias()
-        vitrines = self.repo_cardapio.listar_vitrines(empresa_id)
+        subcategorias = self.repo_cardapio.listar_vitrines(empresa_id)  # Subcategorias == vitrines
         produtos = self.repo_cardapio.listar_produtos_emp(empresa_id)
 
-        categorias_raiz = [cat for cat in categorias if not cat.slug_pai]
-        logger.info(f"Categorias raiz encontradas: {[cat.descricao for cat in categorias_raiz]}")
-
-        # Agrupa produtos por vitrine_id
-        produtos_por_vitrine: dict[int, List[ProdutoEmpMiniDTO]] = defaultdict(list)
+        # Agrupa produtos por subcategoria_id
+        from collections import defaultdict
+        produtos_por_subcategoria: dict[int, List[ProdutoEmpMiniDTO]] = defaultdict(list)
         for ie in produtos:
             base = ie.produto
             if not base:
@@ -125,33 +120,30 @@ class CardapioService:
                 subcategoria_id=ie.subcategoria_id,
                 produto=prod_mini,
             )
-            produtos_por_vitrine[ie.subcategoria_id].append(emp_mini)
+            produtos_por_subcategoria[ie.subcategoria_id].append(emp_mini)
 
+        # Pega categorias raiz (sem pai)
+        categorias_raiz = [cat for cat in categorias if not cat.slug_pai]
         resultado: List[VitrineComProdutosResponse] = []
 
         for categoria in categorias_raiz:
-            vitrine = next((v for v in vitrines if v.cod_categoria == categoria.id), None)
-
-            if not vitrine:
-                logger.info(f"[{categoria.descricao}] Sem vitrine cadastrada.")
+            # Busca subcategorias (vitrines) ligadas à categoria
+            vitrines_da_categoria = [v for v in subcategorias if v.cod_categoria == categoria.id]
+            if not vitrines_da_categoria:
                 continue
 
-            produtos_da_vitrine = produtos_por_vitrine.get(vitrine.id, [])
+            primeira_vitrine = vitrines_da_categoria[0]
+            produtos = produtos_por_subcategoria.get(primeira_vitrine.id, [])
 
-            if not produtos_da_vitrine:
-                logger.info(f"[{categoria.descricao}] Vitrine ({vitrine.titulo}) sem produtos.")
+            if not produtos:
                 continue
-
-            logger.info(
-                f"[{categoria.descricao}] Vitrine: {vitrine.titulo} - Produtos encontrados: {len(produtos_da_vitrine)}")
 
             resultado.append(VitrineComProdutosResponse(
                 id=categoria.id,
                 titulo=categoria.descricao,
-                produtos=produtos_da_vitrine[:3]
+                produtos=produtos[:3]
             ))
 
-        logger.info(f"Total de categorias com produtos na home: {len(resultado)}")
         return resultado
 
 
