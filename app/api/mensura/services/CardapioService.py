@@ -96,10 +96,13 @@ class CardapioService:
         if not empresa:
             raise HTTPException(status_code=404, detail="Empresa não encontrada")
 
-        # Busca todas categorias, vitrines e produtos
+        # Busca dados
         categorias = self.repo_cardapio.listar_categorias()
-        produtos = self.repo_cardapio.listar_produtos_emp(empresa_id)
         vitrines = self.repo_cardapio.listar_vitrines(empresa_id)
+        produtos = self.repo_cardapio.listar_produtos_emp(empresa_id)
+
+        # Categorias raiz
+        categorias_raiz = [cat for cat in categorias if cat.slug_pai is None]
 
         # Agrupar produtos por vitrine_id (subcategoria_id)
         from collections import defaultdict
@@ -125,25 +128,23 @@ class CardapioService:
             )
             produtos_por_vitrine[ie.subcategoria_id].append(emp_mini)
 
-        # Categorias raiz
-        categorias_raiz = [cat for cat in categorias if cat.slug_pai is None]
-
         resultado: List[VitrineComProdutosResponse] = []
 
         for cat in categorias_raiz:
-            # Filtrar vitrines que pertencem à categoria atual
-            vitrines_cat = [v for v in vitrines if v.cod_categoria == cat.id]
+            # Pega a primeira vitrine dessa categoria
+            vitrine = next((v for v in vitrines if v.cod_categoria == cat.id), None)
+            if not vitrine:
+                continue
 
-            for vitrine in vitrines_cat:
-                produtos_da_vitrine = produtos_por_vitrine.get(vitrine.id, [])
-                if produtos_da_vitrine:
-                    resultado.append(VitrineComProdutosResponse(
-                        id=cat.id,  # usa o ID da categoria raiz como ID da vitrine
-                        titulo=cat.descricao,
-                        produtos=produtos_da_vitrine[:3]
-                    ))
-                    break  # só a primeira vitrine com produtos
-            # se não achar nenhuma vitrine com produto → ignora
+            produtos_da_vitrine = produtos_por_vitrine.get(vitrine.id, [])
+            if not produtos_da_vitrine:
+                continue
+
+            resultado.append(VitrineComProdutosResponse(
+                id=vitrine.id,
+                titulo=vitrine.titulo,
+                produtos=produtos_da_vitrine[:3]
+            ))
 
         return resultado
 
