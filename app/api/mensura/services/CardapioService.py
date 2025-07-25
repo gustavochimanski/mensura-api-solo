@@ -111,7 +111,7 @@ class CardapioService:
             base = ie.produto
             if not base:
                 continue
-""
+
             prod_mini = ProdutoMiniDTO(
                 id=base.id,
                 descricao=base.descricao,
