@@ -10,6 +10,7 @@ from app.api.mensura.schemas.delivery.cardapio.cardapio_schema import (
      ProdutoEmpMiniDTO, ProdutoMiniDTO, VitrineComProdutosResponse
 )
 from app.api.mensura.schemas.delivery.categorias.categoria_schema import CategoriaDeliveryOut
+from app.utils.logger import logger
 
 
 class CardapioService:
