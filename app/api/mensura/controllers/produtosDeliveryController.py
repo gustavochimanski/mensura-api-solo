@@ -5,7 +5,6 @@ from sqlalchemy.orm import Session
 from datetime import datetime
 from typing import Optional
 
-from app.api.mensura.repositories.empresaRepository import EmpresaRepository
 from app.database.db_connection import get_db
 from app.api.mensura.services.ProdutosDeliveryService import ProdutosDeliveryService
 from app.api.mensura.schemas.delivery.produtos.produtosDelivery_schema import (
@@ -62,8 +61,7 @@ async def criar_produto(
         data_cadastro=datetime.fromisoformat(data_cadastro) if data_cadastro else None,
         imagem=imagem_url,
     )
-    empresa_repo = EmpresaRepository(db)
-    service = ProdutosDeliveryService(db, empresa_repo)
+    service = ProdutosDeliveryService(db)
 
     try:
         return service.criar_novo_produto(cod_empresa, dto)
@@ -108,8 +106,7 @@ async def atualizar_produto(
         data_cadastro=datetime.fromisoformat(data_cadastro) if data_cadastro else None,
         imagem=imagem_url,
     )
-    empresa_repo = EmpresaRepository(db)
-    service = ProdutosDeliveryService(db, empresa_repo)
+    service = ProdutosDeliveryService(db)
     try:
         return service.atualizar_produto(cod_barras, dto)
     except HTTPException:
@@ -123,7 +120,6 @@ async def atualizar_produto(
 
 @router.delete("/produtos/delivery/{cod_barras}", status_code=status.HTTP_204_NO_CONTENT)
 def deletar_produto(cod_barras: str, db: Session = Depends(get_db)):
-    empresa_repo = EmpresaRepository(db)
-    service = ProdutosDeliveryService(db, empresa_repo)
+    service = ProdutosDeliveryService(db)
     sucesso = service.deletar_produto(cod_barras)
     return { "success": sucesso }

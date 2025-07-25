@@ -14,10 +14,10 @@ from app.utils.logger import logger
 
 
 class ProdutosDeliveryService:
-    def __init__(self, db: Session, repo_empresa: EmpresaRepository):
+    def __init__(self, db: Session):
         self.db = db
         self.produto_repo = ProdutoDeliveryRepository(db)
-        self.emp_repo = repo_empresa
+        self.emp_repo = EmpresaRepository(db)
 
     def listar_paginado(self, cod_empresa: int, page: int, limit: int):
         offset = (page - 1) * limit
