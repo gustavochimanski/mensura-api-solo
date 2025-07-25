@@ -135,13 +135,10 @@ class CardapioService:
             primeira_vitrine = vitrines_da_categoria[0]
             produtos = produtos_por_subcategoria.get(primeira_vitrine.id, [])
 
-            if not produtos:
-                continue
-
             resultado.append(VitrineComProdutosResponse(
                 id=categoria.id,
                 titulo=categoria.descricao,
-                produtos=produtos[:3]
+                produtos=produtos[:3] if produtos else []
             ))
 
         return resultado
