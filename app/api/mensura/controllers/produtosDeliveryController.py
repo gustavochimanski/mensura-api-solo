@@ -108,7 +108,8 @@ async def atualizar_produto(
         data_cadastro=datetime.fromisoformat(data_cadastro) if data_cadastro else None,
         imagem=imagem_url,
     )
-    service = ProdutosDeliveryService(db)
+    empresa_repo = EmpresaRepository(db)
+    service = ProdutosDeliveryService(db, empresa_repo)
     try:
         return service.atualizar_produto(cod_barras, dto)
     except HTTPException:
@@ -122,6 +123,7 @@ async def atualizar_produto(
 
 @router.delete("/produtos/delivery/{cod_barras}", status_code=status.HTTP_204_NO_CONTENT)
 def deletar_produto(cod_barras: str, db: Session = Depends(get_db)):
-    service = ProdutosDeliveryService(db)
+    empresa_repo = EmpresaRepository(db)
+    service = ProdutosDeliveryService(db, empresa_repo)
     sucesso = service.deletar_produto(cod_barras)
     return { "success": sucesso }
