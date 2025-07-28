@@ -3,7 +3,7 @@ from fastapi import HTTPException, status
 
 from app.api.mensura.models.cad_prod_emp_delivery_model import ProdutosEmpDeliveryModel
 from app.api.mensura.models.vitrines_model import VitrinesModel
-from app.api.mensura.schemas.delivery.categorias.vitrine_schema import CriarSubCategoriaRequest
+from app.api.mensura.schemas.delivery.vitrine_schema import CriarVitrineRequest
 
 
 class SubCategoriaRepository:
@@ -23,7 +23,7 @@ class SubCategoriaRepository:
 
         return query.order_by(VitrinesModel.ordem).all()
 
-    def create(self, dados: CriarSubCategoriaRequest):
+    def create(self, dados: CriarVitrineRequest):
         """
         Cria uma nova subcategoria/vitrine.
         Gera slug automático se não fornecido.

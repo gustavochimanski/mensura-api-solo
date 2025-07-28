@@ -1,10 +1,10 @@
-from fastapi import APIRouter, Depends, Query, HTTPException, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 from typing import Optional, List
 
 from app.api.mensura.repositories.categorias.vitrines_repo import SubCategoriaRepository
-from app.api.mensura.schemas.delivery.categorias.vitrine_schema import (
-    CriarSubCategoriaRequest, CriarSubCategoriaResponse
+from app.api.mensura.schemas.delivery.vitrine_schema import (
+    CriarVitrineRequest, CriarVitrineResponse
 )
 from app.database.db_connection import get_db
 from app.utils.logger import logger
@@ -16,7 +16,7 @@ router = APIRouter(
 
 
 # ✅ GET Subcategorias com filtros opcionais
-@router.get("", response_model=List[CriarSubCategoriaResponse])
+@router.get("", response_model=List[CriarVitrineResponse])
 def listar_subcategorias(
         empresa_id: int = Query(..., description="ID da empresa"),
         cod_categoria: Optional[int] = Query(None, description="Filtrar por ID da categoria"),
@@ -25,13 +25,13 @@ def listar_subcategorias(
     logger.info(f"[GET] Listando subcategorias - empresa_id={empresa_id}, cod_categoria={cod_categoria}")
     repo = SubCategoriaRepository(db)
     subcategorias = repo.listar(cod_empresa=empresa_id, cod_categoria=cod_categoria)
-    return [CriarSubCategoriaResponse.from_orm(sub) for sub in subcategorias]
+    return [CriarVitrineResponse.from_orm(sub) for sub in subcategorias]
 
 
 # ✅ POST Subcategoria com validação e log
-@router.post("", response_model=CriarSubCategoriaResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=CriarVitrineResponse, status_code=status.HTTP_201_CREATED)
 def criar_subcategoria(
-        request: CriarSubCategoriaRequest,
+        request: CriarVitrineRequest,
         db: Session = Depends(get_db)
 ):
     logger.info(
@@ -39,7 +39,7 @@ def criar_subcategoria(
 
     repo = SubCategoriaRepository(db)
     nova_sub = repo.create(request)
-    return CriarSubCategoriaResponse.model_validate(nova_sub)
+    return CriarVitrineResponse.model_validate(nova_sub)
 
 
 # ✅ DELETE com tratamento de erro
