@@ -63,7 +63,7 @@ class ProdutosDeliveryService:
                 cod_barras=produto.cod_barras,
                 preco_venda=produto_data.preco_venda,
                 custo=produto_data.custo or 0,
-                subcategoria_id=produto_data.subcategoria_id,
+                vitrine_id=produto_data.vitrine_id,
                 produto=produto
             ) for emp in empresas
         ]
@@ -85,7 +85,7 @@ class ProdutosDeliveryService:
             "data_cadastro": data.data_cadastro or datetime.utcnow(),
             "preco_venda": data.preco_venda,
             "custo": data.custo or 0,
-            "subcategoria_id": data.subcategoria_id,
+            "vitrine_id": data.vitrine_id,
         }
 
         prod = self.produto_repo.update_produto(cod_barras, update_data)

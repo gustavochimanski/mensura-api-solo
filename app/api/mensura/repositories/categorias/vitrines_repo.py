@@ -6,13 +6,13 @@ from app.api.mensura.models.vitrines_model import VitrinesModel
 from app.api.mensura.schemas.delivery.vitrine_schema import CriarVitrineRequest
 
 
-class SubCategoriaRepository:
+class VitrineRepository:
     def __init__(self, db: Session):
         self.db = db
 
     def listar(self, cod_empresa: int, cod_categoria: int | None = None):
         """
-        Retorna as subcategorias da empresa, podendo filtrar por categoria.
+        Retorna as Vitrines da empresa, podendo filtrar por categoria.
         """
         query = self.db.query(VitrinesModel).filter(
             VitrinesModel.cod_empresa == cod_empresa
@@ -25,7 +25,7 @@ class SubCategoriaRepository:
 
     def create(self, dados: CriarVitrineRequest):
         """
-        Cria uma nova subcategoria/vitrine.
+        Cria uma nova vitrine.
         Gera slug automático se não fornecido.
         """
         slug_value = dados.titulo.lower().replace(" ", "-")
@@ -44,33 +44,33 @@ class SubCategoriaRepository:
             self.db.rollback()
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Erro ao criar subcategoria"
+                detail="Erro ao criar Vitrine"
             )
         return nova
 
     def delete(self, sub_id: int):
         """
-        Deleta a subcategoria pelo ID, se não houver produtos relacionados.
+        Deleta a Vitrine pelo ID, se não houver produtos relacionados.
         Lança 404 se não encontrar, e 400 se houver produtos vinculados.
         """
         sub = self.db.query(VitrinesModel).filter_by(id=sub_id).first()
         if not sub:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Subcategoria não encontrada"
+                detail="Vitrine não encontrada"
             )
 
         # 🔎 Verificar se existem produtos vinculados via ORM
         produto_vinculado = (
             self.db.query(ProdutosEmpDeliveryModel)
-            .filter(ProdutosEmpDeliveryModel.subcategoria_id == sub_id)
+            .filter(ProdutosEmpDeliveryModel.vitrine_id == sub_id)
             .first()
         )
 
         if produto_vinculado:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Não é possível excluir. Existem produtos vinculados a esta subcategoria."
+                detail="Não é possível excluir. Existem produtos vinculados a esta Vitrine."
             )
 
         self.db.delete(sub)

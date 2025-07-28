@@ -53,7 +53,7 @@ class ProdutoDeliveryRepository:
         Atualiza o produto e seus dados na tabela de relação com empresa.
         update_data deve conter as chaves:
          - descricao, cod_categoria, imagem, data_cadastro
-         - preco_venda, custo, subcategoria_id
+         - preco_venda, custo, vitrine_id
         """
         prod = self.db.query(ProdutoDeliveryModel).filter_by(cod_barras=cod_barras).first()
         if not prod:
@@ -64,14 +64,14 @@ class ProdutoDeliveryRepository:
             if attr in update_data and update_data[attr] is not None:
                 setattr(prod, attr, update_data[attr])
 
-        # Atualiza preço, custo e subcategoria na relação ProdutosEmpDeliveryModel
+        # Atualiza preço, custo e vitrine na relação ProdutosEmpDeliveryModel
         for pe in prod.produtos_empresa:
             if "preco_venda" in update_data:
                 pe.preco_venda = update_data["preco_venda"]
             if "custo" in update_data:
                 pe.custo = update_data["custo"]
-            if "subcategoria_id" in update_data:
-                pe.subcategoria_id = update_data["subcategoria_id"]
+            if "vitrine_id" in update_data:
+                pe.vitrine_id = update_data["vitrine_id"]
 
         try:
             self.db.commit()

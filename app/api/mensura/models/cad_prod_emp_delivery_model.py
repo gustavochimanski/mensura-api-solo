@@ -35,7 +35,7 @@ class ProdutosEmpDeliveryModel(Base):
     custo = Column(Numeric(18, 5), nullable=True)
     preco_venda = Column(Numeric(18, 5), nullable=False)
 
-    # FK para subcategoria/vitrine
+    # FK para vitrine
     vitrine_id = Column(
         Integer,
         ForeignKey("mensura.vitrines.id", ondelete="SET NULL"),

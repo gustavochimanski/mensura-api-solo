@@ -56,8 +56,8 @@ class CardapioService:
         # Filtrar vitrines da categoria desejada
         vitrines_cat = [v for v in vitrines if v.cod_categoria == cod_categoria]
 
-        # Agrupar produtos por subcategoria_id
-        produtos_por_sub: dict[int, List[ProdutoEmpMiniDTO]] = defaultdict(list)
+        # Agrupar produtos por vitrine_id
+        produtos_por_vitrine: dict[int, List[ProdutoEmpMiniDTO]] = defaultdict(list)
 
         for ie in produtos:
             base = ie.produto
@@ -74,10 +74,10 @@ class CardapioService:
                 empresa=ie.empresa,
                 cod_barras=ie.cod_barras,
                 preco_venda=float(ie.preco_venda),
-                subcategoria_id=ie.subcategoria_id,
+                vitrine_id=ie.vitrine_id,
                 produto=prod_mini,
             )
-            produtos_por_sub[ie.subcategoria_id].append(emp_mini)
+            produtos_por_vitrine[ie.vitrine_id].append(emp_mini)
 
         # Construir a resposta
         resultado: List[VitrineComProdutosResponse] = []
@@ -85,7 +85,7 @@ class CardapioService:
             resultado.append(VitrineComProdutosResponse(
                 id=vitrine.id,
                 titulo=vitrine.titulo,
-                produtos=produtos_por_sub.get(vitrine.id, [])
+                produtos=produtos_por_vitrine.get(vitrine.id, [])
             ))
 
         return resultado
