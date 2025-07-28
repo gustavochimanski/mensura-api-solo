@@ -10,6 +10,6 @@ class ProdutoEmpDTO(BaseModel):
     cod_barras: str
     preco_venda: float
     custo: Optional[float]
-    vitrine_id: Optional[int]
+    vitrine_id: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True)
