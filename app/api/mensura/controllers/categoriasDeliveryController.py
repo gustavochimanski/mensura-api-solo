@@ -70,7 +70,7 @@ async def criar_categoria(
         if imagem.content_type not in permitidos:
             raise HTTPException(400, "Formato de imagem inválido")
         try:
-            imagem_url = upload_file_to_minio(db, cod_empresa, imagem, slug)
+            imagem_url = upload_file_to_minio(db, cod_empresa, imagem, "categorias")
         except RuntimeError as e:
             logger.error(f"Upload falhou: {e}")
             raise HTTPException(500, "Erro ao enviar imagem")
