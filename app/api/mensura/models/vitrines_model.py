@@ -31,5 +31,5 @@ class VitrinesModel(Base):
     produtos = relationship(
         "ProdutosEmpDeliveryModel",
         back_populates="vitrine",
-        foreign_keys=[ProdutosEmpDeliveryModel.subcategoria_id]  # ✅ lista real
+        foreign_keys=[ProdutosEmpDeliveryModel.vitrine_id]  # ✅ lista real
     )
