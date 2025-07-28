@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.api.mensura.models.cad_categoria_delivery_model import CategoriaDeliveryModel
 from app.api.mensura.models.cad_prod_emp_delivery_model import ProdutosEmpDeliveryModel
-from app.api.mensura.models.sub_categoria_model import SubCategoriaModel
+from app.api.mensura.models.vitrines_model import VitrinesModel
 
 
 class CardapioRepository:
@@ -28,11 +28,11 @@ class CardapioRepository:
             .all()
         )
 
-    def listar_vitrines(self, empresa_id: int) -> List[SubCategoriaModel]:
+    def listar_vitrines(self, empresa_id: int) -> List[VitrinesModel]:
         return (
-            self.db.query(SubCategoriaModel)
-            .filter(SubCategoriaModel.cod_empresa == empresa_id)
-            .order_by(SubCategoriaModel.ordem)
+            self.db.query(VitrinesModel)
+            .filter(VitrinesModel.cod_empresa == empresa_id)
+            .order_by(VitrinesModel.ordem)
             .all()
         )
 

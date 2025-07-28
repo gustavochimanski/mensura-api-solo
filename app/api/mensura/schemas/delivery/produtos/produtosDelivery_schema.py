@@ -9,7 +9,7 @@ class CriarNovoProdutoRequest(BaseModel):
     cod_barras: str
     descricao: str
     cod_categoria: int
-    subcategoria_id: Optional[int] = None
+    vitrine_id: Optional[int] = None
     preco_venda: float
     custo: Optional[float] = None
     data_cadastro: Optional[datetime] = None

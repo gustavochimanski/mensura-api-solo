@@ -25,7 +25,7 @@ class ProdutoEmpMiniDTO(BaseModel):
     empresa: int
     cod_barras: str
     preco_venda: float
-    subcategoria_id: int
+    vitrine_id: int
     produto: ProdutoMiniDTO
 
     model_config = ConfigDict(from_attributes=True)

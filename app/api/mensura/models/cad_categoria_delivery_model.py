@@ -19,17 +19,9 @@ class CategoriaDeliveryModel(Base):
         "ProdutoDeliveryModel",
         back_populates="categoria"
     )
-    sub_categorias = relationship(
-        "SubCategoriaModel",
+    vitrines = relationship(
+        "VitrinesModel",
         back_populates="categoria"
     )
-
-    @hybrid_property
-    def label(self) -> str:
-        return self.descricao
-
-    @hybrid_property
-    def href(self) -> str:
-        return f"/categoria/{self.slug}"
 
     model_config = ConfigDict(from_attributes=True)

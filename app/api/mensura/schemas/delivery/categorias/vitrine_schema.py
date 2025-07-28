@@ -1,7 +1,7 @@
 from pydantic import BaseModel, ConfigDict, constr
 from typing import Optional
 
-class CriarSubCategoriaRequest(BaseModel):
+class CriarVitrineRequest(BaseModel):
     cod_empresa: int
     cod_categoria: Optional[int]
     titulo: constr(min_length=1, max_length=100)
@@ -9,7 +9,7 @@ class CriarSubCategoriaRequest(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-class CriarSubCategoriaResponse(BaseModel):
+class CriarVitrineResponse(BaseModel):
     id: int
     cod_empresa: int
     cod_categoria: int

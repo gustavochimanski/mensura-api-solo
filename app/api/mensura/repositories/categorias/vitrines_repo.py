@@ -2,8 +2,8 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 
 from app.api.mensura.models.cad_prod_emp_delivery_model import ProdutosEmpDeliveryModel
-from app.api.mensura.models.sub_categoria_model import SubCategoriaModel
-from app.api.mensura.schemas.delivery.categorias.sub_categoria_schema import CriarSubCategoriaRequest
+from app.api.mensura.models.vitrines_model import VitrinesModel
+from app.api.mensura.schemas.delivery.categorias.vitrine_schema import CriarSubCategoriaRequest
 
 
 class SubCategoriaRepository:
@@ -14,14 +14,14 @@ class SubCategoriaRepository:
         """
         Retorna as subcategorias da empresa, podendo filtrar por categoria.
         """
-        query = self.db.query(SubCategoriaModel).filter(
-            SubCategoriaModel.cod_empresa == cod_empresa
+        query = self.db.query(VitrinesModel).filter(
+            VitrinesModel.cod_empresa == cod_empresa
         )
 
         if cod_categoria is not None:
-            query = query.filter(SubCategoriaModel.cod_categoria == cod_categoria)
+            query = query.filter(VitrinesModel.cod_categoria == cod_categoria)
 
-        return query.order_by(SubCategoriaModel.ordem).all()
+        return query.order_by(VitrinesModel.ordem).all()
 
     def create(self, dados: CriarSubCategoriaRequest):
         """
@@ -29,7 +29,7 @@ class SubCategoriaRepository:
         Gera slug automático se não fornecido.
         """
         slug_value = dados.titulo.lower().replace(" ", "-")
-        nova = SubCategoriaModel(
+        nova = VitrinesModel(
             cod_empresa=dados.cod_empresa,
             cod_categoria=dados.cod_categoria,
             titulo=dados.titulo,
@@ -53,7 +53,7 @@ class SubCategoriaRepository:
         Deleta a subcategoria pelo ID, se não houver produtos relacionados.
         Lança 404 se não encontrar, e 400 se houver produtos vinculados.
         """
-        sub = self.db.query(SubCategoriaModel).filter_by(id=sub_id).first()
+        sub = self.db.query(VitrinesModel).filter_by(id=sub_id).first()
         if not sub:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,

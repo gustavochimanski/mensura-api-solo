@@ -38,7 +38,7 @@ class ProdutosEmpDeliveryModel(Base):
     # FK para subcategoria/vitrine
     subcategoria_id = Column(
         Integer,
-        ForeignKey("mensura.sub_categorias.id", ondelete="SET NULL"),
+        ForeignKey("mensura.vitrines.id", ondelete="SET NULL"),
         nullable=True
     )
 

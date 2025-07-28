@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends, Query, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import Optional, List
 
-from app.api.mensura.repositories.categorias.sub_categorias_repository import SubCategoriaRepository
-from app.api.mensura.schemas.delivery.categorias.sub_categoria_schema import (
+from app.api.mensura.repositories.categorias.vitrines_repo import SubCategoriaRepository
+from app.api.mensura.schemas.delivery.categorias.vitrine_schema import (
     CriarSubCategoriaRequest, CriarSubCategoriaResponse
 )
 from app.database.db_connection import get_db

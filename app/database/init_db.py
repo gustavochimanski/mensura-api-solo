@@ -20,7 +20,7 @@ def criar_tabelas():
         # ✅ IMPORTAÇÃO EXPLÍCITA DOS MODELS
         from app.api.mensura.models.empresas_model import EmpresaModel
         from app.api.mensura.models.cad_categoria_delivery_model import CategoriaDeliveryModel
-        from app.api.mensura.models.sub_categoria_model import SubCategoriaModel
+        from app.api.mensura.models.vitrines_model import SubCategoriaModel
         from app.api.mensura.models.cad_prod_delivery_model import ProdutoDeliveryModel
         from app.api.mensura.models.cad_prod_emp_delivery_model import ProdutosEmpDeliveryModel
 
