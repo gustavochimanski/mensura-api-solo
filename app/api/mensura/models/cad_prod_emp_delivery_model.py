@@ -36,7 +36,7 @@ class ProdutosEmpDeliveryModel(Base):
     preco_venda = Column(Numeric(18, 5), nullable=False)
 
     # FK para subcategoria/vitrine
-    subcategoria_id = Column(
+    vitrine_id = Column(
         Integer,
         ForeignKey("mensura.vitrines.id", ondelete="SET NULL"),
         nullable=True
@@ -46,10 +46,10 @@ class ProdutosEmpDeliveryModel(Base):
         "ProdutoDeliveryModel",
         back_populates="produtos_empresa"
     )
-    sub_categoria = relationship(
-        "SubCategoriaModel",
+    vitrine = relationship(
+        "VitrinesModel",
         back_populates="produtos",
-        foreign_keys=[subcategoria_id]
+        foreign_keys=[vitrine_id]
     )
 
     model_config = ConfigDict(from_attributes=True)
