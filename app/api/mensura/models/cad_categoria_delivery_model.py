@@ -24,4 +24,8 @@ class CategoriaDeliveryModel(Base):
         back_populates="categoria"
     )
 
+    @hybrid_property
+    def href(self) -> str:
+        return f"/categorias/{self.slug}"
+
     model_config = ConfigDict(from_attributes=True)
