@@ -42,9 +42,7 @@ class CardapioService:
 
     from app.api.mensura.schemas.delivery.cardapio.cardapio_schema import VitrineComProdutosResponse
 
-    def buscar_vitrines_com_produtos(
-            self, empresa_id: int, cod_categoria: int
-    ) -> List[VitrineComProdutosResponse]:
+    def buscar_vitrines_com_produtos(self, empresa_id: int, cod_categoria: int) -> List[VitrineComProdutosResponse]:
         # VALIDAÇÃO EMPRESA
         empresa = self.repo_empresa.get_empresa_by_id(empresa_id)
         if not empresa:
