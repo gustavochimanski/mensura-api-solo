@@ -2,7 +2,6 @@ from pydantic import BaseModel, ConfigDict, constr
 from typing import Optional
 
 class CriarVitrineRequest(BaseModel):
-    cod_empresa: int
     cod_categoria: Optional[int]
     titulo: constr(min_length=1, max_length=100)
     ordem: int
@@ -11,7 +10,6 @@ class CriarVitrineRequest(BaseModel):
 
 class CriarVitrineResponse(BaseModel):
     id: int
-    cod_empresa: int
     cod_categoria: int
     titulo: str
     slug: str

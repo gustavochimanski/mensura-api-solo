@@ -4,10 +4,10 @@ from sqlalchemy.orm import Session
 from typing import Optional, List
 
 from app.database.db_connection import get_db
-from app.api.mensura.repositories.categorias.categoriasDeliveryRepository import (
+from app.api.mensura.repositories.delivery.categorias_dv_repo import (
     CategoriaDeliveryRepository
 )
-from app.api.mensura.schemas.delivery.categorias.categoria_schema import (
+from app.api.mensura.schemas.delivery.categoria_dv_schema import (
     CategoriaDeliveryIn,
     CategoriaDeliveryOut
 )

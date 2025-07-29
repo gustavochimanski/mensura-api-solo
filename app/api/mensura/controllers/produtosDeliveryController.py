@@ -7,7 +7,7 @@ from typing import Optional
 
 from app.database.db_connection import get_db
 from app.api.mensura.services.ProdutosDeliveryService import ProdutosDeliveryService
-from app.api.mensura.schemas.delivery.produtos.produtosDelivery_schema import (
+from app.api.mensura.schemas.delivery.produtos.produtos_dv_schema import (
     ProdutosPaginadosResponse,
     CriarNovoProdutoResponse,
     CriarNovoProdutoRequest

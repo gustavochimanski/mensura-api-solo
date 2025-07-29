@@ -4,12 +4,12 @@ from collections import defaultdict
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.api.mensura.repositories.cardapio.CardapioRepository import CardapioRepository
+from app.api.mensura.repositories.delivery.cardapio_dv_repo import CardapioRepository
 from app.api.mensura.repositories.empresaRepository import EmpresaRepository
-from app.api.mensura.schemas.delivery.cardapio.cardapio_schema import (
+from app.api.mensura.schemas.delivery.cardapio__dv_schema import (
      ProdutoEmpMiniDTO, ProdutoMiniDTO, VitrineComProdutosResponse
 )
-from app.api.mensura.schemas.delivery.categorias.categoria_schema import CategoriaDeliveryOut
+from app.api.mensura.schemas.delivery.categoria_dv_schema import CategoriaDeliveryOut
 
 
 class CardapioService:
@@ -40,10 +40,9 @@ class CardapioService:
 
         return resultado
 
-    from app.api.mensura.schemas.delivery.cardapio.cardapio_schema import VitrineComProdutosResponse
+    from app.api.mensura.schemas.delivery.cardapio__dv_schema import VitrineComProdutosResponse
 
     def buscar_vitrines_com_produtos(self, empresa_id: int, cod_categoria: int) -> List[VitrineComProdutosResponse]:
-        # VALIDAÇÃO EMPRESA
         empresa = self.repo_empresa.get_empresa_by_id(empresa_id)
         if not empresa:
             raise HTTPException(status_code=404, detail="Empresa não encontrada")
@@ -51,16 +50,19 @@ class CardapioService:
         vitrines = self.repo_cardapio.listar_vitrines(empresa_id)
         produtos = self.repo_cardapio.listar_produtos_emp(empresa_id)
 
-        # Filtrar vitrines da categoria desejada
+        # Filtrar vitrines da categoria
         vitrines_cat = [v for v in vitrines if v.cod_categoria == cod_categoria]
 
-        # Agrupar produtos por vitrine_id
+        # Agrupar produtos
         produtos_por_vitrine: dict[int, List[ProdutoEmpMiniDTO]] = defaultdict(list)
 
         for ie in produtos:
             base = ie.produto
             if not base or base.cod_categoria != cod_categoria:
                 continue
+
+            if ie.vitrine_id is None:
+                continue  # Evita chave None no dicionário
 
             prod_mini = ProdutoMiniDTO(
                 id=base.id,
@@ -77,7 +79,6 @@ class CardapioService:
             )
             produtos_por_vitrine[ie.vitrine_id].append(emp_mini)
 
-        # Construir a resposta
         resultado: List[VitrineComProdutosResponse] = []
         for vitrine in vitrines_cat:
             resultado.append(VitrineComProdutosResponse(
@@ -87,6 +88,7 @@ class CardapioService:
             ))
 
         return resultado
+
 
 
 

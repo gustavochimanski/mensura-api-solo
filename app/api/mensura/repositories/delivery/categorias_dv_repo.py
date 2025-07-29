@@ -1,4 +1,4 @@
-# app/api/mensura/repositories/categorias/categoriasDeliveryRepository.py
+# app/api/mensura/repositories/categorias/categorias_dv_repo.py
 from typing import Optional
 
 from sqlalchemy import select, func
@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 
 from app.api.mensura.models.cad_categoria_delivery_model import CategoriaDeliveryModel
-from app.api.mensura.schemas.delivery.categorias.categoria_schema import CategoriaDeliveryIn
+from app.api.mensura.schemas.delivery.categoria_dv_schema import CategoriaDeliveryIn
 
 class CategoriaDeliveryRepository:
     def __init__(self, db: Session):

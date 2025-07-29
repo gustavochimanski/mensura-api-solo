@@ -2,9 +2,9 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from typing import List
 
-from app.api.mensura.schemas.delivery.cardapio.cardapio_schema import  \
+from app.api.mensura.schemas.delivery.cardapio__dv_schema import  \
     VitrineComProdutosResponse
-from app.api.mensura.schemas.delivery.categorias.categoria_schema import CategoriaDeliveryOut
+from app.api.mensura.schemas.delivery.categoria_dv_schema import CategoriaDeliveryOut
 from app.api.mensura.services.CardapioService import CardapioService
 from app.database.db_connection import get_db
 

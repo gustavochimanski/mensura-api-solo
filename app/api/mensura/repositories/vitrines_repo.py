@@ -12,25 +12,25 @@ class VitrineRepository:
 
     def listar(self, cod_empresa: int, cod_categoria: int | None = None):
         """
-        Retorna as Vitrines da empresa, podendo filtrar por categoria.
+        Retorna as vitrines que possuem produtos da empresa, podendo filtrar por categoria.
         """
-        query = self.db.query(VitrinesModel).filter(
-            VitrinesModel.cod_empresa == cod_empresa
+        query = (
+            self.db.query(VitrinesModel)
+            .join(ProdutosEmpDeliveryModel, ProdutosEmpDeliveryModel.vitrine_id == VitrinesModel.id)
+            .filter(ProdutosEmpDeliveryModel.empresa == cod_empresa)
         )
 
         if cod_categoria is not None:
             query = query.filter(VitrinesModel.cod_categoria == cod_categoria)
 
-        return query.order_by(VitrinesModel.ordem).all()
+        return query.distinct().order_by(VitrinesModel.ordem).all()
 
     def create(self, dados: CriarVitrineRequest):
         """
         Cria uma nova vitrine.
-        Gera slug automático se não fornecido.
         """
         slug_value = dados.titulo.lower().replace(" ", "-")
         nova = VitrinesModel(
-            cod_empresa=dados.cod_empresa,
             cod_categoria=dados.cod_categoria,
             titulo=dados.titulo,
             slug=slug_value,
@@ -50,8 +50,7 @@ class VitrineRepository:
 
     def delete(self, sub_id: int):
         """
-        Deleta a Vitrine pelo ID, se não houver produtos relacionados.
-        Lança 404 se não encontrar, e 400 se houver produtos vinculados.
+        Deleta a Vitrine se não houver produtos vinculados.
         """
         sub = self.db.query(VitrinesModel).filter_by(id=sub_id).first()
         if not sub:
@@ -60,7 +59,6 @@ class VitrineRepository:
                 detail="Vitrine não encontrada"
             )
 
-        # 🔎 Verificar se existem produtos vinculados via ORM
         produto_vinculado = (
             self.db.query(ProdutosEmpDeliveryModel)
             .filter(ProdutosEmpDeliveryModel.vitrine_id == sub_id)
@@ -75,4 +73,3 @@ class VitrineRepository:
 
         self.db.delete(sub)
         self.db.commit()
-

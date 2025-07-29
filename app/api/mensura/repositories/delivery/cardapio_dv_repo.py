@@ -29,22 +29,28 @@ class CardapioRepository:
         )
 
     def listar_vitrines(self, empresa_id: int) -> List[VitrinesModel]:
+        """
+        Retorna vitrines que possuem produtos da empresa.
+        """
         return (
             self.db.query(VitrinesModel)
-            .filter(VitrinesModel.cod_empresa == empresa_id)
+            .join(ProdutosEmpDeliveryModel, ProdutosEmpDeliveryModel.vitrine_id == VitrinesModel.id)
+            .filter(ProdutosEmpDeliveryModel.empresa == empresa_id)
+            .distinct()
             .order_by(VitrinesModel.ordem)
             .all()
         )
 
-    def listar_produtos_emp_por_categoria_e_sub(
-            self, cod_empresa: int, cod_categoria: int
-    ) -> List[ProdutosEmpDeliveryModel]:
+    def listar_produtos_emp_por_categoria_e_sub(self, cod_empresa: int, cod_categoria: int) -> List[ProdutosEmpDeliveryModel]:
         return (
             self.db.query(ProdutosEmpDeliveryModel)
             .join(ProdutosEmpDeliveryModel.produto)
             .options(joinedload(ProdutosEmpDeliveryModel.produto))
-            .filter(ProdutosEmpDeliveryModel.empresa == cod_empresa)
-            .filter(ProdutosEmpDeliveryModel.produto.has(cod_categoria=cod_categoria))
+            .filter(
+                ProdutosEmpDeliveryModel.empresa == cod_empresa,
+                ProdutosEmpDeliveryModel.produto.has(cod_categoria=cod_categoria)
+            )
             .all()
         )
+
 

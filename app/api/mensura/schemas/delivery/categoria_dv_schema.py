@@ -1,4 +1,4 @@
-# app/api/mensura/schemas/delivery/categorias/categoria_schema.py
+# app/api/mensura/schemas/delivery/categorias/categoria_dv_schema.py
 from pydantic import BaseModel, ConfigDict, constr
 from typing import Optional
 
