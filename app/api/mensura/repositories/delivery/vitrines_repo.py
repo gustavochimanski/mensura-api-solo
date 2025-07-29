@@ -13,18 +13,26 @@ class VitrineRepository:
 
     def listar(self, cod_empresa: int, cod_categoria: int | None = None):
         """
-        Retorna as vitrines que possuem produtos da empresa, podendo filtraar por categoria.
+        Retorna todas as vitrines da categoria (se informada),
+        mesmo que não tenham produtos vinculados à empresa.
+        Marca apenas se têm produtos da empresa.
         """
-        query = (
-            self.db.query(VitrinesModel)
-            .join(ProdutosEmpDeliveryModel, ProdutosEmpDeliveryModel.vitrine_id == VitrinesModel.id)
+        # Subquery com produtos da empresa
+        subquery = (
+            self.db.query(ProdutosEmpDeliveryModel.vitrine_id)
             .filter(ProdutosEmpDeliveryModel.empresa == cod_empresa)
+            .distinct()
+            .subquery()
+        )
+
+        query = self.db.query(VitrinesModel).outerjoin(
+            subquery, VitrinesModel.id == subquery.c.vitrine_id
         )
 
         if cod_categoria is not None:
             query = query.filter(VitrinesModel.cod_categoria == cod_categoria)
 
-        return query.distinct().order_by(VitrinesModel.ordem).all()
+        return query.order_by(VitrinesModel.ordem).all()
 
     def create(self, dados: CriarVitrineRequest):
         """
