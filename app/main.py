@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,8 +8,7 @@ from app.utils.logger import logger  # ✅ Logger centralizado
 from app.api.BI.router import router as bi_router
 from app.api.mensura.router import router as mensura_router
 from app.api.public.router import router as public_router
-from app.api.mensura.controllers import auth_controller
-
+from app.api.auth import auth_controller
 
 # ───────────────────────────
 # Diretórios
