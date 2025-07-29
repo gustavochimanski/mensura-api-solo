@@ -11,6 +11,7 @@ asyncpg==0.27.0
 gunicorn[uvicorn]==21.2.0
 minio==7.2.5
 pytest==7.4.2
+slugify
 
 # Para segurança e JWT:
 bcrypt==4.0.1

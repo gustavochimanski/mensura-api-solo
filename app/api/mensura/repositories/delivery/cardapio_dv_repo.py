@@ -1,5 +1,5 @@
 # app/repositories/cardapio_repository.py
-from typing import List
+from typing import List, Dict
 from collections import defaultdict
 
 from sqlalchemy.orm import Session, joinedload
@@ -52,5 +52,20 @@ class CardapioRepository:
             )
             .all()
         )
+
+    def listar_vitrines_com_produtos_empresa_categoria(
+            self, empresa_id: int, cod_categoria: int
+    ) -> Dict[int, List[ProdutosEmpDeliveryModel]]:
+        """
+        Retorna um dicionário onde a chave é o ID da vitrine e o valor é a lista de produtos daquela empresa e categoria.
+        """
+        produtos = self.listar_produtos_emp_por_categoria_e_sub(empresa_id, cod_categoria)
+
+        agrupado: Dict[int, List[ProdutosEmpDeliveryModel]] = defaultdict(list)
+        for p in produtos:
+            if p.vitrine_id is not None:
+                agrupado[p.vitrine_id].append(p)
+
+        return agrupado
 
 

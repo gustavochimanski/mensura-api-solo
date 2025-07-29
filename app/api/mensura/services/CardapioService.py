@@ -9,6 +9,7 @@ from app.api.mensura.repositories.empresaRepository import EmpresaRepository
 from app.api.mensura.schemas.delivery.cardapio__dv_schema import (
      ProdutoEmpMiniDTO, ProdutoMiniDTO, VitrineComProdutosResponse
 )
+from app.api.mensura.schemas.delivery.cardapio__dv_schema import VitrineComProdutosResponse
 from app.api.mensura.schemas.delivery.categoria_dv_schema import CategoriaDeliveryOut
 
 
@@ -40,7 +41,6 @@ class CardapioService:
 
         return resultado
 
-    from app.api.mensura.schemas.delivery.cardapio__dv_schema import VitrineComProdutosResponse
 
     def buscar_vitrines_com_produtos(self, empresa_id: int, cod_categoria: int) -> List[VitrineComProdutosResponse]:
         empresa = self.repo_empresa.get_empresa_by_id(empresa_id)
@@ -48,46 +48,38 @@ class CardapioService:
             raise HTTPException(status_code=404, detail="Empresa não encontrada")
 
         vitrines = self.repo_cardapio.listar_vitrines(empresa_id)
-        produtos = self.repo_cardapio.listar_produtos_emp(empresa_id)
-
-        # Filtrar vitrines da categoria
         vitrines_cat = [v for v in vitrines if v.cod_categoria == cod_categoria]
 
-        # Agrupar produtos
-        produtos_por_vitrine: dict[int, List[ProdutoEmpMiniDTO]] = defaultdict(list)
-
-        for ie in produtos:
-            base = ie.produto
-            if not base or base.cod_categoria != cod_categoria:
-                continue
-
-            if ie.vitrine_id is None:
-                continue  # Evita chave None no dicionário
-
-            prod_mini = ProdutoMiniDTO(
-                id=base.id,
-                descricao=base.descricao,
-                imagem=base.imagem,
-                cod_categoria=base.cod_categoria,
-            )
-            emp_mini = ProdutoEmpMiniDTO(
-                empresa=ie.empresa,
-                cod_barras=ie.cod_barras,
-                preco_venda=float(ie.preco_venda),
-                vitrine_id=ie.vitrine_id,
-                produto=prod_mini,
-            )
-            produtos_por_vitrine[ie.vitrine_id].append(emp_mini)
+        produtos_por_vitrine = self.repo_cardapio.listar_vitrines_com_produtos_empresa_categoria(
+            empresa_id, cod_categoria
+        )
 
         resultado: List[VitrineComProdutosResponse] = []
         for vitrine in vitrines_cat:
+            produtos_dto = [
+                ProdutoEmpMiniDTO(
+                    empresa=prod.empresa,
+                    cod_barras=prod.cod_barras,
+                    preco_venda=float(prod.preco_venda),
+                    vitrine_id=prod.vitrine_id,
+                    produto=ProdutoMiniDTO(
+                        id=prod.produto.id,
+                        descricao=prod.produto.descricao,
+                        imagem=prod.produto.imagem,
+                        cod_categoria=prod.produto.cod_categoria,
+                    ),
+                )
+                for prod in produtos_por_vitrine.get(vitrine.id, [])
+            ]
+
             resultado.append(VitrineComProdutosResponse(
                 id=vitrine.id,
                 titulo=vitrine.titulo,
-                produtos=produtos_por_vitrine.get(vitrine.id, [])
+                produtos=produtos_dto
             ))
 
         return resultado
+
 
 
 

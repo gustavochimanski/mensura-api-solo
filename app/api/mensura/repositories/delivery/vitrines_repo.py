@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
+from slugify import slugify
 
 from app.api.mensura.models.cad_prod_emp_delivery_model import ProdutosEmpDeliveryModel
 from app.api.mensura.models.vitrines_model import VitrinesModel
@@ -29,7 +30,7 @@ class VitrineRepository:
         """
         Cria uma nova vitrine.
         """
-        slug_value = dados.titulo.lower().replace(" ", "-")
+        slug_value = slugify(dados.titulo)
         nova = VitrinesModel(
             cod_categoria=dados.cod_categoria,
             titulo=dados.titulo,
