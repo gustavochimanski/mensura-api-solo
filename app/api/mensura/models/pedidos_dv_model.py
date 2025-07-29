@@ -18,7 +18,7 @@ class PedidoDeliveryModel(Base):
     data_criacao = Column(DateTime, default=datetime.now)
 
     cliente = relationship("ClienteDeliveryModel", back_populates="pedidos")
-    empresa = relationship("EmpresaModel")
+    empresa = relationship("EmpresaModel", back_populates="pedidos")
     itens = relationship("PedidoItemModel", back_populates="pedido", cascade="all, delete-orphan")
 
     model_config = ConfigDict(from_attributes=True)
