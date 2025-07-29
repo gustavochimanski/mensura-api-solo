@@ -35,7 +35,7 @@ def criar_vitrines(
         db: Session = Depends(get_db)
 ):
     logger.info(
-        f"[POST] Criando vitrine - empresa={request.cod_empresa}, categoria={request.cod_categoria}, titulo={request.titulo}")
+        f"[POST] Criando vitrine - categoria={request.cod_categoria}, titulo={request.titulo}")
 
     repo = VitrineRepository(db)
     nova_sub = repo.create(request)
