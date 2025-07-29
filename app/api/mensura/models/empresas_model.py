@@ -19,9 +19,10 @@ class EmpresaModel(Base):
         ForeignKey("mensura.enderecos.id", ondelete="SET NULL"),
         nullable=True
     )
-    endereco = relationship("EnderecoModel", back_populates="empresa")
 
     # Relacionamentos
     produtos_emp = relationship("ProdutosEmpDeliveryModel", back_populates="empresa_rel")
+    endereco = relationship("EnderecoModel", back_populates="empresa")
+    pedidos = relationship("PedidoDeliveryModel", back_populates="empresa", cascade="all, delete-orphan")
 
     model_config = ConfigDict(from_attributes=True)
