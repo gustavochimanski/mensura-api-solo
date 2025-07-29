@@ -1,5 +1,5 @@
 # models/user.py
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Column, Integer, String, ARRAY
 from app.database.db_connection import Base
 
 class UserModel(Base):
@@ -10,4 +10,4 @@ class UserModel(Base):
     username = Column(String, unique=True, nullable=False)
     hashed_password = Column(String, nullable=False)
     type_user = Column(String, nullable=False)
-    empresas_liberadas = Column(String, nullable=False)
+    empresas_liberadas = Column(ARRAY(Integer), nullable=False, default=list)
