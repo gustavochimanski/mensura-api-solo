@@ -29,7 +29,7 @@ class ProdutosEmpDeliveryModel(Base):
 
     # Composite PK: empresa + cod_barras
     empresa = Column(Integer, ForeignKey("mensura.empresas.id"), primary_key=True)
-    empresa_rel = relationship("EmpresaModel", back_populates="produtos")
+    empresa_rel = relationship("EmpresaModel", back_populates="produtos_emp")
     cod_barras = Column(String, primary_key=True, nullable=False)
 
     custo = Column(Numeric(18, 5), nullable=True)
@@ -48,7 +48,7 @@ class ProdutosEmpDeliveryModel(Base):
     )
     vitrine = relationship(
         "VitrinesModel",
-        back_populates="produtos",
+        back_populates="produtos_emp",
         foreign_keys=[vitrine_id]
     )
 

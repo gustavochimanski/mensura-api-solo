@@ -10,8 +10,6 @@ class VitrinesModel(Base):
     __table_args__ = {"schema": "mensura"}
 
     id = Column(Integer, primary_key=True)
-    cod_empresa = Column(Integer, ForeignKey("mensura.empresas.id"), nullable=False)
-
     empresa_rel = relationship("EmpresaModel", back_populates="vitrines")
 
     cod_categoria = Column(
@@ -28,7 +26,7 @@ class VitrinesModel(Base):
     categoria = relationship("CategoriaDeliveryModel", back_populates="vitrines")
 
 
-    produtos = relationship(
+    produtos_emp = relationship(
         "ProdutosEmpDeliveryModel",
         back_populates="vitrine",
         foreign_keys=[ProdutosEmpDeliveryModel.vitrine_id]  # ✅ lista real

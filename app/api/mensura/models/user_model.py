@@ -10,3 +10,4 @@ class UserModel(Base):
     username = Column(String, unique=True, nullable=False)
     hashed_password = Column(String, nullable=False)
     type_user = Column(String, nullable=False)
+    empresas_liberadas = Column(String, nullable=False)

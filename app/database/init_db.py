@@ -20,7 +20,7 @@ def criar_tabelas():
         # ✅ IMPORTAÇÃO EXPLÍCITA DOS MODELS
         from app.api.mensura.models.empresas_model import EmpresaModel
         from app.api.mensura.models.user_model import UserModel
-        from app.api.mensura.models.endereco_model import EnderecoModel
+        from app.api.mensura.models.enderecos_model import EnderecoModel
         from app.api.mensura.models.cad_categoria_delivery_model import CategoriaDeliveryModel
         from app.api.mensura.models.vitrines_model import VitrinesModel
         from app.api.mensura.models.cad_prod_delivery_model import ProdutoDeliveryModel
