@@ -13,7 +13,7 @@ class VitrineRepository:
 
     def listar(self, cod_empresa: int, cod_categoria: int | None = None):
         """
-        Retorna as vitrines que possuem produtos da empresa, podendo filtrar por categoria.
+        Retorna as vitrines que possuem produtos da empresa, podendo filtraar por categoria.
         """
         query = (
             self.db.query(VitrinesModel)
