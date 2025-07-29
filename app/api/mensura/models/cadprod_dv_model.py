@@ -7,7 +7,7 @@ class ProdutoDeliveryModel(Base):
     __tablename__ = "cadprod_dv"
     __table_args__ = {"schema": "mensura"}
 
-    cod_barras = Column(String, nullable=False, unique=True)
+    cod_barras = Column(String, nullable=False, unique=True, primary_key=True)
     descricao = Column(String(255), nullable=False)
     imagem = Column(String(255), nullable=True)
     data_cadastro = Column(Date, nullable=True)
