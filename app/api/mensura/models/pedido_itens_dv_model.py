@@ -9,7 +9,7 @@ class PedidoItemModel(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     pedido_id = Column(Integer, ForeignKey("mensura.pedidos_dv.id", ondelete="CASCADE"), nullable=False)
-    produto_cod_barras = Column(String, ForeignKey("mensura.cadprod_delivery.cod_barras", ondelete="RESTRICT"), nullable=False)
+    produto_cod_barras = Column(String, ForeignKey("mensura.cadprod_dv.cod_barras", ondelete="RESTRICT"), nullable=False)
 
     quantidade = Column(Integer, nullable=False, default=1)
     preco_unitario = Column(Numeric(18, 2), nullable=False)
