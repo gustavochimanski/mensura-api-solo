@@ -10,22 +10,27 @@ def criar_schemas():
         with engine.begin() as conn:
             for schema in SCHEMAS:
                 logger.info(f"🛠️ Criando/verificando schema: {schema}")
-                conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema}"))
+                conn.execute(text("CREATE SCHEMA IF NOT EXISTS :schema").bindparams(schema=schema))
         logger.info("✅ Todos os schemas verificados/criados.")
     except Exception as e:
         logger.error(f"❌ Erro ao criar schemas: {e}")
 
+
+def importar_models():
+    from app.api.mensura.models.empresas_model import EmpresaModel
+    from app.api.mensura.models.enderecos_model import EnderecoModel
+    from app.api.mensura.models.cadprod_emp_dv_model import ProdutosEmpDeliveryModel
+    from app.api.mensura.models.cadprod_dv_model import ProdutoDeliveryModel
+    from app.api.mensura.models.user_model import UserModel
+    from app.api.mensura.models.categoria_dv_model import CategoriaDeliveryModel
+    from app.api.mensura.models.vitrines_model import VitrinesModel
+    from app.api.mensura.models.pedido_itens_dv_model import PedidoItemModel
+    from app.api.mensura.models.pedidos_dv_model import PedidoDeliveryModel
+    from app.api.mensura.models.clientes_dv_model import ClienteDeliveryModel
+
 def criar_tabelas():
     try:
-        # ✅ IMPORTAÇÃO EXPLÍCITA DOS MODELS
-        from app.api.mensura.models.empresas_model import EmpresaModel
-        from app.api.mensura.models.user_model import UserModel
-        from app.api.mensura.models.enderecos_model import EnderecoModel
-        from app.api.mensura.models.categoria_dv_model import CategoriaDeliveryModel
-        from app.api.mensura.models.vitrines_model import VitrinesModel
-        from app.api.mensura.models.cadprod_dv_model import ProdutoDeliveryModel
-        from app.api.mensura.models.cadprod_emp_dv_model import ProdutosEmpDeliveryModel
-
+        importar_models()
         # Agora o SQLAlchemy sabe de todas as tabelas
         Base.metadata.create_all(bind=engine)
 
