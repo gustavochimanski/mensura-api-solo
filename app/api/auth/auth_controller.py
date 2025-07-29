@@ -25,12 +25,11 @@ def login_usuario(
     # 1. Busca usuário no banco
     repo = authRepository(db)
     user = repo.get_user_by_username(payload.username)
-    if not user or not verify_password(payload.password, user.hashed_password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Credenciais inválidas",
-            headers={"WWW-Authenticate": "None"}
-        )
+    if not user:
+        raise HTTPException(status_code=401, detail="Usuário não encontrado")
+
+    if not verify_password(payload.password, user.hashed_password):
+        raise HTTPException(status_code=401, detail="Senha incorreta")
 
     # 2. Gera JWT com 30 minutos de validade
     access_token = create_access_token(
@@ -46,13 +45,12 @@ def login_usuario(
     )
 
 @router.get(
-    "/mensura/auth/me",
+    "/me",
     response_model=UserResponse,
     summary="Retorna o usuário atual baseado no token JWT"
 )
 def obter_usuario_atual(
     current_user: UserModel = Depends(get_current_user),
-    db: Session        = Depends(get_db),  # opcional, se depois quiser buscar algo extra
 ):
     """Puxa o usuário já autenticado pelo get_current_user e devolve seus campos."""
     return current_user
