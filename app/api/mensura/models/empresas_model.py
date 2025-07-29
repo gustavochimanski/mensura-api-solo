@@ -23,6 +23,5 @@ class EmpresaModel(Base):
 
     # Relacionamentos
     produtos_emp = relationship("ProdutosEmpDeliveryModel", back_populates="empresa_rel")
-    vitrines = relationship("VitrinesModel", back_populates="empresa_rel")
 
     model_config = ConfigDict(from_attributes=True)

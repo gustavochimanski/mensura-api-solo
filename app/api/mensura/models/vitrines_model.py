@@ -10,7 +10,6 @@ class VitrinesModel(Base):
     __table_args__ = {"schema": "mensura"}
 
     id = Column(Integer, primary_key=True)
-    empresa_rel = relationship("EmpresaModel", back_populates="vitrines")
 
     cod_categoria = Column(
         Integer,
@@ -24,7 +23,6 @@ class VitrinesModel(Base):
 
     # Relacionamento reverso para Categoria
     categoria = relationship("CategoriaDeliveryModel", back_populates="vitrines")
-
 
     produtos_emp = relationship(
         "ProdutosEmpDeliveryModel",
