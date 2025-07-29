@@ -22,7 +22,7 @@ class VitrinesModel(Base):
     ordem = Column(Integer, nullable=False)
 
     # Relacionamento reverso para Categoria
-    categoria = relationship("CategoriaDeliveryModel", back_populates="vitrines")
+    categoria = relationship("CategoriaDeliveryModel", back_populates="vitrines_dv")
 
     produtos_emp = relationship(
         "ProdutosEmpDeliveryModel",

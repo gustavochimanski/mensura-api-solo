@@ -19,7 +19,7 @@ class CategoriaDeliveryModel(Base):
         "ProdutoDeliveryModel",
         back_populates="categoria"
     )
-    vitrines = relationship(
+    vitrines_dv = relationship(
         "VitrinesModel",
         back_populates="categoria"
     )
