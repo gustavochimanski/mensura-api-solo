@@ -59,3 +59,28 @@ def upload_file_to_minio(
 
     # 5️⃣ Retorna a URL pública
     return f"{MINIO_PUBLIC_ENDPOINT}/{bucket_name}/{object_key}"
+
+
+
+def remover_arquivo_minio(url: str) -> None:
+    """
+    Remove um arquivo do MinIO com base na URL completa salva no banco (ex: imagem da categoria).
+    """
+    if not url or not MINIO_PUBLIC_ENDPOINT:
+        return
+
+    try:
+        # Remove o domínio da URL pública e extrai bucket e objeto
+        base_url = MINIO_PUBLIC_ENDPOINT.rstrip("/")
+        relative_path = url.replace(base_url, "").lstrip("/")  # exemplo: cnpj-do-cliente/imagens/abc.png
+
+        parts = relative_path.split("/", 1)
+        if len(parts) != 2:
+            raise ValueError("URL malformada para remoção no MinIO")
+
+        bucket_name, object_key = parts
+        client.remove_object(bucket_name, object_key)
+        print(f"✅ Removido: {bucket_name}/{object_key}")
+
+    except Exception as e:
+        print(f"⚠️ Erro ao remover arquivo do MinIO: {e}")
