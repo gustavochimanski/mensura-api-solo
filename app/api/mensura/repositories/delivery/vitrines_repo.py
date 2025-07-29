@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 from slugify import slugify
 
-from app.api.mensura.models.cad_prod_emp_delivery_model import ProdutosEmpDeliveryModel
+from app.api.mensura.models.cadprod_emp_dv_model import ProdutosEmpDeliveryModel
 from app.api.mensura.models.vitrines_model import VitrinesModel
 from app.api.mensura.schemas.delivery.vitrine_schema import CriarVitrineRequest
 

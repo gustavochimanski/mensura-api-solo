@@ -25,11 +25,12 @@ def login_usuario(
     # 1. Busca usuário no banco
     repo = authRepository(db)
     user = repo.get_user_by_username(payload.username)
-    if not user:
-        raise HTTPException(status_code=401, detail="Usuário não encontrado")
-
-    if not verify_password(payload.password, user.hashed_password):
-        raise HTTPException(status_code=401, detail="Senha incorreta")
+    if not user or not verify_password(payload.password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Credenciais inválidas",
+            headers={"WWW-Authenticate": "None"}
+        )
 
     # 2. Gera JWT com 30 minutos de validade
     access_token = create_access_token(

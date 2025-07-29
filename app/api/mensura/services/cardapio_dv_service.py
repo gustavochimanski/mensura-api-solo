@@ -5,7 +5,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.mensura.repositories.delivery.cardapio_dv_repo import CardapioRepository
-from app.api.mensura.repositories.empresaRepository import EmpresaRepository
+from app.api.mensura.repositories.empresa_repository import EmpresaRepository
 from app.api.mensura.schemas.delivery.cardapio__dv_schema import (
      ProdutoEmpMiniDTO, ProdutoMiniDTO, VitrineComProdutosResponse
 )

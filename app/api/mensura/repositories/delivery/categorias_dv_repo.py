@@ -5,7 +5,7 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 
-from app.api.mensura.models.cad_categoria_delivery_model import CategoriaDeliveryModel
+from app.api.mensura.models.categoria_dv_model import CategoriaDeliveryModel
 from app.api.mensura.schemas.delivery.categoria_dv_schema import CategoriaDeliveryIn
 
 class CategoriaDeliveryRepository:

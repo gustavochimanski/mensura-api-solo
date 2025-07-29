@@ -8,11 +8,11 @@ from sqlalchemy.orm import relationship
 from app.database.db_connection import Base
 
 class ProdutosEmpDeliveryModel(Base):
-    __tablename__ = "cadprod_emp_delivery"
+    __tablename__ = "cadprod_emp_dv"
     __table_args__ = (
         ForeignKeyConstraint(
             ["cod_barras"],
-            ["mensura.cadprod_delivery.cod_barras"],
+            ["mensura.cadprod_dv.cod_barras"],
             name="fk_produto_empresa_cod_barras",
             ondelete="CASCADE"
         ),

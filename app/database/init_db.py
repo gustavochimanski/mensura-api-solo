@@ -21,10 +21,10 @@ def criar_tabelas():
         from app.api.mensura.models.empresas_model import EmpresaModel
         from app.api.mensura.models.user_model import UserModel
         from app.api.mensura.models.enderecos_model import EnderecoModel
-        from app.api.mensura.models.cad_categoria_delivery_model import CategoriaDeliveryModel
+        from app.api.mensura.models.categoria_dv_model import CategoriaDeliveryModel
         from app.api.mensura.models.vitrines_model import VitrinesModel
-        from app.api.mensura.models.cad_prod_delivery_model import ProdutoDeliveryModel
-        from app.api.mensura.models.cad_prod_emp_delivery_model import ProdutosEmpDeliveryModel
+        from app.api.mensura.models.cadprod_dv_model import ProdutoDeliveryModel
+        from app.api.mensura.models.cadprod_emp_dv_model import ProdutosEmpDeliveryModel
 
         # Agora o SQLAlchemy sabe de todas as tabelas
         Base.metadata.create_all(bind=engine)

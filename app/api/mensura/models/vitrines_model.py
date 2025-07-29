@@ -2,18 +2,18 @@
 from sqlalchemy import Column, Integer, String, ForeignKey
 from sqlalchemy.orm import relationship
 from app.database.db_connection import Base
-from app.api.mensura.models.cad_prod_emp_delivery_model import ProdutosEmpDeliveryModel
+from app.api.mensura.models.cadprod_emp_dv_model import ProdutosEmpDeliveryModel
 
 
 class VitrinesModel(Base):
-    __tablename__ = "vitrines"
+    __tablename__ = "vitrines_dv"
     __table_args__ = {"schema": "mensura"}
 
     id = Column(Integer, primary_key=True)
 
     cod_categoria = Column(
         Integer,
-        ForeignKey("mensura.categoria_delivery.id", ondelete="CASCADE"),
+        ForeignKey("mensura.categoria_dv.id", ondelete="CASCADE"),
         nullable=False,
     )
 

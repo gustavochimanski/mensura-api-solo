@@ -3,8 +3,8 @@ from fastapi import HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
-from app.api.mensura.models.cad_prod_delivery_model import ProdutoDeliveryModel
-from app.api.mensura.models.cad_prod_emp_delivery_model import ProdutosEmpDeliveryModel
+from app.api.mensura.models.cadprod_dv_model import ProdutoDeliveryModel
+from app.api.mensura.models.cadprod_emp_dv_model import ProdutosEmpDeliveryModel
 
 
 class ProdutoDeliveryRepository:
@@ -28,7 +28,7 @@ class ProdutoDeliveryRepository:
 
     def contar_total(self, cod_empresa: int):
         return (
-            self.db.query(func.count(ProdutoDeliveryModel.id))
+            self.db.query(func.count(ProdutoDeliveryModel.cod_barras))
             .join(ProdutosEmpDeliveryModel, ProdutoDeliveryModel.cod_barras == ProdutosEmpDeliveryModel.cod_barras)
             .filter(ProdutosEmpDeliveryModel.empresa == cod_empresa)
             .scalar()

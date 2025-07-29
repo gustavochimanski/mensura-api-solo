@@ -5,7 +5,7 @@ from sqlalchemy.ext.hybrid import hybrid_property
 from app.database.db_connection import Base
 
 class CategoriaDeliveryModel(Base):
-    __tablename__ = "categoria_delivery"
+    __tablename__ = "categoria_dv"
     __table_args__ = {"schema": "mensura"}
 
     id = Column(Integer, primary_key=True)

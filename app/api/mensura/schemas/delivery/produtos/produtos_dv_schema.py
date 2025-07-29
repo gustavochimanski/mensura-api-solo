@@ -18,7 +18,6 @@ class CriarNovoProdutoRequest(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 class CriarNovoProdutoResponse(BaseModel):
-    id: int
     cod_barras: str
     descricao: Optional[str]
     cod_categoria: Optional[int]

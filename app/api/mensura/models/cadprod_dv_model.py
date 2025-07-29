@@ -4,10 +4,9 @@ from sqlalchemy.orm import relationship
 from app.database.db_connection import Base
 
 class ProdutoDeliveryModel(Base):
-    __tablename__ = "cadprod_delivery"
+    __tablename__ = "cadprod_dv"
     __table_args__ = {"schema": "mensura"}
 
-    id = Column(Integer, primary_key=True)
     cod_barras = Column(String, nullable=False, unique=True)
     descricao = Column(String(255), nullable=False)
     imagem = Column(String(255), nullable=True)
@@ -15,7 +14,7 @@ class ProdutoDeliveryModel(Base):
 
     cod_categoria = Column(
         Integer,
-        ForeignKey("mensura.categoria_delivery.id", ondelete="RESTRICT"),
+        ForeignKey("mensura.categoria_dv.id", ondelete="RESTRICT"),
         nullable=False
     )
     categoria = relationship(

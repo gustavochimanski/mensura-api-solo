@@ -1,4 +1,4 @@
-# app/api/mensura/controllers/produtosDeliveryController.py
+# app/api/mensura/controllers/produtos_dv_controller.py
 
 from fastapi import APIRouter, Depends, Form, File, UploadFile, HTTPException, status, Query, Path
 from sqlalchemy.orm import Session
@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Optional
 
 from app.database.db_connection import get_db
-from app.api.mensura.services.ProdutosDeliveryService import ProdutosDeliveryService
+from app.api.mensura.services.produtos_dv_service import ProdutosDeliveryService
 from app.api.mensura.schemas.delivery.produtos.produtos_dv_schema import (
     ProdutosPaginadosResponse,
     CriarNovoProdutoResponse,
@@ -35,7 +35,7 @@ async def criar_produto(
     cod_barras: str = Form(...),
     descricao: str = Form(...),
     cod_categoria: int = Form(...),
-    subcategoria_id: Optional[int] = Form(None),
+    vitrine_id: Optional[int] = Form(None),
     preco_venda: float = Form(...),
     custo: float = Form(...),
     data_cadastro: Optional[str] = Form(None),
@@ -55,12 +55,13 @@ async def criar_produto(
         cod_barras=cod_barras,
         descricao=descricao,
         cod_categoria=cod_categoria,
-        subcategoria_id=subcategoria_id,
+        vitrine_id=vitrine_id,
         preco_venda=preco_venda,
         custo=custo,
         data_cadastro=datetime.fromisoformat(data_cadastro) if data_cadastro else None,
         imagem=imagem_url,
     )
+
     service = ProdutosDeliveryService(db)
 
     try:

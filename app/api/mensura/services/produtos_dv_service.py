@@ -5,12 +5,11 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.mensura.repositories.delivery.produtos_dv_repo import ProdutoDeliveryRepository
-from app.api.mensura.repositories.empresaRepository import EmpresaRepository
+from app.api.mensura.repositories.empresa_repository import EmpresaRepository
 from app.api.mensura.schemas.delivery.produtos.produtos_dv_schema import ProdutoListItem, CriarNovoProdutoResponse, \
     CriarNovoProdutoRequest
-from app.api.mensura.models.cad_prod_delivery_model import ProdutoDeliveryModel
-from app.api.mensura.models.cad_prod_emp_delivery_model import ProdutosEmpDeliveryModel
-from app.utils.logger import logger
+from app.api.mensura.models.cadprod_dv_model import ProdutoDeliveryModel
+from app.api.mensura.models.cadprod_emp_dv_model import ProdutosEmpDeliveryModel
 
 
 class ProdutosDeliveryService:

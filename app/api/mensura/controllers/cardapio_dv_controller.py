@@ -5,7 +5,7 @@ from typing import List
 from app.api.mensura.schemas.delivery.cardapio__dv_schema import  \
     VitrineComProdutosResponse
 from app.api.mensura.schemas.delivery.categoria_dv_schema import CategoriaDeliveryOut
-from app.api.mensura.services.CardapioService import CardapioService
+from app.api.mensura.services.cardapio_dv_service import CardapioService
 from app.database.db_connection import get_db
 
 router = APIRouter(tags=["Cardapio"])

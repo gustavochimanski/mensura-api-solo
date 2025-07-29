@@ -4,8 +4,8 @@ from collections import defaultdict
 
 from sqlalchemy.orm import Session, joinedload
 
-from app.api.mensura.models.cad_categoria_delivery_model import CategoriaDeliveryModel
-from app.api.mensura.models.cad_prod_emp_delivery_model import ProdutosEmpDeliveryModel
+from app.api.mensura.models.categoria_dv_model import CategoriaDeliveryModel
+from app.api.mensura.models.cadprod_emp_dv_model import ProdutosEmpDeliveryModel
 from app.api.mensura.models.vitrines_model import VitrinesModel
 
 
