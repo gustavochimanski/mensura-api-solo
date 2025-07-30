@@ -42,13 +42,22 @@ class EmpresaService:
 
     def update_empresa(self, id: int, data: EmpresaUpdate):
         empresa = self.get_empresa(id)
-        # Verifica se o CNPJ está sendo alterado
-        if data.cnpj and data.cnpj != empresa.cnpj:
-            existente = self.repo_emp.get_emp_by_cnpj(data.cnpj)
+        payload = data.dict(exclude_unset=True)
+
+        # Verifica duplicidade de CNPJ se for alterar
+        if "cnpj" in payload and payload["cnpj"] != empresa.cnpj:
+            existente = self.repo_emp.get_emp_by_cnpj(payload["cnpj"])
             if existente and existente.id != id:
                 raise HTTPException(status_code=400, detail="CNPJ já cadastrado em outra empresa")
 
-        return self.repo_emp.update(empresa, data.dict(exclude_unset=True))
+        # 🏠 Se endereço está sendo alterado, valida se o novo endereço existe
+        if "endereco_id" in payload:
+            endereco = self.endereco_service.get_endereco(payload["endereco_id"])  # 404 se não existir
+            empresa.endereco_id = endereco.id  # ou usa payload["endereco_id"]
+
+        # Atualiza outros campos
+        update_data = {k: v for k, v in payload.items() if k != "endereco_id"}
+        return self.repo_emp.update(empresa, update_data)
 
     def delete_empresa(self, id: int):
         empresa = self.get_empresa(id)

@@ -17,7 +17,7 @@ class EmpresaUpdate(BaseModel):
     cnpj: Optional[str] = None
     slug: Optional[str] = None
     logo: Optional[str] = None
-    endereco_id: Optional[int] = None  # ou endereco: EnderecoUpdate se quiser editar inline
+    endereco_id: Optional[int] = None
 
 class EmpresaResponse(EmpresaBase):
     id: int
