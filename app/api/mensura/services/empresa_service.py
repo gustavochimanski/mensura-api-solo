@@ -56,6 +56,11 @@ class EmpresaService:
             endereco = self.endereco_service.get_endereco(payload["endereco_id"])
             empresa.endereco_id = endereco.id
 
+        if "slug" in payload and payload["slug"] != empresa.slug:
+            existente = self.repo_emp.get_emp_by_slug(payload["slug"])
+            if existente and existente.id != id:
+                raise HTTPException(status_code=400, detail="Slug já está em uso por outra empresa")
+
         # Atualiza demais campos
         update_data = {k: v for k, v in payload.items() if k != "endereco_id"}
         return self.repo_emp.update(empresa, update_data)
