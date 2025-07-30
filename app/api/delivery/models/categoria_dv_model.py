@@ -38,3 +38,8 @@ class CategoriaDeliveryModel(Base):
     @hybrid_property
     def slug_pai(self) -> Optional[str]:
         return self.parent.slug if self.parent else None
+
+    @property
+    def label(self) -> str:
+        # ESTE É O CAMPO QUE O Pydantic ESPERA PARA POPULAR `label`
+        return self.descricao
