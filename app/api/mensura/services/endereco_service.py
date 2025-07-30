@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException
 import re
 
+from app.api.delivery.repositories.cliente_repo import ClienteRepository
 from app.api.mensura.repositories.endereco_repo import EnderecoRepository
 from app.api.mensura.schemas.endereco_schema import EnderecoCreate, EnderecoUpdate
 from app.api.mensura.models.endereco_model import EnderecoModel
