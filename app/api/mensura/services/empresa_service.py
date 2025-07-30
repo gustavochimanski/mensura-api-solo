@@ -4,10 +4,13 @@ from fastapi import HTTPException
 from app.api.mensura.models.empresa_model import EmpresaModel
 from app.api.mensura.repositories.empresa_repo import EmpresaRepository
 from app.api.mensura.schemas.empresa_schema import EmpresaCreate, EmpresaUpdate
+from app.api.mensura.services.endereco_service import EnderecoService
+
 
 class EmpresaService:
     def __init__(self, db: Session):
         self.repo_emp = EmpresaRepository(db)
+        self.endereco_service = EnderecoService(db)
 
     def get_empresa(self, id: int):
         empresa = self.repo_emp.get_empresa_by_id(id)
@@ -19,13 +22,22 @@ class EmpresaService:
         return self.repo_emp.list(skip, limit)
 
     def create_empresa(self, data: EmpresaCreate):
-        # Verifica se já existe uma empresa com o mesmo CNPJ
-        empresa_existente = self.repo_emp.get_emp_by_cnpj(data.cnpj)
-        if empresa_existente:
+        # 🔁 Valida duplicidade de CNPJ
+        if self.repo_emp.get_emp_by_cnpj(data.cnpj):
             raise HTTPException(status_code=400, detail="Empresa já cadastrada")
 
-        # Cria a nova empresa
-        empresa = EmpresaModel(**data.dict())
+        # 🏠 Cria o endereço primeiro
+        endereco = self.endereco_service.create_endereco(data.endereco)
+
+        # 🏢 Cria empresa vinculando o endereço
+        empresa = EmpresaModel(
+            nome=data.nome,
+            cnpj=data.cnpj,
+            slug=data.slug,
+            logo=data.logo,
+            endereco_id=endereco.id
+        )
+
         return self.repo_emp.create(empresa)
 
     def update_empresa(self, id: int, data: EmpresaUpdate):
