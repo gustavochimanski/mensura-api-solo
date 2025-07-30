@@ -51,6 +51,7 @@ async def criar_categoria(
     logger.info(f"Criando categoria: {descricao}")
     imagem_url: Optional[str] = None
 
+    # upload de imagem (se houver)
     if imagem:
         permitidos = {"image/jpeg", "image/png", "image/webp"}
         if imagem.content_type not in permitidos:
@@ -58,7 +59,7 @@ async def criar_categoria(
         try:
             imagem_url = upload_file_to_minio(db, cod_empresa, imagem, "categorias")
         except Exception as e:
-            logger.error(f"Upload falhou: {e}")
+            logger.error("Upload falhou", exc_info=True)
             raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Erro ao enviar imagem")
 
     cat_in = CategoriaDeliveryIn(
@@ -68,10 +69,23 @@ async def criar_categoria(
         imagem=imagem_url,
         posicao=posicao,
     )
-    c = repos.create(cat_in)
+
+    # *** Wrap para debugar o 500 ***
+    try:
+        c = repos.create(cat_in)
+    except HTTPException:
+        # se for um HTTPException lançado no repositório, repassa
+        raise
+    except Exception as e:
+        # captura QUALQUER outro erro, log completo de stacktrace e retorna 500 genérico
+        logger.error("Erro ao criar categoria no repositório", exc_info=True)
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Erro interno ao criar categoria"
+        )
+
     logger.info(f"Categoria criada com ID={c.id}")
     return CategoriaDeliveryOut.from_orm(c)
-
 
 @router.put("/{cat_id}", response_model=CategoriaDeliveryOut)
 async def editar_categoria(
