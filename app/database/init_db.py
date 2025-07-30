@@ -17,16 +17,8 @@ def criar_schemas():
 
 
 def importar_models():
-    from app.api.mensura.models.empresas_model import EmpresaModel
-    from app.api.mensura.models.enderecos_model import EnderecoModel
-    from app.api.mensura.models.cadprod_emp_dv_model import ProdutosEmpDeliveryModel
-    from app.api.mensura.models.cadprod_dv_model import ProdutoDeliveryModel
-    from app.api.mensura.models.user_model import UserModel
-    from app.api.mensura.models.categoria_dv_model import CategoriaDeliveryModel
-    from app.api.mensura.models.vitrines_dv_model import VitrinesModel
-    from app.api.mensura.models.pedido_itens_dv_model import PedidoItemModel
-    from app.api.mensura.models.pedidos_dv_model import PedidoDeliveryModel
-    from app.api.mensura.models.clientes_dv_model import ClienteDeliveryModel
+    pass
+
 
 def criar_tabelas():
     try:

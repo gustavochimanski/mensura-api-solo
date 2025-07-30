@@ -6,8 +6,8 @@ from datetime import datetime
 from typing import Optional
 
 from app.database.db_connection import get_db
-from app.api.mensura.services.produtos_dv_service import ProdutosDeliveryService
-from app.api.mensura.schemas.delivery.produtos.produtos_dv_schema import (
+from app.api.delivery.services.produtos_dv_service import ProdutosDeliveryService
+from app.api.delivery.schemas.produtos.produtos_dv_schema import (
     ProdutosPaginadosResponse,
     CriarNovoProdutoResponse,
     CriarNovoProdutoRequest

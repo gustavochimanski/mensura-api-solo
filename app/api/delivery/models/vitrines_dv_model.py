@@ -2,7 +2,7 @@
 from sqlalchemy import Column, Integer, String, ForeignKey
 from sqlalchemy.orm import relationship
 from app.database.db_connection import Base
-from app.api.mensura.models.cadprod_emp_dv_model import ProdutosEmpDeliveryModel
+from app.api.delivery.models.cadprod_emp_dv_model import ProdutosEmpDeliveryModel
 
 
 class VitrinesModel(Base):

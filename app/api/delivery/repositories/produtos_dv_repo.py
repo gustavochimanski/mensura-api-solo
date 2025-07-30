@@ -3,8 +3,8 @@ from fastapi import HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
-from app.api.mensura.models.cadprod_dv_model import ProdutoDeliveryModel
-from app.api.mensura.models.cadprod_emp_dv_model import ProdutosEmpDeliveryModel
+from app.api.delivery.models.cadprod_dv_model import ProdutoDeliveryModel
+from app.api.delivery.models.cadprod_emp_dv_model import ProdutosEmpDeliveryModel
 
 
 class ProdutoDeliveryRepository:

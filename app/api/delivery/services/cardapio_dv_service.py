@@ -1,16 +1,15 @@
 from typing import List
-from collections import defaultdict
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.api.mensura.repositories.delivery.cardapio_dv_repo import CardapioRepository
+from app.api.delivery.repositories.cardapio_dv_repo import CardapioRepository
 from app.api.mensura.repositories.empresa_repository import EmpresaRepository
-from app.api.mensura.schemas.delivery.cardapio__dv_schema import (
-     ProdutoEmpMiniDTO, ProdutoMiniDTO, VitrineComProdutosResponse
+from app.api.delivery.schemas.cardapio__dv_schema import (
+     ProdutoEmpMiniDTO, ProdutoMiniDTO
 )
-from app.api.mensura.schemas.delivery.cardapio__dv_schema import VitrineComProdutosResponse
-from app.api.mensura.schemas.delivery.categoria_dv_schema import CategoriaDeliveryOut
+from app.api.delivery.schemas.cardapio__dv_schema import VitrineComProdutosResponse
+from app.api.delivery.schemas.categoria_dv_schema import CategoriaDeliveryOut
 
 
 class CardapioService:

@@ -2,10 +2,10 @@
 
 from fastapi import APIRouter, Depends
 
-from app.api.mensura.controllers.categorias_dv_controller import router as routerCategoriasDelivery
-from app.api.mensura.controllers.produtos_dv_controller import router as routerProdutosDelivery
-from app.api.mensura.controllers.cardapio_dv_controller import router as routerCardapio
-from app.api.mensura.controllers.vitrine_controller import router as routerSubCategorias
+from app.api.delivery.controllers.categorias_dv_controller import router as routerCategoriasDelivery
+from app.api.delivery.controllers.produtos_dv_controller import router as routerProdutosDelivery
+from app.api.delivery.controllers.cardapio_dv_controller import router as routerCardapio
+from app.api.delivery.controllers.vitrine_controller import router as routerSubCategorias
 from app.core.dependencies import get_current_user
 
 router = APIRouter()

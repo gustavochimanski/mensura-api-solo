@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 from typing import Optional, List
 
-from app.api.mensura.repositories.delivery.vitrines_repo import VitrineRepository
-from app.api.mensura.schemas.delivery.vitrine_schema import (
+from app.api.delivery.repositories.vitrines_repo import VitrineRepository
+from app.api.delivery.schemas.vitrine_schema import (
     CriarVitrineRequest, CriarVitrineResponse
 )
 from app.database.db_connection import get_db
