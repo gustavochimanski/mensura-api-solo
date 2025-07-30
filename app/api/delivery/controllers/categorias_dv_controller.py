@@ -1,5 +1,8 @@
 # app/api/mensura/controllers/categorias_dv_controller.py
-from fastapi import APIRouter, Depends, Form, File, UploadFile, HTTPException, status
+from fastapi import (
+    APIRouter, Depends, Form, File, UploadFile,
+    HTTPException, status, Path
+)
 from sqlalchemy.orm import Session
 from typing import Optional, List
 
@@ -24,7 +27,10 @@ def list_categorias(db: Session = Depends(get_db)):
 
 
 @router.get("/{cat_id}", response_model=CategoriaDeliveryOut)
-def get_categoria(cat_id: int, db: Session = Depends(get_db)):
+def get_categoria(
+    cat_id: int = Path(..., title="ID da categoria"),
+    db: Session = Depends(get_db),
+):
     repos = CategoriaDeliveryRepository(db)
     logger.info(f"Buscando categoria ID={cat_id}")
     c = repos.get_by_id(cat_id)
@@ -69,8 +75,8 @@ async def criar_categoria(
 
 @router.put("/{cat_id}", response_model=CategoriaDeliveryOut)
 async def editar_categoria(
+    cat_id: int = Path(..., title="ID da categoria"),
     cod_empresa: int = Form(...),
-    cat_id: int = Form(...),
     descricao: str = Form(...),
     slug: str = Form(...),
     parent_id: Optional[int] = Form(None),
@@ -87,7 +93,6 @@ async def editar_categoria(
         if imagem.content_type not in permitidos:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Formato de imagem inválido")
         try:
-            # se precisar, passe cod_empresa aqui também
             imagem_url = upload_file_to_minio(db, cod_empresa, imagem, "categorias")
         except Exception as e:
             logger.error(f"Upload falhou: {e}")
@@ -106,7 +111,10 @@ async def editar_categoria(
 
 
 @router.delete("/{cat_id}", status_code=status.HTTP_204_NO_CONTENT)
-def deletar_categoria(cat_id: int, db: Session = Depends(get_db)):
+def deletar_categoria(
+    cat_id: int = Path(..., title="ID da categoria"),
+    db: Session = Depends(get_db),
+):
     repos = CategoriaDeliveryRepository(db)
     repos.delete(cat_id)
     logger.info(f"Categoria ID={cat_id} deletada")
@@ -114,7 +122,10 @@ def deletar_categoria(cat_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{cat_id}/move-right", response_model=CategoriaDeliveryOut)
-def move_categoria_direita(cat_id: int, db: Session = Depends(get_db)):
+def move_categoria_direita(
+    cat_id: int = Path(..., title="ID da categoria"),
+    db: Session = Depends(get_db),
+):
     repos = CategoriaDeliveryRepository(db)
     c = repos.move_right(cat_id)
     logger.info(f"Categoria ID={cat_id} movida para direita")
@@ -122,7 +133,10 @@ def move_categoria_direita(cat_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{cat_id}/move-left", response_model=CategoriaDeliveryOut)
-def move_categoria_esquerda(cat_id: int, db: Session = Depends(get_db)):
+def move_categoria_esquerda(
+    cat_id: int = Path(..., title="ID da categoria"),
+    db: Session = Depends(get_db),
+):
     repos = CategoriaDeliveryRepository(db)
     c = repos.move_left(cat_id)
     logger.info(f"Categoria ID={cat_id} movida para esquerda")
