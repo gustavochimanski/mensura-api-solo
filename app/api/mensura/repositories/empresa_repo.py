@@ -25,9 +25,10 @@ class EmpresaRepository:
     def list(self, skip: int = 0, limit: int = 100) -> List[EmpresaModel]:
         return (
             self.db.query(EmpresaModel)
-            .options(joinedload(EmpresaModel.endereco))  # 👈 isso carrega o relacionamento
+            .options(joinedload(EmpresaModel.endereco))
             .offset(skip)
             .limit(limit)
+            .distinct()
             .all()
         )
 
