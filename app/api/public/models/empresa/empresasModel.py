@@ -4,6 +4,7 @@ from app.database.db_connection import Base  # certifique-se de ter o Base
 
 class Empresa(Base):
     __tablename__ = "empresas"
+    __table_args__ = "public"
 
     empr_codigo = Column(String(3), primary_key=True)
     empr_codgrupo = Column(String(2))
