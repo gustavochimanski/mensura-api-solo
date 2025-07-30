@@ -1,4 +1,4 @@
-from app.api.mensura.models.empresas_model import EmpresaModel
+from app.api.mensura.models.empresa_model import EmpresaModel
 from sqlalchemy.orm import Session
 from typing import Optional
 

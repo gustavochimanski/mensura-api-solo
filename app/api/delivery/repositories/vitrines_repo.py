@@ -3,7 +3,7 @@ from fastapi import HTTPException, status
 from slugify import slugify
 
 from app.api.delivery.models.cadprod_emp_dv_model import ProdutoEmpDeliveryModel
-from app.api.delivery.models.vitrines_dv_model import VitrinesModel
+from app.api.delivery.models.vitrine_dv_model import VitrinesModel
 from app.api.delivery.schemas.vitrine_schema import CriarVitrineRequest
 
 
