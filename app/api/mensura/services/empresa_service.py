@@ -67,4 +67,10 @@ class EmpresaService:
 
     def delete_empresa(self, id: int):
         empresa = self.get_empresa(id)
+
+        # 🚫 Verifica se existem usuários vinculados
+        if empresa.usuarios and len(empresa.usuarios) > 0:
+            raise HTTPException(status_code=400,
+                                detail="Empresa possui usuários vinculados. Remova-os antes de excluir.")
+
         self.repo_emp.delete(empresa)
