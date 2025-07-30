@@ -37,6 +37,9 @@ def upload_file_to_minio(
     repo = EmpresaRepository(db)
     cnpj = repo.get_cnpj_by_id(cod_empresa)
 
+    if not cnpj:
+        raise ValueError(f"Empresa {cod_empresa} não possui CNPJ cadastrado.")
+
     # 2️⃣ Garante bucket com nome igual ao CNPJ
     bucket_name = cnpj
     if not client.bucket_exists(bucket_name):

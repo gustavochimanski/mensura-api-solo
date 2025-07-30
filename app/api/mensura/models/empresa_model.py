@@ -26,6 +26,6 @@ class EmpresaModel(Base):
     produtos_emp = relationship("ProdutoEmpDeliveryModel", back_populates="empresa")
     pedidos = relationship("PedidoDeliveryModel", back_populates="empresa", cascade="all, delete-orphan")
     entregadores = relationship("EntregadorDeliveryModel", secondary=entregador_empresa, back_populates="empresas")
-    usuarios     = relationship( "UserModel", secondary=usuario_empresa, back_populates="empresas")
+    usuarios = relationship( "UserModel", secondary=usuario_empresa, back_populates="empresas")
     endereco = relationship("EnderecoModel", back_populates="empresa")
     model_config = ConfigDict(from_attributes=True)
