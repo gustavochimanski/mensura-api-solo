@@ -2,6 +2,7 @@
 import uuid
 import mimetypes
 import os
+from slugify import slugify
 
 from fastapi import UploadFile
 from minio import Minio
@@ -27,6 +28,14 @@ client = Minio(
     secure=MINIO_ENDPOINT.startswith("https"),
 )
 
+
+def gerar_nome_bucket(cnpj: str) -> str:
+    """
+    Gera um nome de bucket seguro e válido com base no CNPJ ou nome da empresa.
+    """
+    return slugify(cnpj)[:63]  # garante no máximo 63 caracteres
+
+
 def upload_file_to_minio(
     db: Session,
     cod_empresa: int,
@@ -41,7 +50,7 @@ def upload_file_to_minio(
         raise ValueError(f"Empresa {cod_empresa} não possui CNPJ cadastrado.")
 
     # 2️⃣ Garante bucket com nome igual ao CNPJ
-    bucket_name = cnpj
+    bucket_name = gerar_nome_bucket(cnpj)
     if not client.bucket_exists(bucket_name):
         client.make_bucket(bucket_name)
 
