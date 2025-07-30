@@ -8,7 +8,6 @@ from fastapi import UploadFile
 from minio import Minio
 from sqlalchemy.orm import Session
 
-
 from app.api.mensura.repositories.empresa_repo import EmpresaRepository
 # Só carrega .env se não estiver em Docker
 if not os.getenv("RUNNING_IN_DOCKER"):
@@ -23,12 +22,10 @@ MINIO_ROOT_USER = os.getenv("MINIO_ROOT_USER", "")
 MINIO_ROOT_PASSWORD = os.getenv("MINIO_ROOT_PASSWORD", "")
 
 client = Minio(
-    endpoint=MINIO_ENDPOINT.replace("http://", "").replace("https://", ""),
+    endpoint="localhost:1001",
     access_key=MINIO_ROOT_USER,
     secret_key=MINIO_ROOT_PASSWORD,
-    secure=MINIO_ENDPOINT.startswith("https"),
-    http_client=None,
-    credentials=None,
+    secure=MINIO_ENDPOINT.startswith("https")
 )
 
 
