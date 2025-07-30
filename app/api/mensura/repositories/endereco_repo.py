@@ -28,7 +28,6 @@ class EnderecoRepository:
         self.db.refresh(endereco)
         return endereco
 
-
     def delete(self, endereco: EnderecoModel):
         self.db.delete(endereco)
-        self.db.refresh(endereco)
+        self.db.commit()

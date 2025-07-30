@@ -41,4 +41,3 @@ class EmpresaService:
     def delete_empresa(self, id: int):
         empresa = self.get_empresa(id)
         self.repo_emp.delete(empresa)
-
