@@ -28,15 +28,7 @@ class EnderecoRepository:
         self.db.refresh(endereco)
         return endereco
 
-    def exists_for_cliente(self, cliente_id: int, cep: str, logradouro: str, numero: str) -> bool:
-        return (
-                self.db.query(EnderecoModel)
-                .filter(
-                    EnderecoModel.cliente_id == cliente_id,
-                    EnderecoModel.cep == cep,
-                    EnderecoModel.logradouro == logradouro,
-                    EnderecoModel.numero == numero,
-                )
-                .first()
-                is not None
-        )
+
+    def delete(self, endereco: EnderecoModel):
+        self.db.delete(endereco)
+        self.db.refresh(endereco)
