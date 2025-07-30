@@ -11,8 +11,8 @@ class ProdutoEmpDeliveryModel(Base):
     __tablename__ = "cadprod_emp_dv"
     __table_args__ = (
         ForeignKeyConstraint(["cod_barras"],["delivery.cadprod_dv.cod_barras"], name="fk_produto_empresa_cod_barras", ondelete="CASCADE"),
-        UniqueConstraint("empresa", "cod_barras", name="uix_empresa_cod_barras"),
-        Index("idx_empresa_produto", "empresa", "cod_barras"),
+        UniqueConstraint("empresa_id", "cod_barras", name="uix_empresa_cod_barras"),
+        Index("idx_empresa_produto", "empresa_id", "cod_barras"),
         {"schema": "delivery"}
     )
 

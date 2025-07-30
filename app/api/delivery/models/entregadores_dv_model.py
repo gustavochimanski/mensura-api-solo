@@ -12,7 +12,6 @@ class EntregadorDeliveryModel(Base):
     id = Column(Integer, primary_key=True)
     nome = Column(String, nullable=False)
     acrescimo_taxa = Column(Integer)
-    empresas = Column(ARRAY(Integer), nullable=False, default=list)
 
     empresas = relationship(
         "EmpresaModel",
