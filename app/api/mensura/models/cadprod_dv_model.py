@@ -22,7 +22,7 @@ class ProdutoDeliveryModel(Base):
         back_populates="produtos"
     )
 
-    # Produtos associados às empresass
+    # Produtos associados às empresas
     produtos_empresa = relationship(
         "ProdutosEmpDeliveryModel",
         back_populates="produto",
