@@ -18,7 +18,7 @@ class EmpresaModel(Base):
     # Novo campo de endereço
     endereco_id = Column(
         Integer,
-        ForeignKey("mensura.enderecos.id", ondelete="SET NULL"),
+        ForeignKey("mensura.enderecos.id", ondelete="RESTRICT"),
         nullable=True
     )
 
