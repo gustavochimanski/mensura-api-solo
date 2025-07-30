@@ -1,5 +1,5 @@
 from app.api.mensura.models.empresa_model import EmpresaModel
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import Optional, List
 
 class EmpresaRepository:
@@ -16,7 +16,13 @@ class EmpresaRepository:
         return self.db.query(EmpresaModel.cnpj).filter(EmpresaModel.cnpj == cnpj).first()
 
     def list(self, skip: int = 0, limit: int = 100) -> List[EmpresaModel]:
-        return self.db.query(EmpresaModel).offset(skip).limit(limit).all()
+        return (
+            self.db.query(EmpresaModel)
+            .options(joinedload(EmpresaModel.endereco))  # 👈 isso carrega o relacionamento
+            .offset(skip)
+            .limit(limit)
+            .all()
+        )
 
     def list_by_ids(self, ids: List[int]) -> List[EmpresaModel]:
         return (
