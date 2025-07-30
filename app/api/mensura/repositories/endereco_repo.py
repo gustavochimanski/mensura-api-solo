@@ -10,12 +10,12 @@ class EnderecoRepository:
         self.db = db
 
     def get(self, id: int) -> Optional[EnderecoModel]:
-        return self.db.query(EnderecoModel).filter(EnderecoModel.id == id).firts()
+        return self.db.query(EnderecoModel).filter(EnderecoModel.id == id).first()
 
     def list(self, skip: int = 0, limit: int = 100) -> List[EnderecoModel]:
         return self.db.query(EnderecoModel).offset(skip).limit(limit).all()
 
-    def crate(self, endereco: EnderecoModel) -> EnderecoModel:
+    def create(self, endereco: EnderecoModel) -> EnderecoModel:
         self.db.add(endereco)
         self.db.commit()
         self.db.refresh(endereco)
@@ -27,3 +27,16 @@ class EnderecoRepository:
         self.db.commit()
         self.db.refresh(endereco)
         return endereco
+
+    def exists_for_cliente(self, cliente_id: int, cep: str, logradouro: str, numero: str) -> bool:
+        return (
+                self.db.query(EnderecoModel)
+                .filter(
+                    EnderecoModel.cliente_id == cliente_id,
+                    EnderecoModel.cep == cep,
+                    EnderecoModel.logradouro == logradouro,
+                    EnderecoModel.numero == numero,
+                )
+                .first()
+                is not None
+        )
