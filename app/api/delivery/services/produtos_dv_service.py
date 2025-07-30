@@ -5,7 +5,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.delivery.repositories.produtos_dv_repo import ProdutoDeliveryRepository
-from app.api.mensura.repositories.empresa_repository import EmpresaRepository
+from app.api.mensura.repositories.empresa_repo import EmpresaRepository
 from app.api.delivery.schemas.produtos.produtos_dv_schema import ProdutoListItem, CriarNovoProdutoResponse, \
     CriarNovoProdutoRequest
 from app.api.delivery.models.cadprod_dv_model import ProdutoDeliveryModel

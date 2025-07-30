@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from datetime import timedelta
 
-from app.api.mensura.repositories.auth_repository import authRepository
+from app.api.mensura.repositories.auth_repo import authRepository
 from app.api.mensura.schemas.auth_schema import LoginRequest, TokenResponse
 from app.core.security import verify_password, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES
 from app.database.db_connection import get_db

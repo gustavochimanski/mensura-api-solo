@@ -1,0 +1,36 @@
+from app.api.mensura.models.empresa_model import EmpresaModel
+from sqlalchemy.orm import Session
+from typing import Optional, List
+
+class EmpresaRepository:
+    def __init__(self, db: Session):
+        self.db = db
+
+    def get_empresa_by_id(self, empresa_id: int) -> Optional[EmpresaModel]:
+        return self.db.query(EmpresaModel).filter(EmpresaModel.id == empresa_id).first()
+
+    def get_cnpj_by_id(self, emp_id: int) -> Optional[str]:
+        return self.db.query(EmpresaModel.cnpj).filter(EmpresaModel.id == emp_id).scalar()
+
+    def get_emp_by_cnpj(self, cnpj: str ):
+        return self.db.query(EmpresaModel.cnpj).filter(EmpresaModel.cnpj == cnpj)
+
+    def list(self, skip: int = 0, limit: int = 100) -> List[EmpresaModel]:
+        return self.db.query(EmpresaModel).offset(skip).limit(limit).all()
+
+    def create(self, empresa: EmpresaModel) -> EmpresaModel:
+        self.db.add(empresa)
+        self.db.commit()
+        self.db.refresh(empresa)
+        return empresa
+
+    def update(self, empresa: EmpresaModel, data: dict) -> EmpresaModel:
+        for key, value in data.items():
+            setattr(empresa, key, value)
+        self.db.commit()
+        self.db.refresh(empresa)
+        return empresa
+
+    def delete(self, empresa: EmpresaModel) -> None:
+        self.db.delete(empresa)
+        self.db.commit()

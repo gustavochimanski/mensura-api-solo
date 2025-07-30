@@ -1,4 +1,4 @@
-# app/mensura/repositories/auth_repository.py
+# app/mensura/repositories/auth_repo.py
 from sqlalchemy.orm import Session
 
 from app.api.mensura.models.user_model import UserModel

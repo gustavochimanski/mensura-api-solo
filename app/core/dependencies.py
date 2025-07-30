@@ -5,7 +5,7 @@ from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 
 from app.api.mensura.models.user_model import UserModel
-from app.api.mensura.repositories.auth_repository import authRepository
+from app.api.mensura.repositories.auth_repo import authRepository
 from app.core.security import SECRET_KEY, ALGORITHM
 from app.database.db_connection import get_db
 from app.utils.logger import logger
