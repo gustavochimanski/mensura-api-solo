@@ -51,6 +51,10 @@ def upload_file_to_minio(
 
     # 2️⃣ Garante bucket com nome igual ao CNPJ
     bucket_name = gerar_nome_bucket(cnpj)
+
+    if not bucket_name:
+        raise ValueError(f"Falha ao gerar nome do bucket para CNPJ: {cnpj}")
+
     if not client.bucket_exists(bucket_name):
         client.make_bucket(bucket_name)
 
