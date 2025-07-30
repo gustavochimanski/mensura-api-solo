@@ -5,7 +5,7 @@ from app.database.db_connection import Base
 
 class ProdutoDeliveryModel(Base):
     __tablename__ = "cadprod_dv"
-    __table_args__ = {"schema": "mensura"}
+    __table_args__ = {"schema": "delivery"}
 
     cod_barras = Column(String, nullable=False, unique=True, primary_key=True)
     descricao = Column(String(255), nullable=False)

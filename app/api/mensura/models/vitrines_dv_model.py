@@ -1,4 +1,4 @@
-# app/models/mensura/vitrines_model.py
+# app/models/mensura/vitrines_dv_model.py
 from sqlalchemy import Column, Integer, String, ForeignKey
 from sqlalchemy.orm import relationship
 from app.database.db_connection import Base
@@ -7,7 +7,7 @@ from app.api.mensura.models.cadprod_emp_dv_model import ProdutosEmpDeliveryModel
 
 class VitrinesModel(Base):
     __tablename__ = "vitrines_dv"
-    __table_args__ = {"schema": "mensura"}
+    __table_args__ = {"schema": "delivery"}
 
     id = Column(Integer, primary_key=True)
 

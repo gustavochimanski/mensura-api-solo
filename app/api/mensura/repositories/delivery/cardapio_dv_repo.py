@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.api.mensura.models.categoria_dv_model import CategoriaDeliveryModel
 from app.api.mensura.models.cadprod_emp_dv_model import ProdutosEmpDeliveryModel
-from app.api.mensura.models.vitrines_model import VitrinesModel
+from app.api.mensura.models.vitrines_dv_model import VitrinesModel
 
 
 class CardapioRepository:

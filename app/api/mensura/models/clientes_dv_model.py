@@ -5,7 +5,7 @@ from pydantic import ConfigDict
 
 class ClienteDeliveryModel(Base):
     __tablename__ = "clientes_dv"
-    __table_args__ = {"schema": "mensura"}
+    __table_args__ = {"schema": "delivery"}
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     nome = Column(String(100), nullable=False)

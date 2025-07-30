@@ -3,7 +3,7 @@ from sqlalchemy import text, quoted_name
 from .db_connection import engine, Base
 
 logger = logging.getLogger(__name__)
-SCHEMAS = ["mensura", "bi", "pdv"]
+SCHEMAS = ["mensura", "bi", "pdv", "delivery"]
 
 def criar_schemas():
     try:
@@ -23,7 +23,7 @@ def importar_models():
     from app.api.mensura.models.cadprod_dv_model import ProdutoDeliveryModel
     from app.api.mensura.models.user_model import UserModel
     from app.api.mensura.models.categoria_dv_model import CategoriaDeliveryModel
-    from app.api.mensura.models.vitrines_model import VitrinesModel
+    from app.api.mensura.models.vitrines_dv_model import VitrinesModel
     from app.api.mensura.models.pedido_itens_dv_model import PedidoItemModel
     from app.api.mensura.models.pedidos_dv_model import PedidoDeliveryModel
     from app.api.mensura.models.clientes_dv_model import ClienteDeliveryModel

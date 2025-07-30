@@ -4,8 +4,8 @@ from app.database.db_connection import Base
 from pydantic import ConfigDict
 
 class PedidoItemModel(Base):
-    __tablename__ = "pedido_produtos"
-    __table_args__ = {"schema": "mensura"}
+    __tablename__ = "pedido_itens_dv"
+    __table_args__ = {"schema": "delivery"}
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     pedido_id = Column(Integer, ForeignKey("mensura.pedidos_dv.id", ondelete="CASCADE"), nullable=False)

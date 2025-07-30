@@ -6,7 +6,7 @@ from app.database.db_connection import Base
 
 class CategoriaDeliveryModel(Base):
     __tablename__ = "categoria_dv"
-    __table_args__ = {"schema": "mensura"}
+    __table_args__ = {"schema": "delivery"}
 
     id = Column(Integer, primary_key=True)
     descricao = Column(String(100), nullable=False)

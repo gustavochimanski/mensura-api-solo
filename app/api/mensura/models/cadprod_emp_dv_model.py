@@ -24,7 +24,7 @@ class ProdutosEmpDeliveryModel(Base):
             "idx_empresa_produto",
             "empresa", "cod_barras"
         ),
-        {"schema": "mensura"}
+        {"schema": "delivery"}
     )
 
     # Composite PK: empresa + cod_barras
