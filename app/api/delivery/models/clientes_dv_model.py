@@ -16,6 +16,6 @@ class ClienteDeliveryModel(Base):
     ativo = Column(Boolean, default=True)
 
     pedidos = relationship("PedidoDeliveryModel", back_populates="cliente")
+    enderecos = relationship("EnderecoDeliveryModel", back_populates="cliente")
 
     model_config = ConfigDict(from_attributes=True)
-

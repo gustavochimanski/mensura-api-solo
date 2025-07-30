@@ -1,9 +1,9 @@
-from pydantic import BaseModel, ConfigDict, constr
-from typing import Optional
+# app/api/mensura/schemas/delivery/vitrines/vitrine_dv_schema.py
+from pydantic import BaseModel, ConfigDict
 
 class CriarVitrineRequest(BaseModel):
-    cod_categoria: Optional[int]
-    titulo: constr(min_length=1, max_length=100)
+    cod_categoria: int
+    titulo: str
     ordem: int
 
     model_config = ConfigDict(from_attributes=True)

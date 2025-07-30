@@ -9,7 +9,7 @@ from app.api.mensura.repositories.empresa_repository import EmpresaRepository
 from app.api.delivery.schemas.produtos.produtos_dv_schema import ProdutoListItem, CriarNovoProdutoResponse, \
     CriarNovoProdutoRequest
 from app.api.delivery.models.cadprod_dv_model import ProdutoDeliveryModel
-from app.api.delivery.models.cadprod_emp_dv_model import ProdutosEmpDeliveryModel
+from app.api.delivery.models.cadprod_emp_dv_model import ProdutoEmpDeliveryModel
 
 
 class ProdutosDeliveryService:
@@ -57,7 +57,7 @@ class ProdutosDeliveryService:
         empresas = [cod_empresa]
 
         produto.produtos_empresa = [
-            ProdutosEmpDeliveryModel(
+            ProdutoEmpDeliveryModel(
                 empresa=int(emp),
                 cod_barras=produto.cod_barras,
                 preco_venda=produto_data.preco_venda,

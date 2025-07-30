@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 from slugify import slugify
 
-from app.api.delivery.models.cadprod_emp_dv_model import ProdutosEmpDeliveryModel
+from app.api.delivery.models.cadprod_emp_dv_model import ProdutoEmpDeliveryModel
 from app.api.delivery.models.vitrines_dv_model import VitrinesModel
 from app.api.delivery.schemas.vitrine_schema import CriarVitrineRequest
 
@@ -19,8 +19,8 @@ class VitrineRepository:
         """
         # Subquery com produtos da empresa
         subquery = (
-            self.db.query(ProdutosEmpDeliveryModel.vitrine_id)
-            .filter(ProdutosEmpDeliveryModel.empresa == cod_empresa)
+            self.db.query(ProdutoEmpDeliveryModel.vitrine_id)
+            .filter(ProdutoEmpDeliveryModel.empresa == cod_empresa)
             .distinct()
             .subquery()
         )
@@ -69,8 +69,8 @@ class VitrineRepository:
             )
 
         produto_vinculado = (
-            self.db.query(ProdutosEmpDeliveryModel)
-            .filter(ProdutosEmpDeliveryModel.vitrine_id == sub_id)
+            self.db.query(ProdutoEmpDeliveryModel)
+            .filter(ProdutoEmpDeliveryModel.vitrine_id == sub_id)
             .first()
         )
 

@@ -5,19 +5,19 @@ from typing import Optional
 class CategoriaDeliveryIn(BaseModel):
     descricao: constr(min_length=1, max_length=100)
     slug: constr(min_length=1, max_length=100)
-    slug_pai: Optional[str] = None
+    parent_id: Optional[int] = None
     imagem: Optional[str] = None
-    posicao: Optional[int] = None   # ⬅️ incluído
+    posicao: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True)
 
 class CategoriaDeliveryOut(BaseModel):
     id: int
-    label: str
-    imagem: Optional[str]
+    label: str             # corresponde a "descricao" do model
     slug: str
-    slug_pai: Optional[str]
-    href: str
-    posicao: Optional[int]           # ⬅️ incluído
+    parent_id: Optional[int] = None
+    imagem: Optional[str] = None
+    href: str              # propriedade @hybrid_property do model
+    posicao: int
 
     model_config = ConfigDict(from_attributes=True)

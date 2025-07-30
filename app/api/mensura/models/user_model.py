@@ -1,5 +1,8 @@
 # models/user.py
 from sqlalchemy import Column, Integer, String, ARRAY
+from sqlalchemy.orm import relationship
+
+from app.api.mensura.models.association_tables import usuario_empresa
 from app.database.db_connection import Base
 
 class UserModel(Base):
@@ -10,4 +13,9 @@ class UserModel(Base):
     username = Column(String, unique=True, nullable=False)
     hashed_password = Column(String, nullable=False)
     type_user = Column(String, nullable=False)
-    empresas_liberadas = Column(ARRAY(Integer), nullable=False, default=list)
+    empresas = relationship(
+        "EmpresaModel",
+        secondary=usuario_empresa,
+        back_populates="usuarios"
+    )
+

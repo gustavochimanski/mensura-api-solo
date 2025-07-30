@@ -1,5 +1,7 @@
 from sqlalchemy import Column, Integer, String, ForeignKey
 from sqlalchemy.orm import relationship
+
+from app.api.mensura.models.association_tables import entregador_empresa, usuario_empresa
 from app.database.db_connection import Base
 from pydantic import ConfigDict
 
@@ -21,8 +23,9 @@ class EmpresaModel(Base):
     )
 
     # Relacionamentos
-    produtos_emp = relationship("ProdutosEmpDeliveryModel", back_populates="empresa_rel")
-    endereco = relationship("EnderecoModel", back_populates="empresa")
+    produtos_emp = relationship("ProdutoEmpDeliveryModel", back_populates="empresa")
     pedidos = relationship("PedidoDeliveryModel", back_populates="empresa", cascade="all, delete-orphan")
-
+    entregadores = relationship("EntregadorDeliveryModel", secondary=entregador_empresa, back_populates="empresas")
+    usuarios     = relationship( "UserModel", secondary=usuario_empresa, back_populates="empresas")
+    endereco = relationship("EnderecoModel", back_populates="empresa")
     model_config = ConfigDict(from_attributes=True)

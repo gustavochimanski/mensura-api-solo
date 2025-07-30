@@ -4,7 +4,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.delivery.models.cadprod_dv_model import ProdutoDeliveryModel
-from app.api.delivery.models.cadprod_emp_dv_model import ProdutosEmpDeliveryModel
+from app.api.delivery.models.cadprod_emp_dv_model import ProdutoEmpDeliveryModel
 
 
 class ProdutoDeliveryRepository:
@@ -14,8 +14,8 @@ class ProdutoDeliveryRepository:
     def buscar_produtos_da_empresa(self, cod_empresa: int, offset: int, limit: int):
         return (
             self.db.query(ProdutoDeliveryModel)
-            .join(ProdutosEmpDeliveryModel, ProdutoDeliveryModel.cod_barras == ProdutosEmpDeliveryModel.cod_barras)
-            .filter(ProdutosEmpDeliveryModel.empresa == cod_empresa)
+            .join(ProdutoEmpDeliveryModel, ProdutoDeliveryModel.cod_barras == ProdutoEmpDeliveryModel.cod_barras)
+            .filter(ProdutoEmpDeliveryModel.empresa == cod_empresa)
             .options(
                 joinedload(ProdutoDeliveryModel.categoria),
                 joinedload(ProdutoDeliveryModel.produtos_empresa),
@@ -29,8 +29,8 @@ class ProdutoDeliveryRepository:
     def contar_total(self, cod_empresa: int):
         return (
             self.db.query(func.count(ProdutoDeliveryModel.cod_barras))
-            .join(ProdutosEmpDeliveryModel, ProdutoDeliveryModel.cod_barras == ProdutosEmpDeliveryModel.cod_barras)
-            .filter(ProdutosEmpDeliveryModel.empresa == cod_empresa)
+            .join(ProdutoEmpDeliveryModel, ProdutoDeliveryModel.cod_barras == ProdutoEmpDeliveryModel.cod_barras)
+            .filter(ProdutoEmpDeliveryModel.empresa == cod_empresa)
             .scalar()
         )
 
