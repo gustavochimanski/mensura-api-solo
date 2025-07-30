@@ -19,7 +19,7 @@ if not os.getenv("RUNNING_IN_DOCKER"):
 
 # Configuração do MinIO Client
 # Usa o endpoint interno (nome do container + porta interna)
-MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "minio_global:9000")
+MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "minio:9000")
 MINIO_PUBLIC_ENDPOINT = os.getenv("MINIO_PUBLIC_ENDPOINT", "")
 MINIO_ROOT_USER = os.getenv("MINIO_ROOT_USER", "")
 MINIO_ROOT_PASSWORD = os.getenv("MINIO_ROOT_PASSWORD", "")

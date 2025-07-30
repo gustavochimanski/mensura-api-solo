@@ -1,4 +1,4 @@
-# app/api/mensura/schemas/delivery/categorias/categoria_dv_schema.py
+# app/api/delivery/schemas/categoria_dv_schema.py
 from pydantic import BaseModel, ConfigDict, constr
 from typing import Optional
 
@@ -13,7 +13,7 @@ class CategoriaDeliveryIn(BaseModel):
 
 class CategoriaDeliveryOut(BaseModel):
     id: int
-    label: str             # corresponde a "descricao" do model
+    label: str             # será preenchido com c.descricao
     slug: str
     parent_id: Optional[int] = None
     imagem: Optional[str] = None

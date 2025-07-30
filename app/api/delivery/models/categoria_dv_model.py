@@ -1,3 +1,5 @@
+# app/api/delivery/models/categoria_dv_model.py
+from typing import Optional
 from sqlalchemy import Column, Integer, String, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.hybrid import hybrid_property
@@ -11,17 +13,16 @@ class CategoriaDeliveryModel(Base):
     descricao = Column(String(100), nullable=False)
     slug = Column(String(100), nullable=False, unique=True)
 
-    # Self-relation para hierarquia
     parent_id = Column(Integer, ForeignKey("delivery.categoria_dv.id"), nullable=True)
     parent = relationship(
         "CategoriaDeliveryModel",
         remote_side=[id],
-        back_populates="children"
+        back_populates="children",
     )
-    children    = relationship(
+    children = relationship(
         "CategoriaDeliveryModel",
         back_populates="parent",
-        cascade="all, delete-orphan"
+        cascade="all, delete-orphan",
     )
 
     imagem = Column(String(255), nullable=True)
@@ -33,3 +34,7 @@ class CategoriaDeliveryModel(Base):
     @hybrid_property
     def href(self) -> str:
         return f"/categorias/{self.slug}"
+
+    @hybrid_property
+    def slug_pai(self) -> Optional[str]:
+        return self.parent.slug if self.parent else None

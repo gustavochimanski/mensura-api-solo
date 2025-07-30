@@ -4,9 +4,7 @@ from sqlalchemy.orm import Session
 from typing import Optional, List
 
 from app.database.db_connection import get_db
-from app.api.delivery.repositories.categorias_dv_repo import (
-    CategoriaDeliveryRepository
-)
+from app.api.delivery.repositories.categorias_dv_repo import CategoriaDeliveryRepository
 from app.api.delivery.schemas.categoria_dv_schema import (
     CategoriaDeliveryIn,
     CategoriaDeliveryOut
@@ -22,33 +20,15 @@ def list_categorias(db: Session = Depends(get_db)):
     repos = CategoriaDeliveryRepository(db)
     logger.info("Listando todas as categorias de delivery")
     cats = repos.list_all()
-    return [
-        CategoriaDeliveryOut(
-            id=c.id,
-            label=c.descricao,
-            imagem=c.imagem,
-            slug=c.slug,
-            slug_pai=c.slug_pai,
-            href=c.href,
-            posicao=c.posicao,
-        )
-        for c in cats
-    ]
+    return [CategoriaDeliveryOut.from_orm(c) for c in cats]
+
 
 @router.get("/{cat_id}", response_model=CategoriaDeliveryOut)
 def get_categoria(cat_id: int, db: Session = Depends(get_db)):
     repos = CategoriaDeliveryRepository(db)
     logger.info(f"Buscando categoria ID={cat_id}")
     c = repos.get_by_id(cat_id)
-    return CategoriaDeliveryOut(
-        id=c.id,
-        label=c.descricao,
-        imagem=c.imagem,
-        slug=c.slug,
-        slug_pai=c.slug_pai,
-        href=c.href,
-        posicao=c.posicao,
-    )
+    return CategoriaDeliveryOut.from_orm(c)
 
 
 @router.post("", response_model=CategoriaDeliveryOut, status_code=status.HTTP_201_CREATED)
@@ -56,87 +36,73 @@ async def criar_categoria(
     cod_empresa: int = Form(...),
     descricao: str = Form(...),
     slug: str = Form(...),
-    slug_pai: Optional[str] = Form(None),
+    parent_id: Optional[int] = Form(None),
     posicao: Optional[int] = Form(None),
     imagem: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
 ):
     repos = CategoriaDeliveryRepository(db)
     logger.info(f"Criando categoria: {descricao}")
-    imagem_url = None
+    imagem_url: Optional[str] = None
 
     if imagem:
         permitidos = {"image/jpeg", "image/png", "image/webp"}
         if imagem.content_type not in permitidos:
-            raise HTTPException(400, "Formato de imagem inválido")
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Formato de imagem inválido")
         try:
             imagem_url = upload_file_to_minio(db, cod_empresa, imagem, "categorias")
-        except RuntimeError as e:
+        except Exception as e:
             logger.error(f"Upload falhou: {e}")
-            raise HTTPException(500, "Erro ao enviar imagem")
+            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Erro ao enviar imagem")
 
     cat_in = CategoriaDeliveryIn(
         descricao=descricao,
         slug=slug,
-        slug_pai=slug_pai,
+        parent_id=parent_id,
         imagem=imagem_url,
         posicao=posicao,
     )
     c = repos.create(cat_in)
     logger.info(f"Categoria criada com ID={c.id}")
-    return CategoriaDeliveryOut(
-        id=c.id,
-        label=c.descricao,
-        imagem=c.imagem,
-        slug=c.slug,
-        slug_pai=c.slug_pai,
-        href=c.href,
-        posicao=c.posicao,
-    )
+    return CategoriaDeliveryOut.from_orm(c)
 
 
 @router.put("/{cat_id}", response_model=CategoriaDeliveryOut)
 async def editar_categoria(
-    cat_id: int,
+    cod_empresa: int = Form(...),
+    cat_id: int = Form(...),
     descricao: str = Form(...),
     slug: str = Form(...),
-    slug_pai: Optional[str] = Form(None),
+    parent_id: Optional[int] = Form(None),
     posicao: Optional[int] = Form(None),
     imagem: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
 ):
     repos = CategoriaDeliveryRepository(db)
     logger.info(f"Editando categoria ID={cat_id}")
-    imagem_url = None
+    imagem_url: Optional[str] = None
 
     if imagem:
         permitidos = {"image/jpeg", "image/png", "image/webp"}
         if imagem.content_type not in permitidos:
-            raise HTTPException(400, "Formato de imagem inválido")
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Formato de imagem inválido")
         try:
-            imagem_url = upload_file_to_minio(imagem, slug, bucket="categorias")
-        except RuntimeError as e:
+            # se precisar, passe cod_empresa aqui também
+            imagem_url = upload_file_to_minio(db, cod_empresa, imagem, "categorias")
+        except Exception as e:
             logger.error(f"Upload falhou: {e}")
-            raise HTTPException(500, "Erro ao enviar imagem")
+            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Erro ao enviar imagem")
 
     updates = {
         "descricao": descricao,
         "slug": slug,
-        "slug_pai": slug_pai,
+        "parent_id": parent_id,
         "posicao": posicao,
         "imagem": imagem_url,
     }
     c = repos.update(cat_id, updates)
     logger.info(f"Categoria ID={cat_id} atualizada")
-    return CategoriaDeliveryOut(
-        id=c.id,
-        label=c.descricao,
-        imagem=c.imagem,
-        slug=c.slug,
-        slug_pai=c.slug_pai,
-        href=c.href,
-        posicao=c.posicao,
-    )
+    return CategoriaDeliveryOut.from_orm(c)
 
 
 @router.delete("/{cat_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -152,15 +118,7 @@ def move_categoria_direita(cat_id: int, db: Session = Depends(get_db)):
     repos = CategoriaDeliveryRepository(db)
     c = repos.move_right(cat_id)
     logger.info(f"Categoria ID={cat_id} movida para direita")
-    return CategoriaDeliveryOut(
-        id=c.id,
-        label=c.descricao,
-        imagem=c.imagem,
-        slug=c.slug,
-        slug_pai=c.slug_pai,
-        href=c.href,
-        posicao=c.posicao,
-    )
+    return CategoriaDeliveryOut.from_orm(c)
 
 
 @router.post("/{cat_id}/move-left", response_model=CategoriaDeliveryOut)
@@ -168,12 +126,4 @@ def move_categoria_esquerda(cat_id: int, db: Session = Depends(get_db)):
     repos = CategoriaDeliveryRepository(db)
     c = repos.move_left(cat_id)
     logger.info(f"Categoria ID={cat_id} movida para esquerda")
-    return CategoriaDeliveryOut(
-        id=c.id,
-        label=c.descricao,
-        imagem=c.imagem,
-        slug=c.slug,
-        slug_pai=c.slug_pai,
-        href=c.href,
-        posicao=c.posicao,
-    )
+    return CategoriaDeliveryOut.from_orm(c)
