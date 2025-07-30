@@ -13,11 +13,12 @@ class CategoriaDeliveryIn(BaseModel):
 
 class CategoriaDeliveryOut(BaseModel):
     id: int
-    label: str             # será preenchido com c.descricao
+    label: str
     slug: str
     parent_id: Optional[int] = None
+    slug_pai: Optional[str] = None
     imagem: Optional[str] = None
-    href: str              # propriedade @hybrid_property do model
+    href: str
     posicao: int
 
     model_config = ConfigDict(from_attributes=True)
