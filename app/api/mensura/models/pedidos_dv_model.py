@@ -10,7 +10,7 @@ class PedidoDeliveryModel(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
 
-    cliente_id = Column(Integer, ForeignKey("mensura.clientes_dv.id", ondelete="SET NULL"))
+    cliente_id = Column(Integer, ForeignKey("delivery.clientes_dv.id", ondelete="SET NULL"))
     empresa_id = Column(Integer, ForeignKey("mensura.empresas.id", ondelete="RESTRICT"), nullable=False)
 
     status = Column(String(2), nullable=False, default="P")  # Ex: P, E, F, C

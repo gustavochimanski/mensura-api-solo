@@ -12,7 +12,7 @@ class ProdutosEmpDeliveryModel(Base):
     __table_args__ = (
         ForeignKeyConstraint(
             ["cod_barras"],
-            ["mensura.cadprod_dv.cod_barras"],
+            ["delivery.cadprod_dv.cod_barras"],
             name="fk_produto_empresa_cod_barras",
             ondelete="CASCADE"
         ),
@@ -38,7 +38,7 @@ class ProdutosEmpDeliveryModel(Base):
     # FK para vitrine
     vitrine_id = Column(
         Integer,
-        ForeignKey("mensura.vitrines_dv.id", ondelete="SET NULL"),
+        ForeignKey("delivery.vitrines_dv.id", ondelete="SET NULL"),
         nullable=True
     )
 

@@ -14,7 +14,7 @@ class ProdutoDeliveryModel(Base):
 
     cod_categoria = Column(
         Integer,
-        ForeignKey("mensura.categoria_dv.id", ondelete="RESTRICT"),
+        ForeignKey("delivery.categoria_dv.id", ondelete="RESTRICT"),
         nullable=False
     )
     categoria = relationship(

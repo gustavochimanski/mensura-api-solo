@@ -1,4 +1,4 @@
-# app/models/mensura/vitrines_dv_model.py
+# app/models/vitrines_dv_model.py
 from sqlalchemy import Column, Integer, String, ForeignKey
 from sqlalchemy.orm import relationship
 from app.database.db_connection import Base
@@ -13,7 +13,7 @@ class VitrinesModel(Base):
 
     cod_categoria = Column(
         Integer,
-        ForeignKey("mensura.categoria_dv.id", ondelete="CASCADE"),
+        ForeignKey("delivery.categoria_dv.id", ondelete="CASCADE"),
         nullable=False,
     )
 
