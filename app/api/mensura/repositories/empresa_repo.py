@@ -14,8 +14,13 @@ class EmpresaRepository:
     def get_cnpj_by_id(self, emp_id: int) -> Optional[str]:
         return self.db.query(EmpresaModel.cnpj).filter(EmpresaModel.id == emp_id).scalar()
 
-    def get_emp_by_cnpj(self, cnpj: str ):
-        return self.db.query(EmpresaModel.cnpj).filter(EmpresaModel.cnpj == cnpj).first()
+    def get_emp_by_cnpj(self, cnpj: str) -> Optional[EmpresaModel]:
+        return (
+            self.db.query(EmpresaModel)
+            .options(joinedload(EmpresaModel.endereco))
+            .filter(EmpresaModel.cnpj == cnpj)
+            .first()
+        )
 
     def list(self, skip: int = 0, limit: int = 100) -> List[EmpresaModel]:
         return (
