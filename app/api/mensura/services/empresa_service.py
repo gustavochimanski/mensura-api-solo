@@ -68,9 +68,22 @@ class EmpresaService:
     def delete_empresa(self, id: int):
         empresa = self.get_empresa(id)
 
-        # 🚫 Verifica se existem usuários vinculados
+        # 🚫 Regra 1: impedir exclusão se houver usuários
         if empresa.usuarios and len(empresa.usuarios) > 0:
-            raise HTTPException(status_code=400,
-                                detail="Empresa possui usuários vinculados. Remova-os antes de excluir.")
+            raise HTTPException(status_code=400, detail="Empresa possui usuários vinculados.")
 
+        endereco_id = empresa.endereco_id  # salva antes de deletar
+
+        # ✅ Deleta a empresa
         self.repo_emp.delete(empresa)
+
+        # 🧹 Regra 2: deleta o endereço se ninguém mais usa
+        if endereco_id:
+            outras_empresas = (
+                self.repo_emp.db.query(EmpresaModel)
+                .filter(EmpresaModel.endereco_id == endereco_id)
+                .count()
+            )
+            if outras_empresas == 0:
+                self.endereco_service.delete_endereco(endereco_id)
+
