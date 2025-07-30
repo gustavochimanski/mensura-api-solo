@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 
 from sqlalchemy.orm import Session
 
@@ -12,6 +12,9 @@ class UsuarioRepository(Base):
 
     def get(self, id : int) -> UserModel:
         return self.db.query(UserModel).filter(UserModel.id == id).first()
+
+    def get_by_username(self, username: str) -> Optional[UserModel]:
+        return self.db.query(UserModel).filter(UserModel.username == username).first()
 
     def list(self, skip: int = 0, limit: int = 0) -> List[UserModel]:
         return self.db.query(UserModel).offset(skip).limit(limit).all()

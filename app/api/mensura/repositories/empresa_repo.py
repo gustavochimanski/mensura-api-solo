@@ -18,6 +18,14 @@ class EmpresaRepository:
     def list(self, skip: int = 0, limit: int = 100) -> List[EmpresaModel]:
         return self.db.query(EmpresaModel).offset(skip).limit(limit).all()
 
+    def list_by_ids(self, ids: List[int]) -> List[EmpresaModel]:
+        return (
+            self.db
+            .query(EmpresaModel)
+            .filter(EmpresaModel.id.in_(ids))
+            .all()
+        )
+
     def create(self, empresa: EmpresaModel) -> EmpresaModel:
         self.db.add(empresa)
         self.db.commit()
