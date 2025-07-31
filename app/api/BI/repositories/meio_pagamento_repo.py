@@ -18,22 +18,37 @@ class MeioPagamentoRepository:
     def list(self, skip: int = 0, limit: int = 100) -> List[MeiosPgtoPDVModel]:
         return self.db.query(MeiosPgtoPDVModel).offset(skip).limit(limit).all()
 
-    def get_resumo_por_tipo(
-            self,
-            empresas: List[str],
-            data_inicio,
-            data_fim
-    ) -> List[tuple]:
+    def get_resumo_geral(self, data_inicio, data_fim):
+        return (
+            self.db.query(
+                MovMeioPgtoPDVModel.movm_codmeiopgto.label("tipo"),
+                func.max(MeiosPgtoPDVModel.mpgt_descricao).label("descricao"),
+                func.sum(MovMeioPgtoPDVModel.movm_valor).label("valorTotal"),
+            )
+            .join(
+                MeiosPgtoPDVModel,
+                MovMeioPgtoPDVModel.movm_codmeiopgto == MeiosPgtoPDVModel.mpgt_codigo,
+                isouter=True,
+            )
+            .filter(
+                MovMeioPgtoPDVModel.movm_datamvto.between(data_inicio, data_fim),
+            )
+            .group_by(MovMeioPgtoPDVModel.movm_codmeiopgto)
+            .all()
+        )
+
+    def get_resumo_por_empresa(self, empresas: list[str], data_inicio, data_fim):
         return (
             self.db.query(
                 MovMeioPgtoPDVModel.movm_codempresa.label("empresa"),
                 MovMeioPgtoPDVModel.movm_codmeiopgto.label("tipo"),
-                MeiosPgtoPDVModel.mpgt_descricao.label("descricao"),
-                func.sum(MovMeioPgtoPDVModel.movm_valor).label("valor_total"),
+                func.max(MeiosPgtoPDVModel.mpgt_descricao).label("descricao"),
+                func.sum(MovMeioPgtoPDVModel.movm_valor).label("valorTotal"),
             )
-            .outerjoin(
+            .join(
                 MeiosPgtoPDVModel,
-                MovMeioPgtoPDVModel.movm_codmeiopgto == MeiosPgtoPDVModel.mpgt_codigo
+                MovMeioPgtoPDVModel.movm_codmeiopgto == MeiosPgtoPDVModel.mpgt_codigo,
+                isouter=True,
             )
             .filter(
                 MovMeioPgtoPDVModel.movm_codempresa.in_(empresas),
@@ -42,8 +57,6 @@ class MeioPagamentoRepository:
             .group_by(
                 MovMeioPgtoPDVModel.movm_codempresa,
                 MovMeioPgtoPDVModel.movm_codmeiopgto,
-                MeiosPgtoPDVModel.mpgt_descricao,
             )
-            .order_by(MovMeioPgtoPDVModel.movm_codempresa)
             .all()
         )

@@ -2,7 +2,8 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from app.api.BI.repositories.meio_pagamento_repo import MeioPagamentoRepository
-from app.api.BI.schemas.dashboard_types import MeioPagamentoResumoResponse
+from app.api.BI.schemas.meio_pagamento_types import MeioPagamentoResumoResponse, MeioPagamentoResponseFinal, \
+    MeioPagamentoPorEmpresa
 
 
 class MeioPagamentoPDVService:
@@ -14,21 +15,46 @@ class MeioPagamentoPDVService:
         empresas: list[str],
         data_inicio: str,
         data_fim: str,
-    ) -> list[MeioPagamentoResumoResponse]:
-        # 🔁 Converte string para date
+    ) -> MeioPagamentoResponseFinal:
         dt_inicio = datetime.strptime(data_inicio, "%Y-%m-%d").date()
         dt_fim = datetime.strptime(data_fim, "%Y-%m-%d").date()
-
         repo = MeioPagamentoRepository(self.db)
-        rows = repo.get_resumo_por_tipo(empresas, dt_inicio, dt_fim)
 
-        return [
+        # 🔹 Total geral
+        geral_raw = repo.get_resumo_geral(dt_inicio, dt_fim)
+
+        total_geral = [
             MeioPagamentoResumoResponse(
-                empresa=empresa,
-                tipo=tipo or "??",
-                descricao=descricao or "DESCONHECIDO",
-                valor_total=float(valor or 0),
+                tipo=row.tipo or "??",
+                descricao=row.descricao or "DESCONHECIDO",
+                valor_total=float(row.valorTotal or 0),
             )
-            for empresa, tipo, descricao, valor in rows
+            for row in geral_raw
         ]
 
+        # 🔹 Por empresa
+        por_empresa_raw = repo.get_resumo_por_empresa(empresas, dt_inicio, dt_fim)
+        agrupado = {}
+
+        for row in por_empresa_raw:
+            cod = str(row.empresa)
+            if cod not in agrupado:
+                agrupado[cod] = []
+
+            agrupado[cod].append(
+                MeioPagamentoResumoResponse(
+                    tipo=row.tipo or "??",
+                    descricao=row.descricao or "DESCONHECIDO",
+                    valor_total=float(row.valorTotal or 0),
+                )
+            )
+
+        por_empresa = [
+            MeioPagamentoPorEmpresa(empresa=emp, meios=meios)
+            for emp, meios in agrupado.items()
+        ]
+
+        return MeioPagamentoResponseFinal(
+            total_geral=total_geral,
+            por_empresa=por_empresa
+        )
