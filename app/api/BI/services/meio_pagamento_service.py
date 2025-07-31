@@ -20,42 +20,43 @@ class MeioPagamentoPDVService:
         data_inicio: str,
         data_fim: str,
     ) -> MeioPagamentoResponseFinal:
-        # converte strings para date
+        # 1) converte strings para date
         dt_inicio = datetime.strptime(data_inicio, "%Y-%m-%d").date()
         dt_fim    = datetime.strptime(data_fim,    "%Y-%m-%d").date()
 
         repo = MeioPagamentoRepository(self.db)
 
-        # 🔹 Total geral
-        geral_raw = repo.get_resumo_geral(dt_inicio, dt_fim)
-        total_geral = [
-            MeioPagamentoResumoResponse(
-                tipo=row.tipo or "??",
-                descricao=row.descricao or "DESCONHECIDO",
-                valor_total=float(row.valor_total or 0),  # ← correção aqui
-            )
-            for row in geral_raw
-        ]
-
-        # 🔹 Por empresa
+        # 2) pega o resumo POR EMPRESA (já filtrado)
         por_empresa_raw = repo.get_resumo_por_empresa(empresas, dt_inicio, dt_fim)
-        agrupado: dict[str, list[MeioPagamentoResumoResponse]] = {}
 
+        # 3) monta a lista por empresa
+        agrupado: dict[str, list[MeioPagamentoResumoResponse]] = {}
         for row in por_empresa_raw:
             cod = str(row.empresa)
             agrupado.setdefault(cod, []).append(
                 MeioPagamentoResumoResponse(
                     tipo=row.tipo or "??",
                     descricao=row.descricao or "DESCONHECIDO",
-                    valor_total=float(row.valor_total or 0),  # ← e aqui
+                    valor_total=float(row.valor_total or 0),
                 )
             )
-
         por_empresa = [
             MeioPagamentoPorEmpresa(empresa=emp, meios=meios)
             for emp, meios in agrupado.items()
         ]
 
+        # 4) recalcula TOTAL GERAL somando todos os por_empresa
+        totais_dict: dict[tuple[str, str], float] = {}
+        for row in por_empresa_raw:
+            key = (row.tipo, row.descricao)
+            totais_dict[key] = totais_dict.get(key, 0) + float(row.valor_total or 0)
+
+        total_geral = [
+            MeioPagamentoResumoResponse(tipo=tipo, descricao=descricao, valor_total=valor)
+            for (tipo, descricao), valor in totais_dict.items()
+        ]
+
+        # 5) retorna o objeto final
         return MeioPagamentoResponseFinal(
             total_geral=total_geral,
             por_empresa=por_empresa
