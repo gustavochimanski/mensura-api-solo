@@ -24,7 +24,7 @@ class MeioPagamentoRepository:
             self.db.query(
                 MeiosPgtoPublicModel.mpgt_codigo.label("codigo"),
                 MeiosPgtoPublicModel.mpgt_descricao.label("descricao"),
-                MeiosPgtoPublicModel.mpgt_tipo.label("tipo"),
+                MeiosPgtoPublicModel.mpgt_tpmeiopgto.label("tipo"),
                 func.sum(MovMeioPgtoPDVModel.movm_valor).label("valor_total"),
             )
             .join(
@@ -39,7 +39,7 @@ class MeioPagamentoRepository:
             .group_by(
                 MeiosPgtoPublicModel.mpgt_codigo,
                 MeiosPgtoPublicModel.mpgt_descricao,
-                MeiosPgtoPublicModel.mpgt_tipo,
+                MeiosPgtoPublicModel.mpgt_tpmeiopgto,
             )
             .all()
         )
@@ -58,7 +58,7 @@ class MeioPagamentoRepository:
                 MovMeioPgtoPDVModel.movm_codempresa.label("empresa"),
                 MeiosPgtoPublicModel.mpgt_codigo.label("codigo"),
                 MeiosPgtoPublicModel.mpgt_descricao.label("descricao"),
-                MeiosPgtoPublicModel.mpgt_tipo.label("tipo"),
+                MeiosPgtoPublicModel.mpgt_tpmeiopgto.label("tipo"),
                 func.sum(MovMeioPgtoPDVModel.movm_valor).label("valor_total"),
             )
             .join(
@@ -74,7 +74,7 @@ class MeioPagamentoRepository:
                 MovMeioPgtoPDVModel.movm_codempresa,
                 MeiosPgtoPublicModel.mpgt_codigo,
                 MeiosPgtoPublicModel.mpgt_descricao,
-                MeiosPgtoPublicModel.mpgt_tipo,
+                MeiosPgtoPublicModel.mpgt_tpmeiopgto,
             )
             .all()
         )
