@@ -2,8 +2,8 @@
 
 from sqlalchemy import func, distinct, cast, Integer
 from sqlalchemy.orm import Session
+from app.api.public.models.empresa.empresasModel import Empresa
 from app.api.pdv.models.lctoprodutos_pdv_model import LctoProdutosPDV
-from app.api.mensura.models.empresa_model       import EmpresaModel
 from app.api.BI.schemas.vendas.resumoVendas    import TotaisPorEmpresa
 
 def resumoDeVendasRepository(db: Session, vendas_request) -> list[TotaisPorEmpresa]:
@@ -11,15 +11,15 @@ def resumoDeVendasRepository(db: Session, vendas_request) -> list[TotaisPorEmpre
     query = (
         db.query(
             LctoProdutosPDV.lcpr_codempresa.label("lcpr_codempresa"),
-            EmpresaModel.lcpr_nomereduzido.label("lcpr_nomereduzido"),
+            Empresa.lcpr_nomereduzido.label("lcpr_nomereduzido"),
             func.count(distinct(LctoProdutosPDV.lcpr_cupom)).label("total_cupons"),
             func.sum(LctoProdutosPDV.lcpr_totalprodutos).label("total_vendas"),
             func.avg(LctoProdutosPDV.lcpr_totalprodutos).label("ticket_medio"),
         )
         # 2) JOIN — ajustar o cast se necessário para casar tipos
         .join(
-            EmpresaModel,
-            cast(LctoProdutosPDV.lcpr_codempresa, Integer) == EmpresaModel.id
+            Empresa,
+            cast(LctoProdutosPDV.lcpr_codempresa, Integer) == Empresa.id
         )
         .filter(
             LctoProdutosPDV.lcpr_datamvto.between(
@@ -41,7 +41,7 @@ def resumoDeVendasRepository(db: Session, vendas_request) -> list[TotaisPorEmpre
 
     query = query.group_by(
         LctoProdutosPDV.lcpr_codempresa,
-        EmpresaModel.nomereduzido
+        Empresa.nomereduzido
     )
 
     # 3) Mapeia direto para o schema, agora incluindo nomereduzido
