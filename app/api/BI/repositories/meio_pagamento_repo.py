@@ -37,7 +37,7 @@ class MeioPagamentoRepository:
             .all()
         )
 
-    def get_resumo_por_empresa(self, empresas: list[str], data_inicio, data_fim):
+    def get_resumo_por_empresa(self, empresas: List[str], data_inicio, data_fim):
         return (
             self.db.query(
                 MovMeioPgtoPDVModel.movm_codempresa.label("empresa"),
