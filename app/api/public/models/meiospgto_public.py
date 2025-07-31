@@ -1,0 +1,11 @@
+from sqlalchemy import Column, String
+from app.database.db_connection import Base
+
+
+class MeiosPgtoPublicModel(Base):
+    __tablename__ = "meiospgto"
+    __table_args__ = {"schema": "public"}
+
+    mpgt_codigo    = Column(String(3), primary_key=True)
+    mpgt_descricao = Column(String(20), nullable=True)
+    mpgt_tipo      = Column(String(2), nullable=True)
