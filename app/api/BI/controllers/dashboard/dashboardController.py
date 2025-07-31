@@ -18,6 +18,7 @@ from app.api.BI.services.compras.resumoDeCompras import calcular_movimento_multi
 from app.api.BI.services.vendas.resumoVendasService import resumoDeVendasService
 from app.api.BI.services.metas.consultaMetasService import consultar_metas_periodo
 from app.api.BI.services.vendas.vendaPorHoraService import consultaVendaPorHoraService
+from app.utils.empresas_utils import normalizar_empresas
 from app.utils.logger import logger
 
 router = APIRouter(tags=["Dashboard"])
@@ -32,13 +33,7 @@ def dashboardController(
 
     # Define as empresas
     repo = EmpresasRepository(db)
-    empresas_raw = request.empresas or []
-
-    if not empresas_raw or empresas_raw == [""] or empresas_raw == "":
-        empresas = repo.buscar_codigos_ativos()
-        empresas_str = [str(e).zfill(3) for e in empresas]
-    else:
-        empresas_str = [str(e).zfill(3) for e in empresas_raw]
+    empresas_str = normalizar_empresas(request.empresas, repo.buscar_codigos_ativos)
 
     # Chama o service corretamente
     vendaPorHora = consultaVendaPorHoraService(db, TypeVendaPorHoraRequest(
