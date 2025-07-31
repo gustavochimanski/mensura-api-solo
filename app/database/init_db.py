@@ -17,13 +17,13 @@ def criar_schemas():
 
 
 def importar_models():
-    # ─── Models de Mensura ────────────────────────────────────────────
+    # ─── Models Mensura ────────────────────────────────────────────
     import app.api.mensura.models.user_model
     import app.api.mensura.models.endereco_model
     import app.api.mensura.models.empresa_model
     import app.api.mensura.models.association_tables
 
-    # ─── Models de Delivery ───────────────────────────────────────────
+    # ─── Models Delivery ───────────────────────────────────────────
     import app.api.delivery.models.cadprod_dv_model
     import app.api.delivery.models.cadprod_emp_dv_model
     import app.api.delivery.models.categoria_dv_model
@@ -33,6 +33,9 @@ def importar_models():
     import app.api.delivery.models.pedido_item_dv_model
     import app.api.delivery.models.pedido_dv_model
     import app.api.delivery.models.vitrine_dv_model
+
+    # ─── Models PagarMe ───────────────────────────────────────────
+    import app.api.pagarme.models.transacao_model
 
 def criar_tabelas():
     try:
