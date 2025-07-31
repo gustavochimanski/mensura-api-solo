@@ -12,7 +12,7 @@ class TypeVendasPeriodoGeral(BaseModel):
 
 class TotaisPorEmpresa(BaseModel):
     lcpr_codempresa: str
-    lcpr_nomereduzido: str
+    empr_nomereduzido: Optional[str]
     total_cupons: int
     total_vendas: float
     ticket_medio: float
