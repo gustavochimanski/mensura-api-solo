@@ -11,10 +11,10 @@ def resumoDeVendasRepository(db: Session, vendas_request) -> list[TotaisPorEmpre
     query = (
         db.query(
             LctoProdutosPDV.lcpr_codempresa.label("lcpr_codempresa"),
-            Empresa.empr_nomereduzido.label("empr_nomereduzido"),    # ← aqui
+            Empresa.empr_nomereduzido.label("empr_nomereduzido"),
             func.count(distinct(LctoProdutosPDV.lcpr_cupom)).label("total_cupons"),
-            func.sum(LctoProdutosPDV.lcpr_totalprodutos).label("total_vendas"),
-            func.avg(LctoProdutosPDV.lcpr_totalprodutos).label("ticket_medio"),
+            func.sum(LctoProdutosPDV.lcpr_totaldcto).label("total_vendas"),
+            func.avg(LctoProdutosPDV.lcpr_totaldcto).label("ticket_medio"),
         )
         .join(
             Empresa,

@@ -31,7 +31,7 @@ class MeioPagamentoRepository:
             )
             .filter(
                 MovMeioPgtoPDVModel.movm_datamvto.between(data_inicio, data_fim),
-                MovMeioPgtoPDVModel.movm_situacao == 'N',  # só pagamentos normais
+                MovMeioPgtoPDVModel.movm_situacao == 'N',
             )
             .group_by(MovMeioPgtoPDVModel.movm_codmeiopgto)
             .all()
