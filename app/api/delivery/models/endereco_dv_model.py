@@ -20,5 +20,6 @@ class EnderecoDeliveryModel(Base):
 
     # Relação N:1 com ClienteDeliveryModel
     cliente = relationship("ClienteDeliveryModel", back_populates="enderecos")
+    pedidos = relationship("PedidoDeliveryModel", back_populates="endereco", cascade="all, delete-orphan")
 
     model_config = ConfigDict(from_attributes=True)
