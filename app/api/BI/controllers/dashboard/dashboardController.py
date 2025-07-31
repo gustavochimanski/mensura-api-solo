@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
 
 from app.api.BI.schemas.vendas.resumoVendas import TypeVendasPeriodoGeral
+from app.api.pdv.services.meio_pagamento_service import  MeioPagamentoPDVService
 from app.database.db_connection import get_db
 
 from app.api.BI.schemas.metas_types import TypeConsultaMetaRequest
@@ -46,8 +47,8 @@ def dashboardController(
         request.model_dump() | {"empresas": empresas_str}
     )
 
-    resumoVendas = resumoDeVendasService(vendas_req, db)
-    if resumoVendas is None:
+    resumo_vendas = resumoDeVendasService(vendas_req, db)
+    if resumo_vendas is None:
         raise HTTPException(status_code=500, detail="Erro ao consultar relatorios.")
 
     # 2) Consulta metas
@@ -69,7 +70,7 @@ def dashboardController(
     compras = calcular_movimento_multi(db, compras_req)
 
     # 4) Margem bruta: quanto sobrou das relatorios
-    total_vendas = resumoVendas.total_geral.total_vendas
+    total_vendas = resumo_vendas.total_geral.total_vendas
     total_compras = compras.total_geral
 
     if total_vendas > 0:
@@ -86,16 +87,24 @@ def dashboardController(
             relacaoPorcentagem=0.0
         )
 
-    vendaDetalhada = consultaVendaDetalhadaController(request, db)
-    compraDetalhada = compraDetalhadaService(db, compras_req)
+    venda_detalhada = consultaVendaDetalhadaController(request, db)
+    compra_detalhada = compraDetalhadaService(db, compras_req)
+
+    meios_pagamento = MeioPagamentoPDVService(db).consulta_meios_pagamento_dashboard(
+        empresas=empresas_str,
+        data_inicio=request.dataInicio,
+        data_fim=request.dataFinal,
+    )
+
     # 5) Retorno
     return TypeDashboardResponse(
-        totais_por_empresa=resumoVendas.totais_por_empresa,
-        total_geral=resumoVendas.total_geral,
+        totais_por_empresa=resumo_vendas.totais_por_empresa,
+        total_geral=resumo_vendas.total_geral,
         relacao=relacao,
         metas=metas,
         compras=compras,
-        vendaDetalhada=vendaDetalhada,
-        compraDetalhada=compraDetalhada,
+        vendaDetalhada=venda_detalhada,
+        compraDetalhada=compra_detalhada,
         vendaPorHora=vendaPorHora,
+        meios_pagamento=meios_pagamento
     )

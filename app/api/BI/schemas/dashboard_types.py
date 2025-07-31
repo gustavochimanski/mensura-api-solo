@@ -21,6 +21,10 @@ class TypeRelacao(BaseModel):
     relacaoValue: float
     relacaoPorcentagem: float
 
+class MeioPagamentoResumoResponse(BaseModel):
+    tipo: str
+    valorTotal: float
+
 class TypeDashboardResponse(BaseModel):
     totais_por_empresa: List[TotaisPorEmpresa]
     total_geral: TotaisGerais
@@ -30,3 +34,5 @@ class TypeDashboardResponse(BaseModel):
     vendaDetalhada: TypeVendaDetalhadaResponse
     compraDetalhada: CompraDetalhadaResponse
     vendaPorHora: TypeVendaPorHoraComTotalGeralResponse
+    meios_pagamento: list[MeioPagamentoResumoResponse]
+
