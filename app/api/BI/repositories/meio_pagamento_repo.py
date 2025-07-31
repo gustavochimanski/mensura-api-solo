@@ -17,7 +17,6 @@ class MeioPagamentoRepository:
 
     def list(self, skip: int = 0, limit: int = 100) -> List[MeiosPgtoPDVModel]:
         return self.db.query(MeiosPgtoPDVModel).offset(skip).limit(limit).all()
-
     def get_resumo_por_tipo(
         self,
         empresas: List[str],
@@ -43,3 +42,5 @@ class MeioPagamentoRepository:
                 MeiosPgtoPDVModel.mpgt_descricao
             )
             .order_by(func.sum(MovMeioPgtoPDVModel.movm_valor).desc())
+            .all()
+        )

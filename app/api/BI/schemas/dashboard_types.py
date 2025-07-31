@@ -23,7 +23,7 @@ class TypeRelacao(BaseModel):
 
 class MeioPagamentoResumoResponse(BaseModel):
     tipo: str
-    nome: str
+    descricao: str
     valorTotal: float
 
 class TypeDashboardResponse(BaseModel):
