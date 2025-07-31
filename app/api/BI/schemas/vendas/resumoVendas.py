@@ -1,4 +1,4 @@
-# ----------------- schemass.py -----------------
+# ----------------- schemas.py -----------------
 from pydantic import BaseModel
 from typing import Optional, List
 
@@ -12,6 +12,7 @@ class TypeVendasPeriodoGeral(BaseModel):
 
 class TotaisPorEmpresa(BaseModel):
     lcpr_codempresa: str
+    lcpr_nomereduzido: str
     total_cupons: int
     total_vendas: float
     ticket_medio: float

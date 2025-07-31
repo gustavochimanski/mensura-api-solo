@@ -17,3 +17,4 @@ class Empresa(Base):
     empr_cep = Column(String(8))
     empr_fone = Column(String(13))
     empr_situacao = Column(String(1))  # Aqui deve ser "A" ou "I" (ativo/inativo)
+    empr_nomereduzido = Column(String(255))
