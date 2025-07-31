@@ -20,13 +20,13 @@ class MeioPagamentoPDVService:
         dt_fim = datetime.strptime(data_fim, "%Y-%m-%d").date()
 
         repo = MeioPagamentoRepository(self.db)
-        rows = repo.resumo_por_tipo(empresas, dt_inicio, dt_fim)
+        rows = repo.get_resumo_por_tipo(empresas, dt_inicio, dt_fim)
 
         return [
             MeioPagamentoResumoResponse(
-                tipo=row.tipo or "??",
-                descricao=row.descricao or "DESCONHECIDO",
-                valorTotal=float(row.valorTotal or 0),
+                tipo=row[0] or "??",
+                descricao=row[1] or "DESCONHECIDO",
+                valorTotal=float(row[2] or 0),
             )
             for row in rows
         ]
