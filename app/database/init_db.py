@@ -36,7 +36,7 @@ def importar_models():
 
 def criar_tabelas():
     try:
-        importar_models()  # importa só os seus models de mensura e delivery
+        importar_models()  # importa só os seus models de mensura e deliveryy
 
         # pega todas as Table objects que o Base conhece
         all_tables = list(Base.metadata.tables.values())
