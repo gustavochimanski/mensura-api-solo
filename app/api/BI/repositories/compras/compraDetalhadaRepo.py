@@ -36,4 +36,4 @@ def compraDetalhadaByDayRepo(
         .group_by(tabela.c.lcpd_codempresa, func.date(tabela.c.lcpd_dtmvto))
     )
 
-    return db.execute(query).all()
+    return db.query.all()
