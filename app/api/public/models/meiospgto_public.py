@@ -8,4 +8,4 @@ class MeiosPgtoPublicModel(Base):
 
     mpgt_codigo    = Column(String(3), primary_key=True)
     mpgt_descricao = Column(String(20), nullable=True)
-    mpgt_tipo      = Column(String(2), nullable=True)
+    mpgt_tpmeiopgto     = Column(String(2), nullable=True)
