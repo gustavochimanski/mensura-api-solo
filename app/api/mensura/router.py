@@ -9,6 +9,6 @@ from app.api.mensura.controllers.endereco_controller import router as router_end
 
 router = APIRouter()
 
-router.include_router(router_empresa, dependencies=[Depends(get_current_user)])
-router.include_router(router_usuario, dependencies=[Depends(get_current_user)])
-router.include_router(router_endereco, dependencies=[Depends(get_current_user)])
+router.include_router(router_empresa)
+router.include_router(router_usuario)
+router.include_router(router_endereco)
