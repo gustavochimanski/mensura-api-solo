@@ -3,7 +3,7 @@ from sqlalchemy import text, quoted_name
 from .db_connection import engine, Base
 
 logger = logging.getLogger(__name__)
-SCHEMAS = ["mensura", "bi", "pdv", "delivery"]
+SCHEMAS = ["mensura", "bi", "delivery"]
 
 def criar_schemas():
     try:
