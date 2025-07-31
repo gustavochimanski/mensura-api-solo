@@ -5,7 +5,7 @@ from sqlalchemy.ext.declarative import declarative_base
 Base = declarative_base()
 
 class LctoProdutosPDV(Base):
-    __tablename__ = "lctoprodutos"
+    __tablename__ = "lctoprodutos_pdv"
     __table_args__ = {"schema": "pdv"}
 
     # chaves primárias (mesmo que você não use todas, precisam existir para o ORM)
