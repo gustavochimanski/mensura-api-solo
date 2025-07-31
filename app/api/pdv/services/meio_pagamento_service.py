@@ -24,9 +24,11 @@ class MeioPagamentoPDVService:
 
         return [
             MeioPagamentoResumoResponse(
-                tipo=row[0] or "??",
-                descricao=row[1] or "DESCONHECIDO",
-                valorTotal=float(row[2] or 0),
+                empresa=empresa,
+                tipo=tipo or "??",
+                descricao=descricao or "DESCONHECIDO",
+                valor_total=float(valor or 0),
             )
-            for row in rows
+            for empresa, tipo, descricao, valor in rows
         ]
+

@@ -17,17 +17,19 @@ class MeioPagamentoRepository:
 
     def list(self, skip: int = 0, limit: int = 100) -> List[MeiosPgtoPDVModel]:
         return self.db.query(MeiosPgtoPDVModel).offset(skip).limit(limit).all()
+
     def get_resumo_por_tipo(
-        self,
-        empresas: List[str],
-        data_inicio,
-        data_fim
+            self,
+            empresas: List[str],
+            data_inicio,
+            data_fim
     ) -> List[tuple]:
         return (
             self.db.query(
+                MovMeioPgtoPDVModel.movm_codempresa.label("empresa"),
                 MovMeioPgtoPDVModel.movm_codmeiopgto.label("tipo"),
                 MeiosPgtoPDVModel.mpgt_descricao.label("descricao"),
-                func.sum(MovMeioPgtoPDVModel.movm_valor).label("valorTotal"),
+                func.sum(MovMeioPgtoPDVModel.movm_valor).label("valor_total"),
             )
             .outerjoin(
                 MeiosPgtoPDVModel,
@@ -38,9 +40,10 @@ class MeioPagamentoRepository:
                 MovMeioPgtoPDVModel.movm_datamvto.between(data_inicio, data_fim),
             )
             .group_by(
+                MovMeioPgtoPDVModel.movm_codempresa,
                 MovMeioPgtoPDVModel.movm_codmeiopgto,
-                MeiosPgtoPDVModel.mpgt_descricao
+                MeiosPgtoPDVModel.mpgt_descricao,
             )
-            .order_by(func.sum(MovMeioPgtoPDVModel.movm_valor).desc())
+            .order_by(MovMeioPgtoPDVModel.movm_codempresa)
             .all()
         )

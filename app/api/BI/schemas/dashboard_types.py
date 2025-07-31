@@ -22,9 +22,10 @@ class TypeRelacao(BaseModel):
     relacaoPorcentagem: float
 
 class MeioPagamentoResumoResponse(BaseModel):
+    empresa: str
     tipo: str
     descricao: str
-    valorTotal: float
+    valor_total: float
 
 class TypeDashboardResponse(BaseModel):
     totais_por_empresa: List[TotaisPorEmpresa]
