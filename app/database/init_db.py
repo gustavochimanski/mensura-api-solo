@@ -36,13 +36,27 @@ def importar_models():
 
 def criar_tabelas():
     try:
-        importar_models()
-        # Agora o SQLAlchemy sabe de todas as tabelas
-        Base.metadata.create_all(bind=engine)
+        importar_models()  # importa só os seus models de mensura e delivery
 
-        logger.info("✅ Tabelas criadas com sucesso.")
+        # pega todas as Table objects que o Base conhece
+        all_tables = list(Base.metadata.tables.values())
+
+        # filtra pelas tabelas que pertencem aos schemas que você gerencia
+        tables_para_criar = [
+            t
+            for t in all_tables
+            if t.schema in SCHEMAS
+        ]
+
+        # cria apenas essas tabelas
+        Base.metadata.create_all(
+            bind=engine,
+            tables=tables_para_criar
+        )
+
+        logger.info("✅ Tabelas criadas com sucesso (somente nos schemas da aplicação).")
     except Exception as e:
-        logger.error(f"❌ Erro ao criar tabelas: {e}")
+        logger.error(f"❌ Erro ao criar tabelas: {e}", exc_info=True)
 
 def inicializar_banco():
     logger.info("🔹 Criando schemas...")
