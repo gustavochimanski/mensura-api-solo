@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
 
 from app.api.BI.schemas.vendas.resumoVendas import TypeVendasPeriodoGeral
-from app.api.pdv.services.meio_pagamento_service import  MeioPagamentoPDVService
+from app.api.BI.services.meio_pagamento_service import  MeioPagamentoPDVService
 from app.database.db_connection import get_db
 
 from app.api.BI.schemas.metas_types import TypeConsultaMetaRequest

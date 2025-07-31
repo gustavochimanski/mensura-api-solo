@@ -1,10 +1,14 @@
+# app/api/pdv/services/meio_pagamento_service.py
+
 from datetime import datetime
 from sqlalchemy.orm import Session
 
 from app.api.BI.repositories.meio_pagamento_repo import MeioPagamentoRepository
-from app.api.BI.schemas.meio_pagamento_types import MeioPagamentoResumoResponse, MeioPagamentoResponseFinal, \
-    MeioPagamentoPorEmpresa
-
+from app.api.BI.schemas.meio_pagamento_types import (
+    MeioPagamentoResumoResponse,
+    MeioPagamentoResponseFinal,
+    MeioPagamentoPorEmpresa,
+)
 
 class MeioPagamentoPDVService:
     def __init__(self, db: Session):
@@ -16,36 +20,34 @@ class MeioPagamentoPDVService:
         data_inicio: str,
         data_fim: str,
     ) -> MeioPagamentoResponseFinal:
+        # converte strings para date
         dt_inicio = datetime.strptime(data_inicio, "%Y-%m-%d").date()
-        dt_fim = datetime.strptime(data_fim, "%Y-%m-%d").date()
+        dt_fim    = datetime.strptime(data_fim,    "%Y-%m-%d").date()
+
         repo = MeioPagamentoRepository(self.db)
 
         # 🔹 Total geral
         geral_raw = repo.get_resumo_geral(dt_inicio, dt_fim)
-
         total_geral = [
             MeioPagamentoResumoResponse(
                 tipo=row.tipo or "??",
                 descricao=row.descricao or "DESCONHECIDO",
-                valor_total=float(row.valorTotal or 0),
+                valor_total=float(row.valor_total or 0),  # ← correção aqui
             )
             for row in geral_raw
         ]
 
         # 🔹 Por empresa
         por_empresa_raw = repo.get_resumo_por_empresa(empresas, dt_inicio, dt_fim)
-        agrupado = {}
+        agrupado: dict[str, list[MeioPagamentoResumoResponse]] = {}
 
         for row in por_empresa_raw:
             cod = str(row.empresa)
-            if cod not in agrupado:
-                agrupado[cod] = []
-
-            agrupado[cod].append(
+            agrupado.setdefault(cod, []).append(
                 MeioPagamentoResumoResponse(
                     tipo=row.tipo or "??",
                     descricao=row.descricao or "DESCONHECIDO",
-                    valor_total=float(row.valorTotal or 0),
+                    valor_total=float(row.valor_total or 0),  # ← e aqui
                 )
             )
 
