@@ -1,6 +1,6 @@
 from typing import List
 from decimal import Decimal
-from sqlalchemy import func, cast, String
+from sqlalchemy import func, cast, String, Integer
 from sqlalchemy.orm import Session
 
 from app.api.pdv.models.meio_pagamento.movmeiopgto_pdv import MovMeioPgtoPDVModel
@@ -20,7 +20,7 @@ class MeioPagamentoRepository:
             )
             .join(
                 MeiosPgtoPublicModel,
-                MovMeioPgtoPDVModel.movm_tipo == cast(MeiosPgtoPublicModel.mpgt_tpmeiopgto, String)
+                MovMeioPgtoPDVModel.movm_tipo == cast(MeiosPgtoPublicModel.mpgt_tpmeiopgto, Integer)
             )
             .filter(
                 MovMeioPgtoPDVModel.movm_datamvto.between(data_inicio, data_fim),
@@ -41,7 +41,7 @@ class MeioPagamentoRepository:
             )
             .join(
                 MeiosPgtoPublicModel,
-                MovMeioPgtoPDVModel.movm_tipo == cast(MeiosPgtoPublicModel.mpgt_tpmeiopgto, String)
+                MovMeioPgtoPDVModel.movm_tipo == cast(MeiosPgtoPublicModel.mpgt_tpmeiopgto, Integer)
             )
             .filter(
                 MovMeioPgtoPDVModel.movm_codempresa.in_(empresas),
