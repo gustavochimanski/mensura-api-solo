@@ -14,13 +14,13 @@ class MeioPagamentoRepository:
     def get_resumo_geral(self, data_inicio, data_fim):
         return (
             self.db.query(
-                MovMeioPgtoPDVModel.movm_codmeiopgto.label("tipo"),
+                MovMeioPgtoPDVModel.movm_tipo.label("tipo"),
                 func.max(MeiosPgtoPublicModel.mpgt_descricao).label("descricao"),
                 func.sum(MovMeioPgtoPDVModel.movm_valor).label("valor_total"),
             )
             .join(
                 MeiosPgtoPublicModel,
-                MovMeioPgtoPDVModel.movm_codmeiopgto == cast(MeiosPgtoPublicModel.mpgt_tpmeiopgto, String)
+                MovMeioPgtoPDVModel.movm_tipo == cast(MeiosPgtoPublicModel.mpgt_tpmeiopgto, String)
             )
             .filter(
                 MovMeioPgtoPDVModel.movm_datamvto.between(data_inicio, data_fim),
@@ -35,13 +35,13 @@ class MeioPagamentoRepository:
         return (
             self.db.query(
                 MovMeioPgtoPDVModel.movm_codempresa.label("empresa"),
-                MovMeioPgtoPDVModel.movm_codmeiopgto.label("tipo"),
+                MovMeioPgtoPDVModel.movm_tipo.label("tipo"),
                 func.max(MeiosPgtoPublicModel.mpgt_descricao).label("descricao"),
                 func.sum(MovMeioPgtoPDVModel.movm_valor).label("valor_total"),
             )
             .join(
                 MeiosPgtoPublicModel,
-                MovMeioPgtoPDVModel.movm_codmeiopgto == cast(MeiosPgtoPublicModel.mpgt_tpmeiopgto, String)
+                MovMeioPgtoPDVModel.movm_tipo == cast(MeiosPgtoPublicModel.mpgt_tpmeiopgto, String)
             )
             .filter(
                 MovMeioPgtoPDVModel.movm_codempresa.in_(empresas),
