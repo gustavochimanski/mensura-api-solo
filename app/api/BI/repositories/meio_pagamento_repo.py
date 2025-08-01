@@ -1,6 +1,6 @@
 from typing import List
 from decimal import Decimal
-from sqlalchemy import func
+from sqlalchemy import func, String, cast
 from sqlalchemy.orm import Session
 
 from app.api.pdv.models.meio_pagamento.meiospgto_pdv import MeiosPgtoPDVModel
@@ -11,11 +11,8 @@ class MeioPagamentoRepository:
     def __init__(self, db: Session):
         self.db = db
 
+
     def get_resumo_geral(self, data_inicio, data_fim):
-        """
-        Retorna um resumo geral dos meios de pagamento, agrupados por tipo (letra),
-        com base na tabela pdv.meiospgto_pdv.
-        """
         query = (
             self.db.query(
                 MeiosPgtoPDVModel.mpgt_tipo.label("tipo"),
@@ -24,7 +21,7 @@ class MeioPagamentoRepository:
             )
             .join(
                 MeiosPgtoPDVModel,
-                MovMeioPgtoPDVModel.movm_codmeiopgto == MeiosPgtoPDVModel.mpgt_codigo
+                func.lpad(cast(MovMeioPgtoPDVModel.movm_tipo, String), 2, '0') == MeiosPgtoPDVModel.mpgt_tipo
             )
             .filter(
                 MovMeioPgtoPDVModel.movm_datamvto.between(data_inicio, data_fim),
@@ -36,10 +33,6 @@ class MeioPagamentoRepository:
         return query.all()
 
     def get_resumo_por_empresa(self, empresas: List[str], data_inicio, data_fim):
-        """
-        Retorna o resumo de meios de pagamento por empresa, agrupado por tipo (letra).
-        As informações vêm diretamente da tabela pdv.meiospgto_pdv.
-        """
         query = (
             self.db.query(
                 MovMeioPgtoPDVModel.movm_codempresa.label("empresa"),
@@ -49,7 +42,7 @@ class MeioPagamentoRepository:
             )
             .join(
                 MeiosPgtoPDVModel,
-                MovMeioPgtoPDVModel.movm_codmeiopgto == MeiosPgtoPDVModel.mpgt_codigo
+                func.lpad(cast(MovMeioPgtoPDVModel.movm_tipo, String), 2, '0') == MeiosPgtoPDVModel.mpgt_tipo
             )
             .filter(
                 MovMeioPgtoPDVModel.movm_codempresa.in_(empresas),
@@ -63,3 +56,4 @@ class MeioPagamentoRepository:
         )
 
         return query.all()
+
