@@ -1,6 +1,6 @@
 from typing import List
 from decimal import Decimal
-from sqlalchemy import func
+from sqlalchemy import func, cast, Integer
 from sqlalchemy.orm import Session
 
 from app.api.pdv.models.meio_pagamento.movmeiopgto_pdv import MovMeioPgtoPDVModel
@@ -20,12 +20,11 @@ class MeioPagamentoRepository:
             )
             .join(
                 MeiosPgtoPublicModel,
-                MovMeioPgtoPDVModel.movm_codmeiopgto == MeiosPgtoPublicModel.mpgt_codigo
+                cast(MovMeioPgtoPDVModel.movm_codmeiopgto, Integer) == MeiosPgtoPublicModel.mpgt_tpmeiopgto
             )
             .filter(
                 MovMeioPgtoPDVModel.movm_datamvto.between(data_inicio, data_fim),
-                MovMeioPgtoPDVModel.movm_situacao == 'N',
-                MovMeioPgtoPDVModel.movm_valor <= Decimal("9999.99"),
+                MovMeioPgtoPDVModel.movm_situacao == 'N'
             )
             .group_by(MovMeioPgtoPDVModel.movm_codmeiopgto)
             .all()
@@ -41,13 +40,12 @@ class MeioPagamentoRepository:
             )
             .join(
                 MeiosPgtoPublicModel,
-                MovMeioPgtoPDVModel.movm_codmeiopgto == MeiosPgtoPublicModel.mpgt_codigo
+                cast(MovMeioPgtoPDVModel.movm_codmeiopgto, Integer) == MeiosPgtoPublicModel.mpgt_tpmeiopgto
             )
             .filter(
                 MovMeioPgtoPDVModel.movm_codempresa.in_(empresas),
                 MovMeioPgtoPDVModel.movm_datamvto.between(data_inicio, data_fim),
-                MovMeioPgtoPDVModel.movm_situacao == 'N',
-                MovMeioPgtoPDVModel.movm_valor <= Decimal("9999.99"),
+                MovMeioPgtoPDVModel.movm_situacao == 'N'
             )
             .group_by(
                 MovMeioPgtoPDVModel.movm_codempresa,
