@@ -27,7 +27,7 @@ class MeioPagamentoRepository:
                 MovMeioPgtoPDVModel.movm_situacao == 'N',
                 MovMeioPgtoPDVModel.movm_valor <= Decimal("9999.99"),
             )
-            .group_by(MovMeioPgtoPDVModel.movm_codmeiopgto)
+            .group_by(MovMeioPgtoPDVModel.movm_tipo)
             .all()
         )
 
@@ -51,7 +51,7 @@ class MeioPagamentoRepository:
             )
             .group_by(
                 MovMeioPgtoPDVModel.movm_codempresa,
-                MovMeioPgtoPDVModel.movm_codmeiopgto,
+                MovMeioPgtoPDVModel.movm_tipo,
             )
             .all()
         )
