@@ -3,8 +3,8 @@ from decimal import Decimal
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.api.public.models.meiospagamento import MeiosPgtoPublicModel
 from app.api.pdv.models.meio_pagamento.movmeiopgto_pdv import MovMeioPgtoPDVModel
+from app.api.public.models.meiospgto_public import MeiosPgtoPublicModel
 
 
 class MeioPagamentoRepository:
