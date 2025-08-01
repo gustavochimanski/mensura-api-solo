@@ -1,105 +1,94 @@
 from typing import List
-from sqlalchemy import func, case
+from decimal import Decimal
+from sqlalchemy import func, or_, and_
 from sqlalchemy.orm import Session
-from app.api.pdv.models.meio_pagamento.movmeiopgto_pdv import MovMeioPgtoPDVModel
 
-# mapeamento movm_tipo → letra e descrição
-TIPOS_MAP = {
-    1: ("N", "Dinheiro"),
-    2: ("H", "Cheque à vista"),
-    3: ("H", "Cheque pré"),
-    4: ("C", "Convênio"),
-    5: (None, None),  # Off-line (I/E) e PIX (D) serão separados abaixo
-    6: (None, None),  # Débito (D) e Crédito (R)
-    7: ("V", "Vale"),
-    8: ("N", "Contra-Vale"),
-    9: ("X", "Outro"),
+from app.api.pdv.models.meio_pagamento.movmeiopgto_pdv import MovMeioPgtoPDVModel
+from app.api.public.models.meiospgto_public import MeiosPgtoPublicModel
+
+# Mapeamento código PDV (string) → tipo (letra)
+CODIGO_PDV_TO_TIPO = {
+    "01": "N",  # Dinheiro
+    "02": "H",  # Cheque
+    "03": "H",  # Cheque Pré
+    "04": "C",  # Convênio
+    "05": "I",  # Cartão Off-line / PIX
+    "06": "D",  # Cartão débito/crédito
+    "07": "V",  # Ticket
+    "08": "N",  # Contra Vale
+    "09": "X",  # PIX
 }
 
-# para os movm_tipo que têm mais de um tipo_letra, vamos criar casos específicos:
-LETRA_CASE = case(
-    [
-        # código 5: off-line = I ou E, PIX = D
-        (MovMeioPgtoPDVModel.movm_tipo == 5,
-         case(
-             [
-                 (MovMeioPgtoPDVModel.movm_meiopagamento == 5, 'I'),  # troque aqui pela sua coluna/condição real de off-line
-                 # (outra condição para 'E'),
-                 # (outra condição para 'D'),
-             ], else_='D'
-         )
-        ),
-        # código 6: débito = D, crédito = R
-        (MovMeioPgtoPDVModel.movm_tipo == 6,
-         case(
-             [(MovMeioPgtoPDVModel.movm_meiopagamento == 6, 'D')],
-             else_='R'
-         )
-        ),
-        # tipos 1,2,3,4,7,8,9 – mapeio direto
-        *((MovMeioPgtoPDVModel.movm_tipo == k, v[0]) for k, v in TIPOS_MAP.items() if v[0]),
-    ],
-    else_='?'
-).label("tipo_letra")
-
-DESC_CASE = case(
-    [
-        *((MovMeioPgtoPDVModel.movm_tipo == k, v[1]) for k, v in TIPOS_MAP.items() if v[1]),
-        # para 5 e 6, agrupo juntos numa descrição genérica – ajuste se precisar algo mais refinado
-        (MovMeioPgtoPDVModel.movm_tipo == 5, "Off-line / PIX"),
-        (MovMeioPgtoPDVModel.movm_tipo == 6, "Cartão"),
-    ],
-    else_="Desconhecido"
-).label("descricao")
-
+# Inverte mapeamento para letra → [int(códigos)]
+INVERTED_MAP = {}
+for code_str, letra in CODIGO_PDV_TO_TIPO.items():
+    INVERTED_MAP.setdefault(letra, []).append(int(code_str))
 
 class MeioPagamentoRepository:
     def __init__(self, db: Session):
         self.db = db
 
     def get_resumo_geral(self, data_inicio, data_fim):
-        return (
-            self.db
-            .query(
-                MovMeioPgtoPDVModel.movm_tipo.label("tipo"),
-                LETRA_CASE,
-                DESC_CASE,
+        # Construímos uma lista de filtros do tipo:
+        # (p.mpgt_tpmeiopgto == letra) AND (m.movm_tipo IN códigos_da_letra)
+        filtros_por_letra = [
+            and_(
+                MeiosPgtoPublicModel.mpgt_tpmeiopgto == letra,
+                MovMeioPgtoPDVModel.movm_tipo.in_(codigos)
+            )
+            for letra, codigos in INVERTED_MAP.items()
+        ]
+
+        query = (
+            self.db.query(
+                MeiosPgtoPublicModel.mpgt_tpmeiopgto.label("tipo"),     # ex: "N"
+                func.max(MeiosPgtoPublicModel.mpgt_descricao).label("descricao"),
                 func.sum(MovMeioPgtoPDVModel.movm_valor).label("valor_total"),
+            )
+            .join(
+                MeiosPgtoPublicModel,
+                MovMeioPgtoPDVModel.movm_codmeiopgto == MeiosPgtoPublicModel.mpgt_codigo
             )
             .filter(
                 MovMeioPgtoPDVModel.movm_datamvto.between(data_inicio, data_fim),
                 MovMeioPgtoPDVModel.movm_situacao == 'N',
-                MovMeioPgtoPDVModel.movm_tipo.in_(list(TIPOS_MAP.keys()))
+                or_(*filtros_por_letra)
             )
-            .group_by(
-                MovMeioPgtoPDVModel.movm_tipo,
-                LETRA_CASE,
-                DESC_CASE
-            )
-            .all()
+            .group_by(MeiosPgtoPublicModel.mpgt_tpmeiopgto)
         )
 
+        return query.all()
+
     def get_resumo_por_empresa(self, empresas: List[str], data_inicio, data_fim):
-        return (
-            self.db
-            .query(
+        filtros_por_letra = [
+            and_(
+                MeiosPgtoPublicModel.mpgt_tpmeiopgto == letra,
+                MovMeioPgtoPDVModel.movm_tipo.in_(codigos)
+            )
+            for letra, codigos in INVERTED_MAP.items()
+        ]
+
+        query = (
+            self.db.query(
                 MovMeioPgtoPDVModel.movm_codempresa.label("empresa"),
-                MovMeioPgtoPDVModel.movm_tipo.label("tipo"),
-                LETRA_CASE,
-                DESC_CASE,
+                MeiosPgtoPublicModel.mpgt_tpmeiopgto.label("tipo"),
+                func.max(MeiosPgtoPublicModel.mpgt_descricao).label("descricao"),
                 func.sum(MovMeioPgtoPDVModel.movm_valor).label("valor_total"),
+            )
+            .join(
+                MeiosPgtoPublicModel,
+                MovMeioPgtoPDVModel.movm_codmeiopgto == MeiosPgtoPublicModel.mpgt_codigo
             )
             .filter(
                 MovMeioPgtoPDVModel.movm_codempresa.in_(empresas),
                 MovMeioPgtoPDVModel.movm_datamvto.between(data_inicio, data_fim),
                 MovMeioPgtoPDVModel.movm_situacao == 'N',
-                MovMeioPgtoPDVModel.movm_tipo.in_(list(TIPOS_MAP.keys()))
+                or_(*filtros_por_letra)
             )
             .group_by(
                 MovMeioPgtoPDVModel.movm_codempresa,
-                MovMeioPgtoPDVModel.movm_tipo,
-                LETRA_CASE,
-                DESC_CASE
+                MeiosPgtoPublicModel.mpgt_tpmeiopgto
             )
-            .all()
         )
+
+        return query.all()
