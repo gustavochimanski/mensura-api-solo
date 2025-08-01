@@ -29,19 +29,26 @@ class MeioPagamentoRepository:
         self.db = db
 
     def get_resumo_geral(self, data_inicio, data_fim):
-        # Construímos uma lista de filtros do tipo:
-        # (p.mpgt_tpmeiopgto == letra) AND (m.movm_tipo IN códigos_da_letra)
-        filtros_por_letra = [
-            and_(
-                MeiosPgtoPublicModel.mpgt_tpmeiopgto == letra,
-                MovMeioPgtoPDVModel.movm_tipo.in_(codigos)
-            )
-            for letra, codigos in INVERTED_MAP.items()
-        ]
+        # Agrupar os tipos manualmente por movm_tipo → letra
+        CASE_TIPO = func.case(
+            value=MovMeioPgtoPDVModel.movm_tipo,
+            whens={
+                1: 'N',  # Dinheiro
+                2: 'H',  # Cheque
+                3: 'H',  # Cheque Pré
+                4: 'C',  # Convênio
+                5: 'I',  # Cartão Off-line
+                6: 'D',  # Cartão Débito/Crédito
+                7: 'V',  # Ticket
+                8: 'N',  # Contra Vale
+                9: 'X',  # Pix
+            },
+            else_='?'  # caso algum tipo esteja fora da regra
+        ).label("tipo")
 
         query = (
             self.db.query(
-                MeiosPgtoPublicModel.mpgt_tpmeiopgto.label("tipo"),     # ex: "N"
+                CASE_TIPO,
                 func.max(MeiosPgtoPublicModel.mpgt_descricao).label("descricao"),
                 func.sum(MovMeioPgtoPDVModel.movm_valor).label("valor_total"),
             )
@@ -51,10 +58,9 @@ class MeioPagamentoRepository:
             )
             .filter(
                 MovMeioPgtoPDVModel.movm_datamvto.between(data_inicio, data_fim),
-                MovMeioPgtoPDVModel.movm_situacao == 'N',
-                or_(*filtros_por_letra)
+                MovMeioPgtoPDVModel.movm_situacao == 'N'
             )
-            .group_by(MeiosPgtoPublicModel.mpgt_tpmeiopgto)
+            .group_by(CASE_TIPO)
         )
 
         return query.all()
