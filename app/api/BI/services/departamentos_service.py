@@ -8,7 +8,6 @@ from app.api.BI.schemas.departamento_schema import (
     VendasPorDepartamento,
     VendasPorEmpresaComDepartamentos,
 )
-from app.api.public.models.categoriaprod_public_model import CategoriaProdutoPublicModel
 from app.utils.logger import logger
 
 
@@ -24,66 +23,57 @@ class DepartamentosPublicService:
         """
         subempresas = self.repo_subempresas.get_all_isvendas()
         codigos_subempresas = [s.sube_codigo for s in subempresas if s.sube_codigo is not None]
+
         if not codigos_subempresas:
             return []
 
         vendas_por_departamento = self.repo_lpd.get_vendas_por_departamento(ano_mes, codigos_subempresas)
-        # Usa código como “nome” temporariamente (ou monte mapa de nomes igual abaixo)
+
+        # Mapeia código → nome para facilitar match
+        mapa_cod_nome = {s.sube_codigo: s.sube_descricao for s in subempresas}
+
         return [
             VendasPorDepartamento(
-                departamento=str(dep),
+                departamento=mapa_cod_nome.get(dep),
                 total_vendas=float(total)
             )
             for dep, total in vendas_por_departamento
+            if dep in mapa_cod_nome
         ]
 
     def get_mais_vendidos(self, ano_mes: str) -> list[VendasPorEmpresaComDepartamentos]:
         """
-        Retorna total de vendas por empresa e por departamento,
-        já trazendo os nomes corretos tanto de empresa quanto de departamento.
+        Retorna total de vendas por empresa e por departamento
         """
         subempresas = self.repo_subempresas.get_all_isvendas()
         codigos_subempresas = [s.sube_codigo for s in subempresas if s.sube_codigo is not None]
+
         if not codigos_subempresas:
             return []
 
-        # 1) Busca vendas “cruas”
         vendas = self.repo_lpd.get_vendas_por_empresa_e_departamento(ano_mes, codigos_subempresas)
 
-        # 2) Mapeia código → nome das empresas
-        mapa_empresas = {s.sube_codigo: s.sube_descricao for s in subempresas}
+        # Mapeia código para nome de empresa e departamento
+        mapa_cod_nome = {s.sube_codigo: s.sube_descricao for s in subempresas}
 
-        # 3) Mapeia código → nome dos departamentos
-        departamentos = (
-            self.db
-            .query(
-                CategoriaProdutoPublicModel.cate_codsubempresa,
-                CategoriaProdutoPublicModel.cate_descricao
-            )
-            .filter(CategoriaProdutoPublicModel.cate_codsubempresa.in_(codigos_subempresas))
-            .distinct()
-            .all()
-        )
-        mapa_departamentos = {cod: desc for cod, desc in departamentos}
+        agrupado_por_empresa: dict[str, list[VendasPorDepartamento]] = defaultdict(list)
 
-        # 4) Agrupa por empresa
-        agrupado: dict[str, list[VendasPorDepartamento]] = defaultdict(list)
-        for cod_empresa, cod_dep, total in vendas:
-            nome_emp = mapa_empresas.get(cod_empresa)
-            nome_dep = mapa_departamentos.get(cod_dep)
-            if nome_emp and nome_dep:
-                agrupado[nome_emp].append(
+        for cod_empresa, cod_departamento, total in vendas:
+            nome_empresa = mapa_cod_nome.get(cod_empresa)
+            nome_departamento = mapa_cod_nome.get(cod_departamento)
+
+            if nome_empresa and nome_departamento:
+                agrupado_por_empresa[nome_empresa].append(
                     VendasPorDepartamento(
-                        departamento=nome_dep,
+                        departamento=nome_departamento,
                         total_vendas=float(total)
                     )
                 )
 
-        # 5) Monta lista final
         return [
             VendasPorEmpresaComDepartamentos(
-                empresa=empresa,
-                departamentos=deps
+                empresa=nome,
+                departamentos=departamentos
             )
-            for empresa, deps in agrupado.items()
+            for nome, departamentos in agrupado_por_empresa.items()
         ]
