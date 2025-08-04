@@ -35,6 +35,5 @@ class TypeDashboardResponse(BaseModel):
     vendaPorHora: TypeVendaPorHoraComTotalGeralResponse
     meios_pagamento: MeioPagamentoResponseFinal
     departamento_geral: List[VendasPorDepartamento]
-    departamento_geral: List[VendasPorDepartamento]
-    departamento: List[VendasPorEmpresaComDepartamentos]
+    departamento_empresa: List[VendasPorEmpresaComDepartamentos]
 

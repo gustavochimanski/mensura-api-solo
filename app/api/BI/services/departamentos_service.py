@@ -1,3 +1,4 @@
+# app/api/BI/services/departamentos_service.py
 from collections import defaultdict
 from decimal import Decimal
 from sqlalchemy.orm import Session
@@ -16,7 +17,34 @@ class DepartamentosPublicService:
         self.repo_subempresas = SubEmpresasPublicRepository(db)
         self.repo_lpd = LpdRepository(db)
 
+    def get_mais_vendidos_geral(self, ano_mes: str) -> list[VendasPorDepartamento]:
+        """
+        Retorna total de vendas por departamento (geral, sem separar por empresa)
+        """
+        subempresas = self.repo_subempresas.get_all_isvendas()
+        codigos_subempresas = [s.sube_codigo for s in subempresas if s.sube_codigo is not None]
+
+        if not codigos_subempresas:
+            return []
+
+        vendas_por_departamento = self.repo_lpd.get_vendas_por_departamento(ano_mes, codigos_subempresas)
+
+        # Mapeia código → nome para facilitar match
+        mapa_cod_nome = {s.sube_codigo: s.sube_descricao for s in subempresas}
+
+        return [
+            VendasPorDepartamento(
+                departamento=mapa_cod_nome.get(dep),
+                total_vendas=float(total)
+            )
+            for dep, total in vendas_por_departamento
+            if dep in mapa_cod_nome
+        ]
+
     def get_mais_vendidos(self, ano_mes: str) -> list[VendasPorEmpresaComDepartamentos]:
+        """
+        Retorna total de vendas por empresa e por departamento
+        """
         subempresas = self.repo_subempresas.get_all_isvendas()
         codigos_subempresas = [s.sube_codigo for s in subempresas if s.sube_codigo is not None]
 
@@ -25,15 +53,14 @@ class DepartamentosPublicService:
 
         vendas = self.repo_lpd.get_vendas_por_empresa_e_departamento(ano_mes, codigos_subempresas)
 
-        # Mapeia código para nome de empresa
-        mapa_empresa_nome = {s.sube_codigo: s.sube_descricao for s in subempresas}
+        # Mapeia código para nome de empresa e departamento
+        mapa_cod_nome = {s.sube_codigo: s.sube_descricao for s in subempresas}
 
-        # Mapeia os resultados por empresa
         agrupado_por_empresa: dict[str, list[VendasPorDepartamento]] = defaultdict(list)
 
         for cod_empresa, cod_departamento, total in vendas:
-            nome_empresa = mapa_empresa_nome.get(cod_empresa)
-            nome_departamento = mapa_empresa_nome.get(cod_departamento)
+            nome_empresa = mapa_cod_nome.get(cod_empresa)
+            nome_departamento = mapa_cod_nome.get(cod_departamento)
 
             if nome_empresa and nome_departamento:
                 agrupado_por_empresa[nome_empresa].append(
@@ -43,7 +70,6 @@ class DepartamentosPublicService:
                     )
                 )
 
-        # Monta lista final
         return [
             VendasPorEmpresaComDepartamentos(
                 empresa=nome,
