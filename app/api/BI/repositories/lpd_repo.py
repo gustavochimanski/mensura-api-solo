@@ -8,11 +8,12 @@ class LpdRepository:
     def __init__(self, db):
         self.db = db
 
-    def get_vendas_por_departamento(self, ano_mes: str, subempresas: list[int]):
+    def get_vendas_por_empresa_e_departamento(self, ano_mes: str, subempresas: list[int]):
         Lpd = get_lpd_model(ano_mes)
 
         stmt = (
             select(
+                Lpd.lcpd_empresa.label("empresa"),
                 CategoriaProdutoPublicModel.cate_codsubempresa.label("departamento"),
                 func.sum(Lpd.lcpd_valor).label("total_vendas")
             )
@@ -21,12 +22,13 @@ class LpdRepository:
                 CategoriaProdutoPublicModel.cate_codigo == Lpd.lcpd_codcategoria
             )
             .where(
-                CategoriaProdutoPublicModel.cate_codsubempresa.in_(subempresas),  # ✅ Aqui está o filtro correto
+                CategoriaProdutoPublicModel.cate_codsubempresa.in_(subempresas),
                 Lpd.lcpd_situacao == "N",
                 Lpd.lcpd_tipoprocesso == "VN"
             )
-            .group_by(CategoriaProdutoPublicModel.cate_codsubempresa)
+            .group_by(Lpd.lcpd_empresa, CategoriaProdutoPublicModel.cate_codsubempresa)
             .order_by(func.sum(Lpd.lcpd_valor).desc())
         )
 
         return self.db.execute(stmt).all()
+

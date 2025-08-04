@@ -2,5 +2,9 @@ from pydantic import BaseModel
 
 
 class VendasPorDepartamento(BaseModel):
-    departamento: str  # agora é nome
+    departamento: str
     total_vendas: float
+
+class VendasPorEmpresaComDepartamentos(BaseModel):
+    empresa: str
+    departamentos: list[VendasPorDepartamento]

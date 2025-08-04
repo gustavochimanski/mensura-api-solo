@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 
 from app.api.BI.schemas.compras_types import ConsultaMovimentoCompraResponse, CompraDetalhadaResponse
-from app.api.BI.schemas.departamento_schema import VendasPorDepartamento
+from app.api.BI.schemas.departamento_schema import VendasPorDepartamento, VendasPorEmpresaComDepartamentos
 from app.api.BI.schemas.meio_pagamento_types import MeioPagamentoResponseFinal
 from app.api.BI.schemas.vendas.resumoVendas import TotaisGerais, TotaisPorEmpresa
 from app.api.BI.schemas.vendas.vendasPorHoraTypes import TypeVendaPorHoraComTotalGeralResponse
@@ -34,5 +34,7 @@ class TypeDashboardResponse(BaseModel):
     compraDetalhada: CompraDetalhadaResponse
     vendaPorHora: TypeVendaPorHoraComTotalGeralResponse
     meios_pagamento: MeioPagamentoResponseFinal
-    departamentos: List[VendasPorDepartamento]
+    departamento_geral: List[VendasPorDepartamento]
+    departamento_geral: List[VendasPorDepartamento]
+    departamento: List[VendasPorEmpresaComDepartamentos]
 
