@@ -1,4 +1,6 @@
 from sqlalchemy.orm import Session
+from datetime import datetime, timedelta
+
 from app.api.BI.repositories.vendas.resumoVendasRepo import ResumoDeVendasRepository
 from app.api.BI.schemas.dashboard_types import TypeDashboardRequest
 from app.api.BI.schemas.vendas.resumoVendas import (
@@ -6,8 +8,6 @@ from app.api.BI.schemas.vendas.resumoVendas import (
     TotaisGerais,
     TotaisPorEmpresa,
 )
-
-from datetime import datetime, timedelta
 
 def resumoDeVendasService(
     vendas_request: TypeDashboardRequest,
@@ -19,7 +19,7 @@ def resumoDeVendasService(
         # período atual
         totais_por_empresa: list[TotaisPorEmpresa] = repo.resumo_venda_periodo(vendas_request)
 
-        # período anterior para comparação (a mesma duração para trás)
+        # período anterior
         dt_inicio_atual = datetime.strptime(vendas_request.dataInicio, "%Y-%m-%d").date()
         dt_fim_atual = datetime.strptime(vendas_request.dataFinal, "%Y-%m-%d").date()
         delta = dt_fim_atual - dt_inicio_atual
@@ -33,7 +33,7 @@ def resumoDeVendasService(
             cod_vendedor=vendas_request.cod_vendedor
         )
 
-        comparativo: dict[str, list[TotaisPorEmpresa]] = repo.resumo_venda_compara_periodo(
+        comparativo = repo.resumo_venda_compara_periodo(
             vendas_request_atual=vendas_request,
             vendas_request_anterior=vendas_request_anterior
         )
@@ -50,7 +50,7 @@ def resumoDeVendasService(
         return TypeResumoVendasResponse(
             totais_por_empresa=totais_por_empresa,
             total_geral=total_geral,
-            resumo_venda_compara_periodo=comparativo  # ✅ já no schema
+            periodo_anterior=comparativo["anterior"]
         )
 
     except Exception as e:

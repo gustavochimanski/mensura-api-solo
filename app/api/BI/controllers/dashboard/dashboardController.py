@@ -97,6 +97,7 @@ def dashboardController(
     return TypeDashboardResponse(
         totais_por_empresa=resumo_vendas.totais_por_empresa,
         total_geral=resumo_vendas.total_geral,
+        periodo_anterior=resumo_vendas.periodo_anterior,
         relacao=relacao,
         metas=metas,
         compras=compras,

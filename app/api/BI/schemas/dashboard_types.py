@@ -25,6 +25,7 @@ class TypeRelacao(BaseModel):
 class TypeDashboardResponse(BaseModel):
     totais_por_empresa: List[TotaisPorEmpresa]
     total_geral: TotaisGerais
+    periodo_anterior: List[TotaisPorEmpresa]
     relacao: TypeRelacao
     metas: TypeDashboardMetaReturn
     compras: ConsultaMovimentoCompraResponse
