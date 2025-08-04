@@ -83,7 +83,7 @@ class DepartamentosPublicService:
                 logger.warning(f"Departamento {cod_dep!r} não mapeado em subempresas")
                 continue
 
-            agrupado[nome_loja].append(
+            agrupado[key_loja].append(
                 VendasPorDepartamento(departamento=nome_dep, total_vendas=float(total))
             )
 
