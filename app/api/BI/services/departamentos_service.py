@@ -21,7 +21,7 @@ class DepartamentosPublicService:
     def get_mais_vendidos_geral(self, ano_mes: str) -> list[VendasPorDepartamento]:
         """
         Retorna total de vendas por departamento (geral, sem separar por empresa).
-        Usa subempresas apenas para filtro, mapeia depois para nomes.
+        Soma só quando a categoria pertence àquela subempresa.
         """
         subempresas = self.repo_subempresas.get_all_isvendas()
         codigos_subempresas = [s.sube_codigo for s in subempresas if s.sube_codigo is not None]
@@ -30,12 +30,10 @@ class DepartamentosPublicService:
 
         vendas = self.repo_lpd.get_vendas_por_departamento(ano_mes, codigos_subempresas)
 
-        # Mapa codigo_subempresa → descricao
         mapa_cod_nome = {s.sube_codigo: s.sube_descricao for s in subempresas}
-
         return [
             VendasPorDepartamento(
-                departamento=mapa_cod_nome.get(dep),  # nome do departamento
+                departamento=mapa_cod_nome.get(dep),
                 total_vendas=float(total)
             )
             for dep, total in vendas
@@ -45,35 +43,27 @@ class DepartamentosPublicService:
     def get_mais_vendidos(self, ano_mes: str) -> list[VendasPorEmpresaComDepartamentos]:
         """
         Retorna vendas por empresa e departamento com nomes corretos.
-        1) Filtra departamentos pelas subempresas
-        2) Busca raw de vendas por empresa+departamento
-        3) Mapeia empresas reais (001,002..) para nome
-        4) Mapeia departamentos (codsubempresa) para nome
-        5) Agrupa e devolve Pydantic models
+        Inclui só categorias pertencentes à subempresa de cada lançamento.
         """
-        # 1) pega lista de subempresas para filtrar departamentos
+        # 1) subempresas para filtrar departamentos
         subempresas = self.repo_subempresas.get_all_isvendas()
         cods = [s.sube_codigo for s in subempresas if s.sube_codigo is not None]
         if not cods:
             return []
 
-        # 2) dados crus: lista de tuples (empresa, departamento, total)
+        # 2) raw de vendas: cada tupla (empresa, departamento, total)
         vendas = self.repo_lpd.get_vendas_por_empresa_e_departamento(ano_mes, cods)
 
-        # 3) Mapa código → nome de empresa (tabela de empresas reais)
+        # 3) mapa empresa (001,002..) → nome
         rows_emp = (
             self.db
-            .query(
-                Empresa.empr_codigo,   # ex: 1, 2, 4
-                Empresa.empr_nome      # ex: "Golfinho"
-            )
+            .query(Empresa.empr_codigo, Empresa.empr_nome)
             .distinct()
             .all()
         )
-        # padroniza para '001', '002', etc
         mapa_empresas = {str(cod).zfill(3): nome for cod, nome in rows_emp}
 
-        # 4) Mapa código → nome de departamento
+        # 4) mapa departamento (codsubempresa) → nome
         rows_dep = (
             self.db
             .query(
@@ -86,7 +76,7 @@ class DepartamentosPublicService:
         )
         mapa_departamentos = {cod: desc for cod, desc in rows_dep}
 
-        # 5) Agrupar em dict
+        # 5) agrupa resultados
         agrupado: dict[str, list[VendasPorDepartamento]] = defaultdict(list)
         for cod_emp_raw, cod_dep, total in vendas:
             key_emp = str(cod_emp_raw).zfill(3)
@@ -104,9 +94,8 @@ class DepartamentosPublicService:
                 VendasPorDepartamento(departamento=nome_dep, total_vendas=float(total))
             )
 
-        # 6) Monta resultado final
+        # 6) monta Pydantic response
         return [
             VendasPorEmpresaComDepartamentos(empresa=emp, departamentos=deps)
             for emp, deps in agrupado.items()
-
         ]
