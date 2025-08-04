@@ -60,7 +60,7 @@ class DepartamentosPublicService:
         # 3) mapa de empresas (001,002..) → nome
         rows_emp = (
             self.db
-            .query(Empresa.empr_codigo)
+            .query(Empresa.empr_codigo, Empresa.empr_nomereduzido)
             .distinct()
             .all()
         )
