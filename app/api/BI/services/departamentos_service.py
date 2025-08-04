@@ -19,71 +19,58 @@ class DepartamentosPublicService:
         self.repo_lpd = LpdRepository(db)
 
     def get_mais_vendidos_geral(self, ano_mes: str) -> list[VendasPorDepartamento]:
-        """
-        Retorna total de vendas por departamento (geral, sem separar por empresa)
-        """
-        subempresas = self.repo_subempresas.get_all_isvendas()
-        codigos_subempresas = [s.sube_codigo for s in subempresas if s.sube_codigo is not None]
-
-        if not codigos_subempresas:
-            return []
-
-        vendas_por_departamento = self.repo_lpd.get_vendas_por_departamento(ano_mes, codigos_subempresas)
-
-        # Mapeia código → nome para facilitar match
-        mapa_cod_nome = {s.sube_codigo: s.sube_descricao for s in subempresas}
-
-        return [
-            VendasPorDepartamento(
-                departamento=mapa_cod_nome.get(dep),
-                total_vendas=float(total)
-            )
-            for dep, total in vendas_por_departamento
-            if dep in mapa_cod_nome
-        ]
-
-    def get_mais_vendidos(self, ano_mes: str) -> list[VendasPorEmpresaComDepartamentos]:
-        """
-        Retorna vendas por empresa e departamento com nomes corretos.
-        """
         subempresas = self.repo_subempresas.get_all_isvendas()
         cods = [s.sube_codigo for s in subempresas if s.sube_codigo is not None]
         if not cods:
             return []
 
-        # 1) Busca os dados “crus”
+        vendas = self.repo_lpd.get_vendas_por_departamento(ano_mes, cods)
+        return [
+            VendasPorDepartamento(
+                departamento=str(dep),
+                total_vendas=float(total)
+            )
+            for dep, total in vendas
+        ]
+
+    def get_mais_vendidos(self, ano_mes: str) -> list[VendasPorEmpresaComDepartamentos]:
+        subempresas = self.repo_subempresas.get_all_isvendas()
+        cods = [s.sube_codigo for s in subempresas if s.sube_codigo is not None]
+        if not cods:
+            return []
+
+        # 1) pega tuplas (cod_empresa, cod_dep, total)
         vendas = self.repo_lpd.get_vendas_por_empresa_e_departamento(ano_mes, cods)
+        if not vendas:
+            return []
 
-        # 2) Mapa código → nome de empresa (padroniza chave como string de 3 dígitos)
-        mapa_empresas = {
-            f"{s.sube_codigo:03d}": s.sube_descricao
-            for s in subempresas
-            if s.sube_codigo is not None
-        }
+        # 2) mapeia empresas pelo que veio em subempresas
+        mapa_empresas = {str(s.sube_codigo): s.sube_descricao for s in subempresas}
 
-        # 3) Mapa código → nome de departamento (vindo da tabela de categorias)
+        # 3) extrai todos os departamentos que foram vendidos
+        cod_departamentos = {dep for _, dep, _ in vendas}
+        # 4) busca nomes desses departamentos
         rows = (
             self.db
             .query(
                 CategoriaProdutoPublicModel.cate_codsubempresa,
                 CategoriaProdutoPublicModel.cate_descricao
             )
-            .filter(CategoriaProdutoPublicModel.cate_codsubempresa.in_(cods))
+            .filter(CategoriaProdutoPublicModel.cate_codsubempresa.in_(cod_departamentos))
             .distinct()
             .all()
         )
         mapa_departamentos = {cod: desc for cod, desc in rows}
 
-        # 4) Agrupamento final
+        # 5) agrupa
         agrupado: dict[str, list[VendasPorDepartamento]] = defaultdict(list)
-
-        for cod_emp_raw, cod_dep, total in vendas:
-            key_emp = str(cod_emp_raw).zfill(3)      # garante "001", "002", etc
+        for cod_emp, cod_dep, total in vendas:
+            key_emp = str(cod_emp)
             nome_emp = mapa_empresas.get(key_emp)
             nome_dep = mapa_departamentos.get(cod_dep)
 
             if not nome_emp:
-                logger.warning(f"Empresa {cod_emp_raw!r} não mapeada em {list(mapa_empresas.keys())}")
+                logger.warning(f"Empresa {cod_emp!r} não mapeada")
                 continue
             if not nome_dep:
                 logger.warning(f"Departamento {cod_dep!r} não mapeado")
@@ -93,7 +80,7 @@ class DepartamentosPublicService:
                 VendasPorDepartamento(departamento=nome_dep, total_vendas=float(total))
             )
 
-        # 5) Monta a lista de empresas
+        # 6) monta lista final
         return [
             VendasPorEmpresaComDepartamentos(empresa=emp, departamentos=deps)
             for emp, deps in agrupado.items()
