@@ -1,4 +1,3 @@
-# app/api/BI/repositories/lpd_repo.py
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
@@ -12,7 +11,8 @@ class LpdRepository:
 
     def get_vendas_por_departamento(self, ano_mes: str, subempresas: list[int]):
         """
-        Retorna total de vendas por departamento (sem separar por empresa)
+        Retorna total de vendas por departamento (sem separar por empresa).
+        Agrupa por cate_codsubempresa.
         """
         Lpd = get_lpd_model(ano_mes)
 
@@ -26,6 +26,7 @@ class LpdRepository:
                 CategoriaProdutoPublicModel.cate_codigo == Lpd.lcpd_codcategoria
             )
             .where(
+                # filtra pelos códigos de subempresa (departamentos válidos)
                 CategoriaProdutoPublicModel.cate_codsubempresa.in_(subempresas),
                 Lpd.lcpd_situacao == "N",
                 Lpd.lcpd_tipoprocesso == "VN"
@@ -39,14 +40,15 @@ class LpdRepository:
     def get_vendas_por_empresa_e_departamento(self, ano_mes: str, subempresas: list[int]):
         """
         Retorna, para cada empresa e cada departamento, o total de vendas.
-        Já traz o nome do departamento (cate_descricao) direto da tabela.
+        - empresa: lcpd_codempresa (ex: '001', '002')
+        - departamento: cate_codsubempresa (ex: 121000, 122001)
         """
         Lpd = get_lpd_model(ano_mes)
 
         stmt = (
             select(
                 Lpd.lcpd_codempresa.label("empresa"),
-                CategoriaProdutoPublicModel.cate_descricao.label("departamento"),
+                CategoriaProdutoPublicModel.cate_codsubempresa.label("departamento"),
                 func.sum(Lpd.lcpd_valor).label("total_vendas")
             )
             .join(
@@ -54,13 +56,14 @@ class LpdRepository:
                 CategoriaProdutoPublicModel.cate_codigo == Lpd.lcpd_codcategoria
             )
             .where(
+                # aqui usamos subempresas só para filtrar departamentos válidos
                 CategoriaProdutoPublicModel.cate_codsubempresa.in_(subempresas),
                 Lpd.lcpd_situacao == "N",
                 Lpd.lcpd_tipoprocesso == "VN"
             )
             .group_by(
                 Lpd.lcpd_codempresa,
-                CategoriaProdutoPublicModel.cate_descricao
+                CategoriaProdutoPublicModel.cate_codsubempresa
             )
             .order_by(func.sum(Lpd.lcpd_valor).desc())
         )

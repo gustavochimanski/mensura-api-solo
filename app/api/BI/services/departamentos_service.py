@@ -1,4 +1,3 @@
-# app/api/BI/services/departamentos_service.py
 from collections import defaultdict
 from sqlalchemy.orm import Session
 
@@ -9,6 +8,7 @@ from app.api.BI.schemas.departamento_schema import (
     VendasPorEmpresaComDepartamentos,
 )
 from app.api.public.models.categoriaprod_public_model import CategoriaProdutoPublicModel
+from app.api.public.models.empresa.empresasModel import Empresa
 from app.utils.logger import logger
 
 
@@ -20,49 +20,61 @@ class DepartamentosPublicService:
 
     def get_mais_vendidos_geral(self, ano_mes: str) -> list[VendasPorDepartamento]:
         """
-        Retorna total de vendas por departamento (geral, sem separar por empresa)
+        Retorna total de vendas por departamento (geral, sem separar por empresa).
+        Usa subempresas apenas para filtro, mapeia depois para nomes.
         """
         subempresas = self.repo_subempresas.get_all_isvendas()
         codigos_subempresas = [s.sube_codigo for s in subempresas if s.sube_codigo is not None]
-
         if not codigos_subempresas:
             return []
 
-        vendas_por_departamento = self.repo_lpd.get_vendas_por_departamento(ano_mes, codigos_subempresas)
+        vendas = self.repo_lpd.get_vendas_por_departamento(ano_mes, codigos_subempresas)
 
-        # Mapeia código → nome para facilitar match
+        # Mapa codigo_subempresa → descricao
         mapa_cod_nome = {s.sube_codigo: s.sube_descricao for s in subempresas}
 
         return [
             VendasPorDepartamento(
-                departamento=mapa_cod_nome.get(dep),
+                departamento=mapa_cod_nome.get(dep),  # nome do departamento
                 total_vendas=float(total)
             )
-            for dep, total in vendas_por_departamento
+            for dep, total in vendas
             if dep in mapa_cod_nome
         ]
 
     def get_mais_vendidos(self, ano_mes: str) -> list[VendasPorEmpresaComDepartamentos]:
         """
         Retorna vendas por empresa e departamento com nomes corretos.
+        1) Filtra departamentos pelas subempresas
+        2) Busca raw de vendas por empresa+departamento
+        3) Mapeia empresas reais (001,002..) para nome
+        4) Mapeia departamentos (codsubempresa) para nome
+        5) Agrupa e devolve Pydantic models
         """
+        # 1) pega lista de subempresas para filtrar departamentos
         subempresas = self.repo_subempresas.get_all_isvendas()
         cods = [s.sube_codigo for s in subempresas if s.sube_codigo is not None]
         if not cods:
             return []
 
-        # 1) Busca os dados “crus”
+        # 2) dados crus: lista de tuples (empresa, departamento, total)
         vendas = self.repo_lpd.get_vendas_por_empresa_e_departamento(ano_mes, cods)
 
-        # 2) Mapa código → nome de empresa (padroniza chave como string de 3 dígitos)
-        mapa_empresas = {
-            f"{s.sube_codigo:03d}": s.sube_descricao
-            for s in subempresas
-            if s.sube_codigo is not None
-        }
+        # 3) Mapa código → nome de empresa (tabela de empresas reais)
+        rows_emp = (
+            self.db
+            .query(
+                Empresa.empr_codigo,   # ex: 1, 2, 4
+                Empresa.empr_nome      # ex: "Golfinho"
+            )
+            .distinct()
+            .all()
+        )
+        # padroniza para '001', '002', etc
+        mapa_empresas = {str(cod).zfill(3): nome for cod, nome in rows_emp}
 
-        # 3) Mapa código → nome de departamento (vindo da tabela de categorias)
-        rows = (
+        # 4) Mapa código → nome de departamento
+        rows_dep = (
             self.db
             .query(
                 CategoriaProdutoPublicModel.cate_codsubempresa,
@@ -72,13 +84,12 @@ class DepartamentosPublicService:
             .distinct()
             .all()
         )
-        mapa_departamentos = {cod: desc for cod, desc in rows}
+        mapa_departamentos = {cod: desc for cod, desc in rows_dep}
 
-        # 4) Agrupamento final
+        # 5) Agrupar em dict
         agrupado: dict[str, list[VendasPorDepartamento]] = defaultdict(list)
-
         for cod_emp_raw, cod_dep, total in vendas:
-            key_emp = str(cod_emp_raw).zfill(3)      # garante "001", "002", etc
+            key_emp = str(cod_emp_raw).zfill(3)
             nome_emp = mapa_empresas.get(key_emp)
             nome_dep = mapa_departamentos.get(cod_dep)
 
@@ -93,8 +104,9 @@ class DepartamentosPublicService:
                 VendasPorDepartamento(departamento=nome_dep, total_vendas=float(total))
             )
 
-        # 5) Monta a lista de empresas
+        # 6) Monta resultado final
         return [
             VendasPorEmpresaComDepartamentos(empresa=emp, departamentos=deps)
             for emp, deps in agrupado.items()
+
         ]
