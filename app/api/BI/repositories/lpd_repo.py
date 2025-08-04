@@ -44,7 +44,7 @@ class LpdRepository:
 
         stmt = (
             select(
-                Lpd.lcpd_empresa.label("empresa"),
+                Lpd.lcpd_codempresa.label("empresa"),
                 CategoriaProdutoPublicModel.cate_codsubempresa.label("departamento"),
                 func.sum(Lpd.lcpd_valor).label("total_vendas")
             )
@@ -57,7 +57,7 @@ class LpdRepository:
                 Lpd.lcpd_situacao == "N",
                 Lpd.lcpd_tipoprocesso == "VN"
             )
-            .group_by(Lpd.lcpd_empresa, CategoriaProdutoPublicModel.cate_codsubempresa)
+            .group_by(Lpd.lcpd_codempresa, CategoriaProdutoPublicModel.cate_codsubempresa)
             .order_by(func.sum(Lpd.lcpd_valor).desc())
         )
 
