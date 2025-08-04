@@ -7,10 +7,6 @@ Base = declarative_base()
 _model_cache = {}
 
 def get_lpd_model(ano_mes: str):
-    """
-    Retorna um modelo ORM dinâmico para uma tabela `lpdYYYYMM`
-    Exemplo: ano_mes="202501" → tabela "lpd202501"
-    """
     if not re.match(r"^\d{6}$", ano_mes):
         raise ValueError("Formato inválido: use 'yyyymm', ex: '202501'")
 
@@ -21,13 +17,13 @@ def get_lpd_model(ano_mes: str):
 
     metadata = MetaData(schema="public")
 
-    # carrega a tabela sem binding com ORM (somente metadados)
+    # carrega estrutura original
     raw_table = Table(nome_tabela, metadata, autoload_with=engine)
 
     if "lcpd_seq" not in raw_table.columns:
         raise RuntimeError(f"Tabela {nome_tabela} não possui coluna 'lcpd_seq'.")
 
-    # recria manualmente a tabela com PK explícita
+    # recria a tabela com a PK definida manualmente
     tabela = Table(
         nome_tabela,
         metadata,
@@ -35,10 +31,10 @@ def get_lpd_model(ano_mes: str):
             Column(col.name, col.type, primary_key=(col.name == "lcpd_seq"))
             for col in raw_table.columns
         ],
-        schema="public"
+        schema="public",
+        extend_existing=True  # 👈 isso resolve o erro
     )
 
-    # cria a classe ORM com a nova definição
     model = type(
         f"Lpd{ano_mes}Model",
         (Base,),
