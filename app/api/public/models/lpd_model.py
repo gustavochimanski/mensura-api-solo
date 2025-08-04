@@ -1,7 +1,7 @@
+import re
 from sqlalchemy import Table, MetaData
 from sqlalchemy.orm import declarative_base
 from app.database.db_connection import engine
-import re
 
 Base = declarative_base()
 
@@ -17,9 +17,11 @@ def get_lpd_model(ano_mes: str):
 
     nome_tabela = f"lpd{ano_mes}"  # Ex: lpd202501
 
+    # Retorna do cache se já foi criado antes
     if nome_tabela in _model_cache:
         return _model_cache[nome_tabela]
 
+    # Cria metadata e carrega a tabela do banco
     metadata = MetaData(schema="public")
     tabela = Table(
         nome_tabela,
@@ -27,6 +29,13 @@ def get_lpd_model(ano_mes: str):
         autoload_with=engine
     )
 
+    # Define uma chave primária fictícia apenas para o SQLAlchemy funcionar
+    if "lcpd_seq" in tabela.columns:
+        tabela.columns["lcpd_seq"].primary_key = True
+    else:
+        raise RuntimeError(f"Tabela {nome_tabela} não possui coluna lcpd_seq para usar como PK fictícia.")
+
+    # Cria dinamicamente a classe do model
     model = type(
         f"Lpd{ano_mes}Model",
         (Base,),
