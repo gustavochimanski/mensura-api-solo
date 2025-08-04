@@ -16,14 +16,13 @@ class DepartamentosPublicService:
         subempresas = self.repo_subempresas.get_all_isvendas()
         codigos_subempresas = [s.sube_codigo for s in subempresas if s.sube_codigo is not None]
 
-        logger.info(f'[DepartamentosPublicService] = codigos subempresas: {codigos_subempresas}')
-
         if not codigos_subempresas:
             return []
 
         # 2. Resultados agregados por cod_subempresa
         vendas_por_departamento = self.repo_lpd.get_vendas_por_departamento(ano_mes, codigos_subempresas)
 
+        logger.info(f"[DepartamentosPublicService] = {vendas_por_departamento}")
         # 3. Mapeia código → nome para facilitar match
         mapa_cod_nome = {
             s.sube_codigo: s.sube_descricao for s in subempresas
