@@ -29,18 +29,15 @@ class DepartamentosPublicService:
 
         vendas_por_departamento = self.repo_lpd.get_vendas_por_departamento(ano_mes, codigos_subempresas)
 
-        logger.info(vendas_por_departamento)
-
         # Mapeia código → nome para facilitar match
         mapa_cod_nome = {s.sube_codigo: s.sube_descricao for s in subempresas}
 
         return [
             VendasPorDepartamento(
-                departamento=mapa_cod_nome.get(dep),
+                departamento=str(dep),  # ou `f"Departamento {dep}"`, algo mais legível
                 total_vendas=float(total)
             )
             for dep, total in vendas_por_departamento
-            if dep in mapa_cod_nome
         ]
 
     def get_mais_vendidos(self, ano_mes: str) -> list[VendasPorEmpresaComDepartamentos]:
