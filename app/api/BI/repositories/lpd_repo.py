@@ -46,8 +46,8 @@ class LpdRepository:
 
         stmt = (
             select(
-                Lpd.lcpd_codempresa.label("empresa"),                        # código da loja
-                CategoriaProdutoPublicModel.cate_codsubempresa.label("departamento"),  # código do departamento
+                Lpd.lcpd_codempresa.label("empresa"),
+                CategoriaProdutoPublicModel.cate_codsubempresa.label("departamento"),
                 func.sum(Lpd.lcpd_valor).label("total_vendas"),
             )
             .join(
@@ -55,7 +55,6 @@ class LpdRepository:
                 CategoriaProdutoPublicModel.cate_codigo == Lpd.lcpd_codcategoria
             )
             .where(
-                # só categorias cujos codsubempresa estejam no seu cadastro
                 CategoriaProdutoPublicModel.cate_codsubempresa.in_(subempresas),
                 Lpd.lcpd_situacao == "N",
                 Lpd.lcpd_tipoprocesso == "VN",
