@@ -8,7 +8,7 @@ from app.api.BI.schemas.departamento_schema import (
     VendasPorEmpresaComDepartamentos,
 )
 from app.api.public.models.categoriaprod_public_model import CategoriaProdutoPublicModel
-from app.api.public.models.empresa_public_model import EmpresaPublicModel
+from app.api.public.models.empresa.empresasModel import Empresa
 from app.utils.logger import logger
 
 
@@ -55,7 +55,7 @@ class DepartamentosPublicService:
         # mapeia empresas reais (001,002..) → nome
         rows_emp = (
             self.db
-            .query(EmpresaPublicModel.empr_codigo, EmpresaPublicModel.empr_nome)
+            .query(Empresa.empr_codigo, Empresa.empr_nome)
             .distinct()
             .all()
         )
