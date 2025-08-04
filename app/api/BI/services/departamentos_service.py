@@ -1,6 +1,5 @@
 # app/api/BI/services/departamentos_service.py
 from collections import defaultdict
-from decimal import Decimal
 from sqlalchemy.orm import Session
 
 from app.api.BI.repositories.lpd_repo import LpdRepository
@@ -9,7 +8,7 @@ from app.api.BI.schemas.departamento_schema import (
     VendasPorDepartamento,
     VendasPorEmpresaComDepartamentos,
 )
-from app.database.db_connection import logger
+from app.utils.logger import logger
 
 
 class DepartamentosPublicService:
