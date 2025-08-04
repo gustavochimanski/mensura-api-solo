@@ -9,6 +9,7 @@ from app.api.BI.schemas.departamento_schema import (
     VendasPorDepartamento,
     VendasPorEmpresaComDepartamentos,
 )
+from app.database.db_connection import logger
 
 
 class DepartamentosPublicService:
@@ -52,6 +53,8 @@ class DepartamentosPublicService:
             return []
 
         vendas = self.repo_lpd.get_vendas_por_empresa_e_departamento(ano_mes, codigos_subempresas)
+
+        logger.info(vendas)
 
         # Mapeia código para nome de empresa e departamento
         mapa_cod_nome = {s.sube_codigo: s.sube_descricao for s in subempresas}
