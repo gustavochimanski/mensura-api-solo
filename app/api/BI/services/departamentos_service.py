@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from sqlalchemy.orm import Session
 from app.api.BI.repositories.lpd_repo import LpdRepository
 from app.api.BI.repositories.subempresas_repo import SubEmpresasPublicRepository
@@ -30,7 +32,7 @@ class DepartamentosPublicService:
         return [
             VendasPorDepartamento(
                 departamento=mapa_cod_nome.get(dep),
-                total_vendas=total
+                total_vendas=Decimal(total)
             )
             for dep, total in vendas_por_departamento
             if dep in mapa_cod_nome
