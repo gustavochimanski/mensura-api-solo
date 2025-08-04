@@ -1,9 +1,10 @@
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
 
+from app.api.BI.schemas.dashboard_types import TypeDashboardRequest
 from app.api.BI.services.vendas.resumoVendasService import resumoDeVendasService
-from app.api.BI.schemas.vendas.resumoVendas import TypeVendasPeriodoGeral, TypeResumoVendasResponse
-from app.database.db_connection import get_db  # importa o get_db correto
+from app.api.BI.schemas.vendas.resumoVendas import  TypeResumoVendasResponse
+from app.database.db_connection import get_db
 from app.utils.logger import logger
 
 router = APIRouter()
@@ -15,7 +16,7 @@ router = APIRouter()
     response_model=TypeResumoVendasResponse
 )
 def resumoVendasController(
-        request: TypeVendasPeriodoGeral,
+        request: TypeDashboardRequest,
         db: Session = Depends(get_db),  # injeta a sessão aqui
 ):
     logger.info(f"Request recebido: empresas={request.empresas}, inicio={request.dataInicio}, fim={request.dataFinal}")
