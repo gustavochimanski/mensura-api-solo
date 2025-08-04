@@ -38,14 +38,15 @@ class LpdRepository:
 
     def get_vendas_por_empresa_e_departamento(self, ano_mes: str, subempresas: list[int]):
         """
-        Retorna total de vendas por empresa e por departamento
+        Retorna, para cada empresa e cada departamento, o total de vendas.
+        Já traz o nome do departamento (cate_descricao) direto da tabela.
         """
         Lpd = get_lpd_model(ano_mes)
 
         stmt = (
             select(
                 Lpd.lcpd_codempresa.label("empresa"),
-                CategoriaProdutoPublicModel.cate_codsubempresa.label("departamento"),
+                CategoriaProdutoPublicModel.cate_descricao.label("departamento"),
                 func.sum(Lpd.lcpd_valor).label("total_vendas")
             )
             .join(
@@ -57,7 +58,10 @@ class LpdRepository:
                 Lpd.lcpd_situacao == "N",
                 Lpd.lcpd_tipoprocesso == "VN"
             )
-            .group_by(Lpd.lcpd_codempresa, CategoriaProdutoPublicModel.cate_codsubempresa)
+            .group_by(
+                Lpd.lcpd_codempresa,
+                CategoriaProdutoPublicModel.cate_descricao
+            )
             .order_by(func.sum(Lpd.lcpd_valor).desc())
         )
 
