@@ -1,9 +1,10 @@
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
+
+from app.api.BI.schemas.dashboard_types import TypeDashboardRequest
 from app.database.db_connection import get_db
 
 from app.api.BI.schemas.vendas.vendaDetalhadaTypes import (
-    TypeVendaDetalhadaRequest,
     TypeVendaDetalhadaResponse,
 )
 from app.api.BI.services.vendas.vendaDetalhadaService import consultaVendaDetalhadaGeralService
@@ -20,7 +21,7 @@ router = APIRouter()
     path="/venda-detalhada"
 )
 def consultaVendaDetalhadaController(
-    request: TypeVendaDetalhadaRequest,
+    request: TypeDashboardRequest,
     db: Session = Depends(get_db)  # ✅ injeta a sessão
 ):
     try:
