@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from app.api.BI.repositories.lpd_repo import LpdRepository
 from app.api.BI.repositories.subempresas_repo import SubEmpresasPublicRepository
 from app.api.BI.schemas.departamento_schema import VendasPorDepartamento
+from app.utils.logger import logger
 
 
 class DepartamentosPublicService:
@@ -14,6 +15,8 @@ class DepartamentosPublicService:
         # 1. Subempresas que vendem
         subempresas = self.repo_subempresas.get_all_isvendas()
         codigos_subempresas = [s.sube_codigo for s in subempresas if s.sube_codigo is not None]
+
+        logger.info(f'[DepartamentosPublicService] = codigos subempresas: {codigos_subempresas}')
 
         if not codigos_subempresas:
             return []
