@@ -32,7 +32,7 @@ class DepartamentosPublicService:
         return [
             VendasPorDepartamento(
                 departamento=mapa_cod_nome.get(dep),
-                total_vendas=Decimal(total)
+                total_vendas=total
             )
             for dep, total in vendas_por_departamento
             if dep in mapa_cod_nome
