@@ -9,11 +9,6 @@ class TypeVendaDetalhadaEmpresa(BaseModel):
     empresa: str
     dates: List[TypeVendaByDay]
 
-class TypeVendaDetalhadaRequest(BaseModel):
-    empresas: List[str]
-    dataInicio: str
-    dataFinal: str
-
 class TypeVendaDetalhadaResponse(BaseModel):
     dataInicio: str
     dataFinal: str

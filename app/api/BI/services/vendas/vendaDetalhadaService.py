@@ -1,14 +1,14 @@
 from sqlalchemy.orm import Session
 from app.api.BI.repositories.vendas.vendaDetalhadaRepository import consultaVendaDetalhadaRepository
+from app.api.BI.schemas.dashboard_types import TypeDashboardRequest
 from app.api.BI.schemas.vendas.vendaDetalhadaTypes import (
-    TypeVendaDetalhadaRequest,
     TypeVendaDetalhadaResponse,
     TypeVendaByDay,
     TypeVendaDetalhadaEmpresa,
 )
 
 def consultaVendaDetalhadaGeralService(
-    request: TypeVendaDetalhadaRequest,
+    request: TypeDashboardRequest,
     db: Session  # ✅ nome padrão, já que vem do get_db
 ) -> TypeVendaDetalhadaResponse:
     venda_empresas: list[TypeVendaDetalhadaEmpresa] = []

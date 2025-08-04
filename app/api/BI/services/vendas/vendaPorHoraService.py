@@ -1,8 +1,8 @@
 from collections import defaultdict
 from sqlalchemy.orm import Session
 from app.api.BI.repositories.vendas.vendaPorHoraRepository import consultaVendaPorHoraRepository
+from app.api.BI.schemas.dashboard_types import TypeDashboardRequest
 from app.api.BI.schemas.vendas.vendasPorHoraTypes import (
-    TypeVendaPorHoraRequest,
     TypeVendaPorHora,
     TypeVendaPorHoraResponse,
     TypeVendaPorHoraComTotalGeralResponse
@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 def consultaVendaPorHoraService(
     db: Session,
-    request: TypeVendaPorHoraRequest
+    request: TypeDashboardRequest
 ) -> TypeVendaPorHoraComTotalGeralResponse:
     dados = consultaVendaPorHoraRepository(
         db=db,

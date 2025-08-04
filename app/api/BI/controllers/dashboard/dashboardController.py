@@ -1,17 +1,14 @@
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
 
-from app.api.BI.schemas.vendas.resumoVendas import TypeVendasPeriodoGeral
 from app.api.BI.services.meio_pagamento_service import  MeioPagamentoPDVService
 from app.database.db_connection import get_db
 
 from app.api.BI.schemas.metas_types import TypeConsultaMetaRequest
 from app.api.BI.schemas.compras_types import ConsultaMovimentoCompraRequest
 from app.api.BI.schemas.dashboard_types import TypeRelacao, TypeDashboardResponse, TypeDashboardRequest
-from app.api.BI.schemas.vendas.vendasPorHoraTypes import TypeVendaPorHoraRequest
 
-from app.api.BI.controllers.vendas.vendaDetalhadaController import consultaVendaDetalhadaController
-
+from app.api.BI.services.vendas.vendaDetalhadaService import consultaVendaDetalhadaGeralService
 from app.api.public.repositories.empresas.consultaEmpresas import EmpresasRepository
 
 from app.api.BI.services.compras.compraDetalhadaByDayService import compraDetalhadaService
@@ -37,13 +34,13 @@ def dashboardController(
     empresas_str = normalizar_empresas(request.empresas, repo.buscar_codigos_ativos)
 
     # Chama o service corretamente
-    vendaPorHora = consultaVendaPorHoraService(db, TypeVendaPorHoraRequest(
+    vendaPorHora = consultaVendaPorHoraService(db, TypeDashboardRequest(
         dataInicio=request.dataInicio,
         dataFinal=request.dataFinal,
         empresas=empresas_str,
     ))
     # 1) Consulta relatorios
-    vendas_req = TypeVendasPeriodoGeral.model_validate(
+    vendas_req = TypeDashboardRequest.model_validate(
         request.model_dump() | {"empresas": empresas_str}
     )
 
@@ -87,7 +84,7 @@ def dashboardController(
             relacaoPorcentagem=0.0
         )
 
-    venda_detalhada = consultaVendaDetalhadaController(request, db)
+    venda_detalhada = consultaVendaDetalhadaGeralService(request, db)
     compra_detalhada = compraDetalhadaService(db, compras_req)
 
     meios_pagamento = MeioPagamentoPDVService(db).consulta_meios_pagamento_dashboard(

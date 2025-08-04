@@ -2,13 +2,6 @@
 from pydantic import BaseModel
 from typing import List, Optional
 
-class TypeVendaPorHoraRequest(BaseModel):
-    dataInicio: str
-    dataFinal: str
-    empresas: List[str]
-    situacao: Optional[str] = None
-    status_venda: Optional[str] = None
-
 class TypeVendaPorHora(BaseModel):
     hora: int
     total_cupons: int
