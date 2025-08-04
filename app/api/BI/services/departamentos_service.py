@@ -8,6 +8,7 @@ from app.api.BI.schemas.departamento_schema import (
     VendasPorDepartamento,
     VendasPorEmpresaComDepartamentos,
 )
+from app.api.public.models.categoriaprod_public_model import CategoriaProdutoPublicModel
 from app.utils.logger import logger
 
 
