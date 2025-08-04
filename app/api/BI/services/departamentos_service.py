@@ -2,7 +2,6 @@ from sqlalchemy.orm import Session
 from app.api.BI.repositories.lpd_repo import LpdRepository
 from app.api.BI.repositories.subempresas_repo import SubEmpresasPublicRepository
 from app.api.BI.schemas.departamento_schema import VendasPorDepartamento
-from app.utils.logger import logger
 
 
 class DepartamentosPublicService:
@@ -22,7 +21,6 @@ class DepartamentosPublicService:
         # 2. Resultados agregados por cod_subempresa
         vendas_por_departamento = self.repo_lpd.get_vendas_por_departamento(ano_mes, codigos_subempresas)
 
-        logger.info(f"[DepartamentosPublicService] = {vendas_por_departamento}")
         # 3. Mapeia código → nome para facilitar match
         mapa_cod_nome = {
             s.sube_codigo: s.sube_descricao for s in subempresas

@@ -21,7 +21,7 @@ class LpdRepository:
                 CategoriaProdutoPublicModel.cate_codigo == Lpd.lcpd_codcategoria
             )
             .where(
-                Lpd.lcpd_subempresa.in_(subempresas),
+                CategoriaProdutoPublicModel.cate_codsubempresa.in_(subempresas),  # ✅ Aqui está o filtro correto
                 Lpd.lcpd_situacao == "N",
                 Lpd.lcpd_tipoprocesso == "VN"
             )
