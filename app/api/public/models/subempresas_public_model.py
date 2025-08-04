@@ -7,6 +7,6 @@ class SubEmpresaPublicModel(Base):
 
     sube_classificacao = Column(String(30), nullable=True)
     sube_descricao     = Column(String(50), nullable=True)
-    sube_codigo        = Column(Integer, index=True)  # índice na DDL
+    sube_codigo        = Column(Integer, index=True, primary_key=True)  # índice na DDL
     sube_vendas        = Column(String(1), nullable=True)
     sube_lucroestimado = Column(Numeric(18, 5), nullable=True)
