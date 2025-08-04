@@ -14,7 +14,11 @@ class TotaisGerais(BaseModel):
     total_vendas: float
     ticket_medio: float
 
+class ResumoVendasComparativo(BaseModel):
+    atual: List[TotaisPorEmpresa]
+    anterior: List[TotaisPorEmpresa]
+
 class TypeResumoVendasResponse(BaseModel):
     totais_por_empresa: List[TotaisPorEmpresa]
     total_geral: TotaisGerais
-    resumo_venda_compara_periodo: Optional[List[TotaisPorEmpresa]] = None
+    resumo_venda_compara_periodo: ResumoVendasComparativo
