@@ -1,6 +1,9 @@
+from datetime import datetime
+
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
 
+from app.api.BI.services.departamentos_service import DepartamentosPublicService
 from app.api.BI.services.meio_pagamento_service import  MeioPagamentoPDVService
 from app.database.db_connection import get_db
 
@@ -93,6 +96,9 @@ def dashboardController(
         data_fim=request.dataFinal,
     )
 
+    ano_mes = datetime.strptime(request.dataInicio, "%Y-%m-%d").strftime("%Y%m")
+    departamentos = DepartamentosPublicService(db).get_mais_vendidos(ano_mes
+
     # 5) Retorno
     return TypeDashboardResponse(
         totais_por_empresa=resumo_vendas.totais_por_empresa,
@@ -104,5 +110,6 @@ def dashboardController(
         vendaDetalhada=venda_detalhada,
         compraDetalhada=compra_detalhada,
         vendaPorHora=vendaPorHora,
-        meios_pagamento=meios_pagamento
+        meios_pagamento=meios_pagamento,
+        departamentos=departamentos
     )
