@@ -12,25 +12,23 @@ class LpdRepository:
     def get_vendas_por_departamento(self, ano_mes: str, subempresas: list[int]):
         """
         Retorna total de vendas por departamento (sem separar por empresa).
-        Agrupa por cate_codsubempresa, mas só inclui categorias cujas
-        cate_codsubempresa estejam em `subempresas`.
+        Agrupa por cate_codsubempresa.
         """
         Lpd = get_lpd_model(ano_mes)
 
         stmt = (
             select(
                 CategoriaProdutoPublicModel.cate_codsubempresa.label("departamento"),
-                func.sum(Lpd.lcpd_valor).label("total_vendas")
+                func.sum(Lpd.lcpd_valor).label("total_vendas"),
             )
             .join(
                 CategoriaProdutoPublicModel,
                 CategoriaProdutoPublicModel.cate_codigo == Lpd.lcpd_codcategoria
             )
             .where(
-                # só categorias válidas para venda
                 CategoriaProdutoPublicModel.cate_codsubempresa.in_(subempresas),
                 Lpd.lcpd_situacao == "N",
-                Lpd.lcpd_tipoprocesso == "VN"
+                Lpd.lcpd_tipoprocesso == "VN",
             )
             .group_by(CategoriaProdutoPublicModel.cate_codsubempresa)
             .order_by(func.sum(Lpd.lcpd_valor).desc())
@@ -40,27 +38,27 @@ class LpdRepository:
 
     def get_vendas_por_empresa_e_departamento(self, ano_mes: str, subempresas: list[int]):
         """
-        Retorna, para cada empresa e para cada departamento (cate_codsubempresa),
-        o total de vendas. Só inclui categorias cujos
-        cate_codsubempresa estejam em `subempresas`.
+        Retorna, para cada empresa e cada departamento, o total de vendas.
+        - empresa: lcpd_codempresa  (ex: '001', '002')
+        - departamento: cate_codsubempresa  (ex: 121000, 122001)
         """
         Lpd = get_lpd_model(ano_mes)
 
         stmt = (
             select(
-                Lpd.lcpd_codempresa.label("empresa"),
-                CategoriaProdutoPublicModel.cate_codsubempresa.label("departamento"),
-                func.sum(Lpd.lcpd_valor).label("total_vendas")
+                Lpd.lcpd_codempresa.label("empresa"),                        # código da loja
+                CategoriaProdutoPublicModel.cate_codsubempresa.label("departamento"),  # código do departamento
+                func.sum(Lpd.lcpd_valor).label("total_vendas"),
             )
             .join(
                 CategoriaProdutoPublicModel,
                 CategoriaProdutoPublicModel.cate_codigo == Lpd.lcpd_codcategoria
             )
             .where(
-                # filtra apenas pelas categorias das subempresas cadastradas
+                # só categorias cujos codsubempresa estejam no seu cadastro
                 CategoriaProdutoPublicModel.cate_codsubempresa.in_(subempresas),
                 Lpd.lcpd_situacao == "N",
-                Lpd.lcpd_tipoprocesso == "VN"
+                Lpd.lcpd_tipoprocesso == "VN",
             )
             .group_by(
                 Lpd.lcpd_codempresa,
