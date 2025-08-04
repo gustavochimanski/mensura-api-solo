@@ -97,7 +97,7 @@ def dashboardController(
     )
 
     ano_mes = datetime.strptime(request.dataInicio, "%Y-%m-%d").strftime("%Y%m")
-    departamentos = DepartamentosPublicService(db).get_mais_vendidos(ano_mes
+    departamentos = DepartamentosPublicService(db).get_mais_vendidos(ano_mes)
 
     # 5) Retorno
     return TypeDashboardResponse(
