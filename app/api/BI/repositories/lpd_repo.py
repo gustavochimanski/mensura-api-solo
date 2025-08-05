@@ -25,7 +25,7 @@ class LpdRepository:
                 CategoriaProdutoPublicModel.cate_codsubempresa.in_(subempresas),
                 Lpd.lcpd_situacao == "N",
                 Lpd.lcpd_tipoprocesso == "VN",
-                Lpd.__table__.c.lcpd_datamvto.between(dt_inicio, dt_fim)
+                Lpd.lcpd_dtmvto.between(dt_inicio, dt_fim),
             )
             .group_by(CategoriaProdutoPublicModel.cate_codsubempresa)
             .order_by(func.sum(Lpd.lcpd_valor).desc())
@@ -50,7 +50,7 @@ class LpdRepository:
                 CategoriaProdutoPublicModel.cate_codsubempresa.in_(subempresas),
                 Lpd.lcpd_situacao == "N",
                 Lpd.lcpd_tipoprocesso == "VN",
-                Lpd.__table__.c.lcpd_datamvto.between(dt_inicio, dt_fim)
+                Lpd.lcpd_dtmvto.between(dt_inicio, dt_fim),
             )
             .group_by(
                 Lpd.lcpd_codempresa,
