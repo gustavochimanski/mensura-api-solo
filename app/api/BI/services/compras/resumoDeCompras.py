@@ -31,10 +31,8 @@ def calcular_movimento_multi(
         di = datetime.strptime(req.dataInicio, "%Y-%m-%d").date()
         df = datetime.strptime(req.dataFinal, "%Y-%m-%d").date()
     except ValueError:
-        logger.error("[Compras•Service] Formato de data inválido")
         raise HTTPException(400, "datas devem ser YYYY-MM-DD")
     if df < di:
-        logger.error("[Compras•Service] dataFinal < dataInicio")
         raise HTTPException(400, "dataFinal deve ser >= dataInicio")
 
     # 2) Gera meses e busca resultados
@@ -43,7 +41,6 @@ def calcular_movimento_multi(
 
     # 3) Se não vier resultado, fallback para zero
     if not resultados:
-        logger.warning("[Compras•Service] fetch retornou vazio — fallback para zero")
         por_empresa = [
             ConsultaMovimentoTotalEmpresa(empresa=emp, valorTotal=0.0)
             for emp in req.empresas
@@ -55,7 +52,6 @@ def calcular_movimento_multi(
         ]
 
     total_geral = sum(item.valorTotal for item in por_empresa)
-    logger.info(f"[Compras•Service] Total geral de compras: {total_geral}")
 
     return ConsultaMovimentoCompraResponse(
         por_empresa=por_empresa,

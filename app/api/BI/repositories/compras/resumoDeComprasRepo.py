@@ -3,7 +3,8 @@ from typing import List, Tuple
 from sqlalchemy import Table, MetaData, select, func, union_all, inspect
 from sqlalchemy.orm import Session
 
-logger = logging.getLogger(__name__)
+from app.utils.logger import logger
+
 TIPOS_VALIDOS = ["PC", "TE", "TS", "BR"]
 
 def fetch_valores_por_empresa_multi(
@@ -25,7 +26,6 @@ def fetch_valores_por_empresa_multi(
     engine = db.get_bind()
     insp = inspect(engine)
     tabelas_disponiveis = insp.get_table_names(schema="public")
-    logger.info(f"[Compras•Repo] Tabelas em public: {tabelas_disponiveis}")
 
     metadata = MetaData()  # sem bind aqui!
     consultas = []
@@ -70,5 +70,4 @@ def fetch_valores_por_empresa_multi(
     )
 
     resultados = db.execute(final).all()
-    logger.info(f"[Compras•Repo] Resultados brutos: {resultados}")
     return [(row.empresa, float(row.soma_total or 0)) for row in resultados]
