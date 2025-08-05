@@ -11,25 +11,24 @@ from app.api.public.models.empresa.empresasModel import Empresa
 from app.utils.logger import logger
 
 
+from datetime import datetime
+
 class DepartamentosPublicService:
     def __init__(self, db: Session):
         self.db = db
         self.repo_subempresas = SubEmpresasPublicRepository(db)
         self.repo_lpd = LpdRepository(db)
 
-    def get_mais_vendidos_geral(self, ano_mes: str) -> list[VendasPorDepartamento]:
-        """
-        Retorna total de vendas por departamento (geral, sem separar por empresa).
-        Só categorias cujos codsubempresa estejam no cadastro de subempresas.
-        Nome do departamento vem de subempresas.
-        """
+    def get_mais_vendidos_geral(self, data_inicio: str, data_fim: str) -> list[VendasPorDepartamento]:
         subemps = self.repo_subempresas.get_all_isvendas()
         cods = [s.sube_codigo for s in subemps if s.sube_codigo is not None]
         if not cods:
             return []
 
-        raw = self.repo_lpd.get_vendas_por_departamento(ano_mes, cods)
-        # Mapa de departamento: sube_codigo → sube_descricao
+        dt_inicio = datetime.strptime(data_inicio, "%Y-%m-%d").date()
+        dt_fim = datetime.strptime(data_fim, "%Y-%m-%d").date()
+
+        raw = self.repo_lpd.get_vendas_por_departamento_periodo(cods, dt_inicio, dt_fim)
         mapa_dep = {s.sube_codigo: s.sube_descricao for s in subemps}
 
         return [
@@ -41,23 +40,17 @@ class DepartamentosPublicService:
             if dep in mapa_dep
         ]
 
-    def get_mais_vendidos(self, ano_mes: str) -> list[VendasPorEmpresaComDepartamentos]:
-        """
-        Retorna vendas por empresa e departamento com nomes corretos:
-        - filtra categorias pelas subempresas
-        - departamento nome vem de subempresas
-        - empresa nome vem de EmpresaPublicModel
-        """
-        # 1) subempresas para filtro de categorias
+    def get_mais_vendidos(self, data_inicio: str, data_fim: str) -> list[VendasPorEmpresaComDepartamentos]:
         subemps = self.repo_subempresas.get_all_isvendas()
         cods = [s.sube_codigo for s in subemps if s.sube_codigo is not None]
         if not cods:
             return []
 
-        # 2) raw de vendas por loja+departamento
-        vendas = self.repo_lpd.get_vendas_por_empresa_e_departamento(ano_mes, cods)
+        dt_inicio = datetime.strptime(data_inicio, "%Y-%m-%d").date()
+        dt_fim = datetime.strptime(data_fim, "%Y-%m-%d").date()
 
-        # 3) mapa de empresas (001,002..) → nome
+        vendas = self.repo_lpd.get_vendas_por_empresa_e_departamento_periodo(cods, dt_inicio, dt_fim)
+
         rows_emp = (
             self.db
             .query(Empresa.empr_codigo, Empresa.empr_nomereduzido)
@@ -65,11 +58,8 @@ class DepartamentosPublicService:
             .all()
         )
         mapa_emp = {str(c).zfill(3): n for c, n in rows_emp}
-
-        # 4) mapa de departamentos: sube_codigo → sube_descricao
         mapa_dep = {s.sube_codigo: s.sube_descricao for s in subemps}
 
-        # 5) agrupa resultados
         agrupado: dict[str, list[VendasPorDepartamento]] = defaultdict(list)
         for cod_loja, cod_dep, total in vendas:
             key_loja = str(cod_loja).zfill(3)
@@ -87,7 +77,6 @@ class DepartamentosPublicService:
                 VendasPorDepartamento(departamento=nome_dep, total_vendas=float(total))
             )
 
-        # 6) monta resposta final
         return [
             VendasPorEmpresaComDepartamentos(empresa=emp, departamentos=deps)
             for emp, deps in agrupado.items()

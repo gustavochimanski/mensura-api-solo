@@ -9,12 +9,8 @@ class LpdRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def get_vendas_por_departamento(self, ano_mes: str, subempresas: list[int]):
-        """
-        Retorna total de vendas por departamento (sem separar por empresa).
-        Agrupa por cate_codsubempresa.
-        """
-        Lpd = get_lpd_model(ano_mes)
+    def get_vendas_por_departamento_periodo(self, subempresas: list[int], dt_inicio, dt_fim):
+        Lpd = get_lpd_model(dt_inicio.strftime("%Y%m"))
 
         stmt = (
             select(
@@ -29,6 +25,7 @@ class LpdRepository:
                 CategoriaProdutoPublicModel.cate_codsubempresa.in_(subempresas),
                 Lpd.lcpd_situacao == "N",
                 Lpd.lcpd_tipoprocesso == "VN",
+                Lpd.lcpd_datahora.between(dt_inicio, dt_fim),
             )
             .group_by(CategoriaProdutoPublicModel.cate_codsubempresa)
             .order_by(func.sum(Lpd.lcpd_valor).desc())
@@ -36,13 +33,8 @@ class LpdRepository:
 
         return self.db.execute(stmt).all()
 
-    def get_vendas_por_empresa_e_departamento(self, ano_mes: str, subempresas: list[int]):
-        """
-        Retorna, para cada empresa e cada departamento, o total de vendas.
-        - empresa: lcpd_codempresa  (ex: '001', '002')
-        - departamento: cate_codsubempresa  (ex: 121000, 122001)
-        """
-        Lpd = get_lpd_model(ano_mes)
+    def get_vendas_por_empresa_e_departamento_periodo(self, subempresas: list[int], dt_inicio, dt_fim):
+        Lpd = get_lpd_model(dt_inicio.strftime("%Y%m"))
 
         stmt = (
             select(
@@ -58,6 +50,7 @@ class LpdRepository:
                 CategoriaProdutoPublicModel.cate_codsubempresa.in_(subempresas),
                 Lpd.lcpd_situacao == "N",
                 Lpd.lcpd_tipoprocesso == "VN",
+                Lpd.lcpd_datahora.between(dt_inicio, dt_fim),
             )
             .group_by(
                 Lpd.lcpd_codempresa,
