@@ -1,4 +1,3 @@
-# app/api/BI/repositories/compras/resumoDeComprasRepo.py
 import logging
 from typing import List, Tuple
 from sqlalchemy import Table, MetaData, select, func, union_all, inspect
@@ -22,11 +21,13 @@ def fetch_valores_por_empresa_multi(
     logger.info(f"[Compras•Repo] Empresas no filtro: {empresas}")
     logger.info(f"[Compras•Repo] Meses calculados: {lista_meses}")
 
-    insp = inspect(db.get_bind())
+    # Inspeciona tabelas disponíveis em public
+    engine = db.get_bind()
+    insp = inspect(engine)
     tabelas_disponiveis = insp.get_table_names(schema="public")
     logger.info(f"[Compras•Repo] Tabelas em public: {tabelas_disponiveis}")
 
-    metadata = MetaData(bind=db.get_bind())
+    metadata = MetaData()  # sem bind aqui!
     consultas = []
 
     for mes in lista_meses:
@@ -35,7 +36,12 @@ def fetch_valores_por_empresa_multi(
             logger.warning(f"[Compras•Repo] Tabela não encontrada, pulando: {nome_tabela}")
             continue
 
-        tabela = Table(nome_tabela, metadata, autoload_with=metadata.bind, schema="public")
+        tabela = Table(
+            nome_tabela,
+            metadata,
+            autoload_with=engine,
+            schema="public"
+        )
         q = (
             select(
                 tabela.c.lcpd_codempresa.label("empresa"),
@@ -50,7 +56,7 @@ def fetch_valores_por_empresa_multi(
         consultas.append(q)
 
     if not consultas:
-        logger.warning("[Compras•Repo] Nenhuma consulta SQL gerada — nenhum mês/tabela válida.")
+        logger.warning("[Compras•Repo] Nenhuma consulta criada — nenhum mês/tabela válida.")
         return []
 
     union = union_all(*consultas).alias("u")

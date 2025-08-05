@@ -1,4 +1,3 @@
-# app/services/compras/resumoDeComprasRepo.py
 import logging
 from datetime import datetime
 from typing import List
@@ -18,14 +17,16 @@ def _meses_entre(data_inicio, data_fim) -> List[str]:
     meses, cur, ultimo = [], data_inicio.replace(day=1), data_fim.replace(day=1)
     while cur <= ultimo:
         meses.append(f"{cur.year}{cur.month:02d}")
-        cur = cur.replace(year=cur.year + (cur.month // 12), month=(cur.month % 12) + 1)
+        next_month = (cur.month % 12) + 1
+        next_year = cur.year + (1 if next_month == 1 else 0)
+        cur = cur.replace(year=next_year, month=next_month)
     return meses
 
 def calcular_movimento_multi(
     db: Session,
     req: ConsultaMovimentoCompraRequest
 ) -> ConsultaMovimentoCompraResponse:
-    # Validação das datas
+    # 1) Valida datas
     try:
         di = datetime.strptime(req.dataInicio, "%Y-%m-%d").date()
         df = datetime.strptime(req.dataFinal, "%Y-%m-%d").date()
@@ -36,12 +37,13 @@ def calcular_movimento_multi(
         logger.error("[Compras•Service] dataFinal < dataInicio")
         raise HTTPException(400, "dataFinal deve ser >= dataInicio")
 
+    # 2) Gera meses e busca resultados
     meses = _meses_entre(di, df)
     resultados = fetch_valores_por_empresa_multi(db, meses, req.empresas, di, df)
 
-    # Fallback: se não veio resultado, gera zeros para todas as empresas
+    # 3) Se não vier resultado, fallback para zero
     if not resultados:
-        logger.warning("[Compras•Service] fetch retornou vazio — aplicando fallback zero")
+        logger.warning("[Compras•Service] fetch retornou vazio — fallback para zero")
         por_empresa = [
             ConsultaMovimentoTotalEmpresa(empresa=emp, valorTotal=0.0)
             for emp in req.empresas
