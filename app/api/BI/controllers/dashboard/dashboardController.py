@@ -106,7 +106,7 @@ def dashboardController(
             TypeRelacaoEmpresa(
                 empresa=tot.lcpr_codempresa,
                 total_vendas=venda,
-                total_compras=1500,
+                total_compras=15000,
                 relacaoValue=lucro,
                 relacaoPorcentagem=perc
             )
