@@ -1,53 +1,45 @@
+# app/api/BI/repositories/compras/resumoDeComprasRepo.py
 import logging
-from sqlalchemy import Table, MetaData, select, func, union_all
-from sqlalchemy.orm import Session
 from typing import List, Tuple
+from sqlalchemy import Table, MetaData, select, func, union_all, inspect
+from sqlalchemy.orm import Session
 
-# Configuração básica do logger
 logger = logging.getLogger(__name__)
-
-# Você pode configurar handler e formato se quiser logar em arquivo, etc
-
 TIPOS_VALIDOS = ["PC", "TE", "TS", "BR"]
 
-
 def fetch_valores_por_empresa_multi(
-        db: Session,
-        lista_meses: List[str],
-        empresas: List[str],
-        data_inicio,
-        data_fim
+    db: Session,
+    lista_meses: List[str],
+    empresas: List[str],
+    data_inicio,
+    data_fim
 ) -> List[Tuple[str, float]]:
     """
     Para cada mês em lista_meses, carrega a tabela 'lpdYYYYMM',
     filtra por tipo, data e empresa, soma valor por empresa.
     Faz UNION ALL de todas as subconsultas e agrupa por empresa.
     """
-    logger.info("Iniciando fetch_valores_por_empresa_multi")
-    logger.info(f"Meses: {lista_meses}, Empresas: {empresas}, Período: {data_inicio} a {data_fim}")
+    logger.info(f"[Compras•Repo] Empresas no filtro: {empresas}")
+    logger.info(f"[Compras•Repo] Meses calculados: {lista_meses}")
 
-    metadata = MetaData()
-    metadata.bind = db.get_bind()
+    insp = inspect(db.get_bind())
+    tabelas_disponiveis = insp.get_table_names(schema="public")
+    logger.info(f"[Compras•Repo] Tabelas em public: {tabelas_disponiveis}")
 
+    metadata = MetaData(bind=db.get_bind())
     consultas = []
+
     for mes in lista_meses:
         nome_tabela = f"lpd{mes}"
-        logger.info(f"Carregando tabela: {nome_tabela}")
-        try:
-            tabela = Table(
-                nome_tabela,
-                metadata,
-                autoload_with=metadata.bind,
-                schema="public"
-            )
-        except Exception as e:
-            logger.error(f"Erro ao carregar a tabela {nome_tabela}: {e}")
+        if nome_tabela not in tabelas_disponiveis:
+            logger.warning(f"[Compras•Repo] Tabela não encontrada, pulando: {nome_tabela}")
             continue
 
+        tabela = Table(nome_tabela, metadata, autoload_with=metadata.bind, schema="public")
         q = (
             select(
                 tabela.c.lcpd_codempresa.label("empresa"),
-                func.sum(tabela.c.lcpd_valor).label("soma")
+                func.sum(tabela.c.lcpd_valor).label("soma"),
             )
             .where(tabela.c.lcpd_tipoprocesso.in_(TIPOS_VALIDOS))
             .where(tabela.c.lcpd_dtmvto >= data_inicio)
@@ -58,11 +50,10 @@ def fetch_valores_por_empresa_multi(
         consultas.append(q)
 
     if not consultas:
-        logger.warning("Nenhuma consulta gerada. Retornando lista vazia.")
+        logger.warning("[Compras•Repo] Nenhuma consulta SQL gerada — nenhum mês/tabela válida.")
         return []
 
     union = union_all(*consultas).alias("u")
-
     final = (
         select(
             union.c.empresa,
@@ -72,10 +63,6 @@ def fetch_valores_por_empresa_multi(
         .order_by(union.c.empresa)
     )
 
-    try:
-        resultados = db.execute(final).all()
-        logger.info(f"Consulta final retornou {len(resultados)} resultados.")
-        return [(row.empresa, float(row.soma_total or 0)) for row in resultados]
-    except Exception as e:
-        logger.error(f"Erro ao executar consulta final: {e}")
-        return []
+    resultados = db.execute(final).all()
+    logger.info(f"[Compras•Repo] Resultados brutos: {resultados}")
+    return [(row.empresa, float(row.soma_total or 0)) for row in resultados]
