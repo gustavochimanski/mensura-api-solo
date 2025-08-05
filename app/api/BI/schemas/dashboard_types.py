@@ -22,11 +22,15 @@ from app.api.BI.schemas.vendas.vendaDetalhadaTypes import (
 class TypeRelacao(BaseModel):
     relacaoValue: float
     relacaoPorcentagem: float
+    total_vendas: float
+    total_compras: float
 
 class TypeRelacaoEmpresa(BaseModel):
     empresa: str
     relacaoValue: float
     relacaoPorcentagem: float
+    total_vendas: float
+    total_compras: float
 
 class TypeDashboardRequest(BaseModel):
     empresas: List[str]

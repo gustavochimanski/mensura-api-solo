@@ -70,7 +70,7 @@ def dashboardController(
     )
     compras = calcular_movimento_multi(db, compras_req)
 
-    # Margem bruta geral
+    # Margem bruta geral (com totais)
     total_vendas = resumo_vendas.total_geral.total_vendas
     total_compras = compras.total_geral
     if total_vendas > 0:
@@ -81,11 +81,13 @@ def dashboardController(
         margem_bruta_percentual = 0.0
 
     relacao = TypeRelacao(
+        total_vendas=total_vendas,
+        total_compras=total_compras,
         relacaoValue=lucro_bruto,
         relacaoPorcentagem=margem_bruta_percentual
     )
 
-    # *** NOVO: Margem bruta por empresa ***
+    # Margem bruta por empresa
     relacao_por_empresa: list[TypeRelacaoEmpresa] = []
     for tot in resumo_vendas.totais_por_empresa:
         venda = tot.total_vendas
@@ -103,6 +105,8 @@ def dashboardController(
         relacao_por_empresa.append(
             TypeRelacaoEmpresa(
                 empresa=tot.lcpr_codempresa,
+                total_vendas=venda,
+                total_compras=compra,
                 relacaoValue=lucro,
                 relacaoPorcentagem=perc
             )
@@ -126,7 +130,7 @@ def dashboardController(
         data_fim=request.dataFinal,
     )
 
-    # Retorno com relacao_por_empresa incluído
+    # Retorno com relacao e relacao_por_empresa ajustados
     return TypeDashboardResponse(
         totais_por_empresa=resumo_vendas.totais_por_empresa,
         total_geral=resumo_vendas.total_geral,
