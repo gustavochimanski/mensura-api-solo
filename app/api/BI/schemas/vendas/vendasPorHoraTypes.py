@@ -1,6 +1,5 @@
-# app/schemas/vendaDetalhadaTypes.py
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List
 
 class TypeVendaPorHora(BaseModel):
     hora: int
@@ -11,8 +10,3 @@ class TypeVendaPorHora(BaseModel):
 class TypeVendaPorHoraResponse(BaseModel):
     empresa: str
     vendasPorHora: List[TypeVendaPorHora]
-
-# Novo schema para o retorno completo, com totalGeral
-class TypeVendaPorHoraComTotalGeralResponse(BaseModel):
-    totalGeral: List[TypeVendaPorHora]
-    porEmpresa: List[TypeVendaPorHoraResponse]

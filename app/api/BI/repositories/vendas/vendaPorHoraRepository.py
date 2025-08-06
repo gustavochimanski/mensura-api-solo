@@ -15,13 +15,7 @@ def consultaVendaPorHoraRepository(
     Consulta vendas por hora agrupadas por empresa e hora,
     retornando total de cupons, total vendido e ticket médio.
     """
-    hora_convertida = func.date_part(
-        'hour',
-        func.to_timestamp(
-            LctoProdutosPDV.lcpr_datahora,
-            'DD/MM/YYYY HH24:MI:SS'
-        )
-    )
+    hora_convertida = func.date_part('hour', LctoProdutosPDV.lcpr_datahora)
 
     query = db.query(
         LctoProdutosPDV.lcpr_codempresa.label("empresa"),
