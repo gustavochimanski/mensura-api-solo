@@ -48,7 +48,7 @@ class TypeDashboardResponse(BaseModel):
     compras: ConsultaMovimentoCompraResponse
     vendaDetalhada: TypeVendaDetalhadaResponse
     compraDetalhada: CompraDetalhadaResponse
-    vendaPorHora: TypeVendaPorHoraResponse
+    vendaPorHora: List[TypeVendaPorHoraResponse]
     meios_pagamento: MeioPagamentoResponseFinal
     departamento_geral: List[VendasPorDepartamento]
     departamento_empresa: List[VendasPorEmpresaComDepartamentos]
