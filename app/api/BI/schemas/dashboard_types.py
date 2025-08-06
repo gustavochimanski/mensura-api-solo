@@ -11,9 +11,7 @@ from app.api.BI.schemas.departamento_schema import (
 )
 from app.api.BI.schemas.meio_pagamento_types import MeioPagamentoResponseFinal
 from app.api.BI.schemas.vendas.resumoVendas import TotaisGerais, TotaisPorEmpresa
-from app.api.BI.schemas.vendas.vendasPorHoraTypes import (
-    TypeVendaPorHoraComTotalGeralResponse,
-)
+from app.api.BI.schemas.vendas.vendasPorHoraTypes import TypeVendaPorHoraResponse
 from app.api.BI.schemas.metas_types import TypeDashboardMetaReturn
 from app.api.BI.schemas.vendas.vendaDetalhadaTypes import (
     TypeVendaDetalhadaResponse,
@@ -50,7 +48,7 @@ class TypeDashboardResponse(BaseModel):
     compras: ConsultaMovimentoCompraResponse
     vendaDetalhada: TypeVendaDetalhadaResponse
     compraDetalhada: CompraDetalhadaResponse
-    vendaPorHora: TypeVendaPorHoraComTotalGeralResponse
+    vendaPorHora: TypeVendaPorHoraResponse
     meios_pagamento: MeioPagamentoResponseFinal
     departamento_geral: List[VendasPorDepartamento]
     departamento_empresa: List[VendasPorEmpresaComDepartamentos]
