@@ -58,7 +58,7 @@ class ProdutosDeliveryService:
 
         produto.produtos_empresa = [
             ProdutoEmpDeliveryModel(
-                empresa=int(emp),
+                empresa_id=int(emp),
                 cod_barras=produto.cod_barras,
                 preco_venda=produto_data.preco_venda,
                 custo=produto_data.custo or 0,
