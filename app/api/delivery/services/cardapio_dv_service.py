@@ -49,9 +49,9 @@ class CardapioService:
         return resultado
 
     def buscar_vitrines_com_produtos(
-        self,
-        empresa_id: int,
-        cod_categoria: int
+            self,
+            empresa_id: int,
+            cod_categoria: int
     ) -> List[VitrineComProdutosResponse]:
         # valida empresa
         empresa = self.repo_empresa.get_empresa_by_id(empresa_id)
@@ -59,42 +59,40 @@ class CardapioService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                                 detail="Empresa não encontrada")
 
-        # vitrine filtrada por categoria
+        # produtos agrupados por vitrine
+        produtos_por_vitrine = self.repo_cardapio.listar_vitrines_com_produtos_empresa_categoria(
+            empresa_id,
+            cod_categoria
+        )
+
+        # busca vitrines da categoria (mesmo sem produtos)
         vitrines = self.repo_cardapio.listar_vitrines(empresa_id)
         vitrines_cat = [v for v in vitrines if v.cod_categoria == cod_categoria]
 
-        # produtos agrupados por vitrine
-        produtos_por_vitrine = (
-            self.repo_cardapio
-                .listar_vitrines_com_produtos_empresa_categoria(
-                    empresa_id,
-                    cod_categoria
-                )
-        )
-
         resultado: List[VitrineComProdutosResponse] = []
         for vitrine in vitrines_cat:
-            produtos_dto = []
-            for prod in produtos_por_vitrine.get(vitrine.id, []):
-                produtos_dto.append(
-                    ProdutoEmpMiniDTO(
-                        empresa=prod.empresa,
-                        cod_barras=prod.cod_barras,
-                        preco_venda=float(prod.preco_venda),
-                        vitrine_id=prod.vitrine_id,
-                        produto=ProdutoMiniDTO(
-                            id=prod.produto.id,
-                            descricao=prod.produto.descricao,
-                            imagem=prod.produto.imagem,
-                            cod_categoria=prod.produto.cod_categoria,
-                        ),
-                    )
+            produtos_dto = [
+                ProdutoEmpMiniDTO(
+                    empresa_id=prod.empresa_id,
+                    cod_barras=prod.cod_barras,
+                    preco_venda=float(prod.preco_venda),
+                    vitrine_id=prod.vitrine_id,
+                    produto=ProdutoMiniDTO(
+                        cod_barras=prod.produto.cod_barras,
+                        descricao=prod.produto.descricao,
+                        imagem=prod.produto.imagem,
+                        cod_categoria=prod.produto.cod_categoria,
+                    ),
                 )
+                for prod in produtos_por_vitrine.get(vitrine.id, [])
+            ]
 
             resultado.append(
                 VitrineComProdutosResponse(
                     id=vitrine.id,
                     titulo=vitrine.titulo,
+                    slug=vitrine.slug,
+                    ordem=vitrine.ordem,
                     produtos=produtos_dto
                 )
             )
