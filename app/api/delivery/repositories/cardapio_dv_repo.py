@@ -29,15 +29,13 @@ class CardapioRepository:
             .all()
         )
 
-    def listar_vitrines(self, empresa_id: int) -> List[VitrinesModel]:
+    def listar_vitrines_por_categoria(self, cod_categoria: int) -> List[VitrinesModel]:
         """
-        Retorna vitrines que possuem produtos da empresa.
+        Retorna TODAS as vitrines da categoria, mesmo que não tenham produtos.
         """
         return (
             self.db.query(VitrinesModel)
-            .join(ProdutoEmpDeliveryModel, ProdutoEmpDeliveryModel.vitrine_id == VitrinesModel.id)
-            .filter(ProdutoEmpDeliveryModel.empresa_id == empresa_id)
-            .distinct()
+            .filter(VitrinesModel.cod_categoria == cod_categoria)
             .order_by(VitrinesModel.ordem)
             .all()
         )
@@ -55,7 +53,7 @@ class CardapioRepository:
         )
 
     def listar_vitrines_com_produtos_empresa_categoria(
-            self, empresa_id: int, cod_categoria: int
+        self, empresa_id: int, cod_categoria: int
     ) -> Dict[int, List[ProdutoEmpDeliveryModel]]:
         """
         Retorna um dicionário onde a chave é o ID da vitrine e o valor é a lista de produtos daquela empresa e categoria.
@@ -68,5 +66,3 @@ class CardapioRepository:
                 agrupado[p.vitrine_id].append(p)
 
         return agrupado
-
-
