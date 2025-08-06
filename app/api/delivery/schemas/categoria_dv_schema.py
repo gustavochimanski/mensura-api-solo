@@ -16,7 +16,6 @@ class CategoriaDeliveryOut(BaseModel):
     label: str
     slug: str
     parent_id: Optional[int] = None
-    slug_pai: Optional[str] = None
     imagem: Optional[str] = None
     href: str
     posicao: int
