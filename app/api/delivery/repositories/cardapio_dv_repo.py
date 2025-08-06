@@ -17,7 +17,7 @@ class CardapioRepository:
         return (
             self.db.query(ProdutoEmpDeliveryModel)
             .options(joinedload(ProdutoEmpDeliveryModel.produto))
-            .filter(ProdutoEmpDeliveryModel.empresa == cod_empresa)
+            .filter(ProdutoEmpDeliveryModel.empresa_id == cod_empresa)
             .all()
         )
 
