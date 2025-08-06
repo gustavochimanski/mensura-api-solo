@@ -24,6 +24,7 @@ class CardapioRepository:
     def listar_categorias(self) -> List[CategoriaDeliveryModel]:
         return (
             self.db.query(CategoriaDeliveryModel)
+            .options(joinedload(CategoriaDeliveryModel.parent))
             .order_by(CategoriaDeliveryModel.posicao)
             .all()
         )

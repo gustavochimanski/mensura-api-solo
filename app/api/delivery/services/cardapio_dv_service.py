@@ -31,10 +31,7 @@ class CardapioService:
         resultado: List[CategoriaDeliveryOut] = []
         for cat in categorias:
             # 3) Extrai slug do pai, se existir
-            slug_pai: Optional[str] = None
-            if cat.parent_id:
-                # cat.parent já pode estar disponível por joinedload
-                slug_pai = cat.parent.slug if cat.parent else None
+            slug_pai = cat.parent.slug if cat.parent else None
 
             resultado.append(
                 CategoriaDeliveryOut(
