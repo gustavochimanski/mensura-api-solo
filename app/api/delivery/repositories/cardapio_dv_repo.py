@@ -35,7 +35,7 @@ class CardapioRepository:
         return (
             self.db.query(VitrinesModel)
             .join(ProdutoEmpDeliveryModel, ProdutoEmpDeliveryModel.vitrine_id == VitrinesModel.id)
-            .filter(ProdutoEmpDeliveryModel.empresa == empresa_id)
+            .filter(ProdutoEmpDeliveryModel.empresa_id == empresa_id)
             .distinct()
             .order_by(VitrinesModel.ordem)
             .all()
@@ -47,7 +47,7 @@ class CardapioRepository:
             .join(ProdutoEmpDeliveryModel.produto)
             .options(joinedload(ProdutoEmpDeliveryModel.produto))
             .filter(
-                ProdutoEmpDeliveryModel.empresa == cod_empresa,
+                ProdutoEmpDeliveryModel.empresa_id == cod_empresa,
                 ProdutoEmpDeliveryModel.produto.has(cod_categoria=cod_categoria)
             )
             .all()
