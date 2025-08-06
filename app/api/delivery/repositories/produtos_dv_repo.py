@@ -15,7 +15,7 @@ class ProdutoDeliveryRepository:
         return (
             self.db.query(ProdutoDeliveryModel)
             .join(ProdutoEmpDeliveryModel, ProdutoDeliveryModel.cod_barras == ProdutoEmpDeliveryModel.cod_barras)
-            .filter(ProdutoEmpDeliveryModel.empresa == cod_empresa)
+            .filter(ProdutoEmpDeliveryModel.empresa_id == cod_empresa)
             .options(
                 joinedload(ProdutoDeliveryModel.categoria),
                 joinedload(ProdutoDeliveryModel.produtos_empresa),
@@ -30,7 +30,7 @@ class ProdutoDeliveryRepository:
         return (
             self.db.query(func.count(ProdutoDeliveryModel.cod_barras))
             .join(ProdutoEmpDeliveryModel, ProdutoDeliveryModel.cod_barras == ProdutoEmpDeliveryModel.cod_barras)
-            .filter(ProdutoEmpDeliveryModel.empresa == cod_empresa)
+            .filter(ProdutoEmpDeliveryModel.empresa_id == cod_empresa)
             .scalar()
         )
 
