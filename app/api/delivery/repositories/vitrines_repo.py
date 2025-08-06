@@ -20,7 +20,7 @@ class VitrineRepository:
         # Subquery com produtos da empresa
         subquery = (
             self.db.query(ProdutoEmpDeliveryModel.vitrine_id)
-            .filter(ProdutoEmpDeliveryModel.empresa == cod_empresa)
+            .filter(ProdutoEmpDeliveryModel.empresa_id == cod_empresa)
             .distinct()
             .subquery()
         )
