@@ -16,16 +16,3 @@ class ConsultaMovimentoCompraResponse(BaseModel):
     por_empresa: List[ConsultaMovimentoTotalEmpresa]
     total_geral: float
 
-class CompraDetalhadaByDate(BaseModel):
-    data: date
-    valor: float
-
-class CompraDetalhadaEmpresas(BaseModel):
-    empresa: str
-    dates: List[CompraDetalhadaByDate]
-
-class CompraDetalhadaResponse(BaseModel):
-    empresas: List[str]
-    dataInicio: date
-    dataFinal: date
-    compraEmpresas: List[CompraDetalhadaEmpresas]
