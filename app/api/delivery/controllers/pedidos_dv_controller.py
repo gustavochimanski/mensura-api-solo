@@ -14,6 +14,7 @@ router = APIRouter(prefix="/pedidos", tags=["Pedidos"])
     "/finalizar",
     response_model=PedidoResponse,
     status_code=status.HTTP_201_CREATED,
+    summary="Finalizar Pedido"
 )
 def finalizar_pedido_endpoint(
     payload: FinalizarPedidoRequest,
