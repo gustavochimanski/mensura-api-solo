@@ -26,6 +26,7 @@ def consultaVendaPorHoraRepository(
     ).filter(
         LctoProdutosPDV.lcpr_datamvto.between(dataInicio, dataFinal),
         LctoProdutosPDV.lcpr_codempresa.in_(empresas),
+        LctoProdutosPDV.lcpr_datahoraemiss.isnot(None)
     )
 
     if status_venda:
