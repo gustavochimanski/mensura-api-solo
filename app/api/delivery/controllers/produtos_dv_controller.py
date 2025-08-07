@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Optional
 
 from app.database.db_connection import get_db
-from app.api.delivery.services.produtos_dv_service import ProdutosDeliveryService
+from app.api.delivery.services.produtos_service import ProdutosDeliveryService
 from app.api.delivery.schemas.produtos.produtos_dv_schema import (
     ProdutosPaginadosResponse,
     CriarNovoProdutoResponse,

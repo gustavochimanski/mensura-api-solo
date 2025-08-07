@@ -5,7 +5,7 @@ from typing import List
 from app.api.delivery.schemas.cardapio__dv_schema import  \
     VitrineComProdutosResponse
 from app.api.delivery.schemas.categoria_dv_schema import CategoriaDeliveryOut
-from app.api.delivery.services.cardapio_dv_service import CardapioService
+from app.api.delivery.services.cardapio_service import CardapioService
 from app.database.db_connection import get_db
 
 router = APIRouter(tags=["Cardapio"])

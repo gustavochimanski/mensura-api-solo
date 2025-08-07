@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
 
-from app.api.delivery.repositories.pedido_repo import PedidoRepository
+from app.api.delivery.repositories.pedidos_repo import PedidoRepository
 from app.api.pagarme.fake_pagarme_client import FakePagarmeClient
 from app.api.pagarme.schemas_pagarme import PagamentoRequest, PagamentoResponse
 from app.api.pagarme.repositories.transacao_repo import TransacaoPagamentoRepository

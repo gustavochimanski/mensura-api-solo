@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.api.delivery.repositories.pedido_repo import PedidoRepository
+from app.api.delivery.repositories.pedidos_repo import PedidoRepository
 from app.api.pagarme.schemas_pagarme import PagamentoRequest, PagamentoResponse
 from app.api.pagarme.service_pagarme import PagamentoService
 from app.database.db_connection import get_db
