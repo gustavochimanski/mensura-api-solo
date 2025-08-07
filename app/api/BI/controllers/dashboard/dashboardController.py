@@ -8,8 +8,6 @@ from app.api.BI.schemas.dashboard_types import (
     TypeDashboardRequest,
 )
 from app.api.BI.schemas.compras_types import ConsultaMovimentoCompraRequest
-from app.api.BI.services.vendas.vendaDetalhadaService import consultaVendaDetalhadaGeralService
-from app.api.BI.services.compras.compraDetalhadaByDayService import compraDetalhadaService
 from app.api.BI.services.compras.resumoDeCompras import calcular_movimento_multi
 from app.api.BI.services.vendas.resumoVendasService import resumoDeVendasService
 from app.api.BI.services.metas.consultaMetasService import consultar_metas_periodo
