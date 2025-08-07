@@ -24,8 +24,7 @@ class ItemPedidoResponse(BaseModel):
     preco_unitario: float
     observacao: Optional[str] = None
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class PedidoResponse(BaseModel):
@@ -38,5 +37,5 @@ class PedidoResponse(BaseModel):
     data_criacao: datetime
     itens: List[ItemPedidoResponse]
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
+
