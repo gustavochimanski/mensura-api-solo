@@ -13,6 +13,7 @@ class PedidoItemModel(Base):
 
     quantidade = Column(Integer, nullable=False, default=1)
     preco_unitario = Column(Numeric(18, 2), nullable=False)
+    observacao = Column(String(255), nullable=True)
 
     pedido = relationship("PedidoDeliveryModel", back_populates="itens")
     produto = relationship("ProdutoDeliveryModel")

@@ -18,6 +18,7 @@ class PedidoDeliveryModel(Base):
     status = Column(String(1), nullable=False, default="P")  # Ex: P, E, F, C
     valor_total = Column(Numeric(18, 2), nullable=False)
     data_criacao = Column(DateTime, default=datetime.now)
+    observacao_geral = Column(String(255), nullable=True)
 
     # Relacionamentos
     cliente = relationship("ClienteDeliveryModel", back_populates="pedidos")
