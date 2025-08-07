@@ -1,44 +1,36 @@
-# app/api/mensura/repositories/cliente_repository.py
+# src/app/api/delivery/repositories/cliente_repository.py
 from sqlalchemy.orm import Session
-from typing import List, Optional
 
 from app.api.delivery.models.cliente_dv_model import ClienteDeliveryModel
-
+from app.api.delivery.schemas.cliente_schema import ClienteCreate, ClienteUpdate
+from app.database.db_connection import Base
 
 class ClienteRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def get(self, id: int) -> Optional[ClienteDeliveryModel]:
-        return (
-            self.db
-            .query(ClienteDeliveryModel)
-            .filter(ClienteDeliveryModel.id == id)
-            .first()
-        )
+    def get_current(self) -> ClienteDeliveryModel | None:
+        # Exemplo: supomos que há somente um cliente logado
+        return self.db.query(ClienteDeliveryModel).first()
 
-    def list(self, skip: int = 0, limit: int = 100) -> List[ClienteDeliveryModel]:
-        return (
-            self.db
-            .query(ClienteDeliveryModel)
-            .offset(skip)
-            .limit(limit)
-            .all()
-        )
+    def get_by_id(self, cliente_id: int) -> ClienteDeliveryModel | None:
+        return self.db.get(ClienteDeliveryModel, cliente_id)
 
-    def create(self, cliente: ClienteDeliveryModel) -> ClienteDeliveryModel:
-        self.db.add(cliente)
+    def create(self, obj_in: ClienteCreate) -> ClienteDeliveryModel:
+        db_obj = ClienteDeliveryModel(**obj_in.model_dump())
+        self.db.add(db_obj)
         self.db.commit()
-        self.db.refresh(cliente)
-        return cliente
+        self.db.refresh(db_obj)
+        return db_obj
 
-    def update(self, cliente: ClienteDeliveryModel, data: dict) -> ClienteDeliveryModel:
-        for key, value in data.items():
-            setattr(cliente, key, value)
+    def update(
+        self,
+        db_obj: ClienteDeliveryModel,
+        obj_in: ClienteUpdate
+    ) -> ClienteDeliveryModel:
+        obj_data = obj_in.model_dump(exclude_none=True)
+        for field, value in obj_data.items():
+            setattr(db_obj, field, value)
         self.db.commit()
-        self.db.refresh(cliente)
-        return cliente
-
-    def delete(self, cliente: ClienteDeliveryModel) -> None:
-        self.db.delete(cliente)
-        self.db.commit()
+        self.db.refresh(db_obj)
+        return db_obj

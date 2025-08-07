@@ -1,30 +1,44 @@
-# app/api/mensura/controllers/cliente_controller.py
+# src/app/api/delivery/routers/cliente_router.py
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
-from typing import List
 
-from app.api.delivery.schemas.cliente_schema import ClienteResponse, ClienteCreate, ClienteUpdate
-from app.api.delivery.services.cliente_service import ClienteService
-from app.database.db_connection import get_db
+from app.api.delivery.schemas.cliente_schema import ClienteOut, ClienteUpdate, ClienteCreate
+from app.api.delivery.services.cliente_service import (
+    get_current_cliente,
+    create_cliente,
+    update_cliente,
+)
+from app.database.db_connection import get_db  # sua dependência padrão
 
-router = APIRouter(prefix="/clientes", tags=["Clientes"])
+router = APIRouter(prefix="/delivery/cliente", tags=["Cliente"])
 
-@router.post("/", response_model=ClienteResponse, status_code=status.HTTP_201_CREATED)
-def create_cliente(request: ClienteCreate, db: Session = Depends(get_db)):
-    return ClienteService(db).create_cliente(request)
+@router.get("/", response_model=ClienteOut, status_code=status.HTTP_200_OK)
+def read_current_cliente(db: Session = Depends(get_db)):
+    """
+    Busca o cliente "logado" (ou único).
+    """
+    cliente = get_current_cliente(db)
+    return cliente
 
-@router.get("/{id}", response_model=ClienteResponse)
-def get_cliente(id: int, db: Session = Depends(get_db)):
-    return ClienteService(db).get_cliente(id)
+@router.post("/", response_model=ClienteOut, status_code=status.HTTP_201_CREATED)
+def create_new_cliente(
+    data: ClienteCreate,
+    db: Session = Depends(get_db)
+):
+    """
+    Cria um novo cliente.
+    """
+    cliente = create_cliente(db, data)
+    return cliente
 
-@router.get("/", response_model=List[ClienteResponse])
-def list_clientes(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    return ClienteService(db).list_clientes(skip, limit)
-
-@router.put("/{id}", response_model=ClienteResponse)
-def update_cliente(id: int, request: ClienteUpdate, db: Session = Depends(get_db)):
-    return ClienteService(db).update_cliente(id, request)
-
-@router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_cliente(id: int, db: Session = Depends(get_db)):
-    ClienteService(db).delete_cliente(id)
+@router.put("/{cliente_id}", response_model=ClienteOut, status_code=status.HTTP_200_OK)
+def update_existing_cliente(
+    cliente_id: int,
+    data: ClienteUpdate,
+    db: Session = Depends(get_db)
+):
+    """
+    Atualiza dados de um cliente existente.
+    """
+    updated = update_cliente(db, cliente_id, data)
+    return updated
