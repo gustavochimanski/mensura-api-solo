@@ -31,7 +31,7 @@ class PedidoService:
 
         # 2) para cada item, buscar produto e criar item de pedido
         for item_req in payload.itens:
-            produto = self.repo.buscar_produto(item_req.produto_cod_barras)
+            produto = self.repo.buscar_produto(item_req.produto_cod_barras, payload.empresa_id)
             if not produto:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,

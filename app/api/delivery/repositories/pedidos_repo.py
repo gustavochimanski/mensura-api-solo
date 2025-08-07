@@ -4,6 +4,7 @@ from decimal import Decimal
 from sqlalchemy.orm import Session
 
 from app.api.delivery.models.cadprod_dv_model import ProdutoDeliveryModel
+from app.api.delivery.models.cadprod_emp_dv_model import ProdutoEmpDeliveryModel
 from app.api.delivery.models.pedido_dv_model import PedidoDeliveryModel
 from app.api.delivery.models.pedido_item_dv_model import PedidoItemModel
 from app.api.delivery.schemas.pedidos_schema import ItemPedidoRequest
@@ -25,10 +26,10 @@ class PedidoRepository:
         self.db.flush()  # gera pedido.id
         return pedido
 
-    def buscar_produto(self, cod_barras: str) -> ProdutoDeliveryModel | None:
+    def buscar_produto(self, cod_barras: str, empresa_id: int) -> ProdutoEmpDeliveryModel | None:
         return (
-            self.db.query(ProdutoDeliveryModel)
-            .filter_by(cod_barras=cod_barras)
+            self.db.query(ProdutoEmpDeliveryModel)
+            .filter_by(cod_barras=cod_barras, empresa_id=empresa_id)
             .first()
         )
 
