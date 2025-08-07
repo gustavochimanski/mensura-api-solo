@@ -111,8 +111,6 @@ def dashboardController(
         )
 
     # Detalhes, meios de pagamento e departamentos
-    venda_detalhada = consultaVendaDetalhadaGeralService(vendas_req, db)
-    compra_detalhada = compraDetalhadaService(db, compras_req)
     meios_pagamento = MeioPagamentoPDVService(db).consulta_meios_pagamento_dashboard(
         empresas=empresas_str,
         data_inicio=request.dataInicio,
@@ -137,8 +135,6 @@ def dashboardController(
         relacao_por_empresa=relacao_por_empresa,
         metas=metas,
         compras=compras,
-        vendaDetalhada=venda_detalhada,
-        compraDetalhada=compra_detalhada,
         vendaPorHora=vendaPorHora,
         meios_pagamento=meios_pagamento,
         departamento_geral=departamento_geral,

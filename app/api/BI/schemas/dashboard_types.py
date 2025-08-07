@@ -46,8 +46,6 @@ class TypeDashboardResponse(BaseModel):
     relacao_por_empresa: List[TypeRelacaoEmpresa]
     metas: TypeDashboardMetaReturn
     compras: ConsultaMovimentoCompraResponse
-    vendaDetalhada: TypeVendaDetalhadaResponse
-    compraDetalhada: CompraDetalhadaResponse
     vendaPorHora: List[TypeVendaPorHoraResponse]
     meios_pagamento: MeioPagamentoResponseFinal
     departamento_geral: List[VendasPorDepartamento]
