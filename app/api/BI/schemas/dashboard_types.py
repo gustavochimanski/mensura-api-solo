@@ -1,10 +1,7 @@
 from pydantic import BaseModel
 from typing import List, Optional
 
-from app.api.BI.schemas.compras_types import (
-    ConsultaMovimentoCompraResponse,
-    CompraDetalhadaResponse,
-)
+from app.api.BI.schemas.compras_types import ConsultaMovimentoCompraResponse
 from app.api.BI.schemas.departamento_schema import (
     VendasPorDepartamento,
     VendasPorEmpresaComDepartamentos,
@@ -13,9 +10,6 @@ from app.api.BI.schemas.meio_pagamento_types import MeioPagamentoResponseFinal
 from app.api.BI.schemas.vendas.resumoVendas import TotaisGerais, TotaisPorEmpresa
 from app.api.BI.schemas.vendas.vendasPorHoraTypes import TypeVendaPorHoraResponse
 from app.api.BI.schemas.metas_types import TypeDashboardMetaReturn
-from app.api.BI.schemas.vendas.vendaDetalhadaTypes import (
-    TypeVendaDetalhadaResponse,
-)
 
 class TypeRelacao(BaseModel):
     relacaoValue: float
