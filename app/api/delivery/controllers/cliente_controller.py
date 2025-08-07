@@ -10,7 +10,7 @@ from app.api.delivery.services.cliente_service import (
 )
 from app.database.db_connection import get_db  # sua dependência padrão
 
-router = APIRouter(prefix="/delivery/cliente", tags=["Cliente"])
+router = APIRouter(prefix="/cliente", tags=["Cliente"])
 
 @router.get("/", response_model=ClienteOut, status_code=status.HTTP_200_OK)
 def read_current_cliente(db: Session = Depends(get_db)):
