@@ -2,7 +2,7 @@
 from pydantic import BaseModel, ConfigDict
 
 class CriarVitrineRequest(BaseModel):
-    cod_categoria: int
+    cod_categoria: str
     titulo: str
     ordem: int
 
@@ -10,7 +10,7 @@ class CriarVitrineRequest(BaseModel):
 
 class CriarVitrineResponse(BaseModel):
     id: int
-    cod_categoria: int
+    cod_categoria: str
     titulo: str
     slug: str
     ordem: int
