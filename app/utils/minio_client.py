@@ -79,55 +79,40 @@ def upload_file_to_minio(
     return f"{MINIO_PUBLIC_ENDPOINT}/{bucket_name}/{object_key}"
 
 
-def _parse_minio_path(url: str) -> tuple[str, str] | None:
+def remover_arquivo_minio(
+    db: Session,
+    cod_empresa: int,
+    file_url: str
+) -> None:
     """
-    Extrai (bucket, object_key) de várias formas de URL:
-    - http(s)://<host>/<bucket>/<obj...>
-    - s3://<bucket>/<obj...>
-    - <bucket>/<obj...>
-    Retorna None se não conseguir parsear.
+    Remove arquivo do MinIO usando cod_empresa para garantir o bucket correto.
     """
-    if not url:
-        return None
+    if not file_url:
+        return
 
-    # s3://bucket/key
-    if url.startswith("s3://"):
-        rest = url[5:]
-        if "/" not in rest:
-            return None
-        bucket, obj = rest.split("/", 1)
-        return bucket, obj
-
-    # http(s)://host/bucket/key (path-style)
     try:
-        u = urlparse(url)
-        if u.scheme in ("http", "https") and u.path:
-            parts = [p for p in u.path.split("/") if p]  # remove vazios
-            if len(parts) >= 2:
-                bucket = parts[0]
-                obj = "/".join(parts[1:])
-                return bucket, obj
-    except Exception:
-        pass
-
-    # tentativa simples: "bucket/obj"
-    if "/" in url and not url.startswith(("http://", "https://")):
-        bucket, obj = url.split("/", 1)
-        return bucket, obj
-
-    return None
-
-def remover_arquivo_minio(url: str) -> None:
-    """
-    Remove um objeto no MinIO dado qualquer forma de URL.
-    Não levanta erro pra não quebrar fluxo.
-    """
-    try:
-        parsed = _parse_minio_path(url)
-        if not parsed:
-            print(f"⚠️ Não foi possível parsear URL do MinIO: {url}")
+        # Busca CNPJ e gera bucket
+        repo = EmpresaRepository(db)
+        cnpj = repo.get_cnpj_by_id(cod_empresa)
+        if not cnpj:
+            print(f"⚠️ Empresa {cod_empresa} não possui CNPJ cadastrado para remover {file_url}")
             return
-        bucket, obj = parsed
-        client.remove_object(bucket, obj)
+
+        bucket_name = gerar_nome_bucket(cnpj)
+
+        # Extrai o caminho relativo ao bucket
+        # file_url esperado: <MINIO_PUBLIC_ENDPOINT>/<bucket>/<object_key>
+        u = urlparse(file_url)
+        path_parts = [p for p in u.path.split("/") if p]
+        if len(path_parts) < 2:
+            print(f"⚠️ Caminho inválido para remover do MinIO: {file_url}")
+            return
+
+        object_key = "/".join(path_parts[1:])  # ignora o bucket na frente
+
+        # Remove no MinIO
+        client.remove_object(bucket_name, object_key)
+        print(f"✅ Arquivo removido: bucket={bucket_name}, key={object_key}")
+
     except Exception as e:
-        print(f"⚠️ Erro ao remover arquivo do MinIO: {e} | url={url}")
+        print(f"⚠️ Erro ao remover arquivo do MinIO: {e} | url={file_url}")
