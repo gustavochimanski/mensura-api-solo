@@ -65,8 +65,7 @@ class ProdutosDeliveryService:
             imagem=req.imagem,
             data_cadastro=req.data_cadastro or datetime.utcnow().date(),
             ativo=req.ativo,
-            unidade_medida=req.unidade_medida,
-            exibir_delivery=req.exibir_delivery
+            unidade_medida=req.unidade_medida
         )
 
         # vínculo com empresa

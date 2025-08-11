@@ -62,11 +62,13 @@ class ProdutoEmpDTO(BaseModel):
     vitrine_id: Optional[int] = None
     sku_empresa: Optional[str] = None
     disponivel: bool
+    exibir_delivery: bool
 
     created_at: datetime
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
 
 class ProdutoListItem(BaseModel):
     # para listagem paginada
