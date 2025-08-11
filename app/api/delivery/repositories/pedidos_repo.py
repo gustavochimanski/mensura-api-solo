@@ -1,11 +1,10 @@
 from __future__ import annotations
 from decimal import Decimal
-from typing import Iterable, Optional
+from typing import Optional
 
-from sqlalchemy import func, and_, select
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
-from app.api.delivery.models.cadprod_dv_model import ProdutoDeliveryModel
 from app.api.delivery.models.cadprod_emp_dv_model import ProdutoEmpDeliveryModel
 from app.api.delivery.models.pedido_dv_model import PedidoDeliveryModel
 from app.api.delivery.models.pedido_item_dv_model import PedidoItemModel
@@ -13,22 +12,20 @@ from app.api.delivery.models.pedido_status_historico_dv_model import PedidoStatu
 from app.api.delivery.models.cupom_dv_model import CupomDescontoModel
 from app.api.delivery.models.endereco_dv_model import EnderecoDeliveryModel
 from app.api.delivery.models.cliente_dv_model import ClienteDeliveryModel
-from app.api.delivery.models.transacao_pagamento_dv_model import TransacaoPagamentoModel, PagamentoStatus
+from app.api.delivery.models.transacao_pagamento_dv_model import TransacaoPagamentoModel
 
 class PedidoRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    # --------- Validations / Queries ----------
+    # --- Validations / Queries ---
     def get_cliente(self, cliente_id: int) -> Optional[ClienteDeliveryModel]:
         return self.db.get(ClienteDeliveryModel, cliente_id)
 
     def get_endereco(self, endereco_id: int) -> Optional[EnderecoDeliveryModel]:
         return self.db.get(EnderecoDeliveryModel, endereco_id)
 
-    def get_produto_emp(
-        self, empresa_id: int, cod_barras: str
-    ) -> Optional[ProdutoEmpDeliveryModel]:
+    def get_produto_emp(self, empresa_id: int, cod_barras: str) -> Optional[ProdutoEmpDeliveryModel]:
         return (
             self.db.query(ProdutoEmpDeliveryModel)
             .options(joinedload(ProdutoEmpDeliveryModel.produto))
@@ -53,7 +50,7 @@ class PedidoRepository:
             .first()
         )
 
-    # --------- Mutations (atomic with outer service) ----------
+    # --- Mutations ---
     def criar_pedido(
         self,
         *,
@@ -122,9 +119,7 @@ class PedidoRepository:
         if pedido.valor_total < 0:
             pedido.valor_total = Decimal("0")
 
-    def add_status_historico(
-        self, pedido_id: int, status: str, motivo: str | None = None, criado_por: str | None = "system"
-    ):
+    def add_status_historico(self, pedido_id: int, status: str, motivo: str | None = None, criado_por: str | None = "system"):
         hist = PedidoStatusHistoricoModel(
             pedido_id=pedido_id,
             status=status,
@@ -137,7 +132,7 @@ class PedidoRepository:
         pedido.status = novo_status
         self.add_status_historico(pedido.id, novo_status, motivo=motivo)
 
-    # --------- Transação de pagamento ----------
+    # --- Transação de pagamento ---
     def criar_transacao_pagamento(
         self,
         *,
@@ -156,7 +151,7 @@ class PedidoRepository:
             status="PENDENTE",
         )
         self.db.add(tx)
-        self.db.flush()  # gera id
+        self.db.flush()
         return tx
 
     def atualizar_transacao_status(
@@ -168,7 +163,7 @@ class PedidoRepository:
         payload_retorno: dict | None = None,
         qr_code: str | None = None,
         qr_code_base64: str | None = None,
-        timestamp_field: str | None = None,  # "autorizado_em" | "pago_em" | ...
+        timestamp_field: str | None = None,  # ex: "pago_em"
     ):
         tx.status = status
         if provider_transaction_id is not None:
@@ -182,6 +177,7 @@ class PedidoRepository:
         if timestamp_field:
             setattr(tx, timestamp_field, func.now())
 
+    # --- Unit of Work ---
     def commit(self):
         self.db.commit()
 
