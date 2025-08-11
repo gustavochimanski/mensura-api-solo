@@ -8,6 +8,6 @@ class ProdutoEmpDTO(BaseModel):
     preco_venda: float
     custo: Optional[float] = None
     vitrine_id: Optional[int] = None
-    exibir_delivery: Optional[str] = None
+    exibir_delivery: bool = True
 
     model_config = ConfigDict(from_attributes=True)
