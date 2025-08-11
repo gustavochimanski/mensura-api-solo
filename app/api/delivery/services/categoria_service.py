@@ -4,6 +4,9 @@ from sqlalchemy.orm import Session
 
 from app.api.delivery.repositories.categorias_dv_repo import CategoriaDeliveryRepository
 from app.api.delivery.schemas.categoria_dv_schema import CategoriaDeliveryIn
+from app.utils.minio_client import remover_arquivo_minio
+from app.utils.logger import logger
+
 
 class CategoriasService:
     def __init__(self, db: Session):
@@ -22,7 +25,23 @@ class CategoriasService:
         return self.repo.update(cat_id, data)
 
     def delete(self, cat_id: int):
-        return self.repo.delete(cat_id)
+        # 1) pega a categoria pra obter a URL da imagem
+        cat = self.repo.get_by_id(cat_id)
+        image_url = getattr(cat, "imagem", None)
+
+        # 2) remove no banco
+        self.repo.delete(cat_id)
+
+        # 3) tenta remover no MinIO (não quebra se falhar)
+        if image_url:
+            try:
+                remover_arquivo_minio(image_url)
+                logger.info(f"[Categorias] Imagem removida do MinIO: {image_url}")
+            except Exception as e:
+                logger.warning(f"[Categorias] Falha ao remover imagem do MinIO: {e} | url={image_url}")
+
+        # sem retorno (mantém semântica atual do repo.delete)
+        return None
 
     def toggle_home(self, cat_id: int, on: bool):
         return self.repo.toggle_home(cat_id, on)
