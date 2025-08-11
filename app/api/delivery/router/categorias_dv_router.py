@@ -66,48 +66,9 @@ def get_categoria(
 
 
 @router.post("", response_model=CategoriaDeliveryOut, status_code=status.HTTP_201_CREATED)
-async def criar_categoria(
-    cod_empresa: int = Form(...),
-    descricao: str = Form(...),
-    slug: str = Form(...),
-    parent_id: Optional[int] = Form(None),
-    posicao: Optional[int] = Form(None),
-    imagem: Optional[UploadFile] = File(None),
-    tipo_exibicao: Optional[str] = Form(None),
-    db: Session = Depends(get_db),
-):
+def criar_categoria(body: CategoriaDeliveryIn, db: Session = Depends(get_db)):
     repos = CategoriaDeliveryRepository(db)
-    logger.info(f"[Categorias] Criando: {descricao}")
-    imagem_url: Optional[str] = None
-
-    if imagem:
-        permitidos = {"image/jpeg", "image/png", "image/webp"}
-        if imagem.content_type not in permitidos:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Formato de imagem inválido")
-        try:
-            imagem_url = upload_file_to_minio(db, cod_empresa, imagem, "categorias")
-        except Exception:
-            logger.error("[Categorias] Upload falhou", exc_info=True)
-            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Erro ao enviar imagem")
-
-    cat_in = CategoriaDeliveryIn(
-        descricao=descricao,
-        slug=slug,
-        parent_id=parent_id,
-        imagem=imagem_url,
-        posicao=posicao,
-        tipo_exibicao=tipo_exibicao
-    )
-
-    try:
-        c = repos.create(cat_in)
-    except HTTPException:
-        raise
-    except Exception:
-        logger.error("[Categorias] Erro ao criar", exc_info=True)
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Erro interno ao criar categoria")
-
-    logger.info(f"[Categorias] Criada ID={c.id}")
+    c = repos.create(body)
     return CategoriaDeliveryOut(
         id=c.id,
         label=c.descricao,
@@ -120,41 +81,10 @@ async def criar_categoria(
         is_home=c.is_home,
     )
 
-
 @router.put("/{cat_id}", response_model=CategoriaDeliveryOut)
-async def editar_categoria(
-    cat_id: int = Path(..., title="ID da categoria"),
-    cod_empresa: int = Form(...),
-    descricao: str = Form(...),
-    slug: str = Form(...),
-    parent_id: Optional[int] = Form(None),
-    posicao: Optional[int] = Form(None),
-    imagem: Optional[UploadFile] = File(None),
-    db: Session = Depends(get_db),
-):
+def editar_categoria(cat_id: int, body: CategoriaDeliveryIn, db: Session = Depends(get_db)):
     repos = CategoriaDeliveryRepository(db)
-    logger.info(f"[Categorias] Editando ID={cat_id}")
-    imagem_url: Optional[str] = None
-
-    if imagem:
-        permitidos = {"image/jpeg", "image/png", "image/webp"}
-        if imagem.content_type not in permitidos:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Formato de imagem inválido")
-        try:
-            imagem_url = upload_file_to_minio(db, cod_empresa, imagem, "categorias")
-        except Exception as e:
-            logger.error(f"[Categorias] Upload falhou: {e}")
-            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Erro ao enviar imagem")
-
-    updates = {
-        "descricao": descricao,
-        "slug": slug,
-        "parent_id": parent_id,
-        "posicao": posicao,
-        "imagem": imagem_url,
-    }
-    c = repos.update(cat_id, updates)
-    logger.info(f"[Categorias] Atualizada ID={cat_id}")
+    c = repos.update(cat_id, body.model_dump(exclude_unset=True))
     return CategoriaDeliveryOut(
         id=c.id,
         label=c.descricao,
@@ -243,3 +173,31 @@ def toggle_home(
         is_home=c.is_home,
     )
 
+@router.patch("/{cat_id}/imagem", response_model=CategoriaDeliveryOut)
+async def upload_imagem_categoria(
+    cat_id: int,
+    cod_empresa: int,
+    imagem: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    permitidos = {"image/jpeg", "image/png", "image/webp"}
+    if imagem.content_type not in permitidos:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Formato de imagem inválido")
+    try:
+        url = upload_file_to_minio(db, cod_empresa, imagem, "categorias")
+    except Exception:
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Erro ao enviar imagem")
+
+    repos = CategoriaDeliveryRepository(db)
+    c = repos.update(cat_id, {"imagem": url})
+    return CategoriaDeliveryOut(
+        id=c.id,
+        label=c.descricao,
+        slug=c.slug,
+        parent_id=c.parent_id,
+        slug_pai=c.parent.slug if c.parent else None,
+        imagem=c.imagem,
+        href=f"/categoria/{c.slug}",
+        posicao=c.posicao,
+        is_home=bool(c.is_home),
+    )
