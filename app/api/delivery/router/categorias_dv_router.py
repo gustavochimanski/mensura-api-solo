@@ -48,6 +48,7 @@ async def criar_categoria(
     parent_id: Optional[int] = Form(None),
     posicao: Optional[int] = Form(None),
     imagem: Optional[UploadFile] = File(None),
+    tipo_exibicao: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
     repos = CategoriaDeliveryRepository(db)
@@ -70,6 +71,7 @@ async def criar_categoria(
         parent_id=parent_id,
         imagem=imagem_url,
         posicao=posicao,
+        tipo_exibicao=tipo_exibicao
     )
 
     try:
