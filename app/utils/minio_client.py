@@ -80,40 +80,22 @@ def upload_file_to_minio(
     return f"{MINIO_PUBLIC_ENDPOINT}/{bucket_name}/{object_key}"
 
 
-def remover_arquivo_minio(
-    db: Session,
-    cod_empresa: int,
-    file_url: str,
-    slug: str
-) -> None:
-    """
-    Remove arquivo do MinIO usando o mesmo padrão do upload_file_to_minio.
-    """
+def remover_arquivo_minio(file_url: str) -> None:
     if not file_url:
         return
 
     try:
-        # 1️⃣ Busca CNPJ
-        repo = EmpresaRepository(db)
-        cnpj = repo.get_cnpj_by_id(cod_empresa)
-        if not cnpj:
-            logger.info(f"⚠️ Empresa {cod_empresa} sem CNPJ para remover {file_url}")
+        from urllib.parse import urlparse
+        u = urlparse(file_url)
+        path_parts = [p for p in u.path.split("/") if p]  # remove partes vazias
+        if len(path_parts) < 2:
+            print(f"⚠️ Caminho inválido para remover do MinIO: {file_url}")
             return
 
-        # 2️⃣ Bucket igual ao upload
-        bucket_name = gerar_nome_bucket(cnpj)
+        bucket_name = path_parts[0]  # ex: teste2
+        object_key = "/".join(path_parts[1:])  # ex: categorias/f22aac08-...
 
-        # 3️⃣ Extrai filename (o que vem depois de slug/)
-        filename = file_url.split(f"/{slug}/")[-1]
-        if not filename:
-            logger.info(f"⚠️ Caminho inválido para remover do MinIO: {file_url}")
-            return
-
-        object_key = f"{slug}/{filename}"
-
-        # 4️⃣ Remove do MinIO
         client.remove_object(bucket_name, object_key)
-        logger.info(f"✅ Removido do MinIO: bucket={bucket_name}, key={object_key}")
-
+        print(f"✅ Removido do MinIO: bucket={bucket_name}, key={object_key}")
     except Exception as e:
-        logger.info(f"⚠️ Erro ao remover arquivo do MinIO: {e} | url={file_url}")
+        print(f"⚠️ Erro ao remover arquivo do MinIO: {e} | url={file_url}")
