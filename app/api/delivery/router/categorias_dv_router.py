@@ -28,7 +28,21 @@ def list_categorias(
     else:
         logger.info("[Categorias] Listando todas")
         cats = repos.list_all()
-    return [CategoriaDeliveryOut.from_orm(c) for c in cats]
+    return [
+        CategoriaDeliveryOut(
+            id=c.id,
+            label=c.descricao,  # derivado
+            slug=c.slug,
+            parent_id=c.parent_id,
+            slug_pai=c.parent.slug if c.parent else None,
+            imagem=c.imagem,
+            href=f"/categoria/{c.slug}",  # derivado
+            posicao=c.posicao,
+            is_home=c.is_home,  # property no model
+        )
+        for c in cats
+    ]
+
 
 @router.get("/{cat_id}", response_model=CategoriaDeliveryOut)
 def get_categoria(
@@ -38,7 +52,18 @@ def get_categoria(
     repos = CategoriaDeliveryRepository(db)
     logger.info(f"[Categorias] Get ID={cat_id}")
     c = repos.get_by_id(cat_id)
-    return CategoriaDeliveryOut.from_orm(c)
+    return CategoriaDeliveryOut(
+        id=c.id,
+        label=c.descricao,
+        slug=c.slug,
+        parent_id=c.parent_id,
+        slug_pai=c.parent.slug if c.parent else None,
+        imagem=c.imagem,
+        href=f"/categoria/{c.slug}",
+        posicao=c.posicao,
+        is_home=c.is_home,
+    )
+
 
 @router.post("", response_model=CategoriaDeliveryOut, status_code=status.HTTP_201_CREATED)
 async def criar_categoria(
@@ -83,7 +108,18 @@ async def criar_categoria(
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Erro interno ao criar categoria")
 
     logger.info(f"[Categorias] Criada ID={c.id}")
-    return CategoriaDeliveryOut.from_orm(c)
+    return CategoriaDeliveryOut(
+        id=c.id,
+        label=c.descricao,
+        slug=c.slug,
+        parent_id=c.parent_id,
+        slug_pai=c.parent.slug if c.parent else None,
+        imagem=c.imagem,
+        href=f"/categoria/{c.slug}",
+        posicao=c.posicao,
+        is_home=c.is_home,
+    )
+
 
 @router.put("/{cat_id}", response_model=CategoriaDeliveryOut)
 async def editar_categoria(
@@ -119,7 +155,18 @@ async def editar_categoria(
     }
     c = repos.update(cat_id, updates)
     logger.info(f"[Categorias] Atualizada ID={cat_id}")
-    return CategoriaDeliveryOut.from_orm(c)
+    return CategoriaDeliveryOut(
+        id=c.id,
+        label=c.descricao,
+        slug=c.slug,
+        parent_id=c.parent_id,
+        slug_pai=c.parent.slug if c.parent else None,
+        imagem=c.imagem,
+        href=f"/categoria/{c.slug}",
+        posicao=c.posicao,
+        is_home=c.is_home,
+    )
+
 
 @router.delete("/{cat_id}", status_code=status.HTTP_204_NO_CONTENT)
 def deletar_categoria(
@@ -139,7 +186,18 @@ def move_categoria_direita(
     repos = CategoriaDeliveryRepository(db)
     c = repos.move_right(cat_id)
     logger.info(f"[Categorias] Move right ID={cat_id}")
-    return CategoriaDeliveryOut.from_orm(c)
+    return CategoriaDeliveryOut(
+        id=c.id,
+        label=c.descricao,
+        slug=c.slug,
+        parent_id=c.parent_id,
+        slug_pai=c.parent.slug if c.parent else None,
+        imagem=c.imagem,
+        href=f"/categoria/{c.slug}",
+        posicao=c.posicao,
+        is_home=c.is_home,
+    )
+
 
 @router.post("/{cat_id}/move-left", response_model=CategoriaDeliveryOut)
 def move_categoria_esquerda(
@@ -149,7 +207,18 @@ def move_categoria_esquerda(
     repos = CategoriaDeliveryRepository(db)
     c = repos.move_left(cat_id)
     logger.info(f"[Categorias] Move left ID={cat_id}")
-    return CategoriaDeliveryOut.from_orm(c)
+    return CategoriaDeliveryOut(
+        id=c.id,
+        label=c.descricao,
+        slug=c.slug,
+        parent_id=c.parent_id,
+        slug_pai=c.parent.slug if c.parent else None,
+        imagem=c.imagem,
+        href=f"/categoria/{c.slug}",
+        posicao=c.posicao,
+        is_home=c.is_home,
+    )
+
 
 @router.post("/{cat_id}/toggle-home", response_model=CategoriaDeliveryOut)
 def toggle_home(
@@ -162,4 +231,15 @@ def toggle_home(
     repos = CategoriaDeliveryRepository(db)
     c = repos.toggle_home(cat_id, on=True)
     logger.info(f"[Categorias] Toggle home ID={cat_id}")
-    return CategoriaDeliveryOut.from_orm(c)
+    return CategoriaDeliveryOut(
+        id=c.id,
+        label=c.descricao,
+        slug=c.slug,
+        parent_id=c.parent_id,
+        slug_pai=c.parent.slug if c.parent else None,
+        imagem=c.imagem,
+        href=f"/categoria/{c.slug}",
+        posicao=c.posicao,
+        is_home=c.is_home,
+    )
+

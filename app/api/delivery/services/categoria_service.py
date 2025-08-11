@@ -50,7 +50,7 @@ class CategoriasService:
         # tenta apagar arquivo no MinIO usando o cod_empresa para garantir bucket correto
         if image_url:
             try:
-                remover_arquivo_minio(self.repo.db, cod_empresa,  image_url, "categorias")
+                remover_arquivo_minio(image_url)
                 logger.info(f"[Categorias] Imagem removida do MinIO: {image_url}")
             except Exception as e:
                 logger.warning(f"[Categorias] Falha ao remover imagem do MinIO: {e} | url={image_url}")
