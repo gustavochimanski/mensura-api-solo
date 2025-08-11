@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from fastapi import APIRouter, Depends, Form, File, UploadFile, HTTPException, status, Query, Path, Body
 from sqlalchemy.orm import Session
 from datetime import datetime
@@ -41,8 +43,8 @@ async def criar_produto(
     descricao: str = Form(...),
     cod_categoria: int = Form(...),
     vitrine_id: Optional[int] = Form(None),
-    preco_venda: float = Form(...),
-    custo: float = Form(...),
+    preco_venda: Decimal = Form(...),
+    custo: Decimal = Form(...),
     data_cadastro: Optional[str] = Form(None),
     imagem: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
@@ -58,6 +60,7 @@ async def criar_produto(
             raise HTTPException(status_code=500, detail=str(e))
 
     dto = CriarNovoProdutoRequest(
+        empresa_id=cod_empresa,
         cod_barras=cod_barras,
         descricao=descricao,
         cod_categoria=cod_categoria,
