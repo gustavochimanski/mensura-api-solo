@@ -9,7 +9,6 @@ from app.api.BI.router.router import router as bi_router
 from app.api.mensura.router.router import router as mensura_router
 from app.api.delivery.router.router import api_delivery
 from app.api.public.router import router as public_router
-from app.api.pagarme.controller_pagar import router as pagarme_router
 from app.api.auth import auth_controller
 
 # ───────────────────────────
@@ -66,5 +65,4 @@ app.include_router(auth_controller.router)
 app.include_router(api_delivery)
 app.include_router(mensura_router, dependencies=[Depends(get_current_user)])
 app.include_router(bi_router, dependencies=[Depends(get_current_user)])
-app.include_router(pagarme_router, dependencies=[Depends(get_current_user)])
 app.include_router(public_router,  dependencies=[Depends(get_current_user)])
