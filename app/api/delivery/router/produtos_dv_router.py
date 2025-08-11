@@ -116,7 +116,7 @@ async def atualizar_produto(
     )
     service = ProdutosDeliveryService(db)
     try:
-        return service.atualizar_produto(cod_barras, dto)
+        return service.atualizar_produto(cod_empresa ,cod_barras, dto)
     except HTTPException:
         raise
     except IntegrityError:
