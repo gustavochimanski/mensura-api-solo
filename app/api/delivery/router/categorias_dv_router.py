@@ -160,6 +160,6 @@ def toggle_home(
     Alterna `tipo_exibicao` para exibir na Home (valor 'P') ou remover.
     """
     repos = CategoriaDeliveryRepository(db)
-    c = repos.toggle_home(cat_id)
+    c = repos.toggle_home(cat_id, on=True)
     logger.info(f"[Categorias] Toggle home ID={cat_id}")
     return CategoriaDeliveryOut.from_orm(c)
