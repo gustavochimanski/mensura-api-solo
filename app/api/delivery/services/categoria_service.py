@@ -10,14 +10,7 @@ class CategoriasService:
         self.repo = CategoriaDeliveryRepository(db)
 
     def create(self, data: CategoriaDeliveryIn):
-        return self.repo.create(
-            descricao=data.descricao,
-            slug=data.slug,
-            parent_id=data.parent_id,
-            imagem=data.imagem,
-            posicao=data.posicao,
-            tipo_exibicao=data.tipo_exibicao or None,
-        )
+        return self.repo.create(data)
 
     def list_all(self):
         return self.repo.list_all()
