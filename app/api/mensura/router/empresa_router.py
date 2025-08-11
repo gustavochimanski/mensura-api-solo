@@ -1,4 +1,4 @@
-# app/api/mensura/router/empresa_controller.py
+# app/api/mensura/router/empresa_router.py
 from typing import List
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session

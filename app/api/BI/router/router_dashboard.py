@@ -19,9 +19,9 @@ from app.database.db_connection import get_db
 from app.utils.empresas_utils import normalizar_empresas
 from app.utils.logger import logger
 
-router = APIRouter(tags=["Dashboard"])
+router = APIRouter(tags=["Dashboard"], prefix="/api/bi/dashboard")
 
-@router.post("/dashboard/periodo", summary="Dados Dashboard geral")
+@router.post("/periodo", summary="Dashboard Visão panorâmica")
 def dashboardController(
     request: TypeDashboardRequest,
     db: Session = Depends(get_db)

@@ -3,9 +3,9 @@
 from fastapi import APIRouter
 
 from app.core.dependencies import get_current_user
-from app.api.mensura.controllers.empresa_controller import router as router_empresa
-from app.api.mensura.controllers.usuario_controller import router as router_usuario
-from app.api.mensura.controllers.endereco_controller import router as router_endereco
+from app.api.mensura.router.empresa_router import router as router_empresa
+from app.api.mensura.router.usuario_router import router as router_usuario
+from app.api.mensura.router.endereco_router import router as router_endereco
 
 router = APIRouter()
 

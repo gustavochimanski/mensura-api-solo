@@ -1,4 +1,4 @@
-# app/api/mensura/router/endereco_controller.py
+# app/api/mensura/router/endereco_router.py
 from typing import List
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session

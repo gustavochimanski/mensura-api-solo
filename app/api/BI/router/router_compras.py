@@ -9,10 +9,10 @@ from app.api.BI.schemas.compras_types import (
 from app.database.db_connection import get_db
 from app.utils.logger import logger
 
-router = APIRouter(tags=["Compras"])
+router = APIRouter(tags=["Compras"], prefix="/api/bi/compras")
 
 @router.post(
-    "/compras/consulta_movimento",
+    "/consulta_movimento",
     response_model=ConsultaMovimentoCompraResponse,
     summary="Resumo Compras Empresa"
 )

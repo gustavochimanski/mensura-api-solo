@@ -2,12 +2,14 @@ from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
 
 from app.api.BI.schemas.dashboard_types import TypeDashboardRequest
+from app.api.BI.schemas.vendas.vendasPorHoraTypes import TypeVendaPorHoraResponse
 from app.api.BI.services.vendas.resumoVendasService import resumoDeVendasService
 from app.api.BI.schemas.vendas.resumoVendas import  TypeResumoVendasResponse
+from app.api.BI.services.vendas.vendaPorHoraService import consultaVendaPorHoraService
 from app.database.db_connection import get_db
 from app.utils.logger import logger
 
-router = APIRouter()
+router = APIRouter(tags=["Vendas"], prefix="/api/bi/vendas")
 
 
 @router.post(
@@ -27,3 +29,11 @@ def resumoVendasController(
 
     logger.info(f"Consulta total de relatórios geral: {resultados}")
     return resultados
+
+
+@router.post("/por-hora", summary="Venda por hora", response_model=TypeVendaPorHoraResponse)
+def consultaVendaPorHoraController(
+    request: TypeDashboardRequest,
+    db: Session = Depends(get_db)
+):
+    return consultaVendaPorHoraService(db, request)
