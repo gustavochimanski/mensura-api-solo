@@ -39,7 +39,7 @@ class CategoriasService:
 
         return atualizado
 
-    def delete(self, cat_id: int):
+    def delete(self, cat_id: int, cod_empresa: int):
         # pega a categoria pra obter a URL
         cat = self.repo.get_by_id(cat_id)
         image_url = getattr(cat, "imagem", None)
@@ -47,10 +47,11 @@ class CategoriasService:
         # apaga no banco
         self.repo.delete(cat_id)
 
-        # tenta apagar arquivo
+        # tenta apagar arquivo no MinIO usando o cod_empresa para garantir bucket correto
         if image_url:
             try:
-                remover_arquivo_minio(image_url)
+                remover_arquivo_minio(self.repo.db, cod_empresa, image_url)
+                logger.info(f"[Categorias] Imagem removida do MinIO: {image_url}")
             except Exception as e:
                 logger.warning(f"[Categorias] Falha ao remover imagem do MinIO: {e} | url={image_url}")
 
