@@ -22,6 +22,7 @@ class ProdutoEmpDeliveryModel(Base):
     custo       = Column(Numeric(18, 5), nullable=True)
     preco_venda = Column(Numeric(18, 2), nullable=False)
     disponivel  = Column(Boolean, nullable=False, default=True)
+    exibir_delivery = Column(Boolean, nullable=False, default=True)
 
     created_at  = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at  = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)

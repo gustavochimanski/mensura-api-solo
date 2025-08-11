@@ -13,7 +13,11 @@ class ProdutoDeliveryRepository:
         self.db = db
 
     # -------- Listagem paginada --------
-    def buscar_produtos_da_empresa(self, empresa_id: int, offset: int, limit: int, apenas_disponiveis: bool = False) -> List[ProdutoDeliveryModel]:
+    def buscar_produtos_da_empresa(
+        self, empresa_id: int, offset: int, limit: int,
+        apenas_disponiveis: bool = False,
+        apenas_delivery: bool = True              # 👈 novo parâmetro
+    ) -> List[ProdutoDeliveryModel]:
         q = (
             self.db.query(ProdutoDeliveryModel)
             .join(ProdutoEmpDeliveryModel, ProdutoDeliveryModel.cod_barras == ProdutoEmpDeliveryModel.cod_barras)
@@ -26,9 +30,11 @@ class ProdutoDeliveryRepository:
         )
         if apenas_disponiveis:
             q = q.filter(ProdutoDeliveryModel.ativo.is_(True), ProdutoEmpDeliveryModel.disponivel.is_(True))
+        if apenas_delivery:
+            q = q.filter(ProdutoEmpDeliveryModel.exibir_delivery.is_(True))  # 👈 filtra pro delivery
         return q.offset(offset).limit(limit).all()
 
-    def contar_total(self, empresa_id: int, apenas_disponiveis: bool = False) -> int:
+    def contar_total(self, empresa_id: int, apenas_disponiveis: bool = False, apenas_delivery: bool = True) -> int:
         q = (
             self.db.query(func.count(ProdutoDeliveryModel.cod_barras))
             .join(ProdutoEmpDeliveryModel, ProdutoDeliveryModel.cod_barras == ProdutoEmpDeliveryModel.cod_barras)
@@ -36,7 +42,47 @@ class ProdutoDeliveryRepository:
         )
         if apenas_disponiveis:
             q = q.filter(ProdutoDeliveryModel.ativo.is_(True), ProdutoEmpDeliveryModel.disponivel.is_(True))
+        if apenas_delivery:
+            q = q.filter(ProdutoEmpDeliveryModel.exibir_delivery.is_(True))   # 👈 idem
         return int(q.scalar() or 0)
+
+    def upsert_produto_emp(
+        self,
+        *,
+        empresa_id: int,
+        cod_barras: str,
+        preco_venda: Decimal,
+        custo: Optional[Decimal] = None,
+        vitrine_id: Optional[int] = None,
+        sku_empresa: Optional[str] = None,
+        disponivel: Optional[bool] = None,
+        exibir_delivery: Optional[bool] = None,
+    ) -> ProdutoEmpDeliveryModel:
+        pe = self.get_produto_emp(empresa_id, cod_barras)
+        if pe:
+            pe.preco_venda = preco_venda
+            pe.custo = custo
+            pe.vitrine_id = vitrine_id
+            if sku_empresa is not None:
+                pe.sku_empresa = sku_empresa
+            if disponivel is not None:
+                pe.disponivel = disponivel
+            if exibir_delivery is not None:
+                pe.exibir_delivery = exibir_delivery
+        else:
+            pe = ProdutoEmpDeliveryModel(
+                empresa_id=empresa_id,
+                cod_barras=cod_barras,
+                preco_venda=preco_venda,
+                custo=custo,
+                vitrine_id=vitrine_id,
+                sku_empresa=sku_empresa,
+                disponivel=True if disponivel is None else disponivel,
+                exibir_delivery=True if exibir_delivery is None else exibir_delivery,
+            )
+            self.db.add(pe)
+        self.db.flush()
+        return pe
 
     # -------- CRUD Produto base --------
     def buscar_por_cod_barras(self, cod_barras: str) -> Optional[ProdutoDeliveryModel]:

@@ -20,6 +20,7 @@ class CriarNovoProdutoRequest(BaseModel):
     vitrine_id: Optional[int] = None
     sku_empresa: Optional[constr(max_length=60)] = None
     disponivel: bool = True
+    exibir_delivery: bool = True
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -36,6 +37,7 @@ class AtualizarProdutoRequest(BaseModel):
     vitrine_id: Optional[int] = None
     sku_empresa: Optional[constr(max_length=60)] = None
     disponivel: Optional[bool] = None
+    exibir_delivery: bool = True
 
 # ------ DTOs / Responses ------
 class ProdutoBaseDTO(BaseModel):
@@ -45,6 +47,7 @@ class ProdutoBaseDTO(BaseModel):
     cod_categoria: int
     ativo: bool
     unidade_medida: Optional[str] = None
+    exibir_delivery: bool = True
 
     created_at: datetime
     updated_at: datetime
@@ -75,6 +78,7 @@ class ProdutoListItem(BaseModel):
     cod_categoria: int
     label_categoria: str
     disponivel: bool
+    exibir_delivery: bool = True
 
     model_config = ConfigDict(from_attributes=True)
 

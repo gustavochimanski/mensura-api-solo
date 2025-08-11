@@ -18,18 +18,23 @@ class ProdutosDeliveryService:
         self.emp_repo = EmpresaRepository(db)
 
     def listar_paginado(self, empresa_id: int, page: int, limit: int, apenas_disponiveis: bool = False):
-        if not self.emp_repo.get_empresa_by_id(empresa_id):
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Empresa não encontrada")
-
+        # por ser o endpoint de "delivery", já aplico apenas_delivery=True
         offset = (page - 1) * limit
-        produtos = self.repo.buscar_produtos_da_empresa(empresa_id, offset, limit, apenas_disponiveis=apenas_disponiveis)
-        total = self.repo.contar_total(empresa_id, apenas_disponiveis=apenas_disponiveis)
+        produtos = self.repo.buscar_produtos_da_empresa(
+            empresa_id, offset, limit,
+            apenas_disponiveis=apenas_disponiveis,
+            apenas_delivery=True,                       # 👈
+        )
+        total = self.repo.contar_total(
+            empresa_id,
+            apenas_disponiveis=apenas_disponiveis,
+            apenas_delivery=True,                       # 👈
+        )
 
         data = []
         for p in produtos:
             pe = next((x for x in p.produtos_empresa if x.empresa_id == empresa_id), None)
             if not pe:
-                # pode acontecer se produto estiver vinculado a outra empresa no join
                 continue
             data.append(ProdutoListItem(
                 cod_barras=p.cod_barras,
@@ -40,6 +45,7 @@ class ProdutosDeliveryService:
                 cod_categoria=p.cod_categoria,
                 label_categoria=p.categoria.descricao if p.categoria else "",
                 disponivel=pe.disponivel and p.ativo,
+                exibir_delivery=pe.exibir_delivery,
             ))
 
         return {"data": data, "total": total, "page": page, "limit": limit, "has_more": offset + limit < total}
@@ -60,6 +66,7 @@ class ProdutosDeliveryService:
             data_cadastro=req.data_cadastro or datetime.utcnow().date(),
             ativo=req.ativo,
             unidade_medida=req.unidade_medida,
+            exibir_delivery=req.exibir_delivery
         )
 
         # vínculo com empresa
@@ -71,6 +78,7 @@ class ProdutosDeliveryService:
             vitrine_id=req.vitrine_id,
             sku_empresa=req.sku_empresa,
             disponivel=req.disponivel,
+            exibir_delivery=req.exibir_delivery
         )
 
         self.db.commit()
@@ -105,6 +113,7 @@ class ProdutosDeliveryService:
             ativo=req.ativo,
             unidade_medida=req.unidade_medida,
             data_cadastro=req.data_cadastro or prod.data_cadastro,
+            exibir_delivery=req.exibir_delivery
         )
 
         # upsert no vínculo
@@ -131,7 +140,7 @@ class ProdutosDeliveryService:
                 sku_empresa=req.sku_empresa,
                 disponivel=req.disponivel,
                 created_at=prod.created_at,
-                updated_at=prod.updated_at,
+                updated_at=prod.updated_at
             ),
         )
 
