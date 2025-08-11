@@ -87,15 +87,17 @@ def remover_arquivo_minio(file_url: str) -> None:
     try:
         from urllib.parse import urlparse
         u = urlparse(file_url)
-        path_parts = [p for p in u.path.split("/") if p]  # remove partes vazias
+        path_parts = [p for p in u.path.split("/") if p]  # remove vazios
+
         if len(path_parts) < 2:
             print(f"⚠️ Caminho inválido para remover do MinIO: {file_url}")
             return
 
-        bucket_name = path_parts[0]  # ex: teste2
-        object_key = "/".join(path_parts[1:])  # ex: categorias/f22aac08-...
+        bucket_name = path_parts[0]  # teste2
+        object_key = "/".join(path_parts[1:])  # categorias/f22aac08-...
 
         client.remove_object(bucket_name, object_key)
         print(f"✅ Removido do MinIO: bucket={bucket_name}, key={object_key}")
     except Exception as e:
         print(f"⚠️ Erro ao remover arquivo do MinIO: {e} | url={file_url}")
+
