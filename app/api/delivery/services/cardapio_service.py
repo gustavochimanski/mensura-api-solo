@@ -23,8 +23,14 @@ class CardapioService:
         cats = self.repo_cardapio.listar_categorias(only_home=only_home)
         return [
             CategoriaMiniSchema(
-                id=c.id, slug=c.slug, parent_id=c.parent_id, descricao=c.descricao,
-                posicao=c.posicao, is_home=c.is_home, imagem=c.imagem
+                id=c.id,
+                slug=c.slug,
+                parent_id=c.parent_id,
+                descricao=c.descricao,
+                posicao=c.posicao,
+                is_home=c.is_home,
+                imagem=c.imagem,
+                href=f"/categoria/{c.slug}"  # derivado
             )
             for c in cats
         ]
