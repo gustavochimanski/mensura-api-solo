@@ -16,7 +16,7 @@ class CategoriasService:
             parent_id=data.parent_id,
             imagem=data.imagem,
             posicao=data.posicao,
-            tipo_exibicao=getattr(data, "tipo_exibicao", None),
+            tipo_exibicao=data.tipo_exibicao or None,
         )
 
     def list_all(self):
