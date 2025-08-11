@@ -79,19 +79,15 @@ def upload_file_to_minio(
     return f"{MINIO_PUBLIC_ENDPOINT}/{bucket_name}/{object_key}"
 
 
-def remover_arquivo_minio(db: Session, cod_empresa: int, file_url: str) -> None:
+def remover_arquivo_minio(db: Session, bucket: int, file_url: str) -> None:
     if not file_url:
         return
 
     try:
         # busca CNPJ para gerar bucket
         repo = EmpresaRepository(db)
-        cnpj = repo.get_cnpj_by_id(cod_empresa)
-        if not cnpj:
-            print(f"⚠️ Empresa {cod_empresa} sem CNPJ para remover {file_url}")
-            return
 
-        bucket_name = gerar_nome_bucket(cnpj)
+        bucket_name = gerar_nome_bucket(bucket)
 
         # extrai object_key
         from urllib.parse import urlparse
