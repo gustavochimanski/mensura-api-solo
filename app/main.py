@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from app.core.dependencies import get_current_user
 from app.utils.logger import logger  # ✅ Logger centralizado
 from app.api.BI.router.router import router as bi_router
-from app.api.mensura.router import router as mensura_router
+from app.api.mensura.router.router import router as mensura_router
 from app.api.delivery.router.router import api_delivery
 from app.api.public.router import router as public_router
 from app.api.pagarme.controller_pagar import router as pagarme_router

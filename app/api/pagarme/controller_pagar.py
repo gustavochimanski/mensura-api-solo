@@ -32,9 +32,9 @@ def receber_webhook(payload: dict, db: Session = Depends(get_db)):
 
     # Atualiza status do pedido
     repo = PedidoRepository(db)
-    pedido = repo.get_by_id(pedido_id)
+    pedido = repo.get_pedido(pedido_id)
     if pedido:
-        repo.atualizar_status(pedido, novo_status)
+        repo.atualizar_status_pedido(pedido, novo_status)
 
     # Atualiza status da transação
     repo_transacao = TransacaoPagamentoRepository(db)
