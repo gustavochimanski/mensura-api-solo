@@ -1,7 +1,7 @@
 from typing import List, Optional
 from datetime import datetime
 from pydantic import BaseModel, ConfigDict, condecimal
-from .shared_enums import PedidoStatusEnum, TipoEntregaEnum, OrigemPedidoEnum
+from .shared_enums_schema import PedidoStatusEnum, TipoEntregaEnum, OrigemPedidoEnum
 
 class ItemPedidoRequest(BaseModel):
     produto_cod_barras: str
