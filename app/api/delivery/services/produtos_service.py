@@ -17,13 +17,13 @@ class ProdutosDeliveryService:
         self.repo = ProdutoDeliveryRepository(db)
         self.emp_repo = EmpresaRepository(db)
 
-    def listar_paginado(self, empresa_id: int, page: int, limit: int, only_available: bool = False):
+    def listar_paginado(self, empresa_id: int, page: int, limit: int, apenas_disponiveis: bool = False):
         if not self.emp_repo.get_empresa_by_id(empresa_id):
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Empresa não encontrada")
 
         offset = (page - 1) * limit
-        produtos = self.repo.buscar_produtos_da_empresa(empresa_id, offset, limit, apenas_disponiveis=only_available)
-        total = self.repo.contar_total(empresa_id, apenas_disponiveis=only_available)
+        produtos = self.repo.buscar_produtos_da_empresa(empresa_id, offset, limit, apenas_disponiveis=apenas_disponiveis)
+        total = self.repo.contar_total(empresa_id, apenas_disponiveis=apenas_disponiveis)
 
         data = []
         for p in produtos:
