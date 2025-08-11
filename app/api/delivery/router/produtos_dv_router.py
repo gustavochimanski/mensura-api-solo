@@ -86,9 +86,9 @@ async def atualizar_produto(
     cod_barras: str = Path(...),
     descricao: str = Form(...),
     cod_categoria: int = Form(...),
-    subcategoria_id: Optional[int] = Form(None),
-    preco_venda: float = Form(...),
-    custo: float = Form(...),
+    vitrine_id: Optional[int] = Form(None),
+    preco_venda: Decimal = Form(...),
+    custo: Decimal = Form(...),
     data_cadastro: Optional[str] = Form(None),
     imagem: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
@@ -104,10 +104,11 @@ async def atualizar_produto(
             raise HTTPException(status_code=500, detail=str(e))
 
     dto = CriarNovoProdutoRequest(
+        empresa_id=cod_empresa,
         cod_barras=cod_barras,
         descricao=descricao,
         cod_categoria=cod_categoria,
-        subcategoria_id=subcategoria_id,
+        vitrine_id=vitrine_id,
         preco_venda=preco_venda,
         custo=custo,
         data_cadastro=datetime.fromisoformat(data_cadastro) if data_cadastro else None,
