@@ -7,7 +7,7 @@ from app.core.dependencies import get_current_user
 from app.utils.logger import logger  # ✅ Logger centralizado
 from app.api.BI.router import router as bi_router
 from app.api.mensura.router import router as mensura_router
-from app.api.delivery.router import router as delivery_router
+from app.api.delivery.router.router import api_delivery
 from app.api.public.router import router as public_router
 from app.api.pagarme.controller_pagar import router as pagarme_router
 from app.api.auth import auth_controller
@@ -63,7 +63,7 @@ def startup():
 # Rotas
 # ───────────────────────────
 app.include_router(auth_controller.router)
-app.include_router(delivery_router)
+app.include_router(api_delivery)
 app.include_router(mensura_router, dependencies=[Depends(get_current_user)])
 app.include_router(bi_router, prefix="/bi", dependencies=[Depends(get_current_user)])
 app.include_router(pagarme_router, dependencies=[Depends(get_current_user)])
