@@ -12,6 +12,7 @@ from minio import Minio
 from sqlalchemy.orm import Session
 
 from app.api.mensura.repositories.empresa_repo import EmpresaRepository
+from app.utils.logger import logger
 
 # Só carrega .env se não estiver em Docker
 if not os.getenv("RUNNING_IN_DOCKER"):
@@ -96,7 +97,7 @@ def remover_arquivo_minio(
         repo = EmpresaRepository(db)
         cnpj = repo.get_cnpj_by_id(cod_empresa)
         if not cnpj:
-            print(f"⚠️ Empresa {cod_empresa} sem CNPJ para remover {file_url}")
+            logger.info(f"⚠️ Empresa {cod_empresa} sem CNPJ para remover {file_url}")
             return
 
         # 2️⃣ Bucket igual ao upload
@@ -105,14 +106,14 @@ def remover_arquivo_minio(
         # 3️⃣ Extrai filename (o que vem depois de slug/)
         filename = file_url.split(f"/{slug}/")[-1]
         if not filename:
-            print(f"⚠️ Caminho inválido para remover do MinIO: {file_url}")
+            logger.info(f"⚠️ Caminho inválido para remover do MinIO: {file_url}")
             return
 
         object_key = f"{slug}/{filename}"
 
         # 4️⃣ Remove do MinIO
         client.remove_object(bucket_name, object_key)
-        print(f"✅ Removido do MinIO: bucket={bucket_name}, key={object_key}")
+        logger.info(f"✅ Removido do MinIO: bucket={bucket_name}, key={object_key}")
 
     except Exception as e:
-        print(f"⚠️ Erro ao remover arquivo do MinIO: {e} | url={file_url}")
+        logger.info(f"⚠️ Erro ao remover arquivo do MinIO: {e} | url={file_url}")
