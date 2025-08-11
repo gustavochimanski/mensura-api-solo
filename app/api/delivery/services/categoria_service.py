@@ -1,3 +1,4 @@
+# app/api/delivery/services/categorias_dv_service.py
 from __future__ import annotations
 from typing import Optional
 from sqlalchemy.orm import Session
@@ -6,7 +7,6 @@ from app.api.delivery.repositories.categorias_dv_repo import CategoriaDeliveryRe
 from app.api.delivery.schemas.categoria_dv_schema import CategoriaDeliveryIn
 from app.utils.minio_client import remover_arquivo_minio
 from app.utils.logger import logger
-
 
 class CategoriasService:
     def __init__(self, db: Session):
@@ -22,25 +22,38 @@ class CategoriasService:
         return self.repo.list_by_parent(parent_id)
 
     def update(self, cat_id: int, data: dict):
-        return self.repo.update(cat_id, data)
+        # pega a categoria atual para capturar a URL antiga
+        atual = self.repo.get_by_id(cat_id)
+        url_antiga = getattr(atual, "imagem", None)
+
+        # aplica update no banco
+        atualizado = self.repo.update(cat_id, data)
+
+        # se a imagem foi trocada, remove a antiga no MinIO (best-effort)
+        if "imagem" in data and data["imagem"] and data["imagem"] != url_antiga and url_antiga:
+            try:
+                remover_arquivo_minio(url_antiga)
+                logger.info(f"[Categorias] Imagem antiga removida do MinIO: {url_antiga}")
+            except Exception as e:
+                logger.warning(f"[Categorias] Falha ao remover imagem antiga do MinIO: {e} | url={url_antiga}")
+
+        return atualizado
 
     def delete(self, cat_id: int):
-        # 1) pega a categoria pra obter a URL da imagem
+        # pega a categoria pra obter a URL
         cat = self.repo.get_by_id(cat_id)
         image_url = getattr(cat, "imagem", None)
 
-        # 2) remove no banco
+        # apaga no banco
         self.repo.delete(cat_id)
 
-        # 3) tenta remover no MinIO (não quebra se falhar)
+        # tenta apagar arquivo
         if image_url:
             try:
                 remover_arquivo_minio(image_url)
-                logger.info(f"[Categorias] Imagem removida do MinIO: {image_url}")
             except Exception as e:
                 logger.warning(f"[Categorias] Falha ao remover imagem do MinIO: {e} | url={image_url}")
 
-        # sem retorno (mantém semântica atual do repo.delete)
         return None
 
     def toggle_home(self, cat_id: int, on: bool):

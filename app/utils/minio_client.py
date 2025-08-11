@@ -3,6 +3,8 @@
 import uuid
 import mimetypes
 import os
+from urllib.parse import urlparse
+
 from slugify import slugify
 
 from fastapi import UploadFile
@@ -77,13 +79,55 @@ def upload_file_to_minio(
     return f"{MINIO_PUBLIC_ENDPOINT}/{bucket_name}/{object_key}"
 
 
-def remover_arquivo_minio(url: str) -> None:
-    if not url or not MINIO_PUBLIC_ENDPOINT:
-        return
+def _parse_minio_path(url: str) -> tuple[str, str] | None:
+    """
+    Extrai (bucket, object_key) de várias formas de URL:
+    - http(s)://<host>/<bucket>/<obj...>
+    - s3://<bucket>/<obj...>
+    - <bucket>/<obj...>
+    Retorna None se não conseguir parsear.
+    """
+    if not url:
+        return None
+
+    # s3://bucket/key
+    if url.startswith("s3://"):
+        rest = url[5:]
+        if "/" not in rest:
+            return None
+        bucket, obj = rest.split("/", 1)
+        return bucket, obj
+
+    # http(s)://host/bucket/key (path-style)
     try:
-        base_url = MINIO_PUBLIC_ENDPOINT.rstrip("/")
-        relative = url.replace(base_url, "").lstrip("/")
-        bucket, obj = relative.split("/", 1)
+        u = urlparse(url)
+        if u.scheme in ("http", "https") and u.path:
+            parts = [p for p in u.path.split("/") if p]  # remove vazios
+            if len(parts) >= 2:
+                bucket = parts[0]
+                obj = "/".join(parts[1:])
+                return bucket, obj
+    except Exception:
+        pass
+
+    # tentativa simples: "bucket/obj"
+    if "/" in url and not url.startswith(("http://", "https://")):
+        bucket, obj = url.split("/", 1)
+        return bucket, obj
+
+    return None
+
+def remover_arquivo_minio(url: str) -> None:
+    """
+    Remove um objeto no MinIO dado qualquer forma de URL.
+    Não levanta erro pra não quebrar fluxo.
+    """
+    try:
+        parsed = _parse_minio_path(url)
+        if not parsed:
+            print(f"⚠️ Não foi possível parsear URL do MinIO: {url}")
+            return
+        bucket, obj = parsed
         client.remove_object(bucket, obj)
     except Exception as e:
-        print(f"⚠️ Erro ao remover arquivo do MinIO: {e}")
+        print(f"⚠️ Erro ao remover arquivo do MinIO: {e} | url={url}")
