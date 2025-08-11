@@ -28,7 +28,6 @@ class CardapioService:
                 parent_id=c.parent_id,
                 descricao=c.descricao,
                 posicao=c.posicao,
-                is_home=bool(c.is_home),
                 imagem=c.imagem,
                 label=c.descricao,
                 href=f"/categoria/{c.slug}"

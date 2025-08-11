@@ -7,7 +7,6 @@ class CategoriaMiniSchema(BaseModel):
     parent_id: Optional[int] = None
     descricao: str
     posicao: int
-    is_home: bool
     imagem: Optional[str] = None
     label: str
     href: str

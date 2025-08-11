@@ -12,8 +12,7 @@ class CategoriaDeliveryModel(Base):
     descricao = Column(String(100), nullable=False)
     slug = Column(String(100), nullable=False, unique=True)
 
-    # "P" = aparece na home, outros valores = não aparece
-    tipo_exibicao = Column(String(1), nullable=True)
+
 
     parent_id = Column(Integer, ForeignKey("delivery.categoria_dv.id", ondelete="SET NULL"), nullable=True)
     parent = relationship("CategoriaDeliveryModel", remote_side=[id], back_populates="children")
@@ -39,8 +38,3 @@ class CategoriaDeliveryModel(Base):
     @property
     def label(self) -> str:
         return self.descricao
-
-    @hybrid_property
-    def is_home(self) -> bool:
-        """Retorna True se a categoria deve aparecer na home."""
-        return self.tipo_exibicao == "P"

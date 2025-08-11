@@ -21,6 +21,5 @@ class CategoriaDeliveryOut(BaseModel):
     imagem: Optional[str] = None
     href: str
     posicao: int
-    is_home: bool  # property derivada
 
     model_config = ConfigDict(from_attributes=True)

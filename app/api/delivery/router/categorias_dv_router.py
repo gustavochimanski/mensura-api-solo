@@ -38,7 +38,6 @@ def list_categorias(
             imagem=c.imagem,
             href=f"/categoria/{c.slug}",  # derivado
             posicao=c.posicao,
-            is_home=c.is_home,  # property no model
         )
         for c in cats
     ]
@@ -61,7 +60,6 @@ def get_categoria(
         imagem=c.imagem,
         href=f"/categoria/{c.slug}",
         posicao=c.posicao,
-        is_home=c.is_home,
     )
 
 
@@ -78,7 +76,6 @@ def criar_categoria(body: CategoriaDeliveryIn, db: Session = Depends(get_db)):
         imagem=c.imagem,
         href=f"/categoria/{c.slug}",
         posicao=c.posicao,
-        is_home=c.is_home,
     )
 
 @router.put("/{cat_id}", response_model=CategoriaDeliveryOut)
@@ -94,7 +91,6 @@ def editar_categoria(cat_id: int, body: CategoriaDeliveryIn, db: Session = Depen
         imagem=c.imagem,
         href=f"/categoria/{c.slug}",
         posicao=c.posicao,
-        is_home=c.is_home,
     )
 
 
@@ -125,7 +121,6 @@ def move_categoria_direita(
         imagem=c.imagem,
         href=f"/categoria/{c.slug}",
         posicao=c.posicao,
-        is_home=c.is_home,
     )
 
 
@@ -146,7 +141,6 @@ def move_categoria_esquerda(
         imagem=c.imagem,
         href=f"/categoria/{c.slug}",
         posicao=c.posicao,
-        is_home=c.is_home,
     )
 
 
@@ -170,7 +164,6 @@ def toggle_home(
         imagem=c.imagem,
         href=f"/categoria/{c.slug}",
         posicao=c.posicao,
-        is_home=c.is_home,
     )
 
 @router.patch("/{cat_id}/imagem", response_model=CategoriaDeliveryOut)
@@ -199,5 +192,4 @@ async def upload_imagem_categoria(
         imagem=c.imagem,
         href=f"/categoria/{c.slug}",
         posicao=c.posicao,
-        is_home=bool(c.is_home),
     )
