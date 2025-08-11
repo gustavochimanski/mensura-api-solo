@@ -7,10 +7,13 @@ class CategoriaMiniSchema(BaseModel):
     parent_id: Optional[int] = None
     descricao: str
     posicao: int
-    is_home: bool  # derivado de tipo_exibicao == "P"
+    is_home: bool
     imagem: Optional[str] = None
+    label: str
+    href: str
 
     model_config = ConfigDict(from_attributes=True)
+
 
 class ProdutoMiniDTO(BaseModel):
     cod_barras: str
