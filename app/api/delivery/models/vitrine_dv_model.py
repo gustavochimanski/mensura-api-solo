@@ -12,7 +12,7 @@ class VitrinesModel(Base):
     id = Column(Integer, primary_key=True)
 
     cod_categoria = Column(
-        String,
+        Integer,
         ForeignKey("delivery.categoria_dv.id", ondelete="CASCADE"),
         nullable=False,
     )

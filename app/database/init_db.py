@@ -28,10 +28,13 @@ def importar_models():
     import app.api.delivery.models.cadprod_emp_dv_model
     import app.api.delivery.models.categoria_dv_model
     import app.api.delivery.models.cliente_dv_model
+    import app.api.delivery.models.cupom_dv_model
     import app.api.delivery.models.endereco_dv_model
     import app.api.delivery.models.entregador_dv_model
-    import app.api.delivery.models.pedido_item_dv_model
     import app.api.delivery.models.pedido_dv_model
+    import app.api.delivery.models.pedido_item_dv_model
+    import app.api.delivery.models.pedido_status_historico_dv_model
+    import app.api.delivery.models.transacao_pagamento_dv_model
     import app.api.delivery.models.vitrine_dv_model
 
     # ─── Models PagarMe ───────────────────────────────────────────
