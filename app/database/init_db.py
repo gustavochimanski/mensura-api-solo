@@ -37,9 +37,6 @@ def importar_models():
     import app.api.delivery.models.transacao_pagamento_dv_model
     import app.api.delivery.models.vitrine_dv_model
 
-    # ─── Models PagarMe ───────────────────────────────────────────
-    import app.api.pagarme.models.transacao_model
-
 def criar_tabelas():
     try:
         importar_models()  # importa só os seus models de mensura e deliveryy
