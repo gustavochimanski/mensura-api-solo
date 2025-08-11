@@ -2,7 +2,7 @@ from pydantic import BaseModel, ConfigDict, constr
 from typing import Optional
 
 class CriarVitrineRequest(BaseModel):
-    cod_categoria: int  # alinhar ao model (FK int)
+    cod_categoria: Optional[int] = None  # alinhar ao model (FK int)
     titulo: constr(min_length=1, max_length=100)
     ordem: int = 1
     is_home: bool  # property derivada

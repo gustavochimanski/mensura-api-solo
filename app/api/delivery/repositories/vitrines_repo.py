@@ -5,6 +5,7 @@ from fastapi import HTTPException, status
 from slugify import slugify
 
 from app.api.delivery.models.cadprod_emp_dv_model import ProdutoEmpDeliveryModel
+from app.api.delivery.models.categoria_dv_model import CategoriaDeliveryModel
 from app.api.delivery.models.vitrine_dv_model import VitrinesModel
 
 class VitrineRepository:
@@ -23,9 +24,28 @@ class VitrineRepository:
             q = q.filter(VitrinesModel.cod_categoria == cod_categoria)
         return q.order_by(VitrinesModel.ordem).all()
 
-    def create(self, cod_categoria: int, titulo: str, ordem: int = 1) -> VitrinesModel:
+    def create(self, cod_categoria: int | None, titulo: str, ordem: int = 1) -> VitrinesModel:
+        # Se cod_categoria for None, buscar a primeira categoria disponível
+        if cod_categoria is None:
+            primeira_cat = (
+                self.db.query(CategoriaDeliveryModel)
+                .order_by(CategoriaDeliveryModel.id.asc())
+                .first()
+            )
+            if not primeira_cat:
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    "Não foi possível criar a vitrine: nenhuma categoria cadastrada."
+                )
+            cod_categoria = primeira_cat.id
+
         slug_value = slugify(titulo)
-        nova = VitrinesModel(cod_categoria=cod_categoria, titulo=titulo, slug=slug_value, ordem=ordem)
+        nova = VitrinesModel(
+            cod_categoria=cod_categoria,
+            titulo=titulo,
+            slug=slug_value,
+            ordem=ordem
+        )
         self.db.add(nova)
         try:
             self.db.commit()
@@ -33,7 +53,10 @@ class VitrineRepository:
             return nova
         except Exception:
             self.db.rollback()
-            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Erro ao criar Vitrine")
+            raise HTTPException(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                "Erro ao criar Vitrine"
+            )
 
     def delete(self, vitrine_id: int):
         sub = self.db.query(VitrinesModel).filter_by(id=vitrine_id).first()
