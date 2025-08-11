@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.api.delivery.repositories.vitrines_repo import VitrineRepository
 from app.api.delivery.repositories.produtos_dv_repo import ProdutoDeliveryRepository
-from app.api.delivery.schemas.vitrine_schema import CriarVitrineRequest, VitrineOut
+from app.api.delivery.schemas.vitrine_schema import CriarVitrineRequest
 
 class VitrinesService:
     def __init__(self, db: Session):
