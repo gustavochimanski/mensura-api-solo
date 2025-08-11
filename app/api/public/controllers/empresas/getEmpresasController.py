@@ -1,4 +1,4 @@
-# app/api/public/controllers/empresas.py
+# app/api/public/router/empresas.py
 import logging
 from fastapi import Depends, APIRouter
 from sqlalchemy.orm import Session

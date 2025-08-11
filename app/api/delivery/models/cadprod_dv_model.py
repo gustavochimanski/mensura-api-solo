@@ -1,5 +1,5 @@
 from pydantic import ConfigDict
-from sqlalchemy import Column, Integer, String, Date, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, Date, ForeignKey, Boolean, Numeric, func
 from sqlalchemy.orm import relationship
 from app.database.db_connection import Base
 
@@ -13,10 +13,14 @@ class ProdutoDeliveryModel(Base):
     data_cadastro = Column(Date, nullable=True)
     cod_categoria = Column(Integer, ForeignKey("delivery.categoria_dv.id", ondelete="RESTRICT"), nullable=False)
 
+    # extras úteis para cardápio
+    ativo = Column(Boolean, nullable=False, default=True)
+    unidade_medida = Column(String(10), nullable=True)  # ex: "UN", "KG"
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
     # Relacionamentos
     categoria = relationship("CategoriaDeliveryModel", back_populates="produtos")
-
-    # Produtos associados às empresas
     produtos_empresa = relationship("ProdutoEmpDeliveryModel", back_populates="produto", cascade="all, delete-orphan")
 
     model_config = ConfigDict(from_attributes=True)

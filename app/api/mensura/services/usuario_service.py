@@ -1,11 +1,13 @@
 # app/api/mensura/services/usuario_service.py
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
+
 from app.api.mensura.repositories.usuarios_repo import UsuarioRepository
 from app.api.mensura.repositories.empresa_repo import EmpresaRepository
 from app.api.mensura.schemas.usuario_schema import UserCreate, UserUpdate
 from app.api.mensura.models.user_model import UserModel
-from app.core.security import hash_password  # ✅ agora usa o utilitário central
+from app.core.security import hash_password
+
 
 class UserService:
     def __init__(self, db: Session):
@@ -36,9 +38,9 @@ class UserService:
 
         user = UserModel(
             username=data.username,
-            hashed_password=hash_password(data.password),  # ✅ usando hash centralizado
+            hashed_password=hash_password(data.password),
             type_user=data.type_user,
-            empresas=empresas
+            empresas=empresas,
         )
         return self.repo.create(user)
 
@@ -49,9 +51,9 @@ class UserService:
             if self.repo.get_by_username(data.username):
                 raise HTTPException(400, "Já existe um usuário com este username")
 
-        update_data = data.dict(exclude_unset=True, exclude={"empresa_ids"})
-        if "password" in data.__fields_set__:
-            update_data["hashed_password"] = hash_password(data.password)  # ✅ aqui também
+        update_data = data.model_dump(exclude_unset=True, exclude={"empresa_ids", "password"})
+        if data.password:
+            update_data["hashed_password"] = hash_password(data.password)
 
         if data.empresa_ids is not None:
             empresas = self.repo_emp.list_by_ids(data.empresa_ids)

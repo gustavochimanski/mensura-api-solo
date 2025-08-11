@@ -1,4 +1,4 @@
-# empresa_schema.py
+# app/api/mensura/schemas/empresa_schema.py
 from pydantic import BaseModel, ConfigDict
 from typing import Optional
 from app.api.mensura.schemas.endereco_schema import EnderecoCreate, EnderecoResponse
@@ -22,5 +22,4 @@ class EmpresaUpdate(BaseModel):
 class EmpresaResponse(EmpresaBase):
     id: int
     endereco: Optional[EnderecoResponse] = None
-
     model_config = ConfigDict(from_attributes=True)

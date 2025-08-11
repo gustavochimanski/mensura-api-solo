@@ -1,8 +1,26 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Numeric
-from sqlalchemy.orm import relationship
-from app.database.db_connection import Base
-from datetime import datetime
 from pydantic import ConfigDict
+from sqlalchemy import (
+    Column, Integer, String, DateTime, ForeignKey, Numeric, Enum as SAEnum, Date, func
+)
+from sqlalchemy.orm import relationship
+from datetime import datetime
+from app.database.db_connection import Base
+
+PedidoStatus = SAEnum(
+    "P", "A", "R", "S", "E", "C",
+    name="pedido_status_enum",
+    create_type=False
+)
+
+# PENDENTE: P
+# ACEITO: A
+# EM_PREPARO: R
+# SAIU_PARA_ENTREGA: S
+# ENTREGUE: E
+# CANCELADO: C
+
+TipoEntrega = SAEnum("DELIVERY", "RETIRADA", name="tipo_entrega_enum", create_type=False)
+OrigemPedido = SAEnum("WEB", "APP", "BALCAO", name="origem_pedido_enum", create_type=False)
 
 
 class PedidoDeliveryModel(Base):
@@ -15,19 +33,36 @@ class PedidoDeliveryModel(Base):
     entregador_id = Column(Integer, ForeignKey("delivery.entregadores_dv.id", ondelete="SET NULL"))
     endereco_id = Column(Integer, ForeignKey("delivery.enderecos_dv.id", ondelete="SET NULL"), nullable=True)
 
-    status = Column(String(1), nullable=False, default="P")  # Ex: P, E, F, C
-    valor_total = Column(Numeric(18, 2), nullable=False)
-    data_criacao = Column(DateTime, default=datetime.now)
-    observacao_geral = Column(String(255), nullable=True)
+    status = Column(PedidoStatus, nullable=False, default="PENDENTE")
+    tipo_entrega = Column(TipoEntrega, nullable=False, default="DELIVERY")
+    origem = Column(OrigemPedido, nullable=False, default="WEB")
 
-    # Relacionamentos
+    # totais
+    subtotal = Column(Numeric(18, 2), nullable=False, default=0)
+    desconto = Column(Numeric(18, 2), nullable=False, default=0)
+    taxa_entrega = Column(Numeric(18, 2), nullable=False, default=0)
+    taxa_servico = Column(Numeric(18, 2), nullable=False, default=0)
+    valor_total = Column(Numeric(18, 2), nullable=False)
+
+    previsao_entrega = Column(DateTime, nullable=True)
+    distancia_km = Column(Numeric(10, 3), nullable=True)
+    observacao_geral = Column(String(255), nullable=True)
+    troco_para = Column(Numeric(18, 2), nullable=True)
+
+    cupom_id = Column(Integer, ForeignKey("delivery.cupons_dv.id", ondelete="SET NULL"), nullable=True)
+
+    data_criacao = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    data_atualizacao = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
     cliente = relationship("ClienteDeliveryModel", back_populates="pedidos")
     empresa = relationship("EmpresaModel", back_populates="pedidos")
     entregador = relationship("EntregadorDeliveryModel", back_populates="pedidos")
     endereco = relationship("EnderecoDeliveryModel", back_populates="pedidos")
-    itens = relationship("PedidoItemModel", back_populates="pedido", cascade="all, delete-orphan")
-    transacao = relationship("TransacaoPagamentoModel", back_populates="pedido", uselist=False,cascade="all, delete-orphan")
 
+    itens = relationship("PedidoItemModel", back_populates="pedido", cascade="all, delete-orphan")
+    transacao = relationship("TransacaoPagamentoModel", back_populates="pedido", uselist=False,
+                             cascade="all, delete-orphan")
+    historicos = relationship("PedidoStatusHistoricoModel", back_populates="pedido", cascade="all, delete-orphan")
+    cupom = relationship("CupomDescontoModel", back_populates="pedidos")
 
     model_config = ConfigDict(from_attributes=True)
-

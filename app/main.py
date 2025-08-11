@@ -62,9 +62,9 @@ def startup():
 # ───────────────────────────
 # Rotas
 # ───────────────────────────
-app.include_router(auth_controller.router, prefix="/auth")
-app.include_router(delivery_router, prefix="/delivery")
-app.include_router(mensura_router, prefix="/mensura", dependencies=[Depends(get_current_user)])
+app.include_router(auth_controller.router)
+app.include_router(delivery_router)
+app.include_router(mensura_router, dependencies=[Depends(get_current_user)])
 app.include_router(bi_router, prefix="/bi", dependencies=[Depends(get_current_user)])
-app.include_router(pagarme_router, prefix="/pagarme", dependencies=[Depends(get_current_user)])
+app.include_router(pagarme_router, dependencies=[Depends(get_current_user)])
 app.include_router(public_router, prefix="/public", dependencies=[Depends(get_current_user)])

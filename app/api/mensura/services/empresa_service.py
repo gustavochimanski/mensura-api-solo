@@ -1,3 +1,4 @@
+# app/api/mensura/services/empresa_service.py
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
 
@@ -18,72 +19,62 @@ class EmpresaService:
             raise HTTPException(status_code=404, detail="Empresa não encontrada")
         return empresa
 
-    def list_empresas(self, skip: int = 0, limit: int = 0):
+    def list_empresas(self, skip: int = 0, limit: int = 100):
         return self.repo_emp.list(skip, limit)
 
     def create_empresa(self, data: EmpresaCreate):
-        # 🔁 Valida duplicidade de CNPJ
-        if self.repo_emp.get_emp_by_cnpj(data.cnpj):
-            raise HTTPException(status_code=400, detail="Empresa já cadastrada")
+        if data.cnpj and self.repo_emp.get_emp_by_cnpj(data.cnpj):
+            raise HTTPException(status_code=400, detail="Empresa já cadastrada (CNPJ)")
 
-        # 🏠 Cria o endereço primeiro
         endereco = self.endereco_service.create_endereco(data.endereco)
 
-        # 🏢 Cria empresa vinculando o endereço
         empresa = EmpresaModel(
             nome=data.nome,
             cnpj=data.cnpj,
             slug=data.slug,
             logo=data.logo,
-            endereco_id=endereco.id
+            endereco_id=endereco.id,
         )
-
         return self.repo_emp.create(empresa)
 
     def update_empresa(self, id: int, data: EmpresaUpdate):
         empresa = self.get_empresa(id)
-        payload = data.dict(exclude_unset=True)
+        payload = data.model_dump(exclude_unset=True)
 
-        # Verifica duplicidade de CNPJ
         novo_cnpj = payload.get("cnpj")
         if novo_cnpj and novo_cnpj != empresa.cnpj:
             existente = self.repo_emp.get_emp_by_cnpj(novo_cnpj)
             if existente and existente.id != id:
                 raise HTTPException(status_code=400, detail="CNPJ já cadastrado em outra empresa")
 
-        # Valida e aplica novo endereço, se enviado
-        if "endereco_id" in payload:
+        if "endereco_id" in payload and payload["endereco_id"] is not None:
             endereco = self.endereco_service.get_endereco(payload["endereco_id"])
             empresa.endereco_id = endereco.id
 
         if "slug" in payload and payload["slug"] != empresa.slug:
             existente = self.repo_emp.get_emp_by_slug(payload["slug"])
             if existente and existente.id != id:
-                raise HTTPException(status_code=400, detail="Slug já está em uso por outra empresa")
+                raise HTTPException(status_code=400, detail="Slug já em uso por outra empresa")
 
-        # Atualiza demais campos
         update_data = {k: v for k, v in payload.items() if k != "endereco_id"}
         return self.repo_emp.update(empresa, update_data)
 
     def delete_empresa(self, id: int):
         empresa = self.get_empresa(id)
 
-        # 🚫 Regra 1: impedir exclusão se houver usuários
         if empresa.usuarios and len(empresa.usuarios) > 0:
             raise HTTPException(status_code=400, detail="Empresa possui usuários vinculados.")
 
-        endereco_id = empresa.endereco_id  # salva antes de deletar
+        endereco_id = empresa.endereco_id
 
-        # ✅ Deleta a empresa
         self.repo_emp.delete(empresa)
 
-        # 🧹 Regra 2: deleta o endereço se ninguém mais usa
         if endereco_id:
-            outras_empresas = (
+            # se nenhuma outra empresa usa esse endereço, apaga
+            count = (
                 self.repo_emp.db.query(EmpresaModel)
                 .filter(EmpresaModel.endereco_id == endereco_id)
                 .count()
             )
-            if outras_empresas == 0:
+            if count == 0:
                 self.endereco_service.delete_endereco(endereco_id)
-

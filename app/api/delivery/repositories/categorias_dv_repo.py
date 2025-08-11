@@ -1,42 +1,38 @@
-# app/api/delivery/repositories/categorias_dv_repo.py
-from typing import Optional
+from __future__ import annotations
+from typing import Optional, List
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
+from slugify import slugify
+
 from app.api.delivery.models.categoria_dv_model import CategoriaDeliveryModel
-from app.api.delivery.schemas.categoria_dv_schema import CategoriaDeliveryIn
 
 class CategoriaDeliveryRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def create(self, dados: CategoriaDeliveryIn) -> CategoriaDeliveryModel:
-        slug_value = dados.slug or dados.descricao.lower().replace(" ", "-")
-        existe = (
-            self.db.query(CategoriaDeliveryModel)
-            .filter_by(slug=slug_value)
-            .first()
-        )
+    # -------- CRUD --------
+    def create(self, descricao: str, slug: Optional[str], parent_id: Optional[int], imagem: Optional[str], posicao: Optional[int], tipo_exibicao: Optional[str]) -> CategoriaDeliveryModel:
+        slug_value = slug or slugify(descricao)
+        existe = self.db.query(CategoriaDeliveryModel).filter_by(slug=slug_value).first()
         if existe:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Já existe uma categoria com esse slug.",
-            )
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Já existe uma categoria com esse slug.")
 
-        if dados.posicao is None:
+        if posicao is None:
             max_posicao = (
                 self.db.query(func.max(CategoriaDeliveryModel.posicao))
-                .filter(CategoriaDeliveryModel.parent_id == dados.parent_id)
+                .filter(CategoriaDeliveryModel.parent_id == parent_id)
                 .scalar()
             )
-            dados.posicao = (max_posicao or 0) + 1
+            posicao = (max_posicao or 0) + 1
 
         nova = CategoriaDeliveryModel(
-            descricao=dados.descricao,
+            descricao=descricao,
             slug=slug_value,
-            parent_id=dados.parent_id,
-            imagem=dados.imagem,
-            posicao=dados.posicao,
+            parent_id=parent_id,
+            imagem=imagem,
+            posicao=posicao,
+            tipo_exibicao=tipo_exibicao,
         )
         self.db.add(nova)
         try:
@@ -45,16 +41,13 @@ class CategoriaDeliveryRepository:
             return nova
         except Exception:
             self.db.rollback()
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Erro ao criar categoria",
-            )
+            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Erro ao criar categoria")
 
-    def list_all(self) -> list[CategoriaDeliveryModel]:
+    def list_all(self) -> List[CategoriaDeliveryModel]:
         stmt = select(CategoriaDeliveryModel).order_by(CategoriaDeliveryModel.posicao)
         return self.db.execute(stmt).scalars().all()
 
-    def list_by_parent(self, parent_id: Optional[int]) -> list[CategoriaDeliveryModel]:
+    def list_by_parent(self, parent_id: Optional[int]) -> List[CategoriaDeliveryModel]:
         stmt = (
             select(CategoriaDeliveryModel)
             .where(CategoriaDeliveryModel.parent_id == parent_id)
@@ -65,29 +58,28 @@ class CategoriaDeliveryRepository:
     def get_by_id(self, cat_id: int) -> CategoriaDeliveryModel:
         cat = self.db.query(CategoriaDeliveryModel).filter_by(id=cat_id).first()
         if not cat:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Categoria não encontrada")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Categoria não encontrada")
         return cat
 
     def update(self, cat_id: int, update_data: dict) -> CategoriaDeliveryModel:
         cat = self.get_by_id(cat_id)
-        for key, value in update_data.items():
-            if value is not None:
-                setattr(cat, key, value)
+        for key in ("descricao","slug","parent_id","imagem","posicao","tipo_exibicao"):
+            if key in update_data and update_data[key] is not None:
+                setattr(cat, key, update_data[key])
         try:
             self.db.commit()
             self.db.refresh(cat)
             return cat
         except Exception:
             self.db.rollback()
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Erro ao atualizar categoria"
-            )
+            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Erro ao atualizar categoria")
 
     def delete(self, cat_id: int) -> None:
         cat = self.get_by_id(cat_id)
         self.db.delete(cat)
         self.db.commit()
 
+    # -------- Ordering --------
     def move_right(self, cat_id: int) -> CategoriaDeliveryModel:
         cat = self.get_by_id(cat_id)
         irmas = (
@@ -98,7 +90,7 @@ class CategoriaDeliveryRepository:
         )
         idx = next((i for i, c in enumerate(irmas) if c.id == cat_id), None)
         if idx is None or idx == len(irmas) - 1:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Não é possível mover para a direita")
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Não é possível mover para a direita")
         proxima = irmas[idx + 1]
         cat.posicao, proxima.posicao = proxima.posicao, cat.posicao
         try:
@@ -107,7 +99,7 @@ class CategoriaDeliveryRepository:
             return cat
         except Exception:
             self.db.rollback()
-            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Erro ao mover categoria para a direita")
+            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Erro ao mover categoria para a direita")
 
     def move_left(self, cat_id: int) -> CategoriaDeliveryModel:
         cat = self.get_by_id(cat_id)
@@ -119,7 +111,7 @@ class CategoriaDeliveryRepository:
         )
         idx = next((i for i, c in enumerate(irmas) if c.id == cat_id), None)
         if idx is None or idx == 0:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Não é possível mover para a esquerda")
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Não é possível mover para a esquerda")
         anterior = irmas[idx - 1]
         cat.posicao, anterior.posicao = anterior.posicao, cat.posicao
         try:
@@ -128,4 +120,16 @@ class CategoriaDeliveryRepository:
             return cat
         except Exception:
             self.db.rollback()
-            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Erro ao mover categoria para a esquerda")
+            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Erro ao mover categoria para a esquerda")
+
+    # -------- Extras --------
+    def toggle_home(self, cat_id: int, on: bool) -> CategoriaDeliveryModel:
+        cat = self.get_by_id(cat_id)
+        cat.tipo_exibicao = "P" if on else None
+        try:
+            self.db.commit()
+            self.db.refresh(cat)
+            return cat
+        except Exception:
+            self.db.rollback()
+            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Erro ao alterar exibição na home")

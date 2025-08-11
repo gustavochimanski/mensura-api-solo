@@ -1,4 +1,4 @@
-# app/controllers/relatorios/vendaPorHoraController.py
+# app/router/relatorios/vendaPorHoraController.py
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session

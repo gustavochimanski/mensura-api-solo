@@ -1,6 +1,8 @@
+# app/api/mensura/router/endereco_controller.py
+from typing import List
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from typing import List
+
 from app.database.db_connection import get_db
 from app.api.mensura.services.endereco_service import EnderecoService
 from app.api.mensura.schemas.endereco_schema import EnderecoCreate, EnderecoUpdate, EnderecoResponse

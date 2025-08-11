@@ -1,6 +1,8 @@
+# app/api/mensura/router/usuario_controller.py
+from typing import List
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from typing import List
+
 from app.database.db_connection import get_db
 from app.api.mensura.services.usuario_service import UserService
 from app.api.mensura.schemas.usuario_schema import UserCreate, UserUpdate, UserResponse

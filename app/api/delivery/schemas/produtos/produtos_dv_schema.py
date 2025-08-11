@@ -1,37 +1,80 @@
-# app/api/delivery/schemas/produtos_dv_schema.py
-from datetime import datetime
-from pydantic import BaseModel, ConfigDict
+from datetime import datetime, date
+from pydantic import BaseModel, ConfigDict, Field, condecimal, constr
 from typing import Optional, List
 
+# ------ Requests de criação/edição ------
 class CriarNovoProdutoRequest(BaseModel):
-    cod_barras: str
-    descricao: str
+    # ProdutoDeliveryModel
+    cod_barras: constr(min_length=1)
+    descricao: constr(min_length=1, max_length=255)
     cod_categoria: int
-    preco_venda: float
-    vitrine_id: int
-    custo: float
     imagem: Optional[str] = None
-    data_cadastro: Optional[datetime] = None
+    data_cadastro: Optional[date] = None
+    ativo: bool = True
+    unidade_medida: Optional[constr(max_length=10)] = None
+
+    # ProdutoEmpDeliveryModel (já cria o vínculo com a empresa)
+    empresa_id: int
+    preco_venda: condecimal(max_digits=18, decimal_places=2) = Field(..., gt=0)
+    custo: Optional[condecimal(max_digits=18, decimal_places=5)] = None
+    vitrine_id: Optional[int] = None
+    sku_empresa: Optional[constr(max_length=60)] = None
+    disponivel: bool = True
 
     model_config = ConfigDict(from_attributes=True)
 
-class CriarNovoProdutoResponse(BaseModel):
+class AtualizarProdutoRequest(BaseModel):
+    descricao: Optional[constr(max_length=255)] = None
+    cod_categoria: Optional[int] = None
+    imagem: Optional[str] = None
+    ativo: Optional[bool] = None
+    unidade_medida: Optional[constr(max_length=10)] = None
+
+    # campos de produto da empresa (opcionais)
+    preco_venda: Optional[condecimal(max_digits=18, decimal_places=2)] = None
+    custo: Optional[condecimal(max_digits=18, decimal_places=5)] = None
+    vitrine_id: Optional[int] = None
+    sku_empresa: Optional[constr(max_length=60)] = None
+    disponivel: Optional[bool] = None
+
+# ------ DTOs / Responses ------
+class ProdutoBaseDTO(BaseModel):
     cod_barras: str
     descricao: str
-    cod_categoria: int
     imagem: Optional[str] = None
-    data_cadastro: Optional[datetime] = None
+    cod_categoria: int
+    ativo: bool
+    unidade_medida: Optional[str] = None
+
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+class ProdutoEmpDTO(BaseModel):
+    empresa_id: int
+    cod_barras: str
+    preco_venda: float
+    custo: Optional[float] = None
+    vitrine_id: Optional[int] = None
+    sku_empresa: Optional[str] = None
+    disponivel: bool
+
+    created_at: datetime
+    updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
 
 class ProdutoListItem(BaseModel):
+    # para listagem paginada
     cod_barras: str
     descricao: str
     imagem: Optional[str] = None
     preco_venda: float
-    custo: float
+    custo: Optional[float] = None
     cod_categoria: int
     label_categoria: str
+    disponivel: bool
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -44,11 +87,8 @@ class ProdutosPaginadosResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-class ProdutoEmpDTO(BaseModel):
-    empresa_id: int
-    cod_barras: str
-    preco_venda: float
-    custo: Optional[float] = None
-    vitrine_id: Optional[int] = None
+class CriarNovoProdutoResponse(BaseModel):
+    produto: ProdutoBaseDTO
+    produto_emp: ProdutoEmpDTO
 
     model_config = ConfigDict(from_attributes=True)

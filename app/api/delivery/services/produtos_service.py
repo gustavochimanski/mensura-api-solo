@@ -1,31 +1,36 @@
-# services/produtos_service.py
+from __future__ import annotations
 from datetime import datetime
-
+from decimal import Decimal
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.delivery.repositories.produtos_dv_repo import ProdutoDeliveryRepository
 from app.api.mensura.repositories.empresa_repo import EmpresaRepository
-from app.api.delivery.schemas.produtos.produtos_dv_schema import ProdutoListItem, CriarNovoProdutoResponse, \
-    CriarNovoProdutoRequest
+from app.api.delivery.schemas.produtos.produtos_dv_schema import (
+    ProdutoListItem, CriarNovoProdutoResponse, CriarNovoProdutoRequest, ProdutoBaseDTO, ProdutoEmpDTO
+)
 from app.api.delivery.models.cadprod_dv_model import ProdutoDeliveryModel
-from app.api.delivery.models.cadprod_emp_dv_model import ProdutoEmpDeliveryModel
-
 
 class ProdutosDeliveryService:
     def __init__(self, db: Session):
         self.db = db
-        self.produto_repo = ProdutoDeliveryRepository(db)
+        self.repo = ProdutoDeliveryRepository(db)
         self.emp_repo = EmpresaRepository(db)
 
-    def listar_paginado(self, cod_empresa: int, page: int, limit: int):
+    def listar_paginado(self, empresa_id: int, page: int, limit: int, only_available: bool = False):
+        if not self.emp_repo.get_empresa_by_id(empresa_id):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Empresa não encontrada")
+
         offset = (page - 1) * limit
-        produtos = self.produto_repo.buscar_produtos_da_empresa(cod_empresa, offset, limit)
-        total = self.produto_repo.contar_total(cod_empresa)
+        produtos = self.repo.buscar_produtos_da_empresa(empresa_id, offset, limit, apenas_disponiveis=only_available)
+        total = self.repo.contar_total(empresa_id, apenas_disponiveis=only_available)
 
         data = []
         for p in produtos:
-            pe = next(pe for pe in p.produtos_empresa if pe.empresa == cod_empresa)
+            pe = next((x for x in p.produtos_empresa if x.empresa_id == empresa_id), None)
+            if not pe:
+                # pode acontecer se produto estiver vinculado a outra empresa no join
+                continue
             data.append(ProdutoListItem(
                 cod_barras=p.cod_barras,
                 descricao=p.descricao,
@@ -33,63 +38,127 @@ class ProdutosDeliveryService:
                 preco_venda=float(pe.preco_venda),
                 custo=float(pe.custo or 0),
                 cod_categoria=p.cod_categoria,
-                label_categoria=p.categoria.descricao if p.categoria else ""
+                label_categoria=p.categoria.descricao if p.categoria else "",
+                disponivel=pe.disponivel and p.ativo,
             ))
 
         return {"data": data, "total": total, "page": page, "limit": limit, "has_more": offset + limit < total}
 
-    def criar_novo_produto(self, cod_empresa: int, produto_data: CriarNovoProdutoRequest) -> CriarNovoProdutoResponse:
-        empresa = self.emp_repo.get_empresa_by_id(cod_empresa)
-        if not empresa:
-            raise HTTPException(status_code=404, detail="Empresa não encontrada")
+    def criar_novo_produto(self, empresa_id: int, req: CriarNovoProdutoRequest) -> CriarNovoProdutoResponse:
+        if not self.emp_repo.get_empresa_by_id(empresa_id):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Empresa não encontrada")
 
-        if self.produto_repo.buscar_por_cod_barras(produto_data.cod_barras):
-            raise ValueError("Produto já existe.")
+        if self.repo.buscar_por_cod_barras(req.cod_barras):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Produto já existe.")
 
-        produto = ProdutoDeliveryModel(
-            cod_barras=produto_data.cod_barras,
-            descricao=produto_data.descricao,
-            cod_categoria=produto_data.cod_categoria,
-            imagem=produto_data.imagem,
-            data_cadastro=produto_data.data_cadastro or datetime.utcnow(),
+        # produto base
+        prod = self.repo.criar_produto(
+            cod_barras=req.cod_barras,
+            descricao=req.descricao,
+            cod_categoria=req.cod_categoria,
+            imagem=req.imagem,
+            data_cadastro=req.data_cadastro or datetime.utcnow().date(),
+            ativo=req.ativo,
+            unidade_medida=req.unidade_medida,
         )
 
-        empresas = [cod_empresa]
+        # vínculo com empresa
+        self.repo.upsert_produto_emp(
+            empresa_id=empresa_id,
+            cod_barras=prod.cod_barras,
+            preco_venda=Decimal(str(req.preco_venda)),
+            custo=Decimal(str(req.custo)) if req.custo is not None else None,
+            vitrine_id=req.vitrine_id,
+            sku_empresa=req.sku_empresa,
+            disponivel=req.disponivel,
+        )
 
-        produto.produtos_empresa = [
-            ProdutoEmpDeliveryModel(
-                empresa_id=int(emp),
-                cod_barras=produto.cod_barras,
-                preco_venda=produto_data.preco_venda,
-                custo=produto_data.custo or 0,
-                vitrine_id=produto_data.vitrine_id,
-                produto=produto
-            ) for emp in empresas
-        ]
+        self.db.commit()
+        self.db.refresh(prod)
 
-        produto = self.produto_repo.criar_novo_produto(produto)
-        return CriarNovoProdutoResponse.model_validate(produto, from_attributes=True)
+        return CriarNovoProdutoResponse(
+            produto=ProdutoBaseDTO.model_validate(prod, from_attributes=True),
+            produto_emp=ProdutoEmpDTO(
+                empresa_id=empresa_id,
+                cod_barras=prod.cod_barras,
+                preco_venda=float(req.preco_venda),
+                custo=float(req.custo or 0),
+                vitrine_id=req.vitrine_id,
+                sku_empresa=req.sku_empresa,
+                disponivel=req.disponivel,
+                created_at=prod.created_at,
+                updated_at=prod.updated_at,
+            ),
+        )
+
+    def atualizar_produto(self, empresa_id: int, cod_barras: str, req: CriarNovoProdutoRequest) -> CriarNovoProdutoResponse:
+        prod = self.repo.buscar_por_cod_barras(cod_barras)
+        if not prod:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Produto não encontrado")
+
+        # atualiza produto base
+        self.repo.atualizar_produto(
+            prod,
+            descricao=req.descricao,
+            cod_categoria=req.cod_categoria,
+            imagem=req.imagem,
+            ativo=req.ativo,
+            unidade_medida=req.unidade_medida,
+            data_cadastro=req.data_cadastro or prod.data_cadastro,
+        )
+
+        # upsert no vínculo
+        self.repo.upsert_produto_emp(
+            empresa_id=empresa_id,
+            cod_barras=cod_barras,
+            preco_venda=Decimal(str(req.preco_venda)),
+            custo=Decimal(str(req.custo)) if req.custo is not None else None,
+            vitrine_id=req.vitrine_id,
+            sku_empresa=req.sku_empresa,
+            disponivel=req.disponivel,
+        )
+
+        self.db.commit()
+        self.db.refresh(prod)
+        return CriarNovoProdutoResponse(
+            produto=ProdutoBaseDTO.model_validate(prod, from_attributes=True),
+            produto_emp=ProdutoEmpDTO(
+                empresa_id=empresa_id,
+                cod_barras=cod_barras,
+                preco_venda=float(req.preco_venda),
+                custo=float(req.custo or 0),
+                vitrine_id=req.vitrine_id,
+                sku_empresa=req.sku_empresa,
+                disponivel=req.disponivel,
+                created_at=prod.created_at,
+                updated_at=prod.updated_at,
+            ),
+        )
+
+    def set_disponibilidade(self, empresa_id: int, cod_barras: str, on: bool):
+        ok = self.repo.set_disponibilidade(empresa_id, cod_barras, on)
+        if not ok:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Vínculo produto x empresa não encontrado")
+        return {"ok": True}
+
+    def deletar_produto(self, empresa_id: int, cod_barras: str):
+        # Verifica se a empresa existe
+        if not self.emp_repo.get_empresa_by_id(empresa_id):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Empresa não encontrada")
+
+        prod = self.repo.buscar_por_cod_barras(cod_barras)
+        if not prod:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Produto não encontrado")
+
+        # Remove o vínculo produto x empresa
+        if not self.repo.deletar_vinculo_produto_emp(empresa_id, cod_barras):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Vínculo produto x empresa não encontrado")
+
+        # Se não houver mais vínculos, remove o produto base
+        if not prod.produtos_empresa or len(prod.produtos_empresa) == 0:
+            self.repo.deletar_produto(cod_barras)
+
+        self.db.commit()
+        return {"ok": True, "message": "Produto deletado com sucesso"}
 
 
-    def atualizar_produto(self, cod_barras: str, data: CriarNovoProdutoRequest) -> CriarNovoProdutoResponse:
-        # valida existência
-        if not self.produto_repo.buscar_por_cod_barras(cod_barras):
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Produto não encontrado")
-
-        # monta dict de atualização
-        update_data = {
-            "descricao": data.descricao,
-            "cod_categoria": data.cod_categoria,
-            "imagem": data.imagem,
-            "data_cadastro": data.data_cadastro or datetime.utcnow(),
-            "preco_venda": data.preco_venda,
-            "custo": data.custo or 0,
-            "vitrine_id": data.vitrine_id,
-        }
-
-        prod = self.produto_repo.update_produto(cod_barras, update_data)
-        return CriarNovoProdutoResponse.model_validate(prod, from_attributes=True)
-
-    def deletar_produto(self, cod_barras: str) -> bool:
-        deleted = self.produto_repo.delete_produto(cod_barras)
-        return deleted

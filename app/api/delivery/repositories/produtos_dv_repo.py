@@ -1,98 +1,122 @@
-# repositories/produto_repository.py
-from fastapi import HTTPException, status
+from __future__ import annotations
+from typing import Optional, List, Tuple
+from decimal import Decimal
+
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.delivery.models.cadprod_dv_model import ProdutoDeliveryModel
 from app.api.delivery.models.cadprod_emp_dv_model import ProdutoEmpDeliveryModel
 
-
 class ProdutoDeliveryRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def buscar_produtos_da_empresa(self, cod_empresa: int, offset: int, limit: int):
-        return (
+    # -------- Listagem paginada --------
+    def buscar_produtos_da_empresa(self, empresa_id: int, offset: int, limit: int, apenas_disponiveis: bool = False) -> List[ProdutoDeliveryModel]:
+        q = (
             self.db.query(ProdutoDeliveryModel)
             .join(ProdutoEmpDeliveryModel, ProdutoDeliveryModel.cod_barras == ProdutoEmpDeliveryModel.cod_barras)
-            .filter(ProdutoEmpDeliveryModel.empresa_id == cod_empresa)
+            .filter(ProdutoEmpDeliveryModel.empresa_id == empresa_id)
             .options(
                 joinedload(ProdutoDeliveryModel.categoria),
                 joinedload(ProdutoDeliveryModel.produtos_empresa),
             )
-            .order_by(ProdutoDeliveryModel.data_cadastro.desc())
-            .offset(offset)
-            .limit(limit)
-            .all()
+            .order_by(ProdutoDeliveryModel.created_at.desc())
         )
+        if apenas_disponiveis:
+            q = q.filter(ProdutoDeliveryModel.ativo.is_(True), ProdutoEmpDeliveryModel.disponivel.is_(True))
+        return q.offset(offset).limit(limit).all()
 
-    def contar_total(self, cod_empresa: int):
-        return (
+    def contar_total(self, empresa_id: int, apenas_disponiveis: bool = False) -> int:
+        q = (
             self.db.query(func.count(ProdutoDeliveryModel.cod_barras))
             .join(ProdutoEmpDeliveryModel, ProdutoDeliveryModel.cod_barras == ProdutoEmpDeliveryModel.cod_barras)
-            .filter(ProdutoEmpDeliveryModel.empresa_id == cod_empresa)
-            .scalar()
+            .filter(ProdutoEmpDeliveryModel.empresa_id == empresa_id)
         )
+        if apenas_disponiveis:
+            q = q.filter(ProdutoDeliveryModel.ativo.is_(True), ProdutoEmpDeliveryModel.disponivel.is_(True))
+        return int(q.scalar() or 0)
 
-    def buscar_por_cod_barras(self, cod_barras: str):
+    # -------- CRUD Produto base --------
+    def buscar_por_cod_barras(self, cod_barras: str) -> Optional[ProdutoDeliveryModel]:
+        return self.db.query(ProdutoDeliveryModel).filter_by(cod_barras=cod_barras).first()
+
+    def criar_produto(self, **data) -> ProdutoDeliveryModel:
+        obj = ProdutoDeliveryModel(**data)
+        self.db.add(obj)
+        self.db.flush()
+        return obj
+
+    def atualizar_produto(self, prod: ProdutoDeliveryModel, **data) -> ProdutoDeliveryModel:
+        for f, v in data.items():
+            setattr(prod, f, v)
+        self.db.flush()
+        return prod
+
+    def deletar_produto(self, cod_barras: str) -> bool:
+        prod = self.buscar_por_cod_barras(cod_barras)
+        if not prod:
+            return False
+        self.db.delete(prod)
+        self.db.commit()
+        return True
+
+    def deletar_vinculo_produto_emp(self, empresa_id: int, cod_barras: str) -> bool:
+        pe = self.get_produto_emp(empresa_id, cod_barras)
+        if not pe:
+            return False
+        self.db.delete(pe)
+        self.db.flush()
+        return True
+
+
+    # -------- Produto x Empresa (upsert) --------
+    def get_produto_emp(self, empresa_id: int, cod_barras: str) -> Optional[ProdutoEmpDeliveryModel]:
         return (
-            self.db.query(ProdutoDeliveryModel)
-            .filter(ProdutoDeliveryModel.cod_barras == cod_barras)
+            self.db.query(ProdutoEmpDeliveryModel)
+            .filter_by(empresa_id=empresa_id, cod_barras=cod_barras)
             .first()
         )
 
-    def criar_novo_produto(self, produto: ProdutoDeliveryModel):
-        self.db.add(produto)
-        self.db.commit()
-        self.db.refresh(produto)
-        return produto
-
-
-    def update_produto(self, cod_barras: str, update_data: dict) -> ProdutoDeliveryModel:
-        """
-        Atualiza o produto e seus dados na tabela de relação com empresa.
-        update_data deve conter as chaves:
-         - descricao, cod_categoria, imagem, data_cadastro
-         - preco_venda, custo, vitrine_id
-        """
-        prod = self.db.query(ProdutoDeliveryModel).filter_by(cod_barras=cod_barras).first()
-        if not prod:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Produto não encontrado")
-
-        # Atualiza campos do próprio produto
-        for attr in ("descricao","cod_categoria","imagem","data_cadastro"):
-            if attr in update_data and update_data[attr] is not None:
-                setattr(prod, attr, update_data[attr])
-
-        # Atualiza preço, custo e vitrine na relação ProdutosEmpDeliveryModel
-        for pe in prod.produtos_empresa:
-            if "preco_venda" in update_data:
-                pe.preco_venda = update_data["preco_venda"]
-            if "custo" in update_data:
-                pe.custo = update_data["custo"]
-            if "vitrine_id" in update_data:
-                pe.vitrine_id = update_data["vitrine_id"]
-
-        try:
-            self.db.commit()
-            self.db.refresh(prod)
-            return prod
-        except Exception as e:
-            self.db.rollback()
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Erro ao atualizar produto"
+    def upsert_produto_emp(
+        self,
+        *,
+        empresa_id: int,
+        cod_barras: str,
+        preco_venda: Decimal,
+        custo: Optional[Decimal] = None,
+        vitrine_id: Optional[int] = None,
+        sku_empresa: Optional[str] = None,
+        disponivel: Optional[bool] = None,
+    ) -> ProdutoEmpDeliveryModel:
+        pe = self.get_produto_emp(empresa_id, cod_barras)
+        if pe:
+            pe.preco_venda = preco_venda
+            pe.custo = custo
+            pe.vitrine_id = vitrine_id
+            if sku_empresa is not None:
+                pe.sku_empresa = sku_empresa
+            if disponivel is not None:
+                pe.disponivel = disponivel
+        else:
+            pe = ProdutoEmpDeliveryModel(
+                empresa_id=empresa_id,
+                cod_barras=cod_barras,
+                preco_venda=preco_venda,
+                custo=custo,
+                vitrine_id=vitrine_id,
+                sku_empresa=sku_empresa,
+                disponivel=True if disponivel is None else disponivel,
             )
+            self.db.add(pe)
+        self.db.flush()
+        return pe
 
-    def delete_produto(self, cod_barras: str) -> bool:
-        """
-        Tenta deletar o produto; retorna True se encontrado e deletado,
-        False se não havia produto com esse cod_barras.
-        """
-        prod = self.db.query(ProdutoDeliveryModel).filter_by(cod_barras=cod_barras).first()
-        if not prod:
+    def set_disponibilidade(self, empresa_id: int, cod_barras: str, on: bool) -> bool:
+        pe = self.get_produto_emp(empresa_id, cod_barras)
+        if not pe:
             return False
-
-        self.db.delete(prod)
+        pe.disponivel = on
         self.db.commit()
         return True

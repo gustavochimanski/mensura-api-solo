@@ -1,23 +1,17 @@
-# src/app/api/delivery/routers/cliente_router.py
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from app.api.delivery.schemas.cliente_schema import ClienteOut, ClienteUpdate, ClienteCreate
-from app.api.delivery.services.cliente_service import (
-    get_current_cliente,
-    create_cliente,
-    update_cliente,
-)
-from app.database.db_connection import get_db  # sua dependência padrão
+from app.api.delivery.services.cliente_service import ClienteService
+from app.database.db_connection import get_db
+from app.utils.logger import logger
 
-router = APIRouter(prefix="/cliente", tags=["Cliente"])
+router = APIRouter(prefix="/api/delivery/cliente", tags=["Cliente"])
 
 @router.get("/", response_model=ClienteOut, status_code=status.HTTP_200_OK)
 def read_current_cliente(db: Session = Depends(get_db)):
-    """
-    Busca o cliente "logado" (ou único).
-    """
-    cliente = get_current_cliente(db)
+    logger.info("[Cliente] Get current")
+    cliente = ClienteService(db).get_current()
     return cliente
 
 @router.post("/", response_model=ClienteOut, status_code=status.HTTP_201_CREATED)
@@ -25,10 +19,8 @@ def create_new_cliente(
     data: ClienteCreate,
     db: Session = Depends(get_db)
 ):
-    """
-    Cria um novo cliente.
-    """
-    cliente = create_cliente(db, data)
+    logger.info("[Cliente] Create")
+    cliente =ClienteService(db).create(data)
     return cliente
 
 @router.put("/{cliente_id}", response_model=ClienteOut, status_code=status.HTTP_200_OK)
@@ -37,8 +29,6 @@ def update_existing_cliente(
     data: ClienteUpdate,
     db: Session = Depends(get_db)
 ):
-    """
-    Atualiza dados de um cliente existente.
-    """
-    updated = update_cliente(db, cliente_id, data)
+    logger.info(f"[Cliente] Update ID={cliente_id}")
+    updated = ClienteService(db).update(cliente_id, data)
     return updated

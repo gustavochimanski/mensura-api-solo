@@ -1,3 +1,4 @@
+# app/api/mensura/schemas/usuario_schema.py
 from pydantic import BaseModel, ConfigDict
 from typing import Optional, List
 
@@ -13,8 +14,8 @@ class UserUpdate(BaseModel):
     username: Optional[str] = None
     type_user: Optional[str] = None
     empresa_ids: Optional[List[int]] = None
+    password: Optional[str] = None  # <- necessário para atualizar senha
 
 class UserResponse(UserBase):
     id: int
-
     model_config = ConfigDict(from_attributes=True)

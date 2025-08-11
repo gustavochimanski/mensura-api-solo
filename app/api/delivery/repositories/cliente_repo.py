@@ -1,36 +1,51 @@
-# src/app/api/delivery/repositories/cliente_repository.py
+from __future__ import annotations
+from typing import Optional, List
 from sqlalchemy.orm import Session
+from sqlalchemy import select
 
 from app.api.delivery.models.cliente_dv_model import ClienteDeliveryModel
-from app.api.delivery.schemas.cliente_schema import ClienteCreate, ClienteUpdate
-from app.database.db_connection import Base
 
 class ClienteRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def get_current(self) -> ClienteDeliveryModel | None:
-        # Exemplo: supomos que há somente um cliente logado
+    def get_current(self) -> Optional[ClienteDeliveryModel]:
         return self.db.query(ClienteDeliveryModel).first()
 
-    def get_by_id(self, cliente_id: int) -> ClienteDeliveryModel | None:
+    def get_by_id(self, cliente_id: int) -> Optional[ClienteDeliveryModel]:
         return self.db.get(ClienteDeliveryModel, cliente_id)
 
-    def create(self, obj_in: ClienteCreate) -> ClienteDeliveryModel:
-        db_obj = ClienteDeliveryModel(**obj_in.model_dump())
-        self.db.add(db_obj)
+    def get_by_email(self, email: str) -> Optional[ClienteDeliveryModel]:
+        return self.db.query(ClienteDeliveryModel).filter(ClienteDeliveryModel.email == email).first()
+
+    def get_by_cpf(self, cpf: str) -> Optional[ClienteDeliveryModel]:
+        return self.db.query(ClienteDeliveryModel).filter(ClienteDeliveryModel.cpf == cpf).first()
+
+    def list(self, ativo: Optional[bool] = None) -> List[ClienteDeliveryModel]:
+        stmt = select(ClienteDeliveryModel)
+        if ativo is not None:
+            stmt = stmt.where(ClienteDeliveryModel.ativo.is_(ativo))
+        return self.db.execute(stmt).scalars().all()
+
+    def create(self, **data) -> ClienteDeliveryModel:
+        obj = ClienteDeliveryModel(**data)
+        self.db.add(obj)
+        self.db.commit()
+        self.db.refresh(obj)
+        return obj
+
+    def update(self, db_obj: ClienteDeliveryModel, **data) -> ClienteDeliveryModel:
+        for f, v in data.items():
+            setattr(db_obj, f, v)
         self.db.commit()
         self.db.refresh(db_obj)
         return db_obj
 
-    def update(
-        self,
-        db_obj: ClienteDeliveryModel,
-        obj_in: ClienteUpdate
-    ) -> ClienteDeliveryModel:
-        obj_data = obj_in.model_dump(exclude_none=True)
-        for field, value in obj_data.items():
-            setattr(db_obj, field, value)
+    def set_ativo(self, cliente_id: int, ativo: bool) -> ClienteDeliveryModel:
+        obj = self.get_by_id(cliente_id)
+        if not obj:
+            return None
+        obj.ativo = ativo
         self.db.commit()
-        self.db.refresh(db_obj)
-        return db_obj
+        self.db.refresh(obj)
+        return obj

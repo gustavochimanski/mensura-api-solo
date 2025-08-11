@@ -1,7 +1,6 @@
-# app/api/mensura/controllers/categorias_dv_controller.py
 from fastapi import (
     APIRouter, Depends, Form, File, UploadFile,
-    HTTPException, status, Path
+    HTTPException, status, Path, Query
 )
 from sqlalchemy.orm import Session
 from typing import Optional, List
@@ -15,16 +14,21 @@ from app.api.delivery.schemas.categoria_dv_schema import (
 from app.utils.logger import logger
 from app.utils.minio_client import upload_file_to_minio
 
-router = APIRouter(prefix="/categorias/delivery", tags=["Delivery - Categorias"])
-
+router = APIRouter(prefix="/api/delivery/categorias", tags=["Delivery - Categorias"])
 
 @router.get("", response_model=List[CategoriaDeliveryOut])
-def list_categorias(db: Session = Depends(get_db)):
+def list_categorias(
+    db: Session = Depends(get_db),
+    parent_id: Optional[int] = Query(None, description="Filtra por pai (subcategorias)"),
+):
     repos = CategoriaDeliveryRepository(db)
-    logger.info("Listando todas as categorias de delivery")
-    cats = repos.list_all()
+    if parent_id is not None:
+        logger.info(f"[Categorias] Listando por parent_id={parent_id}")
+        cats = repos.list_by_parent(parent_id)
+    else:
+        logger.info("[Categorias] Listando todas")
+        cats = repos.list_all()
     return [CategoriaDeliveryOut.from_orm(c) for c in cats]
-
 
 @router.get("/{cat_id}", response_model=CategoriaDeliveryOut)
 def get_categoria(
@@ -32,10 +36,9 @@ def get_categoria(
     db: Session = Depends(get_db),
 ):
     repos = CategoriaDeliveryRepository(db)
-    logger.info(f"Buscando categoria ID={cat_id}")
+    logger.info(f"[Categorias] Get ID={cat_id}")
     c = repos.get_by_id(cat_id)
     return CategoriaDeliveryOut.from_orm(c)
-
 
 @router.post("", response_model=CategoriaDeliveryOut, status_code=status.HTTP_201_CREATED)
 async def criar_categoria(
@@ -48,18 +51,17 @@ async def criar_categoria(
     db: Session = Depends(get_db),
 ):
     repos = CategoriaDeliveryRepository(db)
-    logger.info(f"Criando categoria: {descricao}")
+    logger.info(f"[Categorias] Criando: {descricao}")
     imagem_url: Optional[str] = None
 
-    # upload de imagem (se houver)
     if imagem:
         permitidos = {"image/jpeg", "image/png", "image/webp"}
         if imagem.content_type not in permitidos:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Formato de imagem inválido")
         try:
             imagem_url = upload_file_to_minio(db, cod_empresa, imagem, "categorias")
-        except Exception as e:
-            logger.error("Upload falhou", exc_info=True)
+        except Exception:
+            logger.error("[Categorias] Upload falhou", exc_info=True)
             raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Erro ao enviar imagem")
 
     cat_in = CategoriaDeliveryIn(
@@ -70,21 +72,15 @@ async def criar_categoria(
         posicao=posicao,
     )
 
-    # *** Wrap para debugar o 500 ***
     try:
         c = repos.create(cat_in)
     except HTTPException:
-        # se for um HTTPException lançado no repositório, repassa
         raise
-    except Exception as e:
-        # captura QUALQUER outro erro, log completo de stacktrace e retorna 500 genérico
-        logger.error("Erro ao criar categoria no repositório", exc_info=True)
-        raise HTTPException(
-            status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Erro interno ao criar categoria"
-        )
+    except Exception:
+        logger.error("[Categorias] Erro ao criar", exc_info=True)
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Erro interno ao criar categoria")
 
-    logger.info(f"Categoria criada com ID={c.id}")
+    logger.info(f"[Categorias] Criada ID={c.id}")
     return CategoriaDeliveryOut.from_orm(c)
 
 @router.put("/{cat_id}", response_model=CategoriaDeliveryOut)
@@ -99,7 +95,7 @@ async def editar_categoria(
     db: Session = Depends(get_db),
 ):
     repos = CategoriaDeliveryRepository(db)
-    logger.info(f"Editando categoria ID={cat_id}")
+    logger.info(f"[Categorias] Editando ID={cat_id}")
     imagem_url: Optional[str] = None
 
     if imagem:
@@ -109,7 +105,7 @@ async def editar_categoria(
         try:
             imagem_url = upload_file_to_minio(db, cod_empresa, imagem, "categorias")
         except Exception as e:
-            logger.error(f"Upload falhou: {e}")
+            logger.error(f"[Categorias] Upload falhou: {e}")
             raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Erro ao enviar imagem")
 
     updates = {
@@ -120,9 +116,8 @@ async def editar_categoria(
         "imagem": imagem_url,
     }
     c = repos.update(cat_id, updates)
-    logger.info(f"Categoria ID={cat_id} atualizada")
+    logger.info(f"[Categorias] Atualizada ID={cat_id}")
     return CategoriaDeliveryOut.from_orm(c)
-
 
 @router.delete("/{cat_id}", status_code=status.HTTP_204_NO_CONTENT)
 def deletar_categoria(
@@ -131,9 +126,8 @@ def deletar_categoria(
 ):
     repos = CategoriaDeliveryRepository(db)
     repos.delete(cat_id)
-    logger.info(f"Categoria ID={cat_id} deletada")
+    logger.info(f"[Categorias] Deletada ID={cat_id}")
     return None
-
 
 @router.post("/{cat_id}/move-right", response_model=CategoriaDeliveryOut)
 def move_categoria_direita(
@@ -142,9 +136,8 @@ def move_categoria_direita(
 ):
     repos = CategoriaDeliveryRepository(db)
     c = repos.move_right(cat_id)
-    logger.info(f"Categoria ID={cat_id} movida para direita")
+    logger.info(f"[Categorias] Move right ID={cat_id}")
     return CategoriaDeliveryOut.from_orm(c)
-
 
 @router.post("/{cat_id}/move-left", response_model=CategoriaDeliveryOut)
 def move_categoria_esquerda(
@@ -153,5 +146,18 @@ def move_categoria_esquerda(
 ):
     repos = CategoriaDeliveryRepository(db)
     c = repos.move_left(cat_id)
-    logger.info(f"Categoria ID={cat_id} movida para esquerda")
+    logger.info(f"[Categorias] Move left ID={cat_id}")
+    return CategoriaDeliveryOut.from_orm(c)
+
+@router.post("/{cat_id}/toggle-home", response_model=CategoriaDeliveryOut)
+def toggle_home(
+    cat_id: int = Path(..., title="ID da categoria"),
+    db: Session = Depends(get_db),
+):
+    """
+    Alterna `tipo_exibicao` para exibir na Home (valor 'P') ou remover.
+    """
+    repos = CategoriaDeliveryRepository(db)
+    c = repos.toggle_home(cat_id)
+    logger.info(f"[Categorias] Toggle home ID={cat_id}")
     return CategoriaDeliveryOut.from_orm(c)

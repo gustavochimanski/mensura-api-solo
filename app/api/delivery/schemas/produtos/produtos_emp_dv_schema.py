@@ -1,15 +1,12 @@
-# app/schemas/produtosDelivery/produtos_schema.py
-from datetime import datetime
-
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 from typing import Optional
 
-
+# Mantemos um DTO simples para usos internos fora da API HTTP, se necessário.
 class ProdutoEmpDTO(BaseModel):
-    empresa: int
+    empresa_id: int
     cod_barras: str
     preco_venda: float
-    custo: Optional[float]
-    vitrine_id: Optional[int]
+    custo: Optional[float] = None
+    vitrine_id: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True)

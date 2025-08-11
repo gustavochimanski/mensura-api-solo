@@ -1,21 +1,21 @@
-# app/mensura/controllers/auth_controller.py
+# app/mensura/router/auth_controller.py
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from datetime import timedelta
 
-from app.api.mensura.repositories.auth_repo import authRepository
+from app.api.mensura.repositories.auth_repo import AuthRepository
 from app.api.mensura.schemas.auth_schema import LoginRequest, TokenResponse
 from app.core.security import verify_password, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES
 from app.database.db_connection import get_db
 
 
 from app.core.dependencies import get_current_user
-from app.api.mensura.schemas.user_schema import UserResponse
+from app.api.mensura.schemas.usuario_schema import UserResponse
 from app.api.mensura.models.user_model import UserModel
 
 
-router = APIRouter(tags=["auth"])
+router = APIRouter(tags=["auth"], prefix="/auth")
 
 @router.post("/token", response_model=TokenResponse)
 def login_usuario(
@@ -23,7 +23,7 @@ def login_usuario(
     db: Session = Depends(get_db),
 ):
     # 1. Busca usuário no banco
-    repo = authRepository(db)
+    repo = AuthRepository(db)
     user = repo.get_user_by_username(payload.username)
     if not user or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(

@@ -1,7 +1,10 @@
+# app/api/mensura/models/endereco_model.py
 from sqlalchemy import Column, Integer, String
 from sqlalchemy.orm import relationship
-from app.database.db_connection import Base
 from pydantic import ConfigDict
+
+from app.database.db_connection import Base
+
 
 class EnderecoModel(Base):
     __tablename__ = "enderecos"
@@ -17,7 +20,6 @@ class EnderecoModel(Base):
     cidade = Column(String(50), nullable=True)
     estado = Column(String(2), nullable=True)
 
-    # RELACIONAMENTOS
     empresa = relationship("EmpresaModel", back_populates="endereco", uselist=False)
 
     model_config = ConfigDict(from_attributes=True)
