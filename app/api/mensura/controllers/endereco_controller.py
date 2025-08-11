@@ -7,7 +7,7 @@ from app.database.db_connection import get_db
 from app.api.mensura.services.endereco_service import EnderecoService
 from app.api.mensura.schemas.endereco_schema import EnderecoCreate, EnderecoUpdate, EnderecoResponse
 
-router = APIRouter(prefix="/enderecos", tags=["Enderecos"])
+router = APIRouter(prefix="/api/mensura/enderecos", tags=["Enderecos"])
 
 @router.post("/", response_model=EnderecoResponse)
 def create_endereco(request: EnderecoCreate, db: Session = Depends(get_db)):

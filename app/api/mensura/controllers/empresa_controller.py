@@ -7,7 +7,7 @@ from app.database.db_connection import get_db
 from app.api.mensura.services.empresa_service import EmpresaService
 from app.api.mensura.schemas.empresa_schema import EmpresaCreate, EmpresaUpdate, EmpresaResponse
 
-router = APIRouter(prefix="/empresas", tags=["Empresas"])
+router = APIRouter(prefix="/api/mensura/empresas", tags=["Empresas"])
 
 @router.post("/", response_model=EmpresaResponse)
 def create_empresa(request: EmpresaCreate, db: Session = Depends(get_db)):

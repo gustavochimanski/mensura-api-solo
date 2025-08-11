@@ -7,7 +7,7 @@ from app.database.db_connection import get_db
 from app.api.mensura.services.usuario_service import UserService
 from app.api.mensura.schemas.usuario_schema import UserCreate, UserUpdate, UserResponse
 
-router = APIRouter(prefix="/usuarios", tags=["Usuarios"])
+router = APIRouter(prefix="/api/mensura/usuarios", tags=["Usuarios"])
 
 @router.post("/", response_model=UserResponse)
 def create_user(request: UserCreate, db: Session = Depends(get_db)):
