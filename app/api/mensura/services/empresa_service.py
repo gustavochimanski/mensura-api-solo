@@ -1,4 +1,4 @@
-# app/api/mensura/services/empresa_service.pyy
+# app/api/mensura/services/empresa_service.py
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
 
