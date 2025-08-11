@@ -5,7 +5,7 @@ from sqlalchemy.orm import relationship
 from app.database.db_connection import Base
 from app.api.delivery.models.cadprod_emp_dv_model import ProdutoEmpDeliveryModel
 
-
+#
 class VitrinesModel(Base):
     __tablename__ = "vitrines_dv"
     __table_args__ = {"schema": "delivery"}
