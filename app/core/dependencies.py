@@ -5,7 +5,7 @@ from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 
 from app.api.mensura.models.user_model import UserModel
-from app.api.mensura.repositories.auth_repo import authRepository
+from app.api.mensura.repositories.auth_repo import AuthRepository
 from app.core.security import SECRET_KEY, ALGORITHM
 from app.database.db_connection import get_db
 from app.utils.logger import logger
@@ -45,7 +45,7 @@ def get_current_user(
         raise credentials_exception
 
     # 3. Busca o usuário no banco
-    user = authRepository(db).get_user_by_id(user_id)
+    user = AuthRepository(db).get_user_by_id(user_id)
     if not user:
         raise credentials_exception
 
