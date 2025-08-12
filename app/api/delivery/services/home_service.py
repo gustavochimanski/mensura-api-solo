@@ -72,6 +72,7 @@ class HomeService:
                     titulo=vitrine.titulo,
                     slug=vitrine.slug,
                     ordem=vitrine.ordem,
+                    is_home=bool(vitrine.is_home),
                     produtos=produtos_dto
                 )
             )

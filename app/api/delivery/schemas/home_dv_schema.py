@@ -50,7 +50,7 @@ class VitrineComProdutosResponse(BaseModel):
     slug: str
     ordem: int
     produtos: List[ProdutoEmpMiniDTO]
-
+    is_home: bool
     model_config = ConfigDict(from_attributes=True)
 
 class HomeResponse:
