@@ -26,7 +26,7 @@ def listar_home(
 
 
 @router.get(
-    "/produtos/vitrine-por-categoria",
+    "/home/vitrine-por-categoria",
     response_model=List[VitrineComProdutosResponse]
 )
 def listar_vitrines_e_produtos_por_categoria(
