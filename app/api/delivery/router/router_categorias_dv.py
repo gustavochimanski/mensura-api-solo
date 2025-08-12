@@ -6,7 +6,6 @@ from sqlalchemy.orm import Session
 from typing import Optional, List
 
 from app.core.dependencies import get_current_user
-#
 from app.database.db_connection import get_db
 from app.api.delivery.repositories.repo_categorias_dv import CategoriaDeliveryRepository
 from app.api.delivery.schemas.categoria_dv_schema import (
@@ -18,6 +17,7 @@ from app.utils.minio_client import upload_file_to_minio
 
 router = APIRouter(prefix="/api/delivery/categorias", tags=["Delivery - Categorias"])
 
+# -------- GET BY ID -------
 @router.get("/{cat_id}", response_model=CategoriaDeliveryOut)
 def get_categoria(
     cat_id: int = Path(..., title="ID da categoria"),
@@ -26,6 +26,8 @@ def get_categoria(
     repos = CategoriaDeliveryRepository(db)
     logger.info(f"[Categorias] Get ID={cat_id}")
     c = repos.get_by_id(cat_id)
+    if not c:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Categoria não encontrada")
     return CategoriaDeliveryOut(
         id=c.id,
         label=c.descricao,
@@ -37,9 +39,17 @@ def get_categoria(
         posicao=c.posicao,
     )
 
-
-@router.post("", response_model=CategoriaDeliveryOut, status_code=status.HTTP_201_CREATED)
-def criar_categoria(body: CategoriaDeliveryIn, db: Session = Depends(get_db), dependencies=Depends(get_current_user)):
+# -------- CRIAR --------
+@router.post(
+    "",
+    response_model=CategoriaDeliveryOut,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(get_current_user)]
+)
+def criar_categoria(
+    body: CategoriaDeliveryIn,
+    db: Session = Depends(get_db),
+):
     repos = CategoriaDeliveryRepository(db)
     c = repos.create(body)
     return CategoriaDeliveryOut(
@@ -53,8 +63,17 @@ def criar_categoria(body: CategoriaDeliveryIn, db: Session = Depends(get_db), de
         posicao=c.posicao,
     )
 
-@router.put("/{cat_id}", response_model=CategoriaDeliveryOut)
-def editar_categoria(cat_id: int, body: CategoriaDeliveryIn, db: Session = Depends(get_db), dependencies=Depends(get_current_user)):
+# -------- EDITAR --------
+@router.put(
+    "/{cat_id}",
+    response_model=CategoriaDeliveryOut,
+    dependencies=[Depends(get_current_user)]
+)
+def editar_categoria(
+    cat_id: int,
+    body: CategoriaDeliveryIn,
+    db: Session = Depends(get_db),
+):
     repos = CategoriaDeliveryRepository(db)
     c = repos.update(cat_id, body.model_dump(exclude_unset=True))
     return CategoriaDeliveryOut(
@@ -68,23 +87,30 @@ def editar_categoria(cat_id: int, body: CategoriaDeliveryIn, db: Session = Depen
         posicao=c.posicao,
     )
 
-
-@router.delete("/{cat_id}", status_code=status.HTTP_204_NO_CONTENT)
+# -------- DELETAR --------
+@router.delete(
+    "/{cat_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(get_current_user)]
+)
 def deletar_categoria(
     cat_id: int = Path(..., title="ID da categoria"),
     db: Session = Depends(get_db),
-    dependencies=Depends(get_current_user)
 ):
     repos = CategoriaDeliveryRepository(db)
     repos.delete(cat_id)
     logger.info(f"[Categorias] Deletada ID={cat_id}")
     return None
 
-@router.post("/{cat_id}/move-right", response_model=CategoriaDeliveryOut)
+# -------- MOVER DIREITA --------
+@router.post(
+    "/{cat_id}/move-right",
+    response_model=CategoriaDeliveryOut,
+    dependencies=[Depends(get_current_user)]
+)
 def move_categoria_direita(
     cat_id: int = Path(..., title="ID da categoria"),
     db: Session = Depends(get_db),
-    dependencies=Depends(get_current_user)
 ):
     repos = CategoriaDeliveryRepository(db)
     c = repos.move_right(cat_id)
@@ -100,12 +126,15 @@ def move_categoria_direita(
         posicao=c.posicao,
     )
 
-
-@router.post("/{cat_id}/move-left", response_model=CategoriaDeliveryOut)
+# -------- MOVER ESQUERDA --------
+@router.post(
+    "/{cat_id}/move-left",
+    response_model=CategoriaDeliveryOut,
+    dependencies=[Depends(get_current_user)]
+)
 def move_categoria_esquerda(
     cat_id: int = Path(..., title="ID da categoria"),
     db: Session = Depends(get_db),
-    dependencies=Depends(get_current_user)
 ):
     repos = CategoriaDeliveryRepository(db)
     c = repos.move_left(cat_id)
@@ -121,13 +150,17 @@ def move_categoria_esquerda(
         posicao=c.posicao,
     )
 
-@router.patch("/{cat_id}/imagem", response_model=CategoriaDeliveryOut)
+# -------- UPLOAD IMAGEM --------
+@router.patch(
+    "/{cat_id}/imagem",
+    response_model=CategoriaDeliveryOut,
+    dependencies=[Depends(get_current_user)]
+)
 async def upload_imagem_categoria(
     cat_id: int,
     cod_empresa: int = Form(...),
     imagem: UploadFile = File(...),
     db: Session = Depends(get_db),
-    dependencies=Depends(get_current_user)
 ):
     permitidos = {"image/jpeg", "image/png", "image/webp"}
     if imagem.content_type not in permitidos:
