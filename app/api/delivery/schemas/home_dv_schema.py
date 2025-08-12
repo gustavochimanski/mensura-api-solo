@@ -47,6 +47,7 @@ class VitrineComProdutosResponse(BaseModel):
     ordem: int
     produtos: List[ProdutoEmpMiniDTO]
     is_home: bool
+    cod_categoria: int
     model_config = ConfigDict(from_attributes=True)
 
 class HomeResponse(BaseModel):
