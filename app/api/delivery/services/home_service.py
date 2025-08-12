@@ -13,12 +13,12 @@ from app.api.delivery.schemas.home_dv_schema import (
     HomeResponse,
 )
 
+
 class HomeService:
     def __init__(self, db: Session):
         self.repo_home = HomeRepository(db)
         self.repo_empresa = EmpresaRepository(db)
 
-    # --- usado internamente ---
     def _map_categorias(self, cats) -> List[CategoriaMiniSchema]:
         return [
             CategoriaMiniSchema(
@@ -48,12 +48,8 @@ class HomeService:
         # Categorias
         cats = self._map_categorias(self.repo_home.listar_categorias(only_home=only_home))
 
-        # Vitrines
-        if only_home:
-            vitrines = self.repo_home.listar_vitrines_home()  # só as is_home=True
-        else:
-            vitrines = self.repo_home.listar_todas_vitrines()  # novo método listando todas
-
+        # Vitrines filtradas no SQL
+        vitrines = self.repo_home.listar_vitrines(only_home=only_home)
         vitrine_ids = [v.id for v in vitrines]
         produtos_por_vitrine = self.repo_home.listar_produtos_por_vitrine_ids(empresa_id, vitrine_ids)
 
@@ -86,7 +82,7 @@ class HomeService:
                     ordem=v.ordem,
                     cod_categoria=v.cod_categoria,
                     is_home=bool(v.is_home),
-                    produtos=produtos_dto
+                    produtos=produtos_dto,
                 )
             )
 
@@ -125,9 +121,9 @@ class HomeService:
                     titulo=vitrine.titulo,
                     slug=vitrine.slug,
                     ordem=vitrine.ordem,
+                    cod_categoria=vitrine.cod_categoria,
                     is_home=bool(vitrine.is_home),
                     produtos=produtos_dto,
-                    cod_categoria=vitrine.cod_categoria
                 )
             )
         return resultado

@@ -10,6 +10,7 @@ from app.api.delivery.models.cadprod_emp_dv_model import ProdutoEmpDeliveryModel
 from app.api.delivery.models.categoria_dv_model import CategoriaDeliveryModel
 from app.api.delivery.models.vitrine_dv_model import VitrinesModel
 
+
 class HomeRepository:
     def __init__(self, db: Session):
         self.db = db
@@ -23,11 +24,23 @@ class HomeRepository:
         )
         cats = self.db.execute(stmt).scalars().all()
         if only_home:
-            # agora "home" significa: apenas categorias raiz (sem pai)
+            # somente categorias raiz (sem pai)
             cats = [c for c in cats if not c.parent_id]
         return cats
 
     # ---------- Vitrines ----------
+    def listar_vitrines(self, only_home: bool = False) -> List[VitrinesModel]:
+        """
+        Lista vitrines, filtrando por tipo_exibicao se only_home=True.
+        """
+        q = self.db.query(VitrinesModel).order_by(VitrinesModel.ordem)
+        if only_home:
+            # Se a regra for "qualquer tipo_exibicao != NULL"
+            q = q.filter(VitrinesModel.tipo_exibicao.isnot(None))
+            # Ou, se quiser apenas tipo_exibicao == "P":
+            # q = q.filter(VitrinesModel.tipo_exibicao == "P")
+        return q.all()
+
     def listar_vitrines_por_categoria(self, cod_categoria: int) -> List[VitrinesModel]:
         return (
             self.db.query(VitrinesModel)
@@ -36,20 +49,10 @@ class HomeRepository:
             .all()
         )
 
-    def listar_vitrines_home(self) -> List[VitrinesModel]:
-        """Vitrines marcadas para aparecer na Home (is_home=True)."""
-        return (
-            self.db.query(VitrinesModel)
-            .filter(VitrinesModel.is_home.is_(True))
-            .order_by(VitrinesModel.ordem)
-            .all()
-        )
-
     # ---------- Produtos ----------
     def listar_produtos_emp_por_categoria_e_sub(
         self, empresa_id: int, cod_categoria: int
     ) -> List[ProdutoEmpDeliveryModel]:
-        # Busca a categoria e suas subcategorias imediatas
         categoria = (
             self.db.query(CategoriaDeliveryModel)
             .options(joinedload(CategoriaDeliveryModel.children))
@@ -74,19 +77,9 @@ class HomeRepository:
             .all()
         )
 
-    def listar_todas_vitrines(self) -> List[VitrinesModel]:
-        return (
-            self.db.query(VitrinesModel)
-            .order_by(VitrinesModel.ordem)
-            .all()
-        )
-
     def listar_vitrines_com_produtos_empresa_categoria(
         self, empresa_id: int, cod_categoria: int
     ) -> Dict[int, List[ProdutoEmpDeliveryModel]]:
-        """
-        Dicionário {vitrine_id: [ProdutoEmpDeliveryModel, ...]} filtrando empresa/categoria e somente disponíveis.
-        """
         produtos = self.listar_produtos_emp_por_categoria_e_sub(empresa_id, cod_categoria)
         agrupado: Dict[int, List[ProdutoEmpDeliveryModel]] = defaultdict(list)
         for p in produtos:
@@ -97,10 +90,6 @@ class HomeRepository:
     def listar_produtos_por_vitrine_ids(
         self, empresa_id: int, vitrine_ids: List[int]
     ) -> Dict[int, List[ProdutoEmpDeliveryModel]]:
-        """
-        Busca todos os produtos disponíveis/ativos da empresa nas vitrines indicadas.
-        Retorna {vitrine_id: [ProdutoEmpDeliveryModel, ...]}.
-        """
         if not vitrine_ids:
             return {}
 
