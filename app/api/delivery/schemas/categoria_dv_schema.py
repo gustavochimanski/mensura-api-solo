@@ -7,8 +7,6 @@ class CategoriaDeliveryIn(BaseModel):
     parent_id: Optional[int] = None
     imagem: Optional[str] = None
     posicao: Optional[int] = 0
-    # controla presença na home
-    tipo_exibicao: Optional[constr(min_length=1, max_length=1)] = None  # "P" = aparece na home
 
     model_config = ConfigDict(from_attributes=True)
 

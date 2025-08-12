@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.api.delivery.repositories.vitrines_repo import VitrineRepository
 from app.api.delivery.repositories.produtos_dv_repo import ProdutoDeliveryRepository
-from app.api.delivery.schemas.vitrine_schema import CriarVitrineRequest
+from app.api.delivery.schemas.vitrine_schema import CriarVitrineRequest, AtualizarVitrineRequest
 
 class VitrinesService:
     def __init__(self, db: Session):
@@ -15,19 +15,28 @@ class VitrinesService:
         return self.repo.listar(empresa_id, cod_categoria)
 
     def create(self, req: CriarVitrineRequest):
-        return self.repo.create(req.cod_categoria, req.titulo, req.ordem)
+        return self.repo.create(req.cod_categoria, req.titulo, req.ordem, req.is_home)
+
+    def update(self, vitrine_id: int, req: AtualizarVitrineRequest):
+        return self.repo.update(
+            vitrine_id,
+            cod_categoria=req.cod_categoria,
+            titulo=req.titulo,
+            ordem=req.ordem,
+            is_home=req.is_home,
+        )
 
     def delete(self, vitrine_id: int):
         return self.repo.delete(vitrine_id)
 
-    def atribuir_produto(self, empresa_id: int, cod_barras: str, vitrine_id: int):
-        ok = self.repo.atribuir_produto(empresa_id, cod_barras, vitrine_id)
+    def vincular_produto(self, vitrine_id: int, empresa_id: int, cod_barras: str):
+        ok = self.repo.vincular_produto(empresa_id, cod_barras, vitrine_id)
         if not ok:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Produto da empresa não encontrado")
         return {"ok": True}
 
-    def remover_produto(self, empresa_id: int, cod_barras: str):
-        ok = self.repo.remover_produto(empresa_id, cod_barras)
+    def desvincular_produto(self, vitrine_id: int, empresa_id: int, cod_barras: str):
+        ok = self.repo.desvincular_produto(empresa_id, cod_barras)
         if not ok:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Produto da empresa não encontrado")
         return {"ok": True}
