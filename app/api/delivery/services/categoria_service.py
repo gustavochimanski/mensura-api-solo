@@ -15,9 +15,6 @@ class CategoriasService:
     def create(self, data: CategoriaDeliveryIn):
         return self.repo.create(data)
 
-    def list_all(self):
-        return self.repo.list_all()
-
     def list_by_parent(self, parent_id: Optional[int]):
         return self.repo.list_by_parent(parent_id)
 
@@ -56,9 +53,6 @@ class CategoriasService:
                 logger.warning(f"[Categorias] Falha ao remover imagem do MinIO: {e} | url={image_url}")
 
         return None
-
-    def toggle_home(self, cat_id: int, on: bool):
-        return self.repo.toggle_home(cat_id, on)
 
     def move_left(self, cat_id: int):
         return self.repo.move_left(cat_id)

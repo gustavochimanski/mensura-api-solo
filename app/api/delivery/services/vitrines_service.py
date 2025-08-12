@@ -11,9 +11,6 @@ class VitrinesService:
         self.repo = VitrineRepository(db)
         self.repo_prod = ProdutoDeliveryRepository(db)
 
-    def listar(self, empresa_id: int, cod_categoria: int | None = None):
-        return self.repo.listar(empresa_id, cod_categoria)
-
     def create(self, req: CriarVitrineRequest):
         return self.repo.create(req.cod_categoria, req.titulo, req.ordem, req.is_home)
 

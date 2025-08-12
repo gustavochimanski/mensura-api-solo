@@ -12,18 +12,6 @@ class VitrineRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def listar(self, cod_empresa: int, cod_categoria: Optional[int] = None) -> List[VitrinesModel]:
-        subquery = (
-            self.db.query(ProdutoEmpDeliveryModel.vitrine_id)
-            .filter(ProdutoEmpDeliveryModel.empresa_id == cod_empresa)
-            .distinct()
-            .subquery()
-        )
-        q = self.db.query(VitrinesModel).outerjoin(subquery, VitrinesModel.id == subquery.c.vitrine_id)
-        if cod_categoria is not None:
-            q = q.filter(VitrinesModel.cod_categoria == cod_categoria)
-        return q.order_by(VitrinesModel.ordem).all()
-
     def _resolve_categoria_or_400(self, cod_categoria: Optional[int]) -> int:
         if cod_categoria is not None:
             return cod_categoria

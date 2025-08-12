@@ -16,17 +16,6 @@ class VinculoRequest(BaseModel):
     empresa_id: int
     cod_barras: str
 
-@router.get("", response_model=List[VitrineOut])
-def listar_vitrines(
-        empresa_id: int = Query(..., description="ID da empresa"),
-        cod_categoria: Optional[int] = Query(None, description="Filtrar por ID da categoria"),
-        db: Session = Depends(get_db)
-):
-    logger.info(f"[Vitrines] Listando - empresa_id={empresa_id}, cod_categoria={cod_categoria}")
-    svc = VitrinesService(db)
-    vitrines = svc.listar(empresa_id=empresa_id, cod_categoria=cod_categoria)
-    return [VitrineOut.from_orm(v) for v in vitrines]
-
 @router.post("", response_model=VitrineOut, status_code=status.HTTP_201_CREATED)
 def criar_vitrine(
         request: CriarVitrineRequest,

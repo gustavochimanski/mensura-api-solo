@@ -45,10 +45,6 @@ class CategoriaDeliveryRepository:
             self.db.rollback()
             raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Erro ao criar categoria")
 
-    def list_all(self) -> List[CategoriaDeliveryModel]:
-        stmt = select(CategoriaDeliveryModel).order_by(CategoriaDeliveryModel.posicao)
-        return self.db.execute(stmt).scalars().all()
-
     def list_by_parent(self, parent_id: Optional[int]) -> List[CategoriaDeliveryModel]:
         stmt = (
             select(CategoriaDeliveryModel)

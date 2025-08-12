@@ -16,33 +16,6 @@ from app.utils.minio_client import upload_file_to_minio
 
 router = APIRouter(prefix="/api/delivery/categorias", tags=["Delivery - Categorias"])
 
-@router.get("", response_model=List[CategoriaDeliveryOut])
-def list_categorias(
-    db: Session = Depends(get_db),
-    parent_id: Optional[int] = Query(None, description="Filtra por pai (subcategorias)"),
-):
-    repos = CategoriaDeliveryRepository(db)
-    if parent_id is not None:
-        logger.info(f"[Categorias] Listando por parent_id={parent_id}")
-        cats = repos.list_by_parent(parent_id)
-    else:
-        logger.info("[Categorias] Listando todas")
-        cats = repos.list_all()
-    return [
-        CategoriaDeliveryOut(
-            id=c.id,
-            label=c.descricao,  # derivado
-            slug=c.slug,
-            parent_id=c.parent_id,
-            slug_pai=c.parent.slug if c.parent else None,
-            imagem=c.imagem,
-            href=f"/categoria/{c.slug}",  # derivado
-            posicao=c.posicao,
-        )
-        for c in cats
-    ]
-
-
 @router.get("/{cat_id}", response_model=CategoriaDeliveryOut)
 def get_categoria(
     cat_id: int = Path(..., title="ID da categoria"),
