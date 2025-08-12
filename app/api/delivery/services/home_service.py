@@ -85,6 +85,7 @@ class HomeService:
                     ordem=v.ordem,
                     is_home=bool(v.is_home),
                     produtos=produtos_dto,
+                    cod_categoria=v.cod_categoria
                 )
             )
 
