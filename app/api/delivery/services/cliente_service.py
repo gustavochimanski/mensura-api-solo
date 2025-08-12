@@ -2,7 +2,7 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 
-from app.api.delivery.repositories.cliente_repo import ClienteRepository
+from app.api.delivery.repositories.repo_cliente import ClienteRepository
 from app.api.delivery.schemas.cliente_schema import ClienteUpdate, ClienteCreate
 
 class ClienteService:

@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from typing import Optional, List
 #
 from app.database.db_connection import get_db
-from app.api.delivery.repositories.categorias_dv_repo import CategoriaDeliveryRepository
+from app.api.delivery.repositories.repo_categorias_dv import CategoriaDeliveryRepository
 from app.api.delivery.schemas.categoria_dv_schema import (
     CategoriaDeliveryIn,
     CategoriaDeliveryOut

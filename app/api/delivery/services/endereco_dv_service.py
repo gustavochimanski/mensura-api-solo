@@ -1,7 +1,7 @@
 # --- Service ---
 from sqlalchemy.orm import Session
 
-from app.api.delivery.repositories.endereco_dv_repo import EnderecoRepository
+from app.api.delivery.repositories.repo_endereco_dv import EnderecoRepository
 from app.api.delivery.schemas.endereco_dv_schema import EnderecoOut, EnderecoCreate, EnderecoUpdate
 
 

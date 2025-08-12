@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Optional
 from sqlalchemy.orm import Session
 
-from app.api.delivery.repositories.categorias_dv_repo import CategoriaDeliveryRepository
+from app.api.delivery.repositories.repo_categorias_dv import CategoriaDeliveryRepository
 from app.api.delivery.schemas.categoria_dv_schema import CategoriaDeliveryIn
 from app.utils.minio_client import remover_arquivo_minio
 from app.utils.logger import logger

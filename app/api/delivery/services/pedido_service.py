@@ -5,7 +5,7 @@ from typing import Optional, List
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.delivery.repositories.pedidos_repo import PedidoRepository
+from app.api.delivery.repositories.repo_pedidos import PedidoRepository
 from app.api.mensura.repositories.empresa_repo import EmpresaRepository
 from app.api.delivery.schemas.pedido_dv_schema import (
     FinalizarPedidoRequest, ItemPedidoRequest, PedidoResponse, ItemPedidoResponse

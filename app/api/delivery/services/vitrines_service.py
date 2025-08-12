@@ -2,8 +2,8 @@ from __future__ import annotations
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.delivery.repositories.vitrines_repo import VitrineRepository
-from app.api.delivery.repositories.produtos_dv_repo import ProdutoDeliveryRepository
+from app.api.delivery.repositories.repo_vitrines import VitrineRepository
+from app.api.delivery.repositories.repo_produtos_dv import ProdutoDeliveryRepository
 from app.api.delivery.schemas.vitrine_schema import CriarVitrineRequest, AtualizarVitrineRequest
 
 class VitrinesService:

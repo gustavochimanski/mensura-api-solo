@@ -11,9 +11,7 @@ class CategoriaMiniSchema(BaseModel):
     label: str
     href: str
     slug_pai: Optional[str] = None
-
     model_config = ConfigDict(from_attributes=True)
-
 
 class ProdutoMiniDTO(BaseModel):
     cod_barras: str
@@ -22,7 +20,6 @@ class ProdutoMiniDTO(BaseModel):
     cod_categoria: Optional[int] = None
     ativo: bool = True
     unidade_medida: Optional[str] = None
-
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
 class ProdutoEmpMiniDTO(BaseModel):
@@ -32,12 +29,11 @@ class ProdutoEmpMiniDTO(BaseModel):
     vitrine_id: Optional[int] = None
     disponivel: bool = True
     produto: ProdutoMiniDTO
-
     model_config = ConfigDict(from_attributes=True)
 
 class VitrineConfigSchema(BaseModel):
     id: int
-    cod_categoria: int  # alinhar ao model (FK -> categoria.id)
+    cod_categoria: int  # FK -> categoria.id
     titulo: str
     slug: str
     ordem: int
@@ -53,6 +49,7 @@ class VitrineComProdutosResponse(BaseModel):
     is_home: bool
     model_config = ConfigDict(from_attributes=True)
 
-class HomeResponse:
+class HomeResponse(BaseModel):
     categorias: List[CategoriaMiniSchema]
     vitrines: List[VitrineComProdutosResponse]
+    model_config = ConfigDict(from_attributes=True)
