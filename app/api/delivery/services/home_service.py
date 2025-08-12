@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import List
+from typing import List, Optional
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -41,15 +41,22 @@ class HomeService:
         cats = self.repo_home.listar_categorias(only_home=only_home)
         return self._map_categorias(cats)
 
-    def montar_home(self, empresa_id: int, only_home: bool = False) -> HomeResponse:
+    def montar_home(self, empresa_id: int, only_home: bool = False, is_home: Optional[bool] = None) -> HomeResponse:
+        """
+        - Categorias: se only_home=True, retorna apenas raízes (parent_id nulo).
+        - Vitrines: usa `is_home` se enviado; se não enviado, e only_home=True, assume is_home=True;
+                    caso contrário, não filtra (is_home=None).
+        """
         if not self.repo_empresa.get_empresa_by_id(empresa_id):
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Empresa não encontrada")
 
         # Categorias
         cats = self._map_categorias(self.repo_home.listar_categorias(only_home=only_home))
 
-        # Vitrines filtradas no SQL
-        vitrines = self.repo_home.listar_vitrines(only_home=only_home)
+        # Vitrines (filtradas no SQL)
+        vitrines_filter = is_home if is_home is not None else (True if only_home else None)
+        vitrines = self.repo_home.listar_vitrines(is_home=vitrines_filter)
+
         vitrine_ids = [v.id for v in vitrines]
         produtos_por_vitrine = self.repo_home.listar_produtos_por_vitrine_ids(empresa_id, vitrine_ids)
 
@@ -88,12 +95,12 @@ class HomeService:
 
         return HomeResponse(categorias=cats, vitrines=vitrines_resp)
 
-    def vitrines_com_produtos(self, empresa_id: int, cod_categoria: int) -> List[VitrineComProdutosResponse]:
+    def vitrines_com_produtos(self, empresa_id: int, cod_categoria: int, is_home: Optional[bool] = None) -> List[VitrineComProdutosResponse]:
         if not self.repo_empresa.get_empresa_by_id(empresa_id):
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Empresa não encontrada")
 
         produtos_por_vitrine = self.repo_home.listar_vitrines_com_produtos_empresa_categoria(empresa_id, cod_categoria)
-        vitrines_cat = self.repo_home.listar_vitrines_por_categoria(cod_categoria)
+        vitrines_cat = self.repo_home.listar_vitrines_por_categoria(cod_categoria, is_home=is_home)
 
         resultado: List[VitrineComProdutosResponse] = []
         for vitrine in vitrines_cat:

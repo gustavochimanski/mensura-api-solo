@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import List, Dict
+from typing import List, Dict, Optional
 from collections import defaultdict
 
 from sqlalchemy.orm import Session, joinedload
@@ -29,25 +29,34 @@ class HomeRepository:
         return cats
 
     # ---------- Vitrines ----------
-    def listar_vitrines(self, only_home: bool = False) -> List[VitrinesModel]:
+    def listar_vitrines(self, is_home: Optional[bool] = None) -> List[VitrinesModel]:
         """
-        Lista vitrines, filtrando por tipo_exibicao se only_home=True.
+        Lista vitrines. Se is_home for:
+          - True  -> tipo_exibicao IS NOT NULL (ou == 'P' se preferir)
+          - False -> tipo_exibicao IS NULL
+          - None  -> sem filtro por home
         """
         q = self.db.query(VitrinesModel).order_by(VitrinesModel.ordem)
-        if only_home:
-            # Se a regra for "qualquer tipo_exibicao != NULL"
+        if is_home is True:
             q = q.filter(VitrinesModel.tipo_exibicao.isnot(None))
-            # Ou, se quiser apenas tipo_exibicao == "P":
+            # Se a regra for estrita:
             # q = q.filter(VitrinesModel.tipo_exibicao == "P")
+        elif is_home is False:
+            q = q.filter(VitrinesModel.tipo_exibicao.is_(None))
         return q.all()
 
-    def listar_vitrines_por_categoria(self, cod_categoria: int) -> List[VitrinesModel]:
-        return (
+    def listar_vitrines_por_categoria(self, cod_categoria: int, is_home: Optional[bool] = None) -> List[VitrinesModel]:
+        q = (
             self.db.query(VitrinesModel)
             .filter(VitrinesModel.cod_categoria == cod_categoria)
             .order_by(VitrinesModel.ordem)
-            .all()
         )
+        if is_home is True:
+            q = q.filter(VitrinesModel.tipo_exibicao.isnot(None))
+            # ou: q = q.filter(VitrinesModel.tipo_exibicao == "P")
+        elif is_home is False:
+            q = q.filter(VitrinesModel.tipo_exibicao.is_(None))
+        return q.all()
 
     # ---------- Produtos ----------
     def listar_produtos_emp_por_categoria_e_sub(
