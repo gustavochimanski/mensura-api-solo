@@ -24,7 +24,7 @@ class SetDisponibilidadeRequest(BaseModel):
   empresa_id: int
   disponivel: bool
 
-@router.get("/produtos/delivery", response_model=ProdutosPaginadosResponse)
+@router.get("/produtos", response_model=ProdutosPaginadosResponse)
 def listar_delivery(
   db: Session = Depends(get_db),
   cod_empresa: int = Query(...),
@@ -36,7 +36,7 @@ def listar_delivery(
   service = ProdutosDeliveryService(db)
   return service.listar_paginado(cod_empresa, page, limit, apenas_disponiveis=apenas_disponiveis)
 
-@router.post("/produtos/delivery", response_model=CriarNovoProdutoResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/produtos", response_model=CriarNovoProdutoResponse, status_code=status.HTTP_201_CREATED)
 async def criar_produto(
   cod_empresa: int = Form(...),
   cod_barras: str = Form(...),
@@ -87,7 +87,7 @@ async def criar_produto(
     db.rollback()
     raise HTTPException(400, detail="Erro de integridade nos dados")
 
-@router.put("/produtos/delivery/{cod_barras}", response_model=CriarNovoProdutoResponse)
+@router.put("/produtos/{cod_barras}", response_model=CriarNovoProdutoResponse)
 async def atualizar_produto(
   cod_empresa: int = Form(...),
   cod_barras: str = Path(...),
@@ -137,7 +137,7 @@ async def atualizar_produto(
     db.rollback()
     raise HTTPException(400, detail="Erro de integridade nos dados")
 
-@router.patch("/produtos/delivery/{cod_barras}/disponibilidade", status_code=status.HTTP_204_NO_CONTENT)
+@router.patch("/produtos/{cod_barras}/disponibilidade", status_code=status.HTTP_204_NO_CONTENT)
 def set_disponibilidade(
   cod_barras: str,
   payload: SetDisponibilidadeRequest = Body(...),
@@ -152,7 +152,7 @@ def set_disponibilidade(
   )
   return None
 
-@router.delete("/produtos/delivery/{cod_barras}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/produtos/{cod_barras}", status_code=status.HTTP_204_NO_CONTENT)
 def deletar_produto(
   cod_barras: str,
   empresa_id: int = Query(..., description="Empresa dona do vínculo a ser removido"),
