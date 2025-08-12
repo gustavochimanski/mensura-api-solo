@@ -42,17 +42,18 @@ class HomeService:
         return self._map_categorias(cats)
 
     def montar_home(self, empresa_id: int, only_home: bool = False) -> HomeResponse:
-        """
-        Home completa: categorias (raízes quando only_home=True) + vitrines de home (is_home=True) com produtos.
-        """
         if not self.repo_empresa.get_empresa_by_id(empresa_id):
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Empresa não encontrada")
 
         # Categorias
         cats = self._map_categorias(self.repo_home.listar_categorias(only_home=only_home))
 
-        # Vitrines de Home
-        vitrines = self.repo_home.listar_vitrines_home()
+        # Vitrines
+        if only_home:
+            vitrines = self.repo_home.listar_vitrines_home()  # só as is_home=True
+        else:
+            vitrines = self.repo_home.listar_todas_vitrines()  # novo método listando todas
+
         vitrine_ids = [v.id for v in vitrines]
         produtos_por_vitrine = self.repo_home.listar_produtos_por_vitrine_ids(empresa_id, vitrine_ids)
 
@@ -83,9 +84,9 @@ class HomeService:
                     titulo=v.titulo,
                     slug=v.slug,
                     ordem=v.ordem,
+                    cod_categoria=v.cod_categoria,
                     is_home=bool(v.is_home),
-                    produtos=produtos_dto,
-                    cod_categoria=v.cod_categoria
+                    produtos=produtos_dto
                 )
             )
 

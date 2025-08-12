@@ -74,6 +74,13 @@ class HomeRepository:
             .all()
         )
 
+    def listar_todas_vitrines(self) -> List[VitrinesModel]:
+        return (
+            self.db.query(VitrinesModel)
+            .order_by(VitrinesModel.ordem)
+            .all()
+        )
+
     def listar_vitrines_com_produtos_empresa_categoria(
         self, empresa_id: int, cod_categoria: int
     ) -> Dict[int, List[ProdutoEmpDeliveryModel]]:
