@@ -1,18 +1,13 @@
-from __future__ import annotations
+# home_service.py
 from typing import List, Optional
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
-
 from app.api.delivery.repositories.repo_home_dv import HomeRepository
 from app.api.mensura.repositories.empresa_repo import EmpresaRepository
 from app.api.delivery.schemas.home_dv_schema import (
-    ProdutoEmpMiniDTO,
-    ProdutoMiniDTO,
-    VitrineComProdutosResponse,
-    CategoriaMiniSchema,
-    HomeResponse,
+    ProdutoEmpMiniDTO, ProdutoMiniDTO, VitrineComProdutosResponse,
+    CategoriaMiniSchema, HomeResponse,
 )
-
 
 class HomeService:
     def __init__(self, db: Session):
@@ -22,115 +17,75 @@ class HomeService:
     def _map_categorias(self, cats) -> List[CategoriaMiniSchema]:
         return [
             CategoriaMiniSchema(
-                id=c.id,
-                slug=c.slug,
-                parent_id=c.parent_id,
+                id=c.id, slug=c.slug, parent_id=c.parent_id,
                 slug_pai=(c.parent.slug if c.parent else None),
-                descricao=c.descricao,
-                posicao=c.posicao,
-                imagem=c.imagem,
-                label=c.descricao,
-                href=f"/categoria/{c.slug}",
+                descricao=c.descricao, posicao=c.posicao, imagem=c.imagem,
+                label=c.descricao, href=f"/categoria/{c.slug}",
             )
             for c in cats
         ]
 
-    def listar_categorias(self, empresa_id: int, only_home: bool = False) -> List[CategoriaMiniSchema]:
-        if not self.repo_empresa.get_empresa_by_id(empresa_id):
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Empresa não encontrada")
-        cats = self.repo_home.listar_categorias(only_home=only_home)
-        return self._map_categorias(cats)
-
-    def montar_home(self, empresa_id: int, only_home: bool = False, is_home: Optional[bool] = None) -> HomeResponse:
-        """
-        - Categorias: se only_home=True, retorna apenas raízes (parent_id nulo).
-        - Vitrines: usa `is_home` se enviado; se não enviado, e only_home=True, assume is_home=True;
-                    caso contrário, não filtra (is_home=None).
-        """
+    def montar_home(self, empresa_id: int, is_home: bool) -> HomeResponse:
         if not self.repo_empresa.get_empresa_by_id(empresa_id):
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Empresa não encontrada")
 
-        # Categorias
-        cats = self._map_categorias(self.repo_home.listar_categorias(only_home=only_home))
+        # Categorias: se is_home=True → só raízes; caso contrário → todas
+        cats = self._map_categorias(self.repo_home.listar_categorias(is_home=is_home))
 
-        # Vitrines (filtradas no SQL)
-        vitrines_filter = is_home if is_home is not None else (True if only_home else None)
-        vitrines = self.repo_home.listar_vitrines(is_home=vitrines_filter)
-
+        # Vitrines: filtradas no SQL pelo mesmo is_home
+        vitrines = self.repo_home.listar_vitrines(is_home=is_home)
         vitrine_ids = [v.id for v in vitrines]
-        produtos_por_vitrine = self.repo_home.listar_produtos_por_vitrine_ids(empresa_id, vitrine_ids)
+        produtos_map = self.repo_home.listar_produtos_por_vitrine_ids(empresa_id, vitrine_ids)
 
         vitrines_resp: List[VitrineComProdutosResponse] = []
         for v in vitrines:
             produtos_dto = [
                 ProdutoEmpMiniDTO(
-                    empresa_id=p.empresa_id,
-                    cod_barras=p.cod_barras,
-                    preco_venda=float(p.preco_venda),
-                    vitrine_id=p.vitrine_id,
-                    disponivel=p.disponivel,
+                    empresa_id=p.empresa_id, cod_barras=p.cod_barras,
+                    preco_venda=float(p.preco_venda), vitrine_id=p.vitrine_id, disponivel=p.disponivel,
                     produto=ProdutoMiniDTO(
-                        cod_barras=p.produto.cod_barras,
-                        descricao=p.produto.descricao,
-                        imagem=p.produto.imagem,
-                        cod_categoria=p.produto.cod_categoria,
-                        ativo=p.produto.ativo,
-                        unidade_medida=p.produto.unidade_medida,
+                        cod_barras=p.produto.cod_barras, descricao=p.produto.descricao,
+                        imagem=p.produto.imagem, cod_categoria=p.produto.cod_categoria,
+                        ativo=p.produto.ativo, unidade_medida=p.produto.unidade_medida,
                     ),
                 )
-                for p in produtos_por_vitrine.get(v.id, [])
+                for p in produtos_map.get(v.id, [])
             ]
-
             vitrines_resp.append(
                 VitrineComProdutosResponse(
-                    id=v.id,
-                    titulo=v.titulo,
-                    slug=v.slug,
-                    ordem=v.ordem,
-                    cod_categoria=v.cod_categoria,
-                    is_home=bool(v.is_home),
+                    id=v.id, titulo=v.titulo, slug=v.slug, ordem=v.ordem,
+                    cod_categoria=v.cod_categoria, is_home=bool(v.is_home),
                     produtos=produtos_dto,
                 )
             )
-
         return HomeResponse(categorias=cats, vitrines=vitrines_resp)
 
-    def vitrines_com_produtos(self, empresa_id: int, cod_categoria: int, is_home: Optional[bool] = None) -> List[VitrineComProdutosResponse]:
+    def vitrines_com_produtos(self, empresa_id: int, cod_categoria: int, is_home: bool) -> List[VitrineComProdutosResponse]:
         if not self.repo_empresa.get_empresa_by_id(empresa_id):
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Empresa não encontrada")
 
-        produtos_por_vitrine = self.repo_home.listar_vitrines_com_produtos_empresa_categoria(empresa_id, cod_categoria)
+        produtos_map = self.repo_home.listar_vitrines_com_produtos_empresa_categoria(empresa_id, cod_categoria)
         vitrines_cat = self.repo_home.listar_vitrines_por_categoria(cod_categoria, is_home=is_home)
 
-        resultado: List[VitrineComProdutosResponse] = []
-        for vitrine in vitrines_cat:
+        out: List[VitrineComProdutosResponse] = []
+        for v in vitrines_cat:
             produtos_dto = [
                 ProdutoEmpMiniDTO(
-                    empresa_id=p.empresa_id,
-                    cod_barras=p.cod_barras,
-                    preco_venda=float(p.preco_venda),
-                    vitrine_id=p.vitrine_id,
-                    disponivel=p.disponivel,
+                    empresa_id=p.empresa_id, cod_barras=p.cod_barras,
+                    preco_venda=float(p.preco_venda), vitrine_id=p.vitrine_id, disponivel=p.disponivel,
                     produto=ProdutoMiniDTO(
-                        cod_barras=p.produto.cod_barras,
-                        descricao=p.produto.descricao,
-                        imagem=p.produto.imagem,
-                        cod_categoria=p.produto.cod_categoria,
-                        ativo=p.produto.ativo,
-                        unidade_medida=p.produto.unidade_medida,
+                        cod_barras=p.produto.cod_barras, descricao=p.produto.descricao,
+                        imagem=p.produto.imagem, cod_categoria=p.produto.cod_categoria,
+                        ativo=p.produto.ativo, unidade_medida=p.produto.unidade_medida,
                     ),
                 )
-                for p in produtos_por_vitrine.get(vitrine.id, [])
+                for p in produtos_map.get(v.id, [])
             ]
-            resultado.append(
+            out.append(
                 VitrineComProdutosResponse(
-                    id=vitrine.id,
-                    titulo=vitrine.titulo,
-                    slug=vitrine.slug,
-                    ordem=vitrine.ordem,
-                    cod_categoria=vitrine.cod_categoria,
-                    is_home=bool(vitrine.is_home),
+                    id=v.id, titulo=v.titulo, slug=v.slug, ordem=v.ordem,
+                    cod_categoria=v.cod_categoria, is_home=bool(v.is_home),
                     produtos=produtos_dto,
                 )
             )
-        return resultado
+        return out
