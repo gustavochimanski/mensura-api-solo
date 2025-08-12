@@ -4,6 +4,8 @@ from fastapi import (
 )
 from sqlalchemy.orm import Session
 from typing import Optional, List
+
+from app.core.dependencies import get_current_user
 #
 from app.database.db_connection import get_db
 from app.api.delivery.repositories.repo_categorias_dv import CategoriaDeliveryRepository
@@ -37,7 +39,7 @@ def get_categoria(
 
 
 @router.post("", response_model=CategoriaDeliveryOut, status_code=status.HTTP_201_CREATED)
-def criar_categoria(body: CategoriaDeliveryIn, db: Session = Depends(get_db)):
+def criar_categoria(body: CategoriaDeliveryIn, db: Session = Depends(get_db), dependencies=Depends(get_current_user)):
     repos = CategoriaDeliveryRepository(db)
     c = repos.create(body)
     return CategoriaDeliveryOut(
