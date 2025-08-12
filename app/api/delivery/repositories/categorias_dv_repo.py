@@ -34,8 +34,7 @@ class CategoriaDeliveryRepository:
             slug=slug_value,
             parent_id=data.parent_id,
             imagem=data.imagem,
-            posicao=posicao,
-            tipo_exibicao=data.tipo_exibicao,
+            posicao=posicao
         )
         self.db.add(nova)
         try:
@@ -66,7 +65,7 @@ class CategoriaDeliveryRepository:
 
     def update(self, cat_id: int, update_data: dict) -> CategoriaDeliveryModel:
         cat = self.get_by_id(cat_id)
-        for key in ("descricao","slug","parent_id","imagem","posicao","tipo_exibicao"):
+        for key in ("descricao","slug","parent_id","imagem","posicao"):
             if key in update_data and update_data[key] is not None:
                 setattr(cat, key, update_data[key])
         try:
@@ -124,15 +123,3 @@ class CategoriaDeliveryRepository:
         except Exception:
             self.db.rollback()
             raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Erro ao mover categoria para a esquerda")
-
-    # -------- Extras --------
-    def toggle_home(self, cat_id: int, on: bool) -> CategoriaDeliveryModel:
-        cat = self.get_by_id(cat_id)
-        cat.tipo_exibicao = "P" if on else None
-        try:
-            self.db.commit()
-            self.db.refresh(cat)
-            return cat
-        except Exception:
-            self.db.rollback()
-            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Erro ao alterar exibição na home")
