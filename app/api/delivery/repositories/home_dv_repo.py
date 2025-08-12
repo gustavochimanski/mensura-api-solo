@@ -24,7 +24,8 @@ class HomeRepository:
         )
         cats = self.db.execute(stmt).scalars().all()
         if only_home:
-            cats = [c for c in cats if c.is_home]  # usa a property do model
+            # agora retorna apenas as categorias raiz (sem pai)
+            cats = [c for c in cats if not c.parent_id]
         return cats
 
     # ---------- Vitrines ----------
