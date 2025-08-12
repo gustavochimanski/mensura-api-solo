@@ -21,21 +21,28 @@ class HomeRepository:
         cats = self.db.execute(stmt).scalars().all()
         if is_home is True:
             cats = [c for c in cats if not c.parent_id]  # raízes
-        # is_home False/None -> devolve todas
         return cats
 
     def listar_vitrines(self, is_home: bool) -> List[VitrinesModel]:
-        q = self.db.query(VitrinesModel).order_by(VitrinesModel.ordem)
+        q = (
+            self.db.query(VitrinesModel)
+            .options(
+                joinedload(VitrinesModel.categoria).joinedload(CategoriaDeliveryModel.parent)
+            )
+            .order_by(VitrinesModel.ordem)
+        )
         if is_home is True:
             q = q.filter(VitrinesModel.tipo_exibicao.isnot(None))
-            # ou: q = q.filter(VitrinesModel.tipo_exibicao == "P")
         elif is_home is False:
             q = q.filter(VitrinesModel.tipo_exibicao.is_(None))
         return q.all()
 
-    def listar_vitrines_por_categoria(self, cod_categoria: int, is_home:bool) -> List[VitrinesModel]:
+    def listar_vitrines_por_categoria(self, cod_categoria: int, is_home: bool) -> List[VitrinesModel]:
         q = (
             self.db.query(VitrinesModel)
+            .options(
+                joinedload(VitrinesModel.categoria).joinedload(CategoriaDeliveryModel.parent)
+            )
             .filter(VitrinesModel.cod_categoria == cod_categoria)
             .order_by(VitrinesModel.ordem)
         )
