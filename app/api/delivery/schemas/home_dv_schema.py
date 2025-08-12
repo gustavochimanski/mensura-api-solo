@@ -10,6 +10,7 @@ class CategoriaMiniSchema(BaseModel):
     imagem: Optional[str] = None
     label: str
     href: str
+    slug_pai: str
 
     model_config = ConfigDict(from_attributes=True)
 

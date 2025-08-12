@@ -1,14 +1,14 @@
 from fastapi import APIRouter, Depends
 
-from app.api.delivery.router.cardapio_dv_router import router as cardapio_router
-from app.api.delivery.router.categorias_dv_router import router as categorias_router
-from app.api.delivery.router.cliente_router import router as cliente_router
-from app.api.delivery.router.pedidos_dv_router import router as pedidos_router
-from app.api.delivery.router.produtos_dv_router import router as produtos_router
+from app.api.delivery.router.router_home_dv import router as cardapio_router
+from app.api.delivery.router.router_categorias_dv import router as categorias_router
+from app.api.delivery.router.router_cliente_dv import router as cliente_router
+from app.api.delivery.router.router_pedidos_dv import router as pedidos_router
+from app.api.delivery.router.router_produtos_dv import router as produtos_router
 from app.api.delivery.router.vitrine_router import router as vitrines_router
-from app.api.delivery.router.cupons_router import router as cupons_router
-from app.api.delivery.router.entregadores_router import router as entregadores_router
-from app.api.delivery.router.enderecos_router import router as enderecos_router
+from app.api.delivery.router.router_cupons_dv import router as cupons_router
+from app.api.delivery.router.router_entregadores import router as entregadores_router
+from app.api.delivery.router.router_enderecos import router as enderecos_router
 from app.core.dependencies import get_current_user
 
 api_delivery = APIRouter()

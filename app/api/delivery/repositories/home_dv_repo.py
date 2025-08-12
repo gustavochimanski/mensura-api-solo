@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import List, Dict, Optional, Set
+from typing import List, Dict
 from collections import defaultdict
 
 from sqlalchemy.orm import Session, joinedload
@@ -8,10 +8,9 @@ from sqlalchemy import select
 from app.api.delivery.models.categoria_dv_model import CategoriaDeliveryModel
 from app.api.delivery.models.cadprod_emp_dv_model import ProdutoEmpDeliveryModel
 from app.api.delivery.models.vitrine_dv_model import VitrinesModel
-from app.api.delivery.models.cadprod_dv_model import ProdutoDeliveryModel
 
 
-class CardapioRepository:
+class HomeRepository:
     def __init__(self, db: Session):
         self.db = db
 
@@ -24,22 +23,8 @@ class CardapioRepository:
         )
         cats = self.db.execute(stmt).scalars().all()
         if only_home:
-            cats = [c for c in cats if c.is_home]
+            cats = [c for c in cats if c.is_home]  # usa a property do model
         return cats
-
-    def _ids_subarvore(self, raiz_id: int) -> Set[int]:
-        # coleta id da raiz + filhos diretos (poderia expandir recursivamente se necessário)
-        stmt = (
-            select(CategoriaDeliveryModel)
-            .options(joinedload(CategoriaDeliveryModel.children))
-            .where(CategoriaDeliveryModel.id == raiz_id)
-        )
-        raiz = self.db.execute(stmt).scalars().first()
-        if not raiz:
-            return set()
-        ids = {raiz.id}
-        ids.update([c.id for c in raiz.children])
-        return ids
 
     # ---------- Vitrines ----------
     def listar_vitrines_por_categoria(self, cod_categoria: int) -> List[VitrinesModel]:
@@ -50,18 +35,30 @@ class CardapioRepository:
             .all()
         )
 
-    # ---------- Produtos por empresa/categoria ----------
     def listar_produtos_emp_por_categoria_e_sub(self, empresa_id: int, cod_categoria: int) -> List[ProdutoEmpDeliveryModel]:
-        ids = self._ids_subarvore(cod_categoria) or {cod_categoria}
+        """
+        Retorna produtos da empresa que estão na categoria informada ou em suas subcategorias.
+        """
+        categoria = (
+            self.db.query(CategoriaDeliveryModel)
+            .options(joinedload(CategoriaDeliveryModel.children))
+            .filter(CategoriaDeliveryModel.id == cod_categoria)
+            .first()
+        )
+
+        if not categoria:
+            return []
+
+        ids = {categoria.id} | {c.id for c in categoria.children}
+
         return (
             self.db.query(ProdutoEmpDeliveryModel)
             .join(ProdutoEmpDeliveryModel.produto)
             .options(joinedload(ProdutoEmpDeliveryModel.produto))
             .filter(
                 ProdutoEmpDeliveryModel.empresa_id == empresa_id,
-                ProdutoDeliveryModel.cod_categoria.in_(ids),
                 ProdutoEmpDeliveryModel.disponivel.is_(True),
-                ProdutoDeliveryModel.ativo.is_(True),
+                ProdutoEmpDeliveryModel.produto.has(CategoriaDeliveryModel.id.in_(ids))
             )
             .all()
         )
