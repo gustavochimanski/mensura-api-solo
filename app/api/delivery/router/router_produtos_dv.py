@@ -24,7 +24,7 @@ class SetDisponibilidadeRequest(BaseModel):
   empresa_id: int
   disponivel: bool
 
-@router.get("/produtos", response_model=ProdutosPaginadosResponse, description="Lista produtos ERP")
+@router.get(path="/produtos", response_model=ProdutosPaginadosResponse, description="Lista produtos ERP", summary="Lista produtos ERP" )
 def listar_delivery(
   db: Session = Depends(get_db),
   cod_empresa: int = Query(...),
