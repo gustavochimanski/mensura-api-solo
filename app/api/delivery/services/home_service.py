@@ -125,6 +125,7 @@ class HomeService:
                     ordem=vitrine.ordem,
                     is_home=bool(vitrine.is_home),
                     produtos=produtos_dto,
+                    cod_categoria=vitrine.cod_categoria
                 )
             )
         return resultado
