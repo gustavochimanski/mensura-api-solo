@@ -54,7 +54,7 @@ def criar_categoria(body: CategoriaDeliveryIn, db: Session = Depends(get_db), de
     )
 
 @router.put("/{cat_id}", response_model=CategoriaDeliveryOut)
-def editar_categoria(cat_id: int, body: CategoriaDeliveryIn, db: Session = Depends(get_db)):
+def editar_categoria(cat_id: int, body: CategoriaDeliveryIn, db: Session = Depends(get_db), dependencies=Depends(get_current_user)):
     repos = CategoriaDeliveryRepository(db)
     c = repos.update(cat_id, body.model_dump(exclude_unset=True))
     return CategoriaDeliveryOut(
@@ -73,6 +73,7 @@ def editar_categoria(cat_id: int, body: CategoriaDeliveryIn, db: Session = Depen
 def deletar_categoria(
     cat_id: int = Path(..., title="ID da categoria"),
     db: Session = Depends(get_db),
+    dependencies=Depends(get_current_user)
 ):
     repos = CategoriaDeliveryRepository(db)
     repos.delete(cat_id)
@@ -83,6 +84,7 @@ def deletar_categoria(
 def move_categoria_direita(
     cat_id: int = Path(..., title="ID da categoria"),
     db: Session = Depends(get_db),
+    dependencies=Depends(get_current_user)
 ):
     repos = CategoriaDeliveryRepository(db)
     c = repos.move_right(cat_id)
@@ -103,33 +105,11 @@ def move_categoria_direita(
 def move_categoria_esquerda(
     cat_id: int = Path(..., title="ID da categoria"),
     db: Session = Depends(get_db),
+    dependencies=Depends(get_current_user)
 ):
     repos = CategoriaDeliveryRepository(db)
     c = repos.move_left(cat_id)
     logger.info(f"[Categorias] Move left ID={cat_id}")
-    return CategoriaDeliveryOut(
-        id=c.id,
-        label=c.descricao,
-        slug=c.slug,
-        parent_id=c.parent_id,
-        slug_pai=c.parent.slug if c.parent else None,
-        imagem=c.imagem,
-        href=f"/categoria/{c.slug}",
-        posicao=c.posicao,
-    )
-
-
-@router.post("/{cat_id}/toggle-home", response_model=CategoriaDeliveryOut)
-def toggle_home(
-    cat_id: int = Path(..., title="ID da categoria"),
-    db: Session = Depends(get_db),
-):
-    """
-    Alterna `tipo_exibicao` para exibir na Home (valor 'P') ou remover.
-    """
-    repos = CategoriaDeliveryRepository(db)
-    c = repos.toggle_home(cat_id, on=True)
-    logger.info(f"[Categorias] Toggle home ID={cat_id}")
     return CategoriaDeliveryOut(
         id=c.id,
         label=c.descricao,
@@ -147,6 +127,7 @@ async def upload_imagem_categoria(
     cod_empresa: int = Form(...),
     imagem: UploadFile = File(...),
     db: Session = Depends(get_db),
+    dependencies=Depends(get_current_user)
 ):
     permitidos = {"image/jpeg", "image/png", "image/webp"}
     if imagem.content_type not in permitidos:
