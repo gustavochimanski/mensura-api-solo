@@ -1,42 +1,164 @@
-from fastapi import APIRouter, Depends, Query
+# app/api/delivery/router/produtos_dv_router.py
+from decimal import Decimal
+from datetime import date
+from fastapi import APIRouter, Depends, Form, File, UploadFile, HTTPException, status, Query, Path, Body
 from sqlalchemy.orm import Session
-from typing import List
+from typing import Optional
 
-from app.api.delivery.schemas.home_dv_schema import VitrineComProdutosResponse
-from app.api.delivery.schemas.categoria_dv_schema import CategoriaDeliveryOut
-from app.api.delivery.services.home_service import HomeService
+from pydantic import BaseModel
+
 from app.database.db_connection import get_db
-from app.utils.logger import logger
-
-router = APIRouter(prefix="/api/delivery", tags=["Home"])
-
-
-@router.get("/home", response_model=List[CategoriaDeliveryOut])
-def listar_home(
-    empresa_id: int = Query(..., description="ID da empresa"),
-    only_home: bool = Query(False, description="Somente categorias da home"),
-    db: Session = Depends(get_db),
-):
-    """
-    Retorna a árvore (nível raiz) de categorias do cardápio para a empresa.
-    """
-    logger.info(f"[Home] Listar categorias - empresa_id={empresa_id} only_home={only_home}")
-    service = HomeService(db)
-    return service.listar_categorias(empresa_id, only_home=only_home)
-
-
-@router.get(
-    "/produtos/vitrine-por-categoria",
-    response_model=List[VitrineComProdutosResponse]
+from app.api.delivery.services.produtos_service import ProdutosDeliveryService
+from app.api.delivery.schemas.produtos.produtos_dv_schema import (
+    ProdutosPaginadosResponse,
+    CriarNovoProdutoResponse,
+    CriarNovoProdutoRequest
 )
-def listar_vitrines_e_produtos_por_categoria(
-    empresa_id: int = Query(...),
-    cod_categoria: int = Query(...),
-    db: Session = Depends(get_db),
+from app.utils.minio_client import upload_file_to_minio
+from app.utils.logger import logger
+from sqlalchemy.exc import IntegrityError
+
+router = APIRouter(prefix="/api/delivery", tags=["Produtos - Delivery"])
+
+class SetDisponibilidadeRequest(BaseModel):
+  empresa_id: int
+  disponivel: bool
+
+@router.get("/produtos/delivery", response_model=ProdutosPaginadosResponse)
+def listar_delivery(
+  db: Session = Depends(get_db),
+  cod_empresa: int = Query(...),
+  page: int = Query(1, ge=1),
+  limit: int = Query(30, ge=1, le=100),
+  apenas_disponiveis: bool = Query(False),
 ):
-    """
-    Retorna as vitrines (e seus produtos) vinculadas a uma categoria.
-    """
-    logger.info(f"[Cardápio] Vitrines por categoria - empresa_id={empresa_id} categoria={cod_categoria}")
-    service = HomeService(db)
-    return service.vitrines_com_produtos(empresa_id, cod_categoria)
+  logger.info(f"[Produtos] Listar - empresa={cod_empresa} page={page} limit={limit} disp={apenas_disponiveis}")
+  service = ProdutosDeliveryService(db)
+  return service.listar_paginado(cod_empresa, page, limit, apenas_disponiveis=apenas_disponiveis)
+
+@router.post("/produtos/delivery", response_model=CriarNovoProdutoResponse, status_code=status.HTTP_201_CREATED)
+async def criar_produto(
+  cod_empresa: int = Form(...),
+  cod_barras: str = Form(...),
+  descricao: str = Form(...),
+  cod_categoria: int = Form(...),
+  vitrine_id: Optional[int] = Form(None),
+  preco_venda: Decimal = Form(...),
+  custo: Optional[Decimal] = Form(None),
+  data_cadastro: Optional[str] = Form(None),
+  imagem: Optional[UploadFile] = File(None),
+  db: Session = Depends(get_db),
+):
+  logger.info(f"[Produtos] Criar - {cod_barras} / empresa {cod_empresa}")
+  imagem_url = None
+  if imagem:
+    if imagem.content_type not in {"image/jpeg","image/png","image/webp"}:
+      raise HTTPException(status_code=400, detail="Formato de imagem inválido")
+    try:
+      imagem_url = upload_file_to_minio(db, cod_empresa, imagem, "produtos")
+    except RuntimeError as e:
+      raise HTTPException(status_code=500, detail=str(e))
+
+  parsed_date = None
+  if data_cadastro:
+    try:
+      parsed_date = date.fromisoformat(data_cadastro)
+    except ValueError:
+      raise HTTPException(400, detail="data_cadastro inválida (use YYYY-MM-DD)")
+
+  dto = CriarNovoProdutoRequest(
+    empresa_id=cod_empresa,
+    cod_barras=cod_barras,
+    descricao=descricao,
+    cod_categoria=cod_categoria,
+    vitrine_id=vitrine_id,
+    preco_venda=preco_venda,
+    custo=custo,
+    data_cadastro=parsed_date,
+    imagem=imagem_url,
+  )
+
+  service = ProdutosDeliveryService(db)
+  try:
+    return service.criar_novo_produto(cod_empresa, dto)
+  except ValueError as e:
+    raise HTTPException(status_code=400, detail=str(e))
+  except IntegrityError:
+    db.rollback()
+    raise HTTPException(400, detail="Erro de integridade nos dados")
+
+@router.put("/produtos/delivery/{cod_barras}", response_model=CriarNovoProdutoResponse)
+async def atualizar_produto(
+  cod_empresa: int = Form(...),
+  cod_barras: str = Path(...),
+  descricao: str = Form(...),
+  cod_categoria: int = Form(...),
+  vitrine_id: Optional[int] = Form(None),
+  preco_venda: Decimal = Form(...),
+  custo: Optional[Decimal] = Form(None),
+  data_cadastro: Optional[str] = Form(None),
+  imagem: Optional[UploadFile] = File(None),
+  db: Session = Depends(get_db),
+):
+  logger.info(f"[Produtos] Atualizar - {cod_barras} / empresa {cod_empresa}")
+  imagem_url = None
+  if imagem:
+    if imagem.content_type not in {"image/jpeg","image/png","image/webp"}:
+      raise HTTPException(status_code=400, detail="Formato de imagem inválido")
+    try:
+      imagem_url = upload_file_to_minio(db, cod_empresa, imagem, "produtos")
+    except RuntimeError as e:
+      raise HTTPException(status_code=500, detail=str(e))
+
+  parsed_date = None
+  if data_cadastro:
+    try:
+      parsed_date = date.fromisoformat(data_cadastro)
+    except ValueError:
+      raise HTTPException(400, detail="data_cadastro inválida (use YYYY-MM-DD)")
+
+  dto = CriarNovoProdutoRequest(
+    empresa_id=cod_empresa,
+    cod_barras=cod_barras,
+    descricao=descricao,
+    cod_categoria=cod_categoria,
+    vitrine_id=vitrine_id,
+    preco_venda=preco_venda,
+    custo=custo,
+    data_cadastro=parsed_date,
+    imagem=imagem_url,
+  )
+  service = ProdutosDeliveryService(db)
+  try:
+    return service.atualizar_produto(cod_empresa, cod_barras, dto)
+  except HTTPException:
+    raise
+  except IntegrityError:
+    db.rollback()
+    raise HTTPException(400, detail="Erro de integridade nos dados")
+
+@router.patch("/produtos/delivery/{cod_barras}/disponibilidade", status_code=status.HTTP_204_NO_CONTENT)
+def set_disponibilidade(
+  cod_barras: str,
+  payload: SetDisponibilidadeRequest = Body(...),
+  db: Session = Depends(get_db)
+):
+  logger.info(f"[Produtos] Disponibilidade - {cod_barras} / empresa {payload.empresa_id} -> {payload.disponivel}")
+  service = ProdutosDeliveryService(db)
+  service.set_disponibilidade(
+    empresa_id=payload.empresa_id,
+    cod_barras=cod_barras,
+    on=payload.disponivel
+  )
+  return None
+
+@router.delete("/produtos/delivery/{cod_barras}", status_code=status.HTTP_204_NO_CONTENT)
+def deletar_produto(
+  cod_barras: str,
+  empresa_id: int = Query(..., description="Empresa dona do vínculo a ser removido"),
+  db: Session = Depends(get_db)
+):
+  logger.info(f"[Produtos] Deletar - {cod_barras} / empresa {empresa_id}")
+  service = ProdutosDeliveryService(db)
+  service.deletar_produto(empresa_id, cod_barras)
+  return None

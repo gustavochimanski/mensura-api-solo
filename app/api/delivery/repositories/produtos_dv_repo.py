@@ -1,5 +1,6 @@
+# app/api/delivery/repositories/produtos_dv_repo.py
 from __future__ import annotations
-from typing import Optional, List, Tuple
+from typing import Optional, List
 from decimal import Decimal
 
 from sqlalchemy import func
@@ -16,7 +17,7 @@ class ProdutoDeliveryRepository:
     def buscar_produtos_da_empresa(
         self, empresa_id: int, offset: int, limit: int,
         apenas_disponiveis: bool = False,
-        apenas_delivery: bool = True              # 👈 novo parâmetro
+        apenas_delivery: bool = True
     ) -> List[ProdutoDeliveryModel]:
         q = (
             self.db.query(ProdutoDeliveryModel)
@@ -31,7 +32,7 @@ class ProdutoDeliveryRepository:
         if apenas_disponiveis:
             q = q.filter(ProdutoDeliveryModel.ativo.is_(True), ProdutoEmpDeliveryModel.disponivel.is_(True))
         if apenas_delivery:
-            q = q.filter(ProdutoEmpDeliveryModel.exibir_delivery.is_(True))  # 👈 filtra pro delivery
+            q = q.filter(ProdutoEmpDeliveryModel.exibir_delivery.is_(True))
         return q.offset(offset).limit(limit).all()
 
     def contar_total(self, empresa_id: int, apenas_disponiveis: bool = False, apenas_delivery: bool = True) -> int:
@@ -43,7 +44,7 @@ class ProdutoDeliveryRepository:
         if apenas_disponiveis:
             q = q.filter(ProdutoDeliveryModel.ativo.is_(True), ProdutoEmpDeliveryModel.disponivel.is_(True))
         if apenas_delivery:
-            q = q.filter(ProdutoEmpDeliveryModel.exibir_delivery.is_(True))   # 👈 idem
+            q = q.filter(ProdutoEmpDeliveryModel.exibir_delivery.is_(True))
         return int(q.scalar() or 0)
 
     def upsert_produto_emp(
@@ -105,7 +106,7 @@ class ProdutoDeliveryRepository:
         if not prod:
             return False
         self.db.delete(prod)
-        self.db.commit()
+        self.db.flush()  # sem commit aqui
         return True
 
     def deletar_vinculo_produto_emp(self, empresa_id: int, cod_barras: str) -> bool:
@@ -116,8 +117,14 @@ class ProdutoDeliveryRepository:
         self.db.flush()
         return True
 
+    def count_vinculos(self, cod_barras: str) -> int:
+        return int(
+            self.db.query(func.count(ProdutoEmpDeliveryModel.empresa_id))
+            .filter(ProdutoEmpDeliveryModel.cod_barras == cod_barras)
+            .scalar() or 0
+        )
 
-    # -------- Produto x Empresa (upsert) --------
+    # -------- Produto x Empresa --------
     def get_produto_emp(self, empresa_id: int, cod_barras: str) -> Optional[ProdutoEmpDeliveryModel]:
         return (
             self.db.query(ProdutoEmpDeliveryModel)
