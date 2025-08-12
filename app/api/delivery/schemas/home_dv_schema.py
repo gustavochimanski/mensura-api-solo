@@ -41,7 +41,7 @@ class VitrineConfigSchema(BaseModel):
     titulo: str
     slug: str
     ordem: int
-
+    is_home: bool
     model_config = ConfigDict(from_attributes=True)
 
 class VitrineComProdutosResponse(BaseModel):
@@ -52,3 +52,7 @@ class VitrineComProdutosResponse(BaseModel):
     produtos: List[ProdutoEmpMiniDTO]
 
     model_config = ConfigDict(from_attributes=True)
+
+class HomeResponse:
+    categorias: List[CategoriaMiniSchema]
+    vitrines: List[VitrineComProdutosResponse]

@@ -5,6 +5,7 @@ from collections import defaultdict
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import select
 
+from app.api.delivery.models.cadprod_dv_model import ProdutoDeliveryModel
 from app.api.delivery.models.categoria_dv_model import CategoriaDeliveryModel
 from app.api.delivery.models.cadprod_emp_dv_model import ProdutoEmpDeliveryModel
 from app.api.delivery.models.vitrine_dv_model import VitrinesModel
@@ -35,10 +36,10 @@ class HomeRepository:
             .all()
         )
 
-    def listar_produtos_emp_por_categoria_e_sub(self, empresa_id: int, cod_categoria: int) -> List[ProdutoEmpDeliveryModel]:
-        """
-        Retorna produtos da empresa que estão na categoria informada ou em suas subcategorias.
-        """
+    def listar_produtos_emp_por_categoria_e_sub(
+            self, empresa_id: int, cod_categoria: int
+    ) -> List[ProdutoEmpDeliveryModel]:
+        # Busca a categoria e suas subcategorias
         categoria = (
             self.db.query(CategoriaDeliveryModel)
             .options(joinedload(CategoriaDeliveryModel.children))
@@ -53,12 +54,13 @@ class HomeRepository:
 
         return (
             self.db.query(ProdutoEmpDeliveryModel)
-            .join(ProdutoEmpDeliveryModel.produto)
+            .join(ProdutoEmpDeliveryModel.produto)  # relacionamento com ProdutoDeliveryModel
             .options(joinedload(ProdutoEmpDeliveryModel.produto))
             .filter(
                 ProdutoEmpDeliveryModel.empresa_id == empresa_id,
                 ProdutoEmpDeliveryModel.disponivel.is_(True),
-                ProdutoEmpDeliveryModel.produto.has(CategoriaDeliveryModel.id.in_(ids))
+                ProdutoDeliveryModel.cod_categoria.in_(ids),  # <-- usa campo do produto
+                ProdutoDeliveryModel.ativo.is_(True),
             )
             .all()
         )
