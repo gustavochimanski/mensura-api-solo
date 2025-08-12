@@ -169,7 +169,7 @@ def toggle_home(
 @router.patch("/{cat_id}/imagem", response_model=CategoriaDeliveryOut)
 async def upload_imagem_categoria(
     cat_id: int,
-    cod_empresa: int,
+    cod_empresa: int = Form(...),
     imagem: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
