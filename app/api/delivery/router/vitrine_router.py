@@ -24,7 +24,15 @@ def criar_vitrine(
     logger.info(f"[Vitrines] Criando - categoria={request.cod_categoria} titulo={request.titulo}")
     svc = VitrinesService(db)
     nova = svc.create(request)
-    return VitrineOut.model_validate(nova)
+    cat0_id = nova.categorias[0].id if nova.categorias else None
+    return VitrineOut(
+        id=nova.id,
+        cod_categoria=cat0_id,
+        titulo=nova.titulo,
+        slug=nova.slug,
+        ordem=nova.ordem,
+        is_home=bool(nova.is_home),
+    )
 
 @router.delete("/{vitrine_id}", status_code=status.HTTP_204_NO_CONTENT)
 def deletar_vitrine(

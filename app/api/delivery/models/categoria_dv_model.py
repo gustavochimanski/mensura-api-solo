@@ -1,7 +1,10 @@
+# app/api/delivery/models/categoria_dv_model.py
 from typing import Optional
 from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, func
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.hybrid import hybrid_property
+
+from app.api.mensura.models.association_tables import VitrineCategoriaLink
 from app.database.db_connection import Base
 
 class CategoriaDeliveryModel(Base):
@@ -11,8 +14,6 @@ class CategoriaDeliveryModel(Base):
     id = Column(Integer, primary_key=True)
     descricao = Column(String(100), nullable=False)
     slug = Column(String(100), nullable=False, unique=True)
-
-
 
     parent_id = Column(Integer, ForeignKey("delivery.categoria_dv.id", ondelete="SET NULL"), nullable=True)
     parent = relationship("CategoriaDeliveryModel", remote_side=[id], back_populates="children")
@@ -25,7 +26,15 @@ class CategoriaDeliveryModel(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     produtos = relationship("ProdutoDeliveryModel", back_populates="categoria")
-    vitrines_dv = relationship("VitrinesModel", back_populates="categoria")
+
+    # --- N:N com vitrines ---
+    vitrines = relationship(
+        "VitrinesModel",
+        secondary=VitrineCategoriaLink.__table__,
+        back_populates="categorias",
+        passive_deletes=True,
+        order_by=VitrineCategoriaLink.posicao,
+    )
 
     @hybrid_property
     def href(self) -> str:

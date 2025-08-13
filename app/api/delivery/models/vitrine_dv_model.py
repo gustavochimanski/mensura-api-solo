@@ -1,40 +1,41 @@
-# app/models/vitrine_dv_model.py
-from sqlalchemy import Column, Integer, String, ForeignKey
+# app/api/delivery/models/vitrine_dv_model.py
+from sqlalchemy import Column, Integer, String
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import relationship
-from app.database.db_connection import Base
-from app.api.delivery.models.cadprod_emp_dv_model import ProdutoEmpDeliveryModel
 
-#
+from app.api.mensura.models.association_tables import VitrineCategoriaLink, VitrineProdutoEmpLink
+from app.database.db_connection import Base
+
 class VitrinesModel(Base):
     __tablename__ = "vitrines_dv"
     __table_args__ = {"schema": "delivery"}
 
     id = Column(Integer, primary_key=True)
 
-    cod_categoria = Column(
-        Integer,
-        ForeignKey("delivery.categoria_dv.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-
     # "P" = aparece na home, outros valores = não aparece
     tipo_exibicao = Column(String(1), nullable=True)
 
     titulo = Column(String(100), nullable=False)
-    slug = Column(String(100), nullable=False)
-    ordem = Column(Integer, nullable=False, default=1)
+    slug   = Column(String(100), nullable=False)  # avalie unique por empresa, se futuramente houver empresa_id
+    ordem  = Column(Integer, nullable=False, default=1)
 
-    # Relacionamento reverso para Categoria
-    categoria = relationship("CategoriaDeliveryModel", back_populates="vitrines_dv")
+    # --- Relacionamentos N:N ---
+    categorias = relationship(
+        "CategoriaDeliveryModel",
+        secondary=VitrineCategoriaLink.__table__,
+        back_populates="vitrines",
+        passive_deletes=True,
+        order_by=VitrineCategoriaLink.posicao,
+    )
 
     produtos_emp = relationship(
         "ProdutoEmpDeliveryModel",
-        back_populates="vitrine",
-        foreign_keys=[ProdutoEmpDeliveryModel.vitrine_id]  # ✅ lista real
+        secondary=VitrineProdutoEmpLink.__table__,
+        back_populates="vitrines",
+        passive_deletes=True,
+        # order_by=VitrineProdutoEmpLink.posicao,  # ative se quiser ordenar os produtos por 'posicao'
     )
 
     @hybrid_property
     def is_home(self) -> bool:
-        """Retorna True se a categoria deve aparecer na home."""
         return self.tipo_exibicao == "P"

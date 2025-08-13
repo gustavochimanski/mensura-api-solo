@@ -33,7 +33,7 @@ class VitrinesService:
         return {"ok": True}
 
     def desvincular_produto(self, vitrine_id: int, empresa_id: int, cod_barras: str):
-        ok = self.repo.desvincular_produto(empresa_id, cod_barras)
+        ok = self.repo.desvincular_produto(empresa_id, cod_barras, vitrine_id)  # 👈 passa vitrine_id
         if not ok:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Produto da empresa não encontrado")
         return {"ok": True}

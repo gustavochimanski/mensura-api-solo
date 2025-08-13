@@ -8,6 +8,8 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.api.delivery.models.cadprod_dv_model import ProdutoDeliveryModel
 from app.api.delivery.models.cadprod_emp_dv_model import ProdutoEmpDeliveryModel
+from app.api.delivery.models.vitrine_dv_model import VitrinesModel
+
 
 class ProdutoDeliveryRepository:
     def __init__(self, db: Session):
@@ -54,7 +56,7 @@ class ProdutoDeliveryRepository:
         cod_barras: str,
         preco_venda: Decimal,
         custo: Optional[Decimal] = None,
-        vitrine_id: Optional[int] = None,
+        vitrine_id: Optional[int] = None,   # 👈 compat: cria vínculo N:N se vier preenchido
         sku_empresa: Optional[str] = None,
         disponivel: Optional[bool] = None,
         exibir_delivery: Optional[bool] = None,
@@ -63,7 +65,6 @@ class ProdutoDeliveryRepository:
         if pe:
             pe.preco_venda = preco_venda
             pe.custo = custo
-            pe.vitrine_id = vitrine_id
             if sku_empresa is not None:
                 pe.sku_empresa = sku_empresa
             if disponivel is not None:
@@ -76,15 +77,22 @@ class ProdutoDeliveryRepository:
                 cod_barras=cod_barras,
                 preco_venda=preco_venda,
                 custo=custo,
-                vitrine_id=vitrine_id,
                 sku_empresa=sku_empresa,
                 disponivel=True if disponivel is None else disponivel,
                 exibir_delivery=True if exibir_delivery is None else exibir_delivery,
             )
             self.db.add(pe)
-        self.db.flush()
-        return pe
 
+        self.db.flush()
+
+        # 👇 compat: se vier vitrine_id, garante o vínculo N:N
+        if vitrine_id is not None:
+            vit = self.db.query(VitrinesModel).filter_by(id=vitrine_id).first()
+            if vit and vit not in pe.vitrines:
+                pe.vitrines.append(vit)
+                self.db.flush()
+
+        return pe
     # -------- CRUD Produto base --------
     def buscar_por_cod_barras(self, cod_barras: str) -> Optional[ProdutoDeliveryModel]:
         return self.db.query(ProdutoDeliveryModel).filter_by(cod_barras=cod_barras).first()

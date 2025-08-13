@@ -47,12 +47,18 @@ class HomeService:
 
         vitrines_resp: List[VitrineComProdutosResponse] = []
         for v in vitrines:
+            # 👇 categoria “principal” (1ª do vínculo) para compat
+            cat0 = v.categorias[0] if v.categorias else None
+            slug = cat0.slug if cat0 else None
+            slug_pai = cat0.parent.slug if (cat0 and cat0.parent) else None
+            href_categoria = _build_cat_href(slug, slug_pai) if slug else None
+
             produtos_dto = [
                 ProdutoEmpMiniDTO(
                     empresa_id=p.empresa_id,
                     cod_barras=p.cod_barras,
                     preco_venda=float(p.preco_venda),
-                    vitrine_id=p.vitrine_id,
+                    vitrine_id=v.id,  # 👈 vitrine do CONTEXTO
                     disponivel=p.disponivel,
                     produto=ProdutoMiniDTO(
                         cod_barras=p.produto.cod_barras,
@@ -66,24 +72,18 @@ class HomeService:
                 for p in produtos_map.get(v.id, [])
             ]
 
-            # href da categoria à qual a vitrine pertence
-            slug = v.categoria.slug if v.categoria else None
-            slug_pai = v.categoria.parent.slug if (v.categoria and v.categoria.parent) else None
-            href_categoria = _build_cat_href(slug, slug_pai) if slug else None
-
             vitrines_resp.append(
                 VitrineComProdutosResponse(
                     id=v.id,
                     titulo=v.titulo,
                     slug=v.slug,
                     ordem=v.ordem,
-                    cod_categoria=v.cod_categoria,
+                    cod_categoria=(cat0.id if cat0 else None),  # 👈 compat
                     is_home=bool(v.is_home),
                     produtos=produtos_dto,
-                    href_categoria=href_categoria,  # <- novo
+                    href_categoria=href_categoria,
                 )
             )
-
         return HomeResponse(categorias=cats, vitrines=vitrines_resp)
 
     def vitrines_com_produtos(self, empresa_id: int, cod_categoria: int, is_home: bool) -> List[VitrineComProdutosResponse]:
@@ -95,12 +95,17 @@ class HomeService:
 
         out: List[VitrineComProdutosResponse] = []
         for v in vitrines_cat:
+            cat0 = v.categorias[0] if v.categorias else None
+            slug = cat0.slug if cat0 else None
+            slug_pai = cat0.parent.slug if (cat0 and cat0.parent) else None
+            href_categoria = _build_cat_href(slug, slug_pai) if slug else None
+
             produtos_dto = [
                 ProdutoEmpMiniDTO(
                     empresa_id=p.empresa_id,
                     cod_barras=p.cod_barras,
                     preco_venda=float(p.preco_venda),
-                    vitrine_id=p.vitrine_id,
+                    vitrine_id=v.id,  # 👈 vitrine do CONTEXTO
                     disponivel=p.disponivel,
                     produto=ProdutoMiniDTO(
                         cod_barras=p.produto.cod_barras,
@@ -114,21 +119,16 @@ class HomeService:
                 for p in produtos_map.get(v.id, [])
             ]
 
-            # href da categoria ligada à vitrine
-            slug = v.categoria.slug if v.categoria else None
-            slug_pai = v.categoria.parent.slug if (v.categoria and v.categoria.parent) else None
-            href_categoria = _build_cat_href(slug, slug_pai) if slug else None
-
             out.append(
                 VitrineComProdutosResponse(
                     id=v.id,
                     titulo=v.titulo,
                     slug=v.slug,
                     ordem=v.ordem,
-                    cod_categoria=v.cod_categoria,
+                    cod_categoria=(cat0.id if cat0 else None),
                     is_home=bool(v.is_home),
                     produtos=produtos_dto,
-                    href_categoria=href_categoria,  # <- novo
+                    href_categoria=href_categoria,
                 )
             )
         return out

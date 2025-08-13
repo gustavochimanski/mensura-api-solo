@@ -77,7 +77,7 @@ class ProdutosDeliveryService:
             cod_barras=prod.cod_barras,
             preco_venda=Decimal(str(req.preco_venda)),
             custo=(Decimal(str(req.custo)) if req.custo is not None else None),
-            vitrine_id=req.vitrine_id,
+            vitrine_id=req.vitrine_id,   # 👈 cria vínculo N:N se vier
             sku_empresa=req.sku_empresa,
             disponivel=req.disponivel,
             exibir_delivery=req.exibir_delivery
@@ -87,9 +87,25 @@ class ProdutosDeliveryService:
         self.db.refresh(prod)
         self.db.refresh(pe)
 
+        # 👇 compat: vitrine_id = o solicitado ou a 1ª vitrine vinculada
+        vitrine_id_resp = req.vitrine_id
+        if vitrine_id_resp is None and pe.vitrines:
+            vitrine_id_resp = pe.vitrines[0].id
+
         return CriarNovoProdutoResponse(
             produto=ProdutoBaseDTO.model_validate(prod, from_attributes=True),
-            produto_emp=ProdutoEmpDTO.model_validate(pe, from_attributes=True),
+            produto_emp=ProdutoEmpDTO(
+                empresa_id=pe.empresa_id,
+                cod_barras=pe.cod_barras,
+                preco_venda=float(pe.preco_venda),
+                custo=(float(pe.custo) if pe.custo is not None else None),
+                vitrine_id=vitrine_id_resp,
+                sku_empresa=pe.sku_empresa,
+                disponivel=pe.disponivel,
+                exibir_delivery=pe.exibir_delivery,
+                created_at=pe.created_at,
+                updated_at=pe.updated_at,
+            ),
         )
 
     def atualizar_produto(self, empresa_id: int, cod_barras: str, req: CriarNovoProdutoRequest) -> CriarNovoProdutoResponse:
@@ -116,7 +132,7 @@ class ProdutosDeliveryService:
             cod_barras=cod_barras,
             preco_venda=Decimal(str(req.preco_venda)),
             custo=(Decimal(str(req.custo)) if req.custo is not None else None),
-            vitrine_id=req.vitrine_id,
+            vitrine_id=req.vitrine_id,  # 👈 cria/garante vínculo se vier
             sku_empresa=req.sku_empresa,
             disponivel=req.disponivel,
             exibir_delivery=req.exibir_delivery
@@ -126,9 +142,24 @@ class ProdutosDeliveryService:
         self.db.refresh(prod)
         self.db.refresh(pe)
 
+        vitrine_id_resp = req.vitrine_id
+        if vitrine_id_resp is None and pe.vitrines:
+            vitrine_id_resp = pe.vitrines[0].id
+
         return CriarNovoProdutoResponse(
             produto=ProdutoBaseDTO.model_validate(prod, from_attributes=True),
-            produto_emp=ProdutoEmpDTO.model_validate(pe, from_attributes=True),
+            produto_emp=ProdutoEmpDTO(
+                empresa_id=pe.empresa_id,
+                cod_barras=pe.cod_barras,
+                preco_venda=float(pe.preco_venda),
+                custo=(float(pe.custo) if pe.custo is not None else None),
+                vitrine_id=vitrine_id_resp,
+                sku_empresa=pe.sku_empresa,
+                disponivel=pe.disponivel,
+                exibir_delivery=pe.exibir_delivery,
+                created_at=pe.created_at,
+                updated_at=pe.updated_at,
+            ),
         )
 
     def set_disponibilidade(self, empresa_id: int, cod_barras: str, on: bool):

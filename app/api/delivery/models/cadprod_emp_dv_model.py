@@ -1,8 +1,11 @@
+# app/api/delivery/models/cadprod_emp_dv_model.py
 from pydantic import ConfigDict
 from sqlalchemy import (
     Column, Integer, String, Numeric, ForeignKey, Index, Boolean, DateTime, func
 )
 from sqlalchemy.orm import relationship
+
+from app.api.mensura.models.association_tables import VitrineProdutoEmpLink
 from app.database.db_connection import Base
 
 class ProdutoEmpDeliveryModel(Base):
@@ -14,9 +17,10 @@ class ProdutoEmpDeliveryModel(Base):
 
     # PK composta (empresa + produto)
     empresa_id  = Column(Integer, ForeignKey("mensura.empresas.id", ondelete="RESTRICT"), primary_key=True)
-    cod_barras  = Column(String, ForeignKey("delivery.cadprod_dv.cod_barras", ondelete="CASCADE"), primary_key=True, nullable=False)
+    cod_barras  = Column(String,  ForeignKey("delivery.cadprod_dv.cod_barras", ondelete="CASCADE"), primary_key=True, nullable=False)
 
-    vitrine_id  = Column(Integer, ForeignKey("delivery.vitrines_dv.id", ondelete="SET NULL"), nullable=True)
+    # ❌ REMOVIDO: vitrine_id
+    # vitrine_id  = Column(Integer, ForeignKey("delivery.vitrines_dv.id", ondelete="SET NULL"), nullable=True)
 
     sku_empresa = Column(String(60), nullable=True)
     custo       = Column(Numeric(18, 5), nullable=True)
@@ -27,9 +31,17 @@ class ProdutoEmpDeliveryModel(Base):
     created_at  = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at  = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
-    # Relacionamentos
+    # Relacionamentos existentes
     produto  = relationship("ProdutoDeliveryModel", back_populates="produtos_empresa")
     empresa  = relationship("EmpresaModel", back_populates="produtos_emp")
-    vitrine  = relationship("VitrinesModel", back_populates="produtos_emp", foreign_keys=[vitrine_id])
+
+    # --- N:N com vitrines ---
+    vitrines = relationship(
+        "VitrinesModel",
+        secondary=VitrineProdutoEmpLink.__table__,
+        back_populates="produtos_emp",
+        passive_deletes=True,
+        # order_by=VitrineProdutoEmpLink.posicao,  # ative se desejar
+    )
 
     model_config = ConfigDict(from_attributes=True)
