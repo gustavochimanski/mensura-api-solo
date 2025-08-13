@@ -98,7 +98,7 @@ class VitrineRepository:
         self.db.commit()
 
     def vincular_produto(self, empresa_id: int, cod_barras: str, vitrine_id: int) -> bool:
-        # valida entidades
+        # valida entidades (garante que existem)
         pe = (
             self.db.query(ProdutoEmpDeliveryModel)
             .filter_by(empresa_id=empresa_id, cod_barras=cod_barras)
@@ -108,8 +108,8 @@ class VitrineRepository:
         if not pe or not v:
             return False
 
-        # já existe?
-        exists = (
+        # já existe o link?
+        existe = (
             self.db.query(VitrineProdutoEmpLink)
             .filter(
                 VitrineProdutoEmpLink.vitrine_id == vitrine_id,
@@ -118,18 +118,16 @@ class VitrineRepository:
             )
             .first()
         )
-        if exists:
+        if existe:
             return True
 
-        # cria o vínculo explicitamente
+        # cria o vínculo
         link = VitrineProdutoEmpLink(
             vitrine_id=vitrine_id,
             empresa_id=empresa_id,
             cod_barras=cod_barras,
-            # posicao=0, destaque=False  # se quiser defaults custom
         )
         self.db.add(link)
-        from sqlalchemy.exc import IntegrityError
         try:
             self.db.commit()
             return True
@@ -138,16 +136,15 @@ class VitrineRepository:
             return False
 
     def desvincular_produto(self, empresa_id: int, cod_barras: str, vitrine_id: int) -> bool:
-        # deleta direto da tabela de link
-        q = (
+        deleted = (
             self.db.query(VitrineProdutoEmpLink)
             .filter(
                 VitrineProdutoEmpLink.vitrine_id == vitrine_id,
                 VitrineProdutoEmpLink.empresa_id == empresa_id,
                 VitrineProdutoEmpLink.cod_barras == cod_barras,
             )
+            .delete(synchronize_session=False)
         )
-        deleted = q.delete(synchronize_session=False)
         if deleted == 0:
             self.db.rollback()
             return False
