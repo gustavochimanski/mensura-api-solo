@@ -10,7 +10,7 @@ from app.api.delivery.schemas.vitrine_schema import (
 from app.database.db_connection import get_db
 from app.utils.logger import logger
 
-router = APIRouter(prefix="/api/delivery/vitrines", tags=["Delivery - Vitrines"])
+router = APIRouter(prefix="/api/delivery/vitrines", tags=["Delivery - Vitriness"])
 
 class VinculoRequest(BaseModel):
     empresa_id: int
