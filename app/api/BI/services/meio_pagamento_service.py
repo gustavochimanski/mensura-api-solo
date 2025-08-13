@@ -1,5 +1,4 @@
 # app/api/pdv/services/meio_pagamento_service.py
-
 from datetime import datetime
 from sqlalchemy.orm import Session
 
@@ -25,38 +24,54 @@ class MeioPagamentoPDVService:
 
         repo = MeioPagamentoRepository(self.db)
 
-        # 1) Consulta os dados por empresa
-        por_empresa_raw = repo.get_resumo_por_empresa(empresas, dt_inicio, dt_fim)
+        # 🔥 Agora usamos a query COMPLETA (total, retiradas, qtde) AGRUPADA POR EMPRESA
+        rows = repo.get_resumo_por_empresa_completo(empresas, dt_inicio, dt_fim)
 
-        # 2) Agrupa por empresa
-        agrupado: dict[str, list[MeioPagamentoResumoResponse]] = {}
-        for row in por_empresa_raw:
-            cod = str(row.empresa)
-            agrupado.setdefault(cod, []).append(
+        # Monta por_empresa
+        agrupado_por_empresa: dict[str, list[MeioPagamentoResumoResponse]] = {}
+        for r in rows:
+            empresa    = str(r.empresa)
+            cod        = str(r.codmeiopgto) if r.codmeiopgto is not None else "??"
+            descricao  = r.descricao or "DESCONHECIDO"
+            total      = float(r.total or 0)
+            retiradas  = float(r.retiradas or 0)
+            qtde       = int(r.qtde or 0)
+
+            agrupado_por_empresa.setdefault(empresa, []).append(
                 MeioPagamentoResumoResponse(
-                    tipo=row.tipo or "??",
-                    descricao=row.descricao or "DESCONHECIDO",
-                    valor_total=float(row.valor_total or 0),
+                    tipo=cod,
+                    descricao=descricao,
+                    valor_total=total,
+                    retiradas=retiradas,
+                    qtde=qtde,
                 )
             )
+
         por_empresa = [
             MeioPagamentoPorEmpresa(empresa=emp, meios=meios)
-            for emp, meios in agrupado.items()
+            for emp, meios in agrupado_por_empresa.items()
         ]
 
-        # 3) Calcula o total geral SOMANDO todos os valores dos meios de cada empresa
-        totais_dict: dict[tuple[str, str], float] = {}
-        for empresa in por_empresa:
-            for meio in empresa.meios:
+        # total_geral = soma dos por_empresa (agrega por (tipo, descricao))
+        totais_dict: dict[tuple[str, str], dict[str, float]] = {}
+        for emp in por_empresa:
+            for meio in emp.meios:
                 key = (meio.tipo, meio.descricao)
-                totais_dict[key] = totais_dict.get(key, 0) + meio.valor_total
+                acc = totais_dict.setdefault(key, {"valor_total": 0.0, "retiradas": 0.0, "qtde": 0.0})
+                acc["valor_total"] += meio.valor_total
+                acc["retiradas"]   += meio.retiradas
+                acc["qtde"]        += meio.qtde
 
         total_geral = [
-            MeioPagamentoResumoResponse(tipo=tipo, descricao=descricao, valor_total=valor)
-            for (tipo, descricao), valor in totais_dict.items()
+            MeioPagamentoResumoResponse(
+                tipo=tipo, descricao=desc,
+                valor_total=vals["valor_total"],
+                retiradas=vals["retiradas"],
+                qtde=int(vals["qtde"]),
+            )
+            for (tipo, desc), vals in totais_dict.items()
         ]
 
-        # 4) Retorna tudo
         return MeioPagamentoResponseFinal(
             total_geral=total_geral,
             por_empresa=por_empresa

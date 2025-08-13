@@ -8,6 +8,7 @@ from app.api.BI.schemas.dashboard_types import (
     TypeDashboardRequest,
 )
 from app.api.BI.schemas.compras_types import ConsultaMovimentoCompraRequest
+from app.api.BI.schemas.metas_types import TypeConsultaMetaRequest
 from app.api.BI.services.compras.resumoDeCompras import calcular_movimento_multi
 from app.api.BI.services.vendas.resumoVendasService import resumoDeVendasService
 from app.api.BI.services.metas.consultaMetasService import consultar_metas_periodo
@@ -51,7 +52,7 @@ def dashboardController(
         raise HTTPException(status_code=500, detail="Erro ao consultar relatórios.")
 
     # Metas
-    metas_req = TypeDashboardRequest.model_validate(
+    metas_req = TypeConsultaMetaRequest.model_validate(
         {"empresas": empresas_str, "dataInicio": request.dataInicio, "dataFinal": request.dataFinal}
     )
     metas = consultar_metas_periodo(metas_req, db)
