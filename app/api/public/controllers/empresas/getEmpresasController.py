@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.database.db_connection import get_db
 from app.api.public.repositories.empresas.consultaEmpresas import EmpresasRepository
 
-router = APIRouter(prefix="/empresas", tags=["Public"])
+router = APIRouter(prefix="api/public/empresas", tags=["Public"])
 logger = logging.getLogger(__name__)
 
 @router.get("", summary="Buscar códigos das empresas ativas")
