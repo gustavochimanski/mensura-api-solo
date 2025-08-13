@@ -38,10 +38,9 @@ class ProdutoEmpDeliveryModel(Base):
     # --- N:N com vitrines ---
     vitrines = relationship(
         "VitrinesModel",
-        secondary="delivery.vitrine_prod_emp_dv",
+        secondary=VitrineProdutoEmpLink.__table__,  # 👈 em vez de string
         back_populates="produtos_emp",
         passive_deletes=True,
-        # order_by=VitrineProdutoEmpLink.posicao,  # ative se desejar
     )
 
     model_config = ConfigDict(from_attributes=True)

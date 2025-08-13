@@ -30,10 +30,9 @@ class VitrinesModel(Base):
 
     produtos_emp = relationship(
         "ProdutoEmpDeliveryModel",
-        secondary="delivery.vitrine_prod_emp_dv",
+        secondary=VitrineProdutoEmpLink.__table__,  # 👈 em vez de string
         back_populates="vitrines",
-        passive_deletes=True,
-        # order_by=VitrineProdutoEmpLink.posicao,  # ative se quiser ordenar os produtos por 'posicao'
+        passive_deletes=True
     )
 
     @hybrid_property

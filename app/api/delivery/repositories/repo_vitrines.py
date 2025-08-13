@@ -97,8 +97,8 @@ class VitrineRepository:
         self.db.delete(v)
         self.db.commit()
 
-    # --- Vinculação de produtos (N:N) ---
     def vincular_produto(self, empresa_id: int, cod_barras: str, vitrine_id: int) -> bool:
+        # valida entidades
         pe = (
             self.db.query(ProdutoEmpDeliveryModel)
             .filter_by(empresa_id=empresa_id, cod_barras=cod_barras)
@@ -107,19 +107,49 @@ class VitrineRepository:
         v = self.db.query(VitrinesModel).filter_by(id=vitrine_id).first()
         if not pe or not v:
             return False
-        if v not in pe.vitrines:
-            pe.vitrines.append(v)
-        self.db.commit()
-        return True
 
-    def desvincular_produto(self, empresa_id: int, cod_barras: str, vitrine_id: int) -> bool:
-        pe = (
-            self.db.query(ProdutoEmpDeliveryModel)
-            .filter_by(empresa_id=empresa_id, cod_barras=cod_barras)
+        # já existe?
+        exists = (
+            self.db.query(VitrineProdutoEmpLink)
+            .filter(
+                VitrineProdutoEmpLink.vitrine_id == vitrine_id,
+                VitrineProdutoEmpLink.empresa_id == empresa_id,
+                VitrineProdutoEmpLink.cod_barras == cod_barras,
+            )
             .first()
         )
-        if not pe:
+        if exists:
+            return True
+
+        # cria o vínculo explicitamente
+        link = VitrineProdutoEmpLink(
+            vitrine_id=vitrine_id,
+            empresa_id=empresa_id,
+            cod_barras=cod_barras,
+            # posicao=0, destaque=False  # se quiser defaults custom
+        )
+        self.db.add(link)
+        from sqlalchemy.exc import IntegrityError
+        try:
+            self.db.commit()
+            return True
+        except IntegrityError:
+            self.db.rollback()
             return False
-        pe.vitrines = [vt for vt in pe.vitrines if vt.id != vitrine_id]
+
+    def desvincular_produto(self, empresa_id: int, cod_barras: str, vitrine_id: int) -> bool:
+        # deleta direto da tabela de link
+        q = (
+            self.db.query(VitrineProdutoEmpLink)
+            .filter(
+                VitrineProdutoEmpLink.vitrine_id == vitrine_id,
+                VitrineProdutoEmpLink.empresa_id == empresa_id,
+                VitrineProdutoEmpLink.cod_barras == cod_barras,
+            )
+        )
+        deleted = q.delete(synchronize_session=False)
+        if deleted == 0:
+            self.db.rollback()
+            return False
         self.db.commit()
         return True
