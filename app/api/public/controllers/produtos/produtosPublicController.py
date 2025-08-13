@@ -5,7 +5,7 @@ from app.database.db_connection import get_db
 
 router = APIRouter()
 
-@router.get("api/public/produtos")
+@router.get("/api/public/produtos")
 def get_paginated_products(
     db: Session = Depends(get_db),
     page: int = Query(1, ge=1),
@@ -16,7 +16,7 @@ def get_paginated_products(
 
 
 
-@router.put("api/public/produtos/{produto_id}")
+@router.put("/api/public/produtos/{produto_id}")
 def put_product_by_fied(
     produto_id: int,
     field: str = Query(..., description="Nome do campo a ser atualizado"),
