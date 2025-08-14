@@ -9,7 +9,7 @@ def ensure_unaccent():
     with engine.connect() as conn:
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS unaccent;"))
         conn.commit()
-        logger.info("unnacent instalado Banco inicializado com sucesso.")
+        logger.info("unnacent instalado Banco inicializado com sucesso")
 
 def criar_schemas():
     try:
