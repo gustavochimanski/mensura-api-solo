@@ -9,7 +9,7 @@ from app.api.mensura.models.association_tables import VitrineProdutoEmpLink
 from app.database.db_connection import Base
 
 class ProdutoEmpModel(Base):
-    __tablename__ = "cadprod_emp_dv"
+    __tablename__ = "cadprod_emp"
     __table_args__ = (
         Index("idx_empresa_produto", "empresa_id", "cod_barras"),
         {"schema": "mensura"}

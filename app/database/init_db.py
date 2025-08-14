@@ -39,9 +39,11 @@ def importar_models():
     from app.api.delivery.models.categoria_dv_model import CategoriaDeliveryModel
     from app.api.delivery.models.vitrine_dv_model import VitrinesModel
     from app.api.delivery.models.entregador_dv_model import EntregadorDeliveryModel
+    logger.info("📦 Models importados com sucesso.")
+
 def criar_tabelas():
     try:
-        importar_models()  # importa só os seus models de mensura e deliveryy
+        importar_models()  # importa só os seus models de mensura e delivery
 
         # pega todas as Table objects que o Base conhece
         all_tables = list(Base.metadata.tables.values())
