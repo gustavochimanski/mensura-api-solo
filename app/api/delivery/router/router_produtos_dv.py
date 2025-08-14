@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from app.database.db_connection import get_db
 from app.api.delivery.services.service_produto_dv import ProdutosDeliveryService
-from app.api.delivery.schemas.schema_produtos_dv import (
+from app.api.mensura.schemas.schema_produtos import (
     CriarNovoProdutoResponse,
     CriarNovoProdutoRequest
 )
