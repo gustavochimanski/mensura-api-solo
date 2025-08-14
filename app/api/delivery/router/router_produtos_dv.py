@@ -17,7 +17,7 @@ from app.utils.minio_client import upload_file_to_minio
 from app.utils.logger import logger
 from sqlalchemy.exc import IntegrityError
 
-router = APIRouter(prefix="/api/delivery", tags=["Produtos - Delivery"])
+router = APIRouter(prefix="/api/delivery/produtos", tags=["Produtos - Delivery"])
 
 class SetDisponibilidadeRequest(BaseModel):
   empresa_id: int
@@ -46,7 +46,7 @@ def search_produtos(
   )
 
 
-@router.put("/produtos/{cod_barras}", response_model=CriarNovoProdutoResponse)
+@router.put("/{cod_barras}", response_model=CriarNovoProdutoResponse)
 async def atualizar_produto(
   cod_empresa: int = Form(...),
   cod_barras: str = Path(...),
@@ -96,7 +96,7 @@ async def atualizar_produto(
     db.rollback()
     raise HTTPException(400, detail="Erro de integridade nos dados")
 
-@router.patch("/produtos/{cod_barras}/disponibilidade", status_code=status.HTTP_204_NO_CONTENT)
+@router.patch("/{cod_barras}/disponibilidade", status_code=status.HTTP_204_NO_CONTENT)
 def set_disponibilidade(
   cod_barras: str,
   payload: SetDisponibilidadeRequest = Body(...),
@@ -111,7 +111,7 @@ def set_disponibilidade(
   )
   return None
 
-@router.delete("/produtos/{cod_barras}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{cod_barras}", status_code=status.HTTP_204_NO_CONTENT)
 def deletar_produto(
   cod_barras: str,
   empresa_id: int = Query(..., description="Empresa dona do vínculo a ser removido"),
