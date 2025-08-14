@@ -5,6 +5,12 @@ from .db_connection import engine, Base
 logger = logging.getLogger(__name__)
 SCHEMAS = ["mensura", "bi", "delivery"]
 
+def ensure_unaccent():
+    with engine.connect() as conn:
+        conn.execute(text("CREATE EXTENSION IF NOT EXISTS unaccent;"))
+        conn.commit()
+        logger.info("unnacent instalado Banco inicializado com sucesso.")
+
 def criar_schemas():
     try:
         with engine.begin() as conn:
@@ -14,7 +20,6 @@ def criar_schemas():
         logger.info("✅ Todos os schemas verificados/criados.")
     except Exception as e:
         logger.error(f"❌ Erro ao criar schemas: {e}")
-
 
 def importar_models():
     # ─── Models Mensura ────────────────────────────────────────────
@@ -67,4 +72,5 @@ def inicializar_banco():
     logger.info("🔹 Criando tabelas...")
     criar_tabelas()
     logger.info("✅ Banco inicializado com sucesso.")
+    ensure_unaccent()
 
