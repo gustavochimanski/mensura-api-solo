@@ -86,21 +86,20 @@ class HomeService:
             )
         return HomeResponse(categorias=cats, vitrines=vitrines_resp)
 
-    def vitrines_com_produtos(self, empresa_id: int, cod_categoria: int, is_home: bool) -> List[VitrineComProdutosResponse]:
+    def vitrines_com_produtos(self, empresa_id: int, cod_categoria: int) -> List[VitrineComProdutosResponse]:
         if not self.repo_empresa.get_empresa_by_id(empresa_id):
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Empresa não encontrada")
 
-        # produtos de vitrines somente da categoria informada
+        # Produtos apenas das vitrines vinculadas à categoria
         produtos_map = self.repo_home.listar_vitrines_com_produtos_empresa_categoria(empresa_id, cod_categoria)
 
-        # vitrines vinculadas à categoria (opcionalmente só as de home)
-        vitrines_cat = self.repo_home.listar_vitrines_por_categoria(cod_categoria, is_home=is_home)
+        # Vitrines ligadas à categoria (sem filtro de home)
+        vitrines_cat = self.repo_home.listar_vitrines_por_categoria(cod_categoria)
 
         out: List[VitrineComProdutosResponse] = []
         for v in vitrines_cat:
-            # ⚠️ Use a categoria DO FILTRO, não a primeira da lista
+            # Usa a categoria do filtro para coerência de href/cod_categoria
             cat_match = next((c for c in v.categorias if c.id == cod_categoria), None)
-            # Fallback (não deveria acontecer porque filtramos por categoria)
             cat_ref = cat_match or (v.categorias[0] if v.categorias else None)
 
             slug = cat_ref.slug if cat_ref else None
@@ -132,9 +131,8 @@ class HomeService:
                     titulo=v.titulo,
                     slug=v.slug,
                     ordem=v.ordem,
-                    # ✅ aqui garantimos coerência com o filtro
-                    cod_categoria=cod_categoria,
-                    is_home=bool(v.is_home),
+                    cod_categoria=cod_categoria,       # 👈 coerente com o filtro
+                    is_home=bool(v.is_home),           # ainda expõe o flag da vitrine
                     produtos=produtos_dto,
                     href_categoria=href_categoria,
                 )

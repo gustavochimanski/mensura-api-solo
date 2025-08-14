@@ -22,8 +22,7 @@ def listar_home(
 def listar_vitrines_e_produtos_por_categoria(
     empresa_id: int = Query(...),
     cod_categoria: int = Query(...),
-    is_home: bool = Query( description="Filtra vitrines por home"),
     db: Session = Depends(get_db),
 ):
-    logger.info(f"[Home] Vitrines por categoria - empresa_id={empresa_id} categoria={cod_categoria} is_home={is_home}")
-    return HomeService(db).vitrines_com_produtos(empresa_id, cod_categoria, is_home=is_home)
+    logger.info(f"[Home] Vitrines por categoria - empresa_id={empresa_id} categoria={cod_categoria}")
+    return HomeService(db).vitrines_com_produtos(empresa_id, cod_categoria)

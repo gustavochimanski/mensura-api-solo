@@ -47,9 +47,10 @@ class HomeRepository:
         return q.all()
 
     # ----------------- Vitrines por categoria -----------------
-    def listar_vitrines_por_categoria(self, categoria_id: int, is_home: bool) -> List[VitrinesModel]:
+    def listar_vitrines_por_categoria(self, categoria_id: int) -> List[VitrinesModel]:
         """
         Busca vitrines ligadas à categoria via tabela de associação.
+        (Sem filtro de 'home')
         """
         q = (
             self.db.query(VitrinesModel)
@@ -61,8 +62,6 @@ class HomeRepository:
             )
             .order_by(VitrineCategoriaLink.posicao, VitrinesModel.ordem)
         )
-        if is_home:
-            q = q.filter(VitrinesModel.tipo_exibicao == "P")
         return q.all()
 
     # ----------------- Produtos por vitrine (lista de IDs) -----------------
