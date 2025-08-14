@@ -5,7 +5,7 @@ class CriarVitrineRequest(BaseModel):
     cod_categoria: int
     titulo: constr(min_length=1, max_length=100)
     ordem: int = 1
-    is_home: bool = False  # mapeia para tipo_exibicao
+    is_home: bool = False  # mapeia para tipo_exibica
     model_config = ConfigDict(from_attributes=True)
 
 class AtualizarVitrineRequest(BaseModel):
