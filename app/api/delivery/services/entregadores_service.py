@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 
 from app.api.delivery.repositories.repo_entregadores_dv import EntregadorRepository
-from app.api.delivery.schemas.entregador_dv_schema import EntregadorCreate, EntregadorUpdate
+from app.api.delivery.schemas.schema_entregador_dv import EntregadorCreate, EntregadorUpdate
 
 class EntregadoresService:
     def __init__(self, db: Session):

@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional, Any, Dict
 from pydantic import BaseModel, ConfigDict
-from .shared_enums_schema import (
+from .schema_shared_enums import (
     PagamentoGatewayEnum, PagamentoMetodoEnum, PagamentoStatusEnum
 )
 

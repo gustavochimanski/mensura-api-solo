@@ -7,10 +7,10 @@ from sqlalchemy.orm import Session
 
 from app.api.delivery.repositories.repo_pedidos import PedidoRepository
 from app.api.mensura.repositories.empresa_repo import EmpresaRepository
-from app.api.delivery.schemas.pedido_dv_schema import (
+from app.api.delivery.schemas.schema_pedido_dv import (
     FinalizarPedidoRequest, ItemPedidoRequest, PedidoResponse, ItemPedidoResponse
 )
-from app.api.delivery.schemas.shared_enums_schema import (
+from app.api.delivery.schemas.schema_shared_enums import (
     PedidoStatusEnum, TipoEntregaEnum, OrigemPedidoEnum,
     PagamentoMetodoEnum, PagamentoGatewayEnum, PagamentoStatusEnum
 )

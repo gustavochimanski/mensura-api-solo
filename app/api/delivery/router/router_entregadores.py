@@ -4,7 +4,7 @@ from typing import List
 
 from app.database.db_connection import get_db
 from app.api.delivery.services.entregadores_service import EntregadoresService
-from app.api.delivery.schemas.entregador_dv_schema import (
+from app.api.delivery.schemas.schema_entregador_dv import (
     EntregadorOut, EntregadorCreate, EntregadorUpdate
 )
 from app.utils.logger import logger

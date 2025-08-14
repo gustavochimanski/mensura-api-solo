@@ -2,7 +2,7 @@
 from sqlalchemy.orm import Session
 
 from app.api.delivery.repositories.repo_endereco_dv import EnderecoRepository
-from app.api.delivery.schemas.endereco_dv_schema import EnderecoOut, EnderecoCreate, EnderecoUpdate
+from app.api.delivery.schemas.schema_endereco_dv import EnderecoOut, EnderecoCreate, EnderecoUpdate
 
 
 class EnderecosService:

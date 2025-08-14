@@ -1,12 +1,12 @@
 from __future__ import annotations
 from typing import Optional, List
-from sqlalchemy import select, func
-from sqlalchemy.orm import Session
+from sqlalchemy import select, func, or_
+from sqlalchemy.orm import Session, joinedload
 from fastapi import HTTPException, status
 from slugify import slugify
 
 from app.api.delivery.models.categoria_dv_model import CategoriaDeliveryModel
-from app.api.delivery.schemas.categoria_dv_schema import CategoriaDeliveryIn
+from app.api.delivery.schemas.schema_categoria_dv import CategoriaDeliveryIn
 
 
 class CategoriaDeliveryRepository:
@@ -119,3 +119,41 @@ class CategoriaDeliveryRepository:
         except Exception:
             self.db.rollback()
             raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Erro ao mover categoria para a esquerda")
+
+
+    # -------- SEARCH GLOBAL --------
+    def search_all(
+        self, q: Optional[str], limit: int = 30, offset: int = 0
+    ) -> List[CategoriaDeliveryModel]:
+        """
+        Busca em TODAS as categorias (raiz e filhas), com filtro por descrição/slug.
+        Ordena por: raiz primeiro (parent_id NULL), depois posicao.
+        Requer extensão unaccent para acento-insensível (opcional).
+        """
+        base = (
+            self.db.query(CategoriaDeliveryModel)
+            .options(joinedload(CategoriaDeliveryModel.parent))
+            .order_by(
+                # raiz primeiro
+                CategoriaDeliveryModel.parent_id.isnot(None),
+                CategoriaDeliveryModel.posicao
+            )
+        )
+
+        if q and q.strip():
+            term = f"%{q.strip()}%"
+            # Tenta unaccent se disponível; caso não, cai no ILIKE normal
+            try:
+                cond = or_(
+                    func.unaccent(CategoriaDeliveryModel.descricao).ilike(func.unaccent(term)),
+                    func.unaccent(CategoriaDeliveryModel.slug).ilike(func.unaccent(term)),
+                )
+                base = base.filter(cond)
+            except Exception:
+                cond = or_(
+                    CategoriaDeliveryModel.descricao.ilike(term),
+                    CategoriaDeliveryModel.slug.ilike(term),
+                )
+                base = base.filter(cond)
+
+        return base.offset(offset).limit(limit).all()

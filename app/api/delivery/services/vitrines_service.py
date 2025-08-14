@@ -3,7 +3,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.delivery.repositories.repo_vitrines import VitrineRepository
-from app.api.delivery.schemas.vitrine_schema import (
+from app.api.delivery.schemas.schema_vitrine import (
     CriarVitrineRequest,
     AtualizarVitrineRequest,
 )

@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional, List
 from pydantic import BaseModel, ConfigDict, constr
-from .shared_enums_schema import PedidoStatusEnum
+from .schema_shared_enums import PedidoStatusEnum
 
 class AlterarStatusPedidoRequest(BaseModel):
     pedido_id: int

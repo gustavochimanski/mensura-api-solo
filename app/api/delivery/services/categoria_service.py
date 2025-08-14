@@ -4,7 +4,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from app.api.delivery.repositories.repo_categorias_dv import CategoriaDeliveryRepository
-from app.api.delivery.schemas.categoria_dv_schema import CategoriaDeliveryIn
+from app.api.delivery.schemas.schema_categoria_dv import CategoriaDeliveryIn
 from app.utils.minio_client import remover_arquivo_minio
 from app.utils.logger import logger
 

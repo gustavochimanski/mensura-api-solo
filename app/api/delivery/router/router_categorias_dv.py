@@ -8,9 +8,9 @@ from typing import Optional, List
 from app.core.dependencies import get_current_user
 from app.database.db_connection import get_db
 from app.api.delivery.repositories.repo_categorias_dv import CategoriaDeliveryRepository
-from app.api.delivery.schemas.categoria_dv_schema import (
+from app.api.delivery.schemas.schema_categoria_dv import (
     CategoriaDeliveryIn,
-    CategoriaDeliveryOut
+    CategoriaDeliveryOut, CategoriaSearchOut
 )
 from app.utils.logger import logger
 from app.utils.minio_client import upload_file_to_minio
@@ -182,3 +182,27 @@ async def upload_imagem_categoria(
         href=f"/categoria/{c.slug}",
         posicao=c.posicao,
     )
+
+
+
+@router.get("/search", response_model=List[CategoriaSearchOut])
+def search_categorias(
+    q: Optional[str] = Query(None, description="Termo de busca por descrição/slug"),
+    limit: int = Query(30, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+):
+    repos = CategoriaDeliveryRepository(db)
+    cats = repos.search_all(q=q, limit=limit, offset=offset)
+    # map: parent.slug -> slug_pai
+    return [
+        CategoriaSearchOut(
+            id=c.id,
+            descricao=c.descricao,
+            slug=c.slug,
+            parent_id=c.parent_id,
+            slug_pai=(c.parent.slug if c.parent else None),
+            imagem=c.imagem,
+        )
+        for c in cats
+    ]

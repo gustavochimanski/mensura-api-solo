@@ -4,7 +4,7 @@ from typing import List
 
 from app.api.delivery.services.endereco_dv_service import EnderecosService
 from app.database.db_connection import get_db
-from app.api.delivery.schemas.endereco_dv_schema import (
+from app.api.delivery.schemas.schema_endereco_dv import (
   EnderecoOut , EnderecoCreate, EnderecoUpdate
 )
 from app.utils.logger import logger

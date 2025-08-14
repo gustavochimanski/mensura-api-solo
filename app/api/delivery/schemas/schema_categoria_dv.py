@@ -21,3 +21,14 @@ class CategoriaDeliveryOut(BaseModel):
     posicao: int
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class CategoriaSearchOut(BaseModel):
+    id: int
+    descricao: str
+    slug: str
+    parent_id: Optional[int] = None
+    slug_pai: Optional[str] = None
+    imagem: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)

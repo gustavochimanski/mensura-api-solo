@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from typing import Optional
 
 from app.api.delivery.services.vitrines_service import VitrinesService
-from app.api.delivery.schemas.vitrine_schema import (
+from app.api.delivery.schemas.schema_vitrine import (
     CriarVitrineRequest, AtualizarVitrineRequest, VitrineOut
 )
 from app.database.db_connection import get_db

@@ -4,7 +4,7 @@ from typing import List, Optional
 
 from app.database.db_connection import get_db
 from app.api.delivery.services.cupom_service import CuponsService
-from app.api.delivery.schemas.cupom_dv_schema import (
+from app.api.delivery.schemas.schema_cupom_dv import (
     CupomOut, CupomCreate, CupomUpdate
 )
 from app.utils.logger import logger

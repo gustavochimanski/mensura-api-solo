@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from app.api.delivery.schemas.home_dv_schema import HomeResponse, VitrineComProdutosResponse
+from app.api.delivery.schemas.schema_home_dv import HomeResponse, VitrineComProdutosResponse
 from app.api.delivery.services.home_service import HomeService
 from app.database.db_connection import get_db
 from app.utils.logger import logger

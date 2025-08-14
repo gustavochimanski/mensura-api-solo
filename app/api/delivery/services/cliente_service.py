@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 
 from app.api.delivery.repositories.repo_cliente import ClienteRepository
-from app.api.delivery.schemas.cliente_schema import ClienteUpdate, ClienteCreate
+from app.api.delivery.schemas.schema_cliente import ClienteUpdate, ClienteCreate
 
 class ClienteService:
     def __init__(self, db: Session):

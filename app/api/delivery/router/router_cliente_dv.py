@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
-from app.api.delivery.schemas.cliente_schema import ClienteOut, ClienteUpdate, ClienteCreate
+from app.api.delivery.schemas.schema_cliente import ClienteOut, ClienteUpdate, ClienteCreate
 from app.api.delivery.services.cliente_service import ClienteService
 from app.database.db_connection import get_db
 from app.utils.logger import logger

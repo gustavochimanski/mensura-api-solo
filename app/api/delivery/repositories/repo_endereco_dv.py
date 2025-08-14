@@ -1,7 +1,7 @@
 from fastapi import HTTPException
 from sqlalchemy.orm import Session, joinedload
 from typing import List
-from app.api.delivery.schemas.endereco_dv_schema import ( EnderecoCreate, EnderecoUpdate)
+from app.api.delivery.schemas.schema_endereco_dv import (EnderecoCreate, EnderecoUpdate)
 from app.api.delivery.models.endereco_dv_model import EnderecoDeliveryModel
 
 # --- Repository ---
