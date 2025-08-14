@@ -2,7 +2,7 @@
 from sqlalchemy import Column, Integer, String, UniqueConstraint
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import relationship
-
+#
 from app.api.mensura.models.association_tables import VitrineCategoriaLink, VitrineProdutoEmpLink
 from app.database.db_connection import Base
 
