@@ -29,9 +29,16 @@ def importar_models():
     from app.api.mensura.models.cadprod_emp_model import ProdutoEmpModel
     from app.api.mensura.models.cadprod_model import ProdutoModel
     # ─── Models Delivery ───────────────────────────────────────────
-    pass
-
-
+    from app.api.delivery.models.transacao_pagamento_dv_model import TransacaoPagamentoModel
+    from app.api.delivery.models.pedido_dv_model import PedidoDeliveryModel
+    from app.api.delivery.models.pedido_item_dv_model import PedidoItemModel
+    from app.api.delivery.models.pedido_status_historico_dv_model import PedidoStatusHistoricoModel
+    from app.api.delivery.models.cupom_dv_model import CupomDescontoModel
+    from app.api.delivery.models.cliente_dv_model import ClienteDeliveryModel
+    from app.api.delivery.models.endereco_dv_model import EnderecoDeliveryModel
+    from app.api.delivery.models.categoria_dv_model import CategoriaDeliveryModel
+    from app.api.delivery.models.vitrine_dv_model import VitrinesModel
+    from app.api.delivery.models.entregador_dv_model import EntregadorDeliveryModel
 def criar_tabelas():
     try:
         importar_models()  # importa só os seus models de mensura e deliveryy
