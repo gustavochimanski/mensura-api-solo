@@ -3,7 +3,6 @@ from sqlalchemy import (
     Column, Integer, String, DateTime, ForeignKey, Numeric, Enum as SAEnum, Date, func
 )
 from sqlalchemy.orm import relationship
-from datetime import datetime
 from app.database.db_connection import Base
 
 PedidoStatus = SAEnum(
