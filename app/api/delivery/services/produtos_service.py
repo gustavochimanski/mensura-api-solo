@@ -214,7 +214,6 @@ class ProdutosDeliveryService:
         *,
         empresa_id: int,
         q: Optional[str],
-        cod_categoria: Optional[int],
         page: int,
         limit: int,
         apenas_disponiveis: bool = False,
@@ -224,7 +223,6 @@ class ProdutosDeliveryService:
         produtos = self.repo.search_produtos_da_empresa(
             empresa_id=empresa_id,
             q=q,
-            cod_categoria=cod_categoria,
             offset=offset,
             limit=limit,
             apenas_disponiveis=apenas_disponiveis,
@@ -233,7 +231,6 @@ class ProdutosDeliveryService:
         total = self.repo.count_search_total(
             empresa_id=empresa_id,
             q=q,
-            cod_categoria=cod_categoria,
             apenas_disponiveis=apenas_disponiveis,
             apenas_delivery=apenas_delivery,
         )

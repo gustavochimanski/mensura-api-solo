@@ -19,11 +19,13 @@ class ProdutoDeliveryRepository:
     _unaccent_checked: bool = False
     _has_unaccent_cache: bool = False
 
+    _unaccent_checked: bool = False
+    _has_unaccent_cache: bool = False
+
     def _has_unaccent(self) -> bool:
         if self._unaccent_checked:
             return self._has_unaccent_cache
         try:
-            # usa bind param para evitar SQL injection
             self.db.execute(text("SELECT unaccent(:s)"), {"s": "teste"})
             self._has_unaccent_cache = True
         except Exception:
@@ -31,13 +33,11 @@ class ProdutoDeliveryRepository:
         self._unaccent_checked = True
         return self._has_unaccent_cache
 
-    # -------- SEARCH --------
     def search_produtos_da_empresa(
         self,
         *,
         empresa_id: int,
         q: Optional[str],
-        cod_categoria: Optional[int],
         offset: int,
         limit: int,
         apenas_disponiveis: bool = False,
@@ -53,9 +53,6 @@ class ProdutoDeliveryRepository:
             )
             .order_by(ProdutoDeliveryModel.descricao.asc())
         )
-
-        if cod_categoria is not None:
-            qry = qry.filter(ProdutoDeliveryModel.cod_categoria == cod_categoria)
 
         if apenas_disponiveis:
             qry = qry.filter(ProdutoDeliveryModel.ativo.is_(True), ProdutoEmpDeliveryModel.disponivel.is_(True))
@@ -87,7 +84,6 @@ class ProdutoDeliveryRepository:
         *,
         empresa_id: int,
         q: Optional[str],
-        cod_categoria: Optional[int],
         apenas_disponiveis: bool = False,
         apenas_delivery: bool = True,
     ) -> int:
@@ -96,9 +92,6 @@ class ProdutoDeliveryRepository:
             .join(ProdutoEmpDeliveryModel, ProdutoDeliveryModel.cod_barras == ProdutoEmpDeliveryModel.cod_barras)
             .filter(ProdutoEmpDeliveryModel.empresa_id == empresa_id)
         )
-
-        if cod_categoria is not None:
-            qry = qry.filter(ProdutoDeliveryModel.cod_categoria == cod_categoria)
 
         if apenas_disponiveis:
             qry = qry.filter(ProdutoDeliveryModel.ativo.is_(True), ProdutoEmpDeliveryModel.disponivel.is_(True))

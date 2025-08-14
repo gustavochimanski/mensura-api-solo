@@ -24,32 +24,25 @@ class SetDisponibilidadeRequest(BaseModel):
   empresa_id: int
   disponivel: bool
 
-@router.get(
-  "/produtos/search",
-  response_model=ProdutosPaginadosResponse,
-  summary="Busca produtos da empresa por texto",
-)
-def search_produtos(
-        db: Session = Depends(get_db),
-        cod_empresa: int = Query(..., description="Empresa dona dos vínculos"),
-        q: Optional[str] = Query(None, description="Termo de busca (descrição ou código de barras)"),
-        cod_categoria: Optional[int] = Query(None, description="Filtrar por categoria"),
-        page: int = Query(1, ge=1),
-        limit: int = Query(30, ge=1, le=100),
-        apenas_disponiveis: bool = Query(False, description="Somente ativos+disponíveis"),
-):
-  logger.info(
-    f"[Produtos] Search - empresa={cod_empresa} q={q!r} cat={cod_categoria} page={page} limit={limit} disp={apenas_disponiveis}"
-  )
-  svc = ProdutosDeliveryService(db)
-  return svc.buscar_paginado(
-    empresa_id=cod_empresa,
-    q=q,
-    cod_categoria=cod_categoria,
-    page=page,
-    limit=limit,
-    apenas_disponiveis=apenas_disponiveis,
-  )
+  def search_produtos(
+          db: Session = Depends(get_db),
+          cod_empresa: int = Query(..., description="Empresa dona dos vínculos"),
+          q: Optional[str] = Query(None, description="Termo de busca (descrição ou código de barras)"),
+          page: int = Query(1, ge=1),
+          limit: int = Query(30, ge=1, le=100),
+          apenas_disponiveis: bool = Query(False, description="Somente ativos+disponíveis"),
+  ):
+    logger.info(
+      f"[Produtos] Search - empresa={cod_empresa} q={q!r} page={page} limit={limit} disp={apenas_disponiveis}"
+    )
+    svc = ProdutosDeliveryService(db)
+    return svc.buscar_paginado(
+      empresa_id=cod_empresa,
+      q=q,
+      page=page,
+      limit=limit,
+      apenas_disponiveis=apenas_disponiveis,
+    )
 
 @router.get(path="/produtos", response_model=ProdutosPaginadosResponse, summary="Lista produtos ERP", description="Retorna produtos com todas as colunas inclusas para exibição")
 def listar_delivery(
