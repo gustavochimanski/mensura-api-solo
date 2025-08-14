@@ -2,18 +2,17 @@ from pydantic import BaseModel, ConfigDict, constr
 from typing import Optional
 
 class CriarVitrineRequest(BaseModel):
-    cod_categoria: Optional[int] = None
+    cod_categoria: int
     titulo: constr(min_length=1, max_length=100)
     ordem: int = 1
     is_home: bool = False  # mapeia para tipo_exibicao
-
     model_config = ConfigDict(from_attributes=True)
 
 class AtualizarVitrineRequest(BaseModel):
     cod_categoria: Optional[int] = None
     titulo: Optional[constr(min_length=1, max_length=100)] = None
     ordem: Optional[int] = None
-    is_home: Optional[bool] = None  # mapeia para tipo_exibicao
+    is_home: Optional[bool] = None
 
 class VitrineOut(BaseModel):
     id: int
@@ -22,5 +21,4 @@ class VitrineOut(BaseModel):
     slug: str
     ordem: int
     is_home: bool
-
     model_config = ConfigDict(from_attributes=True)
