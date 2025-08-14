@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.api.delivery.repositories.repo_produtos_dv import ProdutoDeliveryRepository
 from app.api.mensura.repositories.empresa_repo import EmpresaRepository
-from app.api.delivery.schemas.schema_produtos_dv import (
+from app.api.mensura.schemas.schema_produtos import (
    CriarNovoProdutoResponse, CriarNovoProdutoRequest, ProdutoBaseDTO, ProdutoEmpDTO
 )
 from app.api.mensura.schemas.schema_produtos import ProdutoListItem
@@ -24,59 +24,6 @@ class ProdutosDeliveryService:
         if not self.emp_repo.get_empresa_by_id(empresa_id):
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Empresa não encontrada")
 
-    def criar_novo_produto(self, empresa_id: int, req: CriarNovoProdutoRequest) -> CriarNovoProdutoResponse:
-        self._empresa_or_404(empresa_id)
-
-        if self.repo.buscar_por_cod_barras(req.cod_barras):
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Produto já existe.")
-
-        # produto base
-        prod = self.repo.criar_produto(
-            cod_barras=req.cod_barras,
-            descricao=req.descricao,
-            cod_categoria=req.cod_categoria,
-            imagem=req.imagem,
-            data_cadastro=req.data_cadastro,
-            ativo=req.ativo,
-            unidade_medida=req.unidade_medida
-        )
-
-        # vínculo com empresa
-        pe = self.repo.upsert_produto_emp(
-            empresa_id=empresa_id,
-            cod_barras=prod.cod_barras,
-            preco_venda=Decimal(str(req.preco_venda)),
-            custo=(Decimal(str(req.custo)) if req.custo is not None else None),
-            vitrine_id=req.vitrine_id,   # 👈 cria vínculo N:N se vier
-            sku_empresa=req.sku_empresa,
-            disponivel=req.disponivel,
-            exibir_delivery=req.exibir_delivery
-        )
-
-        self.db.commit()
-        self.db.refresh(prod)
-        self.db.refresh(pe)
-
-        # 👇 compat: vitrine_id = o solicitado ou a 1ª vitrine vinculada
-        vitrine_id_resp = req.vitrine_id
-        if vitrine_id_resp is None and pe.vitrines:
-            vitrine_id_resp = pe.vitrines[0].id
-
-        return CriarNovoProdutoResponse(
-            produto=ProdutoBaseDTO.model_validate(prod, from_attributes=True),
-            produto_emp=ProdutoEmpDTO(
-                empresa_id=pe.empresa_id,
-                cod_barras=pe.cod_barras,
-                preco_venda=float(pe.preco_venda),
-                custo=(float(pe.custo) if pe.custo is not None else None),
-                vitrine_id=vitrine_id_resp,
-                sku_empresa=pe.sku_empresa,
-                disponivel=pe.disponivel,
-                exibir_delivery=pe.exibir_delivery,
-                created_at=pe.created_at,
-                updated_at=pe.updated_at,
-            ),
-        )
 
     def atualizar_produto(self, empresa_id: int, cod_barras: str, req: CriarNovoProdutoRequest) -> CriarNovoProdutoResponse:
         self._empresa_or_404(empresa_id)

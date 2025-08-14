@@ -11,7 +11,7 @@ class ProdutoModel(Base):
     descricao = Column(String(255), nullable=False)
     imagem = Column(String(255), nullable=True)
     data_cadastro = Column(Date, nullable=True)
-    cod_categoria = Column(Integer, ForeignKey("delivery.categoria_dv.id", ondelete="RESTRICT"), nullable=False)
+    cod_categoria = Column(Integer, ForeignKey("delivery.categoria_dv.id", ondelete="RESTRICT"))
 
     # extras úteis para cardápio
     ativo = Column(Boolean, nullable=False, default=True)

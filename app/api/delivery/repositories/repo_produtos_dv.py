@@ -8,8 +8,6 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.api.mensura.models.cadprod_model import ProdutoModel
 from app.api.mensura.models.cadprod_emp_model import ProdutoEmpModel
-from app.api.delivery.models.vitrine_dv_model import VitrinesModel
-
 
 class ProdutoDeliveryRepository:
     def __init__(self, db: Session):
@@ -118,61 +116,9 @@ class ProdutoDeliveryRepository:
 
         return int(qry.scalar() or 0)
 
-
-
-    def upsert_produto_emp(
-        self,
-        *,
-        empresa_id: int,
-        cod_barras: str,
-        preco_venda: Decimal,
-        custo: Optional[Decimal] = None,
-        vitrine_id: Optional[int] = None,   # 👈 compat: cria vínculo N:N se vier preenchido
-        sku_empresa: Optional[str] = None,
-        disponivel: Optional[bool] = None,
-        exibir_delivery: Optional[bool] = None,
-    ) -> ProdutoEmpModel:
-        pe = self.get_produto_emp(empresa_id, cod_barras)
-        if pe:
-            pe.preco_venda = preco_venda
-            pe.custo = custo
-            if sku_empresa is not None:
-                pe.sku_empresa = sku_empresa
-            if disponivel is not None:
-                pe.disponivel = disponivel
-            if exibir_delivery is not None:
-                pe.exibir_delivery = exibir_delivery
-        else:
-            pe = ProdutoEmpModel(
-                empresa_id=empresa_id,
-                cod_barras=cod_barras,
-                preco_venda=preco_venda,
-                custo=custo,
-                sku_empresa=sku_empresa,
-                disponivel=True if disponivel is None else disponivel,
-                exibir_delivery=True if exibir_delivery is None else exibir_delivery,
-            )
-            self.db.add(pe)
-
-        self.db.flush()
-
-        # 👇 compat: se vier vitrine_id, garante o vínculo N:N
-        if vitrine_id is not None:
-            vit = self.db.query(VitrinesModel).filter_by(id=vitrine_id).first()
-            if vit and vit not in pe.vitrines:
-                pe.vitrines.append(vit)
-                self.db.flush()
-
-        return pe
     # -------- CRUD Produto base --------
     def buscar_por_cod_barras(self, cod_barras: str) -> Optional[ProdutoModel]:
         return self.db.query(ProdutoModel).filter_by(cod_barras=cod_barras).first()
-
-    def criar_produto(self, **data) -> ProdutoModel:
-        obj = ProdutoModel(**data)
-        self.db.add(obj)
-        self.db.flush()
-        return obj
 
     def atualizar_produto(self, prod: ProdutoModel, **data) -> ProdutoModel:
         for f, v in data.items():
