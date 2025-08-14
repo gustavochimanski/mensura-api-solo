@@ -29,7 +29,7 @@ def listar_delivery(
   return service.listar_paginado(cod_empresa, page, limit, apenas_disponiveis=apenas_disponiveis)
 
 
-@router.post("/produtos", response_model=CriarNovoProdutoResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/produtos", response_model=CriarNovoProdutoResponse)
 async def criar_produto(
   cod_empresa: int = Form(...),
   cod_barras: str = Form(...),
