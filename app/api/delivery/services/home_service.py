@@ -90,14 +90,21 @@ class HomeService:
         if not self.repo_empresa.get_empresa_by_id(empresa_id):
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Empresa não encontrada")
 
+        # produtos de vitrines somente da categoria informada
         produtos_map = self.repo_home.listar_vitrines_com_produtos_empresa_categoria(empresa_id, cod_categoria)
+
+        # vitrines vinculadas à categoria (opcionalmente só as de home)
         vitrines_cat = self.repo_home.listar_vitrines_por_categoria(cod_categoria, is_home=is_home)
 
         out: List[VitrineComProdutosResponse] = []
         for v in vitrines_cat:
-            cat0 = v.categorias[0] if v.categorias else None
-            slug = cat0.slug if cat0 else None
-            slug_pai = cat0.parent.slug if (cat0 and cat0.parent) else None
+            # ⚠️ Use a categoria DO FILTRO, não a primeira da lista
+            cat_match = next((c for c in v.categorias if c.id == cod_categoria), None)
+            # Fallback (não deveria acontecer porque filtramos por categoria)
+            cat_ref = cat_match or (v.categorias[0] if v.categorias else None)
+
+            slug = cat_ref.slug if cat_ref else None
+            slug_pai = cat_ref.parent.slug if (cat_ref and cat_ref.parent) else None
             href_categoria = _build_cat_href(slug, slug_pai) if slug else None
 
             produtos_dto = [
@@ -105,7 +112,7 @@ class HomeService:
                     empresa_id=p.empresa_id,
                     cod_barras=p.cod_barras,
                     preco_venda=float(p.preco_venda),
-                    vitrine_id=v.id,  # 👈 vitrine do CONTEXTO
+                    vitrine_id=v.id,
                     disponivel=p.disponivel,
                     produto=ProdutoMiniDTO(
                         cod_barras=p.produto.cod_barras,
@@ -125,10 +132,12 @@ class HomeService:
                     titulo=v.titulo,
                     slug=v.slug,
                     ordem=v.ordem,
-                    cod_categoria=(cat0.id if cat0 else None),
+                    # ✅ aqui garantimos coerência com o filtro
+                    cod_categoria=cod_categoria,
                     is_home=bool(v.is_home),
                     produtos=produtos_dto,
                     href_categoria=href_categoria,
                 )
             )
         return out
+
