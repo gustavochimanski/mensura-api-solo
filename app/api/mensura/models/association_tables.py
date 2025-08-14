@@ -38,13 +38,13 @@ class VitrineProdutoEmpLink(Base):
     """
     Liga ProdutoEmpDelivery (empresa_id + cod_barras) a vitrines (N:N) com ordenação.
     """
-    __tablename__ = "vitrine_prod_emp_dv"
+    __tablename__ = "vitrine_prod_emp"
     __table_args__ = (
         PrimaryKeyConstraint("vitrine_id", "empresa_id", "cod_barras", name="pk_vitrine_prod_emp"),
         # 🔧 CHAVE ESTRANGEIRA COMPOSTA → cadprod_emp_dv (não para cadprod_dv / empresas isoladamente)
         ForeignKeyConstraint(
             ["empresa_id", "cod_barras"],
-            ["delivery.cadprod_emp_dv.empresa_id", "delivery.cadprod_emp_dv.cod_barras"],
+            ["mensura.cadprod_emp.empresa_id", "mensura.cadprod_emp.cod_barras"],
             ondelete="CASCADE",
         ),
         # FK simples para a vitrine
