@@ -1,73 +1,138 @@
 from __future__ import annotations
-from typing import Optional
+from typing import Optional, List, Tuple
 from slugify import slugify
 
-from fastapi import HTTPException, status
+from sqlalchemy import func, or_, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.delivery.models.cadprod_emp_dv_model import ProdutoEmpDeliveryModel
 from app.api.delivery.models.categoria_dv_model import CategoriaDeliveryModel
 from app.api.delivery.models.vitrine_dv_model import VitrinesModel
-from app.api.mensura.models.association_tables import VitrineProdutoEmpLink
+from app.api.mensura.models.association_tables import VitrineProdutoEmpLink, VitrineCategoriaLink
 
 
 class VitrineRepository:
     """
-    Regra: cada vitrine deve ter exatamente 1 categoria principal.
-    O model expõe uma relação M:N (`v.categorias`), mas aqui garantimos 1:1 lógico:
-    - create: exige cod_categoria e vincula somente ela
-    - update: se vier cod_categoria, limpa e reatribui somente ela
+    Repositório: somente operações de banco (CRUD/queries).
+    - Não importa FastAPI nem lança HTTPException.
+    - Propaga exceções técnicas (IntegrityError, etc.) para o Service tratar.
     """
 
     def __init__(self, db: Session):
         self.db = db
 
-    # ---------- helpers ----------
-    def _get_categoria_or_400(self, cod_categoria: int) -> CategoriaDeliveryModel:
-        cat = (
-            self.db.query(CategoriaDeliveryModel)
-            .filter(CategoriaDeliveryModel.id == cod_categoria)
-            .first()
-        )
-        if not cat:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Categoria inválida")
-        return cat
-
-    def _get_vitrine_or_404(self, vitrine_id: int) -> VitrinesModel:
-        v = (
+    # --------------------- LOOKUPS ---------------------
+    def get_vitrine_by_id(self, vitrine_id: int) -> Optional[VitrinesModel]:
+        return (
             self.db.query(VitrinesModel)
-            .options(selectinload(VitrinesModel.categorias))
+            .options(
+                selectinload(VitrinesModel.categorias)
+                .selectinload(CategoriaDeliveryModel.parent)
+            )
             .filter(VitrinesModel.id == vitrine_id)
             .first()
         )
-        if not v:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Vitrine não encontrada")
-        return v
 
-    def _ensure_unique_slug(self, base: str) -> str:
-        """
-        Garante slug único adicionando sufixos -2, -3... se necessário.
-        Evita erro 500 por unique constraint no banco.
-        """
-        s = slugify(base)
-        if not s:
-            s = "vitrine"
+    def get_categoria_by_id(self, cat_id: int) -> Optional[CategoriaDeliveryModel]:
+        return (
+            self.db.query(CategoriaDeliveryModel)
+            .filter(CategoriaDeliveryModel.id == cat_id)
+            .first()
+        )
 
-        # Busca colisões
-        exists = (
+    def has_vinculos(self, vitrine_id: int) -> bool:
+        return (
+            self.db.query(VitrineProdutoEmpLink)
+            .filter(VitrineProdutoEmpLink.vitrine_id == vitrine_id)
+            .first()
+            is not None
+        )
+
+    def exists_prod_emp(self, empresa_id: int, cod_barras: str) -> bool:
+        return (
+            self.db.query(ProdutoEmpDeliveryModel)
+            .filter(
+                ProdutoEmpDeliveryModel.empresa_id == empresa_id,
+                ProdutoEmpDeliveryModel.cod_barras == cod_barras,
+            )
+            .first()
+            is not None
+        )
+
+    # --------------------- SEARCH ---------------------
+    def _has_unaccent(self) -> bool:
+        try:
+            row = self.db.execute(
+                text("SELECT 1 FROM pg_extension WHERE extname = :name LIMIT 1"),
+                {"name": "unaccent"},
+            ).first()
+            return row is not None
+        except Exception:
+            return False
+
+    def search(
+        self,
+        *,
+        q: Optional[str] = None,
+        cod_categoria: Optional[int] = None,
+        is_home: Optional[bool] = None,
+        limit: int = 30,
+        offset: int = 0,
+    ) -> List[VitrinesModel]:
+        # defesa de performance
+        if q is not None:
+            q = q.strip()[:128]
+
+        qy = (
             self.db.query(VitrinesModel)
+            .options(
+                selectinload(VitrinesModel.categorias)
+                .selectinload(CategoriaDeliveryModel.parent)
+            )
+            .order_by(VitrinesModel.ordem, VitrinesModel.id)
+        )
+
+        if cod_categoria is not None:
+            qy = (
+                qy.join(VitrineCategoriaLink, VitrineCategoriaLink.vitrine_id == VitrinesModel.id)
+                  .filter(VitrineCategoriaLink.categoria_id == cod_categoria)
+            )
+
+        if is_home is not None:
+            qy = qy.filter(VitrinesModel.tipo_exibicao == "P") if is_home \
+                 else qy.filter(VitrinesModel.tipo_exibicao.is_(None))
+
+        if q:
+            term = f"%{q}%"
+            if self._has_unaccent():
+                cond = or_(
+                    func.unaccent(VitrinesModel.titulo).ilike(func.unaccent(term)),
+                    func.unaccent(VitrinesModel.slug).ilike(func.unaccent(term)),
+                )
+            else:
+                cond = or_(
+                    VitrinesModel.titulo.ilike(term),
+                    VitrinesModel.slug.ilike(term),
+                )
+            qy = qy.filter(cond)
+
+        return qy.offset(offset).limit(limit).all()
+
+    # --------------------- HELPERS ---------------------
+    def _ensure_unique_slug(self, base: str) -> str:
+        s = slugify(base) or "vitrine"
+        # like com parâmetro (bound)
+        rows = (
+            self.db.query(VitrinesModel.slug)
             .filter(VitrinesModel.slug.like(f"{s}%"))
             .all()
         )
-        if not exists:
+        if not rows:
             return s
-
-        # calcula próximo sufixo
-        used = {v.slug for v in exists}
+        used = {r[0] for r in rows}
         if s not in used:
             return s
-
         i = 2
         while f"{s}-{i}" in used:
             i += 1
@@ -77,18 +142,22 @@ class VitrineRepository:
         v.categorias.clear()
         v.categorias.append(cat)
 
-    # ---------- CRUD ----------
-    def create(self, *, cod_categoria: int, titulo: str, ordem: int = 1, is_home: bool = False) -> VitrinesModel:
-        cat = self._get_categoria_or_400(cod_categoria)
-        slug_value = self._ensure_unique_slug(titulo)
-
+    # --------------------- CRUD ---------------------
+    def create(
+        self,
+        *,
+        categoria: CategoriaDeliveryModel,
+        titulo: str,
+        ordem: int = 1,
+        is_home: bool = False,
+    ) -> VitrinesModel:
         nova = VitrinesModel(
             titulo=titulo,
-            slug=slug_value,
+            slug=self._ensure_unique_slug(titulo),
             ordem=ordem,
             tipo_exibicao=("P" if is_home else None),
         )
-        self._assign_single_category(nova, cat)
+        self._assign_single_category(nova, categoria)
 
         self.db.add(nova)
         try:
@@ -97,85 +166,44 @@ class VitrineRepository:
             return nova
         except IntegrityError:
             self.db.rollback()
-            # Em caso de corrida de slug, tenta 1x com novo slug
+            # corrida de slug: tenta 1x com novo slug
             nova.slug = self._ensure_unique_slug(titulo)
             self.db.add(nova)
             self.db.commit()
             self.db.refresh(nova)
             return nova
-        except Exception:
-            self.db.rollback()
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Erro ao criar Vitrine")
 
     def update(
         self,
-        vitrine_id: int,
+        vitrine: VitrinesModel,
         *,
-        cod_categoria: Optional[int] = None,
+        categoria: Optional[CategoriaDeliveryModel] = None,
         titulo: Optional[str] = None,
         ordem: Optional[int] = None,
         is_home: Optional[bool] = None,
     ) -> VitrinesModel:
-        v = self._get_vitrine_or_404(vitrine_id)
-
-        if cod_categoria is not None:
-            cat = self._get_categoria_or_400(cod_categoria)
-            self._assign_single_category(v, cat)
-
+        if categoria is not None:
+            self._assign_single_category(vitrine, categoria)
         if titulo is not None:
-            v.titulo = titulo
-            v.slug = self._ensure_unique_slug(titulo)
-
+            vitrine.titulo = titulo
+            vitrine.slug = self._ensure_unique_slug(titulo)
         if ordem is not None:
-            v.ordem = ordem
-
+            vitrine.ordem = ordem
         if is_home is not None:
-            v.tipo_exibicao = "P" if is_home else None
+            vitrine.tipo_exibicao = "P" if is_home else None
 
-        try:
-            self.db.commit()
-            self.db.refresh(v)
-            return v
-        except IntegrityError:
-            self.db.rollback()
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Conflito de dados ao atualizar Vitrine")
-        except Exception:
-            self.db.rollback()
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Erro ao atualizar Vitrine")
+        self.db.commit()
+        self.db.refresh(vitrine)
+        return vitrine
 
-    def delete(self, vitrine_id: int) -> None:
-        v = self._get_vitrine_or_404(vitrine_id)
-
-        vinculado = (
-            self.db.query(VitrineProdutoEmpLink)
-            .filter(VitrineProdutoEmpLink.vitrine_id == vitrine_id)
-            .first()
-        )
-        if vinculado:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Não é possível excluir. Existem produtos vinculados."
-            )
-
-        self.db.delete(v)
+    def delete(self, vitrine: VitrinesModel) -> None:
+        self.db.delete(vitrine)
         self.db.commit()
 
-    # ---------- vínculos produto x vitrine ----------
-    def vincular_produto(self, *, empresa_id: int, cod_barras: str, vitrine_id: int) -> bool:
-        # valida existência
-        pe = (
-            self.db.query(ProdutoEmpDeliveryModel)
-            .filter(
-                ProdutoEmpDeliveryModel.empresa_id == empresa_id,
-                ProdutoEmpDeliveryModel.cod_barras == cod_barras,
-            )
-            .first()
-        )
-        self._get_vitrine_or_404(vitrine_id)
-        if not pe:
-            return False
-
-        existe = (
+    # --------------------- VÍNCULOS PRODUTO ↔ VITRINE ---------------------
+    def vincular_produto(self, *, vitrine_id: int, empresa_id: int, cod_barras: str) -> bool:
+        # evita duplicidade
+        exists = (
             self.db.query(VitrineProdutoEmpLink)
             .filter(
                 VitrineProdutoEmpLink.vitrine_id == vitrine_id,
@@ -184,7 +212,7 @@ class VitrineRepository:
             )
             .first()
         )
-        if existe:
+        if exists:
             return True
 
         link = VitrineProdutoEmpLink(
@@ -200,7 +228,7 @@ class VitrineRepository:
             self.db.rollback()
             return False
 
-    def desvincular_produto(self, *, empresa_id: int, cod_barras: str, vitrine_id: int) -> bool:
+    def desvincular_produto(self, *, vitrine_id: int, empresa_id: int, cod_barras: str) -> bool:
         deleted = (
             self.db.query(VitrineProdutoEmpLink)
             .filter(
@@ -215,3 +243,9 @@ class VitrineRepository:
             return False
         self.db.commit()
         return True
+
+    def set_is_home(self, vitrine: VitrinesModel, is_home: bool) -> VitrinesModel:
+        vitrine.tipo_exibicao = "P" if is_home else None
+        self.db.commit()
+        self.db.refresh(vitrine)
+        return vitrine
