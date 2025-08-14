@@ -7,7 +7,7 @@ from app.api.mensura.services.service_produto import ProdutosMensuraService
 from app.database.db_connection import get_db
 from app.utils.logger import logger
 
-router = APIRouter(prefix="/api/delivery", tags=["Produtos - Delivery"])
+router = APIRouter(prefix="/api/mensura", tags=["Produtos - Delivery"])
 @router.get(path="/produtos", response_model=ProdutosPaginadosResponse, summary="Lista produtos ERP", description="Retorna produtos com todas as colunas inclusas para exibição")
 def listar_delivery(
   db: Session = Depends(get_db),
