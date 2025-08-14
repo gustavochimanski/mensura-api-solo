@@ -21,6 +21,6 @@ class ProdutoModel(Base):
 
     # Relacionamentos
     categoria = relationship("CategoriaDeliveryModel", back_populates="produtos")
-    produtos_empresa = relationship("ProdutoModel", back_populates="produto", cascade="all, delete-orphan")
+    produtos_empresa = relationship("ProdutoEmpModel", back_populates="produto", cascade="all, delete-orphan")
 
     model_config = ConfigDict(from_attributes=True)
