@@ -23,25 +23,27 @@ class SetDisponibilidadeRequest(BaseModel):
   empresa_id: int
   disponivel: bool
 
-  def search_produtos(
-          db: Session = Depends(get_db),
-          cod_empresa: int = Query(..., description="Empresa dona dos vínculos"),
-          q: Optional[str] = Query(None, description="Termo de busca (descrição ou código de barras)"),
-          page: int = Query(1, ge=1),
-          limit: int = Query(30, ge=1, le=100),
-          apenas_disponiveis: bool = Query(False, description="Somente ativos+disponíveis"),
-  ):
-    logger.info(
-      f"[Produtos] Search - empresa={cod_empresa} q={q!r} page={page} limit={limit} disp={apenas_disponiveis}"
-    )
-    svc = ProdutosDeliveryService(db)
-    return svc.buscar_paginado(
-      empresa_id=cod_empresa,
-      q=q,
-      page=page,
-      limit=limit,
-      apenas_disponiveis=apenas_disponiveis,
-    )
+# ---------- Endpoints ----------
+@router.get("/search")
+def search_produtos(
+        db: Session = Depends(get_db),
+        cod_empresa: int = Query(..., description="Empresa dona dos vínculos"),
+        q: Optional[str] = Query(None, description="Termo de busca (descrição ou código de barras)"),
+        page: int = Query(1, ge=1),
+        limit: int = Query(30, ge=1, le=100),
+        apenas_disponiveis: bool = Query(False, description="Somente ativos+disponíveis"),
+):
+  logger.info(
+    f"[Produtos] Search - empresa={cod_empresa} q={q!r} page={page} limit={limit} disp={apenas_disponiveis}"
+  )
+  svc = ProdutosDeliveryService(db)
+  return svc.buscar_paginado(
+    empresa_id=cod_empresa,
+    q=q,
+    page=page,
+    limit=limit,
+    apenas_disponiveis=apenas_disponiveis,
+  )
 
 
 @router.put("/produtos/{cod_barras}", response_model=CriarNovoProdutoResponse)
