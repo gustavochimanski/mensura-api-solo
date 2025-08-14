@@ -1,4 +1,4 @@
-# app/api/delivery/models/cadprod_emp_dv_model.py
+# app/api/delivery/models/cadprod_emp_model.py
 from pydantic import ConfigDict
 from sqlalchemy import (
     Column, Integer, String, Numeric, ForeignKey, Index, Boolean, DateTime, func
@@ -8,7 +8,7 @@ from sqlalchemy.orm import relationship
 from app.api.mensura.models.association_tables import VitrineProdutoEmpLink
 from app.database.db_connection import Base
 
-class ProdutoEmpDeliveryModel(Base):
+class ProdutoEmpModel(Base):
     __tablename__ = "cadprod_emp_dv"
     __table_args__ = (
         Index("idx_empresa_produto", "empresa_id", "cod_barras"),
@@ -17,7 +17,7 @@ class ProdutoEmpDeliveryModel(Base):
 
     # PK composta (empresa + produto)
     empresa_id  = Column(Integer, ForeignKey("mensura.empresas.id", ondelete="RESTRICT"), primary_key=True)
-    cod_barras  = Column(String,  ForeignKey("delivery.cadprod_dv.cod_barras", ondelete="CASCADE"), primary_key=True, nullable=False)
+    cod_barras  = Column(String,  ForeignKey("mensura.cadprod.cod_barras", ondelete="CASCADE"), primary_key=True, nullable=False)
 
     # ❌ REMOVIDO: vitrine_id
     # vitrine_id  = Column(Integer, ForeignKey("delivery.vitrines_dv.id", ondelete="SET NULL"), nullable=True)
@@ -32,7 +32,7 @@ class ProdutoEmpDeliveryModel(Base):
     updated_at  = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     # Relacionamentos existentes
-    produto  = relationship("ProdutoDeliveryModel", back_populates="produtos_empresa")
+    produto  = relationship("ProdutoModel", back_populates="produtos_empresa")
     empresa  = relationship("EmpresaModel", back_populates="produtos_emp")
 
     # --- N:N com vitrines ---

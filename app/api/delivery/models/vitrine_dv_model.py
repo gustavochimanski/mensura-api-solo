@@ -29,7 +29,7 @@ class VitrinesModel(Base):
     )
 
     produtos_emp = relationship(
-        "ProdutoEmpDeliveryModel",
+        "ProdutoEmpModel",
         secondary=VitrineProdutoEmpLink.__table__,  # 👈 em vez de string
         back_populates="vitrines",
         passive_deletes=True

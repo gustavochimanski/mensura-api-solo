@@ -1,12 +1,12 @@
 from __future__ import annotations
-from typing import Optional, List, Tuple
+from typing import Optional, List
 from slugify import slugify
 
 from sqlalchemy import func, or_, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
-from app.api.delivery.models.cadprod_emp_dv_model import ProdutoEmpDeliveryModel
+from app.api.mensura.models.cadprod_emp_model import ProdutoEmpModel
 from app.api.delivery.models.categoria_dv_model import CategoriaDeliveryModel
 from app.api.delivery.models.vitrine_dv_model import VitrinesModel
 from app.api.mensura.models.association_tables import VitrineProdutoEmpLink, VitrineCategoriaLink
@@ -51,10 +51,10 @@ class VitrineRepository:
 
     def exists_prod_emp(self, empresa_id: int, cod_barras: str) -> bool:
         return (
-            self.db.query(ProdutoEmpDeliveryModel)
+            self.db.query(ProdutoEmpModel)
             .filter(
-                ProdutoEmpDeliveryModel.empresa_id == empresa_id,
-                ProdutoEmpDeliveryModel.cod_barras == cod_barras,
+                ProdutoEmpModel.empresa_id == empresa_id,
+                ProdutoEmpModel.cod_barras == cod_barras,
             )
             .first()
             is not None

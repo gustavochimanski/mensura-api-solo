@@ -24,7 +24,7 @@ class EmpresaModel(Base):
     )
 
     # Relationships
-    produtos_emp = relationship("ProdutoEmpDeliveryModel", back_populates="empresa")
+    produtos_emp = relationship("ProdutoEmpModel", back_populates="empresa")
     pedidos = relationship("PedidoDeliveryModel", back_populates="empresa", cascade="all, delete-orphan")
     entregadores = relationship("EntregadorDeliveryModel", secondary=entregador_empresa, back_populates="empresas")
     usuarios = relationship("UserModel", secondary=usuario_empresa, back_populates="empresas")

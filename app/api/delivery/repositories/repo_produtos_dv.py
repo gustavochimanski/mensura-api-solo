@@ -6,8 +6,8 @@ from decimal import Decimal
 from sqlalchemy import func, or_, text
 from sqlalchemy.orm import Session, joinedload
 
-from app.api.delivery.models.cadprod_dv_model import ProdutoDeliveryModel
-from app.api.delivery.models.cadprod_emp_dv_model import ProdutoEmpDeliveryModel
+from app.api.mensura.models.cadprod_model import ProdutoModel
+from app.api.mensura.models.cadprod_emp_model import ProdutoEmpModel
 from app.api.delivery.models.vitrine_dv_model import VitrinesModel
 
 
@@ -42,38 +42,38 @@ class ProdutoDeliveryRepository:
         limit: int,
         apenas_disponiveis: bool = False,
         apenas_delivery: bool = True,
-    ) -> List[ProdutoDeliveryModel]:
+    ) -> List[ProdutoModel]:
         qry = (
-            self.db.query(ProdutoDeliveryModel)
-            .join(ProdutoEmpDeliveryModel, ProdutoDeliveryModel.cod_barras == ProdutoEmpDeliveryModel.cod_barras)
-            .filter(ProdutoEmpDeliveryModel.empresa_id == empresa_id)
+            self.db.query(ProdutoModel)
+            .join(ProdutoEmpModel, ProdutoModel.cod_barras == ProdutoEmpModel.cod_barras)
+            .filter(ProdutoEmpModel.empresa_id == empresa_id)
             .options(
-                joinedload(ProdutoDeliveryModel.categoria),
-                joinedload(ProdutoDeliveryModel.produtos_empresa),
+                joinedload(ProdutoModel.categoria),
+                joinedload(ProdutoModel.produtos_empresa),
             )
-            .order_by(ProdutoDeliveryModel.descricao.asc())
+            .order_by(ProdutoModel.descricao.asc())
         )
 
         if apenas_disponiveis:
-            qry = qry.filter(ProdutoDeliveryModel.ativo.is_(True), ProdutoEmpDeliveryModel.disponivel.is_(True))
+            qry = qry.filter(ProdutoModel.ativo.is_(True), ProdutoEmpModel.disponivel.is_(True))
 
         if apenas_delivery:
-            qry = qry.filter(ProdutoEmpDeliveryModel.exibir_delivery.is_(True))
+            qry = qry.filter(ProdutoEmpModel.exibir_delivery.is_(True))
 
         if q and q.strip():
             term = f"%{q.strip()}%"
             if self._has_unaccent():
                 qry = qry.filter(
                     or_(
-                        func.unaccent(ProdutoDeliveryModel.descricao).ilike(func.unaccent(term)),
-                        ProdutoDeliveryModel.cod_barras.ilike(term),
+                        func.unaccent(ProdutoModel.descricao).ilike(func.unaccent(term)),
+                        ProdutoModel.cod_barras.ilike(term),
                     )
                 )
             else:
                 qry = qry.filter(
                     or_(
-                        ProdutoDeliveryModel.descricao.ilike(term),
-                        ProdutoDeliveryModel.cod_barras.ilike(term),
+                        ProdutoModel.descricao.ilike(term),
+                        ProdutoModel.cod_barras.ilike(term),
                     )
                 )
 
@@ -88,69 +88,37 @@ class ProdutoDeliveryRepository:
         apenas_delivery: bool = True,
     ) -> int:
         qry = (
-            self.db.query(func.count(ProdutoDeliveryModel.cod_barras))
-            .join(ProdutoEmpDeliveryModel, ProdutoDeliveryModel.cod_barras == ProdutoEmpDeliveryModel.cod_barras)
-            .filter(ProdutoEmpDeliveryModel.empresa_id == empresa_id)
+            self.db.query(func.count(ProdutoModel.cod_barras))
+            .join(ProdutoEmpModel, ProdutoModel.cod_barras == ProdutoEmpModel.cod_barras)
+            .filter(ProdutoEmpModel.empresa_id == empresa_id)
         )
 
         if apenas_disponiveis:
-            qry = qry.filter(ProdutoDeliveryModel.ativo.is_(True), ProdutoEmpDeliveryModel.disponivel.is_(True))
+            qry = qry.filter(ProdutoModel.ativo.is_(True), ProdutoEmpModel.disponivel.is_(True))
 
         if apenas_delivery:
-            qry = qry.filter(ProdutoEmpDeliveryModel.exibir_delivery.is_(True))
+            qry = qry.filter(ProdutoEmpModel.exibir_delivery.is_(True))
 
         if q and q.strip():
             term = f"%{q.strip()}%"
             if self._has_unaccent():
                 qry = qry.filter(
                     or_(
-                        func.unaccent(ProdutoDeliveryModel.descricao).ilike(func.unaccent(term)),
-                        ProdutoDeliveryModel.cod_barras.ilike(term),
+                        func.unaccent(ProdutoModel.descricao).ilike(func.unaccent(term)),
+                        ProdutoModel.cod_barras.ilike(term),
                     )
                 )
             else:
                 qry = qry.filter(
                     or_(
-                        ProdutoDeliveryModel.descricao.ilike(term),
-                        ProdutoDeliveryModel.cod_barras.ilike(term),
+                        ProdutoModel.descricao.ilike(term),
+                        ProdutoModel.cod_barras.ilike(term),
                     )
                 )
 
         return int(qry.scalar() or 0)
 
-    # -------- Listagem paginada --------
-    def buscar_produtos_da_empresa(
-        self, empresa_id: int, offset: int, limit: int,
-        apenas_disponiveis: bool = False,
-        apenas_delivery: bool = True
-    ) -> List[ProdutoDeliveryModel]:
-        q = (
-            self.db.query(ProdutoDeliveryModel)
-            .join(ProdutoEmpDeliveryModel, ProdutoDeliveryModel.cod_barras == ProdutoEmpDeliveryModel.cod_barras)
-            .filter(ProdutoEmpDeliveryModel.empresa_id == empresa_id)
-            .options(
-                joinedload(ProdutoDeliveryModel.categoria),
-                joinedload(ProdutoDeliveryModel.produtos_empresa),
-            )
-            .order_by(ProdutoDeliveryModel.created_at.desc())
-        )
-        if apenas_disponiveis:
-            q = q.filter(ProdutoDeliveryModel.ativo.is_(True), ProdutoEmpDeliveryModel.disponivel.is_(True))
-        if apenas_delivery:
-            q = q.filter(ProdutoEmpDeliveryModel.exibir_delivery.is_(True))
-        return q.offset(offset).limit(limit).all()
 
-    def contar_total(self, empresa_id: int, apenas_disponiveis: bool = False, apenas_delivery: bool = True) -> int:
-        q = (
-            self.db.query(func.count(ProdutoDeliveryModel.cod_barras))
-            .join(ProdutoEmpDeliveryModel, ProdutoDeliveryModel.cod_barras == ProdutoEmpDeliveryModel.cod_barras)
-            .filter(ProdutoEmpDeliveryModel.empresa_id == empresa_id)
-        )
-        if apenas_disponiveis:
-            q = q.filter(ProdutoDeliveryModel.ativo.is_(True), ProdutoEmpDeliveryModel.disponivel.is_(True))
-        if apenas_delivery:
-            q = q.filter(ProdutoEmpDeliveryModel.exibir_delivery.is_(True))
-        return int(q.scalar() or 0)
 
     def upsert_produto_emp(
         self,
@@ -163,7 +131,7 @@ class ProdutoDeliveryRepository:
         sku_empresa: Optional[str] = None,
         disponivel: Optional[bool] = None,
         exibir_delivery: Optional[bool] = None,
-    ) -> ProdutoEmpDeliveryModel:
+    ) -> ProdutoEmpModel:
         pe = self.get_produto_emp(empresa_id, cod_barras)
         if pe:
             pe.preco_venda = preco_venda
@@ -175,7 +143,7 @@ class ProdutoDeliveryRepository:
             if exibir_delivery is not None:
                 pe.exibir_delivery = exibir_delivery
         else:
-            pe = ProdutoEmpDeliveryModel(
+            pe = ProdutoEmpModel(
                 empresa_id=empresa_id,
                 cod_barras=cod_barras,
                 preco_venda=preco_venda,
@@ -197,16 +165,16 @@ class ProdutoDeliveryRepository:
 
         return pe
     # -------- CRUD Produto base --------
-    def buscar_por_cod_barras(self, cod_barras: str) -> Optional[ProdutoDeliveryModel]:
-        return self.db.query(ProdutoDeliveryModel).filter_by(cod_barras=cod_barras).first()
+    def buscar_por_cod_barras(self, cod_barras: str) -> Optional[ProdutoModel]:
+        return self.db.query(ProdutoModel).filter_by(cod_barras=cod_barras).first()
 
-    def criar_produto(self, **data) -> ProdutoDeliveryModel:
-        obj = ProdutoDeliveryModel(**data)
+    def criar_produto(self, **data) -> ProdutoModel:
+        obj = ProdutoModel(**data)
         self.db.add(obj)
         self.db.flush()
         return obj
 
-    def atualizar_produto(self, prod: ProdutoDeliveryModel, **data) -> ProdutoDeliveryModel:
+    def atualizar_produto(self, prod: ProdutoModel, **data) -> ProdutoModel:
         for f, v in data.items():
             setattr(prod, f, v)
         self.db.flush()
@@ -230,15 +198,15 @@ class ProdutoDeliveryRepository:
 
     def count_vinculos(self, cod_barras: str) -> int:
         return int(
-            self.db.query(func.count(ProdutoEmpDeliveryModel.empresa_id))
-            .filter(ProdutoEmpDeliveryModel.cod_barras == cod_barras)
+            self.db.query(func.count(ProdutoEmpModel.empresa_id))
+            .filter(ProdutoEmpModel.cod_barras == cod_barras)
             .scalar() or 0
         )
 
     # -------- Produto x Empresa --------
-    def get_produto_emp(self, empresa_id: int, cod_barras: str) -> Optional[ProdutoEmpDeliveryModel]:
+    def get_produto_emp(self, empresa_id: int, cod_barras: str) -> Optional[ProdutoEmpModel]:
         return (
-            self.db.query(ProdutoEmpDeliveryModel)
+            self.db.query(ProdutoEmpModel)
             .filter_by(empresa_id=empresa_id, cod_barras=cod_barras)
             .first()
         )

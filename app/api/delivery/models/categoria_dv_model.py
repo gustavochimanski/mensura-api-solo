@@ -25,7 +25,7 @@ class CategoriaDeliveryModel(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
-    produtos = relationship("ProdutoDeliveryModel", back_populates="categoria")
+    produtos = relationship("ProdutoModel", back_populates="categoria")
 
     # --- N:N com vitrines ---
     vitrines = relationship(

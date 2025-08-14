@@ -3,9 +3,9 @@ from sqlalchemy import Column, Integer, String, DateTime, Date, ForeignKey, Bool
 from sqlalchemy.orm import relationship
 from app.database.db_connection import Base
 
-class ProdutoDeliveryModel(Base):
-    __tablename__ = "cadprod_dv"
-    __table_args__ = {"schema": "delivery"}
+class ProdutoModel(Base):
+    __tablename__ = "cadprod"
+    __table_args__ = {"schema": "mensura"}
 
     cod_barras = Column(String, primary_key=True, unique=True, nullable=False)
     descricao = Column(String(255), nullable=False)
@@ -21,6 +21,6 @@ class ProdutoDeliveryModel(Base):
 
     # Relacionamentos
     categoria = relationship("CategoriaDeliveryModel", back_populates="produtos")
-    produtos_empresa = relationship("ProdutoEmpDeliveryModel", back_populates="produto", cascade="all, delete-orphan")
+    produtos_empresa = relationship("ProdutoModel", back_populates="produto", cascade="all, delete-orphan")
 
     model_config = ConfigDict(from_attributes=True)

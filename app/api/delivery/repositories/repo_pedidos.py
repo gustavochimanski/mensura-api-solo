@@ -5,7 +5,7 @@ from typing import Optional
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
-from app.api.delivery.models.cadprod_emp_dv_model import ProdutoEmpDeliveryModel
+from app.api.mensura.models.cadprod_emp_model import ProdutoEmpModel
 from app.api.delivery.models.pedido_dv_model import PedidoDeliveryModel
 from app.api.delivery.models.pedido_item_dv_model import PedidoItemModel
 from app.api.delivery.models.pedido_status_historico_dv_model import PedidoStatusHistoricoModel
@@ -25,13 +25,13 @@ class PedidoRepository:
     def get_endereco(self, endereco_id: int) -> Optional[EnderecoDeliveryModel]:
         return self.db.get(EnderecoDeliveryModel, endereco_id)
 
-    def get_produto_emp(self, empresa_id: int, cod_barras: str) -> Optional[ProdutoEmpDeliveryModel]:
+    def get_produto_emp(self, empresa_id: int, cod_barras: str) -> Optional[ProdutoEmpModel]:
         return (
-            self.db.query(ProdutoEmpDeliveryModel)
-            .options(joinedload(ProdutoEmpDeliveryModel.produto))
+            self.db.query(ProdutoEmpModel)
+            .options(joinedload(ProdutoEmpModel.produto))
             .filter(
-                ProdutoEmpDeliveryModel.empresa_id == empresa_id,
-                ProdutoEmpDeliveryModel.cod_barras == cod_barras,
+                ProdutoEmpModel.empresa_id == empresa_id,
+                ProdutoEmpModel.cod_barras == cod_barras,
             )
             .first()
         )
