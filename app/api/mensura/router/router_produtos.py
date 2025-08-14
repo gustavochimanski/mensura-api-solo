@@ -2,6 +2,7 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
+from app.api.mensura.schemas.schema_produtos import ProdutosPaginadosResponse
 from app.api.mensura.services.service_produto import ProdutosMensuraService
 from app.database.db_connection import get_db
 from app.utils.logger import logger
