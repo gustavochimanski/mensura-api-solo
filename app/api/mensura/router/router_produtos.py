@@ -2,10 +2,8 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-
+from app.api.mensura.services.service_produto import ProdutosMensuraService
 from app.database.db_connection import get_db
-from app.api.delivery.services.service_produto_dv import ProdutosDeliveryService
-from app.api.delivery.schemas.schema_produtos_dv import ProdutosPaginadosResponse
 from app.utils.logger import logger
 
 router = APIRouter(prefix="/api/delivery", tags=["Produtos - Delivery"])
@@ -18,5 +16,5 @@ def listar_delivery(
   apenas_disponiveis: bool = Query(False),
 ):
   logger.info(f"[Produtos] Listar - empresa={cod_empresa} page={page} limit={limit} disp={apenas_disponiveis}")
-  service = ProdutosDeliveryService(db)
+  service = ProdutosMensuraService(db)
   return service.listar_paginado(cod_empresa, page, limit, apenas_disponiveis=apenas_disponiveis)
