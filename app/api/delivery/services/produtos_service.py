@@ -1,16 +1,17 @@
 # app/api/delivery/services/produtos_service.py
 from __future__ import annotations
 from decimal import Decimal
+from typing import Optional
+
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.delivery.repositories.repo_produtos_dv import ProdutoDeliveryRepository
 from app.api.mensura.repositories.empresa_repo import EmpresaRepository
-from app.api.delivery.schemas.produtos.produtos_dv_schema import (
+from app.api.delivery.schemas.schema_produtos_dv import (
     ProdutoListItem, CriarNovoProdutoResponse, CriarNovoProdutoRequest, ProdutoBaseDTO, ProdutoEmpDTO
 )
-from app.api.delivery.models.cadprod_dv_model import ProdutoDeliveryModel
-from app.api.delivery.models.cadprod_emp_dv_model import ProdutoEmpDeliveryModel
+
 
 class ProdutosDeliveryService:
     def __init__(self, db: Session):
@@ -188,3 +189,53 @@ class ProdutosDeliveryService:
 
         self.db.commit()
         return {"ok": True, "message": "Produto deletado com sucesso"}
+
+    def _to_list_items(self, produtos, empresa_id: int) -> list[ProdutoListItem]:
+        data = []
+        for p in produtos:
+            pe = next((x for x in p.produtos_empresa if x.empresa_id == empresa_id), None)
+            if not pe:
+                continue
+            data.append(ProdutoListItem(
+                cod_barras=p.cod_barras,
+                descricao=p.descricao,
+                imagem=p.imagem,
+                preco_venda=float(pe.preco_venda),
+                custo=(float(pe.custo) if pe.custo is not None else None),
+                cod_categoria=p.cod_categoria,
+                label_categoria=p.categoria.descricao if p.categoria else "",
+                disponivel=pe.disponivel and p.ativo,
+                exibir_delivery=pe.exibir_delivery,
+            ))
+        return data
+
+    def buscar_paginado(
+        self,
+        *,
+        empresa_id: int,
+        q: Optional[str],
+        cod_categoria: Optional[int],
+        page: int,
+        limit: int,
+        apenas_disponiveis: bool = False,
+        apenas_delivery: bool = True,
+    ):
+        offset = (page - 1) * limit
+        produtos = self.repo.search_produtos_da_empresa(
+            empresa_id=empresa_id,
+            q=q,
+            cod_categoria=cod_categoria,
+            offset=offset,
+            limit=limit,
+            apenas_disponiveis=apenas_disponiveis,
+            apenas_delivery=apenas_delivery,
+        )
+        total = self.repo.count_search_total(
+            empresa_id=empresa_id,
+            q=q,
+            cod_categoria=cod_categoria,
+            apenas_disponiveis=apenas_disponiveis,
+            apenas_delivery=apenas_delivery,
+        )
+        data = self._to_list_items(produtos, empresa_id)
+        return {"data": data, "total": total, "page": page, "limit": limit, "has_more": offset + limit < total}

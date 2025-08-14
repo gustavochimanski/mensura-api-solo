@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Optional, List
 from decimal import Decimal
 
-from sqlalchemy import func
+from sqlalchemy import func, or_, text
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.delivery.models.cadprod_dv_model import ProdutoDeliveryModel
@@ -14,6 +14,116 @@ from app.api.delivery.models.vitrine_dv_model import VitrinesModel
 class ProdutoDeliveryRepository:
     def __init__(self, db: Session):
         self.db = db
+
+    # ---- helper: unaccent disponível? ----
+    _unaccent_checked: bool = False
+    _has_unaccent_cache: bool = False
+
+    def _has_unaccent(self) -> bool:
+        if self._unaccent_checked:
+            return self._has_unaccent_cache
+        try:
+            # usa bind param para evitar SQL injection
+            self.db.execute(text("SELECT unaccent(:s)"), {"s": "teste"})
+            self._has_unaccent_cache = True
+        except Exception:
+            self._has_unaccent_cache = False
+        self._unaccent_checked = True
+        return self._has_unaccent_cache
+
+    # -------- SEARCH --------
+    def search_produtos_da_empresa(
+        self,
+        *,
+        empresa_id: int,
+        q: Optional[str],
+        cod_categoria: Optional[int],
+        offset: int,
+        limit: int,
+        apenas_disponiveis: bool = False,
+        apenas_delivery: bool = True,
+    ) -> List[ProdutoDeliveryModel]:
+        qry = (
+            self.db.query(ProdutoDeliveryModel)
+            .join(ProdutoEmpDeliveryModel, ProdutoDeliveryModel.cod_barras == ProdutoEmpDeliveryModel.cod_barras)
+            .filter(ProdutoEmpDeliveryModel.empresa_id == empresa_id)
+            .options(
+                joinedload(ProdutoDeliveryModel.categoria),
+                joinedload(ProdutoDeliveryModel.produtos_empresa),
+            )
+            .order_by(ProdutoDeliveryModel.descricao.asc())
+        )
+
+        if cod_categoria is not None:
+            qry = qry.filter(ProdutoDeliveryModel.cod_categoria == cod_categoria)
+
+        if apenas_disponiveis:
+            qry = qry.filter(ProdutoDeliveryModel.ativo.is_(True), ProdutoEmpDeliveryModel.disponivel.is_(True))
+
+        if apenas_delivery:
+            qry = qry.filter(ProdutoEmpDeliveryModel.exibir_delivery.is_(True))
+
+        if q and q.strip():
+            term = f"%{q.strip()}%"
+            if self._has_unaccent():
+                qry = qry.filter(
+                    or_(
+                        func.unaccent(ProdutoDeliveryModel.descricao).ilike(func.unaccent(term)),
+                        ProdutoDeliveryModel.cod_barras.ilike(term),
+                    )
+                )
+            else:
+                qry = qry.filter(
+                    or_(
+                        ProdutoDeliveryModel.descricao.ilike(term),
+                        ProdutoDeliveryModel.cod_barras.ilike(term),
+                    )
+                )
+
+        return qry.offset(offset).limit(limit).all()
+
+    def count_search_total(
+        self,
+        *,
+        empresa_id: int,
+        q: Optional[str],
+        cod_categoria: Optional[int],
+        apenas_disponiveis: bool = False,
+        apenas_delivery: bool = True,
+    ) -> int:
+        qry = (
+            self.db.query(func.count(ProdutoDeliveryModel.cod_barras))
+            .join(ProdutoEmpDeliveryModel, ProdutoDeliveryModel.cod_barras == ProdutoEmpDeliveryModel.cod_barras)
+            .filter(ProdutoEmpDeliveryModel.empresa_id == empresa_id)
+        )
+
+        if cod_categoria is not None:
+            qry = qry.filter(ProdutoDeliveryModel.cod_categoria == cod_categoria)
+
+        if apenas_disponiveis:
+            qry = qry.filter(ProdutoDeliveryModel.ativo.is_(True), ProdutoEmpDeliveryModel.disponivel.is_(True))
+
+        if apenas_delivery:
+            qry = qry.filter(ProdutoEmpDeliveryModel.exibir_delivery.is_(True))
+
+        if q and q.strip():
+            term = f"%{q.strip()}%"
+            if self._has_unaccent():
+                qry = qry.filter(
+                    or_(
+                        func.unaccent(ProdutoDeliveryModel.descricao).ilike(func.unaccent(term)),
+                        ProdutoDeliveryModel.cod_barras.ilike(term),
+                    )
+                )
+            else:
+                qry = qry.filter(
+                    or_(
+                        ProdutoDeliveryModel.descricao.ilike(term),
+                        ProdutoDeliveryModel.cod_barras.ilike(term),
+                    )
+                )
+
+        return int(qry.scalar() or 0)
 
     # -------- Listagem paginada --------
     def buscar_produtos_da_empresa(
