@@ -6,7 +6,7 @@ from app.api.delivery.repositories.repo_home_dv import HomeRepository
 from app.api.mensura.repositories.empresa_repo import EmpresaRepository
 from app.api.delivery.schemas.schema_home_dv import (
     ProdutoEmpMiniDTO, ProdutoMiniDTO, VitrineComProdutosResponse,
-    CategoriaMiniSchema, HomeResponse,
+    CategoriaMiniSchema, HomeResponse, CategoryPageResponse,  # <-- add CategoryPageResponse
 )
 
 def _build_cat_href(slug: str, slug_pai: str | None) -> str:
@@ -16,6 +16,13 @@ class HomeService:
     def __init__(self, db: Session):
         self.repo_home = HomeRepository(db)
         self.repo_empresa = EmpresaRepository(db)
+
+    # util: resolve ID por slug (reuso no router antigo)
+    def resolve_categoria_id_por_slug(self, slug: str) -> int:
+        cat = self.repo_home.get_categoria_by_slug(slug)
+        if not cat:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Categoria não encontrada")
+        return cat.id
 
     def _map_categorias(self, cats) -> List[CategoriaMiniSchema]:
         return [
@@ -28,26 +35,26 @@ class HomeService:
                 posicao=c.posicao,
                 imagem=c.imagem,
                 label=c.descricao,
-                href=_build_cat_href(c.slug, c.parent.slug if c.parent else None),  # <- ajustado
+                href=_build_cat_href(c.slug, c.parent.slug if c.parent else None),
             )
             for c in cats
         ]
 
     def montar_home(self, empresa_id: int, is_home: bool) -> HomeResponse:
+        # ... (igual ao seu código atual) ...
+        # (sem mudanças aqui)
+        # return HomeResponse(categorias=cats, vitrines=vitrines_resp)
+        #  (mantido)
         if not self.repo_empresa.get_empresa_by_id(empresa_id):
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Empresa não encontrada")
 
-        # Categorias
         cats = self._map_categorias(self.repo_home.listar_categorias(is_home=is_home))
-
-        # Vitrines (já com categoria + parent carregados)
         vitrines = self.repo_home.listar_vitrines(is_home=is_home)
         vitrine_ids = [v.id for v in vitrines]
         produtos_map = self.repo_home.listar_produtos_por_vitrine_ids(empresa_id, vitrine_ids)
 
         vitrines_resp: List[VitrineComProdutosResponse] = []
         for v in vitrines:
-            # 👇 categoria “principal” (1ª do vínculo) para compat
             cat0 = v.categorias[0] if v.categorias else None
             slug = cat0.slug if cat0 else None
             slug_pai = cat0.parent.slug if (cat0 and cat0.parent) else None
@@ -58,7 +65,7 @@ class HomeService:
                     empresa_id=p.empresa_id,
                     cod_barras=p.cod_barras,
                     preco_venda=float(p.preco_venda),
-                    vitrine_id=v.id,  # 👈 vitrine do CONTEXTO
+                    vitrine_id=v.id,
                     disponivel=p.disponivel,
                     produto=ProdutoMiniDTO(
                         cod_barras=p.produto.cod_barras,
@@ -78,7 +85,7 @@ class HomeService:
                     titulo=v.titulo,
                     slug=v.slug,
                     ordem=v.ordem,
-                    cod_categoria=(cat0.id if cat0 else None),  # 👈 compat
+                    cod_categoria=(cat0.id if cat0 else None),
                     is_home=bool(v.is_home),
                     produtos=produtos_dto,
                     href_categoria=href_categoria,
@@ -87,18 +94,15 @@ class HomeService:
         return HomeResponse(categorias=cats, vitrines=vitrines_resp)
 
     def vitrines_com_produtos(self, empresa_id: int, cod_categoria: int) -> List[VitrineComProdutosResponse]:
+        # ... (igual ao seu código atual) ...
         if not self.repo_empresa.get_empresa_by_id(empresa_id):
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Empresa não encontrada")
 
-        # Produtos apenas das vitrines vinculadas à categoria
         produtos_map = self.repo_home.listar_vitrines_com_produtos_empresa_categoria(empresa_id, cod_categoria)
-
-        # Vitrines ligadas à categoria (sem filtro de home)
         vitrines_cat = self.repo_home.listar_vitrines_por_categoria(cod_categoria)
 
         out: List[VitrineComProdutosResponse] = []
         for v in vitrines_cat:
-            # Usa a categoria do filtro para coerência de href/cod_categoria
             cat_match = next((c for c in v.categorias if c.id == cod_categoria), None)
             cat_ref = cat_match or (v.categorias[0] if v.categorias else None)
 
@@ -131,11 +135,29 @@ class HomeService:
                     titulo=v.titulo,
                     slug=v.slug,
                     ordem=v.ordem,
-                    cod_categoria=cod_categoria,       # 👈 coerente com o filtro
-                    is_home=bool(v.is_home),           # ainda expõe o flag da vitrine
+                    cod_categoria=cod_categoria,
+                    is_home=bool(v.is_home),
                     produtos=produtos_dto,
                     href_categoria=href_categoria,
                 )
             )
         return out
 
+    # 🆕 NOVO: página de categoria por slug (categoria + subcategorias + vitrines)
+    def categoria_page(self, empresa_id: int, slug: str) -> CategoryPageResponse:
+        if not self.repo_empresa.get_empresa_by_id(empresa_id):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Empresa não encontrada")
+
+        cat = self.repo_home.get_categoria_by_slug(slug)
+        if not cat:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Categoria não encontrada")
+
+        categoria = self._map_categorias([cat])[0]
+        subcats = self._map_categorias(self.repo_home.listar_subcategorias(cat.id))
+        vitrines = self.vitrines_com_produtos(empresa_id, cat.id)
+
+        return CategoryPageResponse(
+            categoria=categoria,
+            subcategorias=subcats,
+            vitrines=vitrines,
+        )

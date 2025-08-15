@@ -133,3 +133,23 @@ class HomeRepository:
         for vit_id, prod_emp in rows:
             out.setdefault(vit_id, []).append(prod_emp)
         return out
+
+
+    # 🆕 Busca categoria por slug
+    def get_categoria_by_slug(self, slug: str) -> Optional[CategoriaDeliveryModel]:
+        return (
+            self.db.query(CategoriaDeliveryModel)
+            .options(joinedload(CategoriaDeliveryModel.parent))
+            .filter(CategoriaDeliveryModel.slug == slug)
+            .first()
+        )
+
+    # 🆕 Lista subcategorias de um pai
+    def listar_subcategorias(self, parent_id: int) -> List[CategoriaDeliveryModel]:
+        return (
+            self.db.query(CategoriaDeliveryModel)
+            .options(joinedload(CategoriaDeliveryModel.parent))
+            .filter(CategoriaDeliveryModel.parent_id == parent_id)
+            .order_by(CategoriaDeliveryModel.posicao)
+            .all()
+        )
