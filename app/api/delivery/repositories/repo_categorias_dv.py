@@ -66,8 +66,6 @@ class CategoriaDeliveryRepository:
         # Se mandarem "slug" como texto livre, normalize
         if "slug" in update_data and update_data["slug"]:
             update_data["slug"] = make_slug(update_data["slug"])
-
-        # (Opcional) se quiser reslugificar ao mudar a descrição quando não for enviado "slug"
         if "descricao" in update_data and update_data["descricao"] and not update_data.get("slug"):
             update_data["slug"] = make_slug(update_data["descricao"])
 
