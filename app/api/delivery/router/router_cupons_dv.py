@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 
 from app.database.db_connection import get_db
-from app.api.delivery.services.cupom_service import CuponsService
+from app.api.delivery.services.service_cupom import CuponsService
 from app.api.delivery.schemas.schema_cupom_dv import (
     CupomOut, CupomCreate, CupomUpdate
 )

@@ -10,7 +10,7 @@ from app.database.db_connection import get_db
 from app.api.delivery.repositories.repo_categorias_dv import CategoriaDeliveryRepository
 from app.api.delivery.schemas.schema_categoria_dv import (
     CategoriaDeliveryIn,
-    CategoriaDeliveryOut, CategoriaSearchOut
+    CategoriaDeliveryOut, CategoriaSearchOut, CategoriaFlatOut
 )
 from app.utils.logger import logger
 from app.utils.minio_client import upload_file_to_minio
@@ -205,3 +205,34 @@ async def upload_imagem_categoria(
         href=f"/categoria/{c.slug}",
         posicao=c.posicao,
     )
+
+
+# -------- FLAT (NOVA) --------
+@router.get("/flat", response_model=List[CategoriaFlatOut])
+def list_categorias_flat(
+    empresa_id: Optional[int] = Query(None, description="(Opcional) Escopo por empresa, se aplicável"),
+    parent_id: Optional[int] = Query(None, description="Filtra por ID do pai"),
+    only_root: bool = Query(False, description="Se true, retorna apenas categorias raiz"),
+    db: Session = Depends(get_db),
+):
+    """
+    Retorna categorias 'flat' (raiz + filhas), com campos prontos para o frontend:
+    id, slug, parent_id, descricao, posicao, imagem, label, href, slug_pai.
+    """
+    repos = CategoriaDeliveryRepository(db)
+    cats = repos.list_all_flat(parent_id=parent_id, only_root=only_root)
+
+    return [
+        CategoriaFlatOut(
+            id=c.id,
+            slug=c.slug,
+            parent_id=c.parent_id,
+            descricao=c.descricao,
+            posicao=c.posicao,
+            imagem=c.imagem,
+            label=c.descricao,                     # <- label = descricao
+            href=f"/categoria/{c.slug}",           # <- href esperado pelo front
+            slug_pai=(c.parent.slug if c.parent else None),
+        )
+        for c in cats
+    ]

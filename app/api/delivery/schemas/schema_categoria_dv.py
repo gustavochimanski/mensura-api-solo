@@ -32,3 +32,17 @@ class CategoriaSearchOut(BaseModel):
     imagem: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class CategoriaFlatOut(BaseModel):
+    id: int
+    slug: str
+    parent_id: Optional[int] = None
+    descricao: str
+    posicao: int
+    imagem: Optional[str] = None
+    label: str
+    href: str
+    slug_pai: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)

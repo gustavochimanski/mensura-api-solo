@@ -193,3 +193,32 @@ class CategoriaDeliveryRepository:
                 base = base.filter(cond)
 
         return base.offset(offset).limit(limit).all()
+
+
+    def list_all_flat(
+        self,
+        parent_id: Optional[int] = None,
+        only_root: bool = False,
+    ) -> List[CategoriaDeliveryModel]:
+        """
+        Retorna categorias em lista 'flat', ordenadas: raiz primeiro, depois irmãs por posicao.
+        Se parent_id for informado, lista apenas filhas desse pai.
+        Se only_root=True, lista apenas categorias raiz.
+        """
+        q = (
+            self.db.query(CategoriaDeliveryModel)
+            .options(joinedload(CategoriaDeliveryModel.parent))
+        )
+
+        if parent_id is not None:
+            q = q.filter(CategoriaDeliveryModel.parent_id == parent_id)
+        elif only_root:
+            q = q.filter(CategoriaDeliveryModel.parent_id.is_(None))
+
+        q = q.order_by(
+            # raiz primeiro (False < True)
+            CategoriaDeliveryModel.parent_id.isnot(None),
+            CategoriaDeliveryModel.parent_id,
+            CategoriaDeliveryModel.posicao,
+        )
+        return q.all()
