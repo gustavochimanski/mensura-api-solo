@@ -98,6 +98,8 @@ def editar_categoria(
 ):
     repos = CategoriaDeliveryRepository(db)
     c = repos.update(cat_id, body.model_dump(exclude_unset=True))
+    if not c:
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Falha ao atualizar categoria")
     return CategoriaDeliveryOut(
         id=c.id,
         label=c.descricao,
@@ -108,7 +110,6 @@ def editar_categoria(
         href=f"/categoria/{c.slug}",
         posicao=c.posicao,
     )
-
 # -------- DELETAR --------
 @router.delete(
     "/{cat_id}",

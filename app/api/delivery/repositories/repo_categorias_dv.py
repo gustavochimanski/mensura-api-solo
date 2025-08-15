@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import Optional, List
 from sqlalchemy import select, func, or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 from fastapi import HTTPException, status
 from app.utils.slug_utils import make_slug
@@ -63,16 +64,49 @@ class CategoriaDeliveryRepository:
     def update(self, cat_id: int, update_data: dict) -> CategoriaDeliveryModel:
         cat = self.get_by_id(cat_id)
 
-        # Se mandarem "slug" como texto livre, normalize
-        if "slug" in update_data and update_data["slug"]:
-            update_data["slug"] = make_slug(update_data["slug"])
-        if "descricao" in update_data and update_data["descricao"] and not update_data.get("slug"):
-            update_data["slug"] = make_slug(update_data["descricao"])
+        # --- Higienização de slug ---
+        if "slug" in update_data:
+            raw = update_data["slug"]
+            if raw:  # veio algo truthy -> normaliza
+                update_data["slug"] = make_slug(raw)
+            else:
+                # veio vazio/None -> recomputa baseado na descrição nova ou atual
+                base = update_data.get("descricao") or cat.descricao
+                update_data["slug"] = make_slug(base)
 
+            # Unicidade do slug (excluindo a própria categoria)
+            existe = (
+                self.db.query(CategoriaDeliveryModel)
+                .filter(
+                    CategoriaDeliveryModel.slug == update_data["slug"],
+                    CategoriaDeliveryModel.id != cat_id
+                )
+                .first()
+            )
+            if existe:
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, "Já existe uma categoria com esse slug.")
+
+        # (Opcional) Se descrição mudar e você quiser manter o slug existente, não faça nada aqui.
+        # Se preferir "slug segue descrição quando não for enviado", descomente:
+        # elif "descricao" in update_data and update_data["descricao"]:
+        #     update_data["slug"] = make_slug(update_data["descricao"])
+
+        # --- Atribuição dos campos permitidos ---
         for key in ("descricao", "slug", "parent_id", "imagem", "posicao"):
             if key in update_data and update_data[key] is not None:
                 setattr(cat, key, update_data[key])
-        # commit/rollback como está
+
+        try:
+            self.db.commit()
+        except IntegrityError:
+            self.db.rollback()
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Violação de unicidade/constraint ao atualizar categoria")
+        except Exception:
+            self.db.rollback()
+            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Erro ao atualizar categoria")
+
+        self.db.refresh(cat)   # garante objeto atualizado
+        return cat
 
     def delete(self, cat_id: int) -> None:
         cat = self.get_by_id(cat_id)

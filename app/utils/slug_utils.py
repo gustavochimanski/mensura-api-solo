@@ -1,6 +1,5 @@
 # app/utils/slug_utils.py
-import re
-import unicodedata
+import re, unicodedata
 from typing import Optional
 from slugify import slugify as _slugify
 
@@ -9,7 +8,7 @@ _EXPLICIT_REPLACEMENTS = [
     ("%", " percent "),
     ("º", "o"), ("ª", "a"),
     ("°", "o"),
-    ("ç", "c"), ("Ç", "c"),   # redundante, mas garante
+    ("ç", "c"), ("Ç", "c"),
 ]
 
 def _ascii_fallback(text: str) -> str:
@@ -26,6 +25,6 @@ def make_slug(text: Optional[str]) -> str:
         separator="-",
         lowercase=True,
         replacements=_EXPLICIT_REPLACEMENTS,
-        allow_unicode=False,     # garante ASCII
+        allow_unicode=False,
     )
     return s or _ascii_fallback(text)
