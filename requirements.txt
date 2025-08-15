@@ -5,8 +5,8 @@ gunicorn[uvicorn]==21.2.0
 
 # ORM / Banco
 SQLAlchemy==2.0.29
-#psycopg2-binary==2.9.9          # escolha APENAS UM driver: este (sync) OU asyncpg (async)
-asyncpg==0.27.0               # descomente se for usar SQLAlchemy async e remova o psycopg2-binary
+psycopg2-binary==2.9.9          # escolha APENAS UM driver: este (sync) OU asyncpg (async)
+# asyncpg==0.27.0               # descomente se for usar SQLAlchemy async e remova o psycopg2-binary
 alembic==1.13.2
 
 # Utilidades
