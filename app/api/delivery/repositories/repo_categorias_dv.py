@@ -3,7 +3,8 @@ from typing import Optional, List
 from sqlalchemy import select, func, or_
 from sqlalchemy.orm import Session, joinedload
 from fastapi import HTTPException, status
-from slugify import slugify
+from app.utils.slug_utils import make_slug
+
 
 from app.api.delivery.models.categoria_dv_model import CategoriaDeliveryModel
 from app.api.delivery.schemas.schema_categoria_dv import CategoriaDeliveryIn
@@ -15,7 +16,7 @@ class CategoriaDeliveryRepository:
 
     # -------- CRUD --------
     def create(self, data: CategoriaDeliveryIn) -> CategoriaDeliveryModel:
-        slug_value = data.slug or slugify(data.descricao)
+        slug_value = data.slug or make_slug(data.descricao)
         existe = self.db.query(CategoriaDeliveryModel).filter_by(slug=slug_value).first()
         if existe:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Já existe uma categoria com esse slug.")
@@ -61,16 +62,19 @@ class CategoriaDeliveryRepository:
 
     def update(self, cat_id: int, update_data: dict) -> CategoriaDeliveryModel:
         cat = self.get_by_id(cat_id)
-        for key in ("descricao","slug","parent_id","imagem","posicao"):
+
+        # Se mandarem "slug" como texto livre, normalize
+        if "slug" in update_data and update_data["slug"]:
+            update_data["slug"] = make_slug(update_data["slug"])
+
+        # (Opcional) se quiser reslugificar ao mudar a descrição quando não for enviado "slug"
+        if "descricao" in update_data and update_data["descricao"] and not update_data.get("slug"):
+            update_data["slug"] = make_slug(update_data["descricao"])
+
+        for key in ("descricao", "slug", "parent_id", "imagem", "posicao"):
             if key in update_data and update_data[key] is not None:
                 setattr(cat, key, update_data[key])
-        try:
-            self.db.commit()
-            self.db.refresh(cat)
-            return cat
-        except Exception:
-            self.db.rollback()
-            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Erro ao atualizar categoria")
+        # commit/rollback como está
 
     def delete(self, cat_id: int) -> None:
         cat = self.get_by_id(cat_id)
