@@ -158,30 +158,27 @@ class HomeRepository:
             self, categoria_ids: List[int]
     ) -> Dict[int, VitrinesModel]:
         """
-        Retorna um dict {categoria_id: VitrinesModel} contendo a Vitrine associada
-        a cada categoria em `categoria_ids` onde VitrineCategoriaLink.posicao == 1.
-        Categories sem vitrine com posicao==1 não aparecem no dict.
+        Retorna um dict {categoria_id: VitrinesModel} contendo a vitrine de menor `ordem`
+        para cada categoria em `categoria_ids`.
         """
         if not categoria_ids:
             return {}
 
-        rows: List[Tuple[int, VitrinesModel]] = (
-            self.db.query(VitrineCategoriaLink.categoria_id, VitrinesModel)
-            .join(VitrinesModel, VitrineCategoriaLink.vitrine_id == VitrinesModel.id)
-            .filter(
-                VitrineCategoriaLink.categoria_id.in_(categoria_ids),
-                VitrineCategoriaLink.posicao == 1,
-            )
-            .options(
-                joinedload(VitrinesModel.categorias)
-                .joinedload(CategoriaDeliveryModel.parent)
-            )
-            .order_by(VitrineCategoriaLink.categoria_id)
-            .all()
-        )
-
         out: Dict[int, VitrinesModel] = {}
-        for categoria_id, vitrine in rows:
-            # se houver duplicidade por algum motivo, o primeiro prevalece
-            out.setdefault(categoria_id, vitrine)
+
+        for cat_id in categoria_ids:
+            vit = (
+                self.db.query(VitrinesModel)
+                .join(VitrineCategoriaLink, VitrineCategoriaLink.vitrine_id == VitrinesModel.id)
+                .filter(VitrineCategoriaLink.categoria_id == cat_id)
+                .options(
+                    joinedload(VitrinesModel.categorias)
+                    .joinedload(CategoriaDeliveryModel.parent)
+                )
+                .order_by(VitrinesModel.ordem.asc())  # aqui usamos ordem, não posicao
+                .first()  # pega só a primeira vitrine
+            )
+            if vit:
+                out[cat_id] = vit
+
         return out
