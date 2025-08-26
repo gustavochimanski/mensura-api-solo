@@ -8,7 +8,7 @@ class EnderecoDeliveryModel(Base):
     __table_args__ = {"schema": "delivery"}
 
     id          = Column(Integer, primary_key=True, autoincrement=True)
-    cliente_id  = Column(Integer, ForeignKey("delivery.clientes_dv.id", ondelete="CASCADE"), nullable=False)
+    cliente_id  = Column(Integer, ForeignKey("delivery.clientes_dv.telefone", ondelete="CASCADE"), nullable=False)
 
     cep         = Column(String(10),  nullable=True)
     logradouro  = Column(String(100), nullable=True)

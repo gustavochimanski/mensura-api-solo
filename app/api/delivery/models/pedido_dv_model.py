@@ -27,7 +27,7 @@ class PedidoDeliveryModel(Base):
     __table_args__ = {"schema": "delivery"}
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    cliente_id = Column(Integer, ForeignKey("delivery.clientes_dv.id", ondelete="SET NULL"))
+    cliente_id = Column(Integer, ForeignKey("delivery.clientes_dv.telefone", ondelete="SET NULL"))
     empresa_id = Column(Integer, ForeignKey("mensura.empresas.id", ondelete="RESTRICT"), nullable=False)
     entregador_id = Column(Integer, ForeignKey("delivery.entregadores_dv.id", ondelete="SET NULL"))
     endereco_id = Column(Integer, ForeignKey("delivery.enderecos_dv.id", ondelete="SET NULL"), nullable=True)
