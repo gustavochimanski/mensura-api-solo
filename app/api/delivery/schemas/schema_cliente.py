@@ -28,3 +28,4 @@ class ClienteUpdate(BaseModel):
     email: Optional[EmailStr] = None
     data_nascimento: Optional[date] = None
     ativo: Optional[bool] = None
+#
