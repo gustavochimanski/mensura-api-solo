@@ -12,8 +12,8 @@ class ClienteRepository:
     def get_current(self) -> Optional[ClienteDeliveryModel]:
         return self.db.query(ClienteDeliveryModel).first()
 
-    def get_by_id(self, cliente_id: int) -> Optional[ClienteDeliveryModel]:
-        return self.db.get(ClienteDeliveryModel, cliente_id)
+    def get_by_id(self, number_client: int) -> Optional[ClienteDeliveryModel]:
+        return self.db.get(ClienteDeliveryModel, number_client)
 
     def get_by_email(self, email: str) -> Optional[ClienteDeliveryModel]:
         return self.db.query(ClienteDeliveryModel).filter(ClienteDeliveryModel.email == email).first()
@@ -41,8 +41,8 @@ class ClienteRepository:
         self.db.refresh(db_obj)
         return db_obj
 
-    def set_ativo(self, cliente_id: int, ativo: bool) -> ClienteDeliveryModel:
-        obj = self.get_by_id(cliente_id)
+    def set_ativo(self, number_client: int, ativo: bool) -> ClienteDeliveryModel:
+        obj = self.get_by_id(number_client)
         if not obj:
             return None
         obj.ativo = ativo

@@ -24,12 +24,12 @@ def create_new_cliente(
     cliente =ClienteService(db).create(data)
     return cliente
 
-@router.put("/{cliente_id}", response_model=ClienteOut, status_code=status.HTTP_200_OK, dependencies=[Depends(get_current_user)])
+@router.put("/{number_client}", response_model=ClienteOut, status_code=status.HTTP_200_OK, dependencies=[Depends(get_current_user)])
 def update_existing_cliente(
-    cliente_id: int,
+    number_client: int,
     data: ClienteUpdate,
     db: Session = Depends(get_db)
 ):
-    logger.info(f"[Cliente] Update ID={cliente_id}")
-    updated = ClienteService(db).update(cliente_id, data)
+    logger.info(f"[Cliente] Update ID={number_client}")
+    updated = ClienteService(db).update(number_client, data)
     return updated

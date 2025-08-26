@@ -9,7 +9,7 @@ class ItemPedidoRequest(BaseModel):
     observacao: Optional[str] = None
 
 class FinalizarPedidoRequest(BaseModel):
-    cliente_id: Optional[int] = None
+    number_client: Optional[int] = None
     empresa_id: int
     endereco_id: Optional[int] = None
     tipo_entrega: TipoEntregaEnum = TipoEntregaEnum.DELIVERY
@@ -34,7 +34,7 @@ class ItemPedidoResponse(BaseModel):
 class PedidoResponse(BaseModel):
     id: int
     status: PedidoStatusEnum
-    cliente_id: Optional[int]
+    number_client: Optional[int]
     empresa_id: int
     entregador_id: Optional[int]
     endereco_id: Optional[int]
