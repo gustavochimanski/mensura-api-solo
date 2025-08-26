@@ -1,6 +1,6 @@
 from typing import List, Optional
 from datetime import datetime
-from pydantic import BaseModel, condecimal, ConfigDict
+from pydantic import BaseModel, ConfigDict, condecimal
 from .schema_shared_enums import PedidoStatusEnum, TipoEntregaEnum, OrigemPedidoEnum
 
 class ItemPedidoRequest(BaseModel):
@@ -8,26 +8,15 @@ class ItemPedidoRequest(BaseModel):
     quantidade: int
     observacao: Optional[str] = None
 
-class EnderecoPedido(BaseModel):
-    rua: str
-    numero: str
-    complemento: Optional[str] = None
-    bairro: str
-    cidade: str
-    uf: str
-    cep: str
-
 class FinalizarPedidoRequest(BaseModel):
-    cliente_number: str  # telefone
-    cliente_nome: Optional[str] = None
+    cliente_id: Optional[int] = None
     empresa_id: int
-    endereco: EnderecoPedido
+    endereco_id: Optional[int] = None
     tipo_entrega: TipoEntregaEnum = TipoEntregaEnum.DELIVERY
     origem: OrigemPedidoEnum = OrigemPedidoEnum.WEB
     observacao_geral: Optional[str] = None
     cupom_id: Optional[int] = None
     troco_para: Optional[condecimal(max_digits=18, decimal_places=2)] = None
-    meio_pagamento: str  # "D" ou "C"
     itens: List[ItemPedidoRequest]
 
 class ItemPedidoResponse(BaseModel):
@@ -36,6 +25,7 @@ class ItemPedidoResponse(BaseModel):
     quantidade: int
     preco_unitario: float
     observacao: Optional[str] = None
+    # snapshots
     produto_descricao_snapshot: Optional[str] = None
     produto_imagem_snapshot: Optional[str] = None
 
@@ -50,7 +40,6 @@ class PedidoResponse(BaseModel):
     endereco_id: Optional[int]
     tipo_entrega: TipoEntregaEnum
     origem: OrigemPedidoEnum
-    meio_pagamento: str
 
     subtotal: float
     desconto: float
