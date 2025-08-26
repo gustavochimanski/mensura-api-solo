@@ -32,7 +32,7 @@ class PedidoRepository:
             self.db.query(EnderecoDeliveryModel)
             .filter_by(
                 cliente_id=cliente_id,
-                rua=endereco.rua,
+                logradouro=endereco.rua,
                 numero=endereco.numero,
                 bairro=endereco.bairro,
                 cidade=endereco.cidade,
@@ -45,7 +45,7 @@ class PedidoRepository:
     def criar_endereco(self, cliente_id: int, endereco) -> EnderecoDeliveryModel:
         end = EnderecoDeliveryModel(
             cliente_id=cliente_id,
-            rua=endereco.rua,
+            logradouro=endereco.rua,
             numero=endereco.numero,
             complemento=endereco.complemento,
             bairro=endereco.bairro,
