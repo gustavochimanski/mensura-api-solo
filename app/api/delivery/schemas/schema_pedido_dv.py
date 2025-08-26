@@ -19,6 +19,7 @@ class EnderecoPedido(BaseModel):
 
 class FinalizarPedidoRequest(BaseModel):
     cliente_number: str  # telefone
+    cliente_nome: Optional[str] = None
     empresa_id: int
     endereco: EnderecoPedido
     tipo_entrega: TipoEntregaEnum = TipoEntregaEnum.DELIVERY
