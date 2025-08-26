@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Path, Query, status
 from sqlalchemy.orm import Session
 from typing import List
 
-from app.api.delivery.services.endereco_dv_service import EnderecosService
+from app.api.delivery.services.service_endereco_dv import EnderecosService
 from app.database.db_connection import get_db
 from app.api.delivery.schemas.schema_endereco_dv import (
   EnderecoOut , EnderecoCreate, EnderecoUpdate

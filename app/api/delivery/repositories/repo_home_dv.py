@@ -153,3 +153,21 @@ class HomeRepository:
             .order_by(CategoriaDeliveryModel.posicao)
             .all()
         )
+
+    def listar_primeira_vitrine_por_categoria(
+        self, categoria_id: int
+    ) -> Optional[VitrinesModel]:
+        """
+        Retorna apenas a 1ª vitrine associada a uma categoria (menor posicao).
+        """
+        return (
+            self.db.query(VitrinesModel)
+            .join(VitrineCategoriaLink, VitrineCategoriaLink.vitrine_id == VitrinesModel.id)
+            .filter(VitrineCategoriaLink.categoria_id == categoria_id)
+            .options(
+                joinedload(VitrinesModel.categorias)
+                .joinedload(CategoriaDeliveryModel.parent)
+            )
+            .order_by(VitrineCategoriaLink.posicao, VitrinesModel.ordem)
+            .first()
+        )

@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from app.database.db_connection import get_db
-from app.api.delivery.services.entregadores_service import EntregadoresService
+from app.api.delivery.services.service_entregadores import EntregadoresService
 from app.api.delivery.schemas.schema_entregador_dv import (
     EntregadorOut, EntregadorCreate, EntregadorUpdate
 )

@@ -14,7 +14,7 @@ from app.api.delivery.schemas.schema_shared_enums import (
     PedidoStatusEnum, TipoEntregaEnum, OrigemPedidoEnum,
     PagamentoMetodoEnum, PagamentoGatewayEnum, PagamentoStatusEnum
 )
-from app.api.delivery.services.pagamento_gateway_service import PaymentGatewayClient
+from app.api.delivery.services.service_pagamento_gateway import PaymentGatewayClient
 
 QTD_MAX_ITENS = 200
 

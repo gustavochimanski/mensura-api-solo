@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Query, status, Body, Path
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.api.delivery.services.vitrines_service import VitrinesService
+from app.api.delivery.services.service_vitrines import VitrinesService
 from app.api.delivery.schemas.schema_vitrine import (
     CriarVitrineRequest, AtualizarVitrineRequest, VitrineOut
 )

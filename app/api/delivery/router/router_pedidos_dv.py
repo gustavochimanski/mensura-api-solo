@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.api.delivery.schemas.schema_pedido_dv import FinalizarPedidoRequest, PedidoResponse
 from app.api.delivery.schemas.schema_shared_enums import PagamentoMetodoEnum, PagamentoGatewayEnum
-from app.api.delivery.services.pedido_service import PedidoService
+from app.api.delivery.services.service_pedido import PedidoService
 from app.database.db_connection import get_db
 from app.utils.logger import logger
 

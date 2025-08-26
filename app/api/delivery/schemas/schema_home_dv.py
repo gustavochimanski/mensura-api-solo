@@ -60,4 +60,5 @@ class CategoryPageResponse(BaseModel):
     categoria: CategoriaMiniSchema
     subcategorias: List[CategoriaMiniSchema]
     vitrines: List[VitrineComProdutosResponse]
+    vitrines_filho: List[VitrineComProdutosResponse]
     model_config = ConfigDict(from_attributes=True)
