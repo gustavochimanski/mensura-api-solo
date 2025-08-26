@@ -53,7 +53,7 @@ class PedidoDeliveryModel(Base):
     data_criacao = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     data_atualizacao = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
-    cliente = relationship("ClienteDeliveryModel", back_populates="pedidos")
+    cliente_telefone = Column(String(20), ForeignKey("delivery.clientes_dv.telefone"), nullable=True)
     empresa = relationship("EmpresaModel", back_populates="pedidos")
     entregador = relationship("EntregadorDeliveryModel", back_populates="pedidos")
     endereco = relationship("EnderecoDeliveryModel", back_populates="pedidos")

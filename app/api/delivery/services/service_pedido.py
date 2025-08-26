@@ -33,7 +33,7 @@ class PedidoService:
         return PedidoResponse(
             id=pedido.id,
             status=PedidoStatusEnum(pedido.status),
-            cliente_id=pedido.cliente_id,
+            telefone_cliente=pedido.cliente_telefone,
             empresa_id=pedido.empresa_id,
             entregador_id=getattr(pedido, "entregador_id", None),
             endereco_id=pedido.endereco_id,
@@ -116,8 +116,8 @@ class PedidoService:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Empresa não encontrada")
 
         # validações de cliente/endereço
-        if payload.cliente_id:
-            cliente = self.repo.get_cliente(payload.cliente_id)
+        if payload.telefone_cliente:
+            cliente = self.repo.get_cliente(payload.telefone_cliente)
             if not cliente:
                 raise HTTPException(status.HTTP_404_NOT_FOUND, "Cliente não encontrado")
 
@@ -126,12 +126,12 @@ class PedidoService:
 
             if payload.endereco_id:
                 endereco = self.repo.get_endereco(payload.endereco_id)
-                if not endereco or endereco.cliente_id != payload.cliente_id:
+                if not endereco or endereco.cliente_telefone != payload.telefone_cliente:
                     raise HTTPException(status.HTTP_400_BAD_REQUEST, "Endereço inválido para o cliente")
 
         try:
             pedido = self.repo.criar_pedido(
-                cliente_id=payload.cliente_id,
+                cliente_telefone=payload.telefone_cliente,
                 empresa_id=payload.empresa_id,
                 endereco_id=payload.endereco_id,
                 status=PedidoStatusEnum.P.value,

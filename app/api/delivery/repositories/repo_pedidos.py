@@ -19,8 +19,8 @@ class PedidoRepository:
         self.db = db
 
     # --- Validations / Queries ---
-    def get_cliente(self, number_client: int) -> Optional[ClienteDeliveryModel]:
-        return self.db.get(ClienteDeliveryModel, number_client)
+    def get_cliente(self, telefone: str) -> Optional[ClienteDeliveryModel]:
+        return self.db.get(ClienteDeliveryModel, telefone)
 
     def get_endereco(self, endereco_id: int) -> Optional[EnderecoDeliveryModel]:
         return self.db.get(EnderecoDeliveryModel, endereco_id)
@@ -54,7 +54,7 @@ class PedidoRepository:
     def criar_pedido(
         self,
         *,
-        number_client: int | None,
+        cliente_telefone: str | None,
         empresa_id: int,
         endereco_id: int | None,
         status: str = "P",
@@ -62,7 +62,7 @@ class PedidoRepository:
         origem: str,
     ) -> PedidoDeliveryModel:
         pedido = PedidoDeliveryModel(
-            number_client=number_client,
+            cliente_telefone=cliente_telefone,
             empresa_id=empresa_id,
             endereco_id=endereco_id,
             status=status,

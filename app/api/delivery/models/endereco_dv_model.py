@@ -7,8 +7,10 @@ class EnderecoDeliveryModel(Base):
     __tablename__ = "enderecos_dv"
     __table_args__ = {"schema": "delivery"}
 
-    id          = Column(Integer, primary_key=True, autoincrement=True)
-    cliente_id  = Column(Integer, ForeignKey("delivery.clientes_dv.telefone", ondelete="CASCADE"), nullable=False)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    # FK para cliente (telefone como PK)
+    cliente_telefone = Column(String(20), ForeignKey("delivery.clientes_dv.telefone", ondelete="CASCADE"), nullable=False)
 
     cep         = Column(String(10),  nullable=True)
     logradouro  = Column(String(100), nullable=True)
@@ -27,6 +29,7 @@ class EnderecoDeliveryModel(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
+    # relacionamentos
     cliente = relationship("ClienteDeliveryModel", back_populates="enderecos")
     pedidos = relationship("PedidoDeliveryModel", back_populates="endereco", cascade="all, delete-orphan")
 

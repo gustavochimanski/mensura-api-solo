@@ -9,7 +9,7 @@ class ItemPedidoRequest(BaseModel):
     observacao: Optional[str] = None
 
 class FinalizarPedidoRequest(BaseModel):
-    number_client: Optional[int] = None
+    telefone_cliente: Optional[str] = None
     empresa_id: int
     endereco_id: Optional[int] = None
     tipo_entrega: TipoEntregaEnum = TipoEntregaEnum.DELIVERY
@@ -18,6 +18,7 @@ class FinalizarPedidoRequest(BaseModel):
     cupom_id: Optional[int] = None
     troco_para: Optional[condecimal(max_digits=18, decimal_places=2)] = None
     itens: List[ItemPedidoRequest]
+
 
 class ItemPedidoResponse(BaseModel):
     id: int
@@ -34,7 +35,7 @@ class ItemPedidoResponse(BaseModel):
 class PedidoResponse(BaseModel):
     id: int
     status: PedidoStatusEnum
-    number_client: Optional[int]
+    telefone_cliente: Optional[str] = None
     empresa_id: int
     entregador_id: Optional[int]
     endereco_id: Optional[int]
