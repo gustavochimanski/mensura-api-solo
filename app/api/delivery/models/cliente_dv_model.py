@@ -14,7 +14,7 @@ class ClienteDeliveryModel(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     nome = Column(String(100), nullable=False)
     cpf = Column(String(14), unique=True, nullable=True)
-    telefone = Column(String(20), nullable=True)
+    telefone = Column(String(20), nullable=True, primary_key=True)
     email = Column(String(100), nullable=True)
     data_nascimento = Column(Date, nullable=True)
     ativo = Column(Boolean, default=True, nullable=False)

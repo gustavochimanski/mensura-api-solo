@@ -134,8 +134,8 @@ class PedidoService:
                 cliente_id=payload.cliente_id,
                 empresa_id=payload.empresa_id,
                 endereco_id=payload.endereco_id,
-                status=PedidoStatusEnum.P.value,                     # <- ok
-                tipo_entrega=payload.tipo_entrega.value,            # <- FIX: era "on="
+                status=PedidoStatusEnum.P.value,
+                tipo_entrega=payload.tipo_entrega,
                 origem=payload.origem.value,
             )
 
