@@ -154,20 +154,34 @@ class HomeRepository:
             .all()
         )
 
-    def listar_primeira_vitrine_por_categoria(
-        self, categoria_id: int
-    ) -> Optional[VitrinesModel]:
+    def listar_primeiras_vitrines_por_categorias(
+            self, categoria_ids: List[int]
+    ) -> Dict[int, VitrinesModel]:
         """
-        Retorna apenas a 1ª vitrine associada a uma categoria (menor posicao).
+        Retorna um dict {categoria_id: VitrinesModel} contendo a Vitrine associada
+        a cada categoria em `categoria_ids` onde VitrineCategoriaLink.posicao == 1.
+        Categories sem vitrine com posicao==1 não aparecem no dict.
         """
-        return (
-            self.db.query(VitrinesModel)
-            .join(VitrineCategoriaLink, VitrineCategoriaLink.vitrine_id == VitrinesModel.id)
-            .filter(VitrineCategoriaLink.categoria_id == categoria_id)
+        if not categoria_ids:
+            return {}
+
+        rows: List[Tuple[int, VitrinesModel]] = (
+            self.db.query(VitrineCategoriaLink.categoria_id, VitrinesModel)
+            .join(VitrinesModel, VitrineCategoriaLink.vitrine_id == VitrinesModel.id)
+            .filter(
+                VitrineCategoriaLink.categoria_id.in_(categoria_ids),
+                VitrineCategoriaLink.posicao == 1,
+            )
             .options(
                 joinedload(VitrinesModel.categorias)
                 .joinedload(CategoriaDeliveryModel.parent)
             )
-            .order_by(VitrineCategoriaLink.posicao, VitrinesModel.ordem)
-            .first()
+            .order_by(VitrineCategoriaLink.categoria_id)
+            .all()
         )
+
+        out: Dict[int, VitrinesModel] = {}
+        for categoria_id, vitrine in rows:
+            # se houver duplicidade por algum motivo, o primeiro prevalece
+            out.setdefault(categoria_id, vitrine)
+        return out

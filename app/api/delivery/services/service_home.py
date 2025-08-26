@@ -154,52 +154,62 @@ class HomeService:
 
         categoria = self._map_categorias([cat])[0]
         subcats = self._map_categorias(self.repo_home.listar_subcategorias(cat.id))
+
+        # vitrines da própria categoria (já existente)
         vitrines = self.vitrines_com_produtos(empresa_id, cat.id)
 
-        # 🆕 buscar vitrines filho (1ª vitrine de cada subcategoria)
+        # --- novo: pegar 1ª vitrine (posicao == 1) para cada subcategoria em batch ---
+        subcat_ids = [s.id for s in subcats]
+        primeiras_vitrines_map = self.repo_home.listar_primeiras_vitrines_por_categorias(subcat_ids)
+        # coletar ids únicos para buscar produtos de uma só vez
+        vitrine_ids = list({v.id for v in primeiras_vitrines_map.values()})
+        produtos_por_vitrine = self.repo_home.listar_produtos_por_vitrine_ids(empresa_id, vitrine_ids)
+
         vitrines_filho: List[VitrineComProdutosResponse] = []
         for sc in subcats:
-            vitrine = self.repo_home.listar_primeira_vitrine_por_categoria(sc.id)
-            if vitrine:
-                produtos_map = self.repo_home.listar_vitrines_com_produtos_empresa_categoria(
-                    empresa_id, sc.id
-                )
-                produtos_dto = [
-                    ProdutoEmpMiniDTO(
-                        empresa_id=p.empresa_id,
-                        cod_barras=p.cod_barras,
-                        preco_venda=float(p.preco_venda),
-                        vitrine_id=vitrine.id,
-                        disponivel=p.disponivel,
-                        produto=ProdutoMiniDTO(
-                            cod_barras=p.produto.cod_barras,
-                            descricao=p.produto.descricao,
-                            imagem=p.produto.imagem,
-                            cod_categoria=p.produto.cod_categoria,
-                            ativo=p.produto.ativo,
-                            unidade_medida=p.produto.unidade_medida,
-                        ),
-                    )
-                    for p in produtos_map.get(vitrine.id, [])
-                ]
+            vit = primeiras_vitrines_map.get(sc.id)  # VitrinesModel ou None
+            if not vit:
+                # se a subcategoria não tem vitrine com posicao==1, pulamos
+                continue
 
-                vitrines_filho.append(
-                    VitrineComProdutosResponse(
-                        id=vitrine.id,
-                        titulo=vitrine.titulo,
-                        slug=vitrine.slug,
-                        ordem=vitrine.ordem,
-                        cod_categoria=sc.id,
-                        is_home=bool(vitrine.is_home),
-                        produtos=produtos_dto,
-                        href_categoria=_build_cat_href(sc.slug, sc.slug_pai),
-                    )
+            produtos_dto = [
+                ProdutoEmpMiniDTO(
+                    empresa_id=p.empresa_id,
+                    cod_barras=p.cod_barras,
+                    preco_venda=float(p.preco_venda),
+                    vitrine_id=vit.id,
+                    disponivel=p.disponivel,
+                    produto=ProdutoMiniDTO(
+                        cod_barras=p.produto.cod_barras,
+                        descricao=p.produto.descricao,
+                        imagem=p.produto.imagem,
+                        cod_categoria=p.produto.cod_categoria,
+                        ativo=p.produto.ativo,
+                        unidade_medida=p.produto.unidade_medida,
+                    ),
                 )
+                for p in produtos_por_vitrine.get(vit.id, [])
+            ]
+
+            href_categoria = _build_cat_href(sc.slug, sc.slug_pai)
+
+            vitrines_filho.append(
+                VitrineComProdutosResponse(
+                    id=vit.id,
+                    titulo=vit.titulo,
+                    slug=vit.slug,
+                    ordem=vit.ordem,
+                    cod_categoria=sc.id,
+                    is_home=bool(vit.is_home),
+                    produtos=produtos_dto,
+                    href_categoria=href_categoria,
+                )
+            )
 
         return CategoryPageResponse(
             categoria=categoria,
             subcategorias=subcats,
             vitrines=vitrines,
-            vitrines_filho=vitrines_filho,  # 🆕 incluído no retorno
+            vitrines_filho=vitrines_filho,
         )
 
