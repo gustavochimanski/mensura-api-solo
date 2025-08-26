@@ -6,7 +6,7 @@ class ClienteOut(BaseModel):
     id: int
     nome: str
     cpf: Optional[str]
-    telefone: Optional[str]
+    telefone: Optional[int]
     email: Optional[EmailStr]
     data_nascimento: Optional[date]
     ativo: bool
