@@ -25,3 +25,4 @@ class ClienteDeliveryModel(Base):
     enderecos = relationship("EnderecoDeliveryModel", back_populates="cliente", cascade="all, delete-orphan")
 
     model_config = ConfigDict(from_attributes=True)
+#
