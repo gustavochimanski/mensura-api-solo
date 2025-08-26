@@ -17,10 +17,15 @@ class CategoriaDeliveryRepository:
 
     # -------- CRUD --------
     def create(self, data: CategoriaDeliveryIn) -> CategoriaDeliveryModel:
-        slug_value = data.slug or make_slug(data.descricao)
+        # sempre gera o slug a partir da descrição
+        slug_value = make_slug(data.descricao)
+
         existe = self.db.query(CategoriaDeliveryModel).filter_by(slug=slug_value).first()
         if existe:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Já existe uma categoria com esse slug.")
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "Já existe uma categoria com esse slug (gerado automaticamente)."
+            )
 
         posicao = data.posicao
         if posicao is None:
@@ -33,7 +38,7 @@ class CategoriaDeliveryRepository:
 
         nova = CategoriaDeliveryModel(
             descricao=data.descricao,
-            slug=slug_value,
+            slug=slug_value,  # <-- slug sempre slugify
             parent_id=data.parent_id,
             imagem=data.imagem,
             posicao=posicao
