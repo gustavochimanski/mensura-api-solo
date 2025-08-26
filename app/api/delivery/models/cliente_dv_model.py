@@ -11,7 +11,7 @@ class ClienteDeliveryModel(Base):
         {"schema": "delivery"},
     )
 
-    telefone = Column(String(20), primary_key=True)  # PK principal
+    telefone = Column(Integer, primary_key=True)  # PK principal
     nome = Column(String(100), nullable=False)
     cpf = Column(String(14), unique=True, nullable=True)
     email = Column(String(100), nullable=True)
