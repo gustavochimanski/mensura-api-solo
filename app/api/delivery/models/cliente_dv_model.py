@@ -21,7 +21,13 @@ class ClienteDeliveryModel(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
-    pedidos = relationship("PedidoDeliveryModel", back_populates="cliente")
+    pedidos = relationship(
+        "PedidoDeliveryModel",
+        back_populates="cliente",
+        cascade="all, delete-orphan",
+        foreign_keys="PedidoDeliveryModel.cliente_telefone"  # especifica a FK correta
+    )
+
     enderecos = relationship("EnderecoDeliveryModel", back_populates="cliente", cascade="all, delete-orphan")
 
     model_config = ConfigDict(from_attributes=True)
