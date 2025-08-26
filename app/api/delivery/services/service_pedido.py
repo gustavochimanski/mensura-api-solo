@@ -1,9 +1,7 @@
 from __future__ import annotations
-from decimal import Decimal, ROUND_HALF_UP
-from typing import Optional, List
 from app.api.delivery.repositories.repo_pedidos import PedidoRepository
 from app.api.delivery.schemas.schema_pedido_dv import (
-    FinalizarPedidoRequest, ItemPedidoRequest, PedidoResponse, ItemPedidoResponse
+    FinalizarPedidoRequest, PedidoResponse, ItemPedidoResponse
 )
 from app.api.delivery.schemas.schema_shared_enums import (
     PedidoStatusEnum, TipoEntregaEnum, OrigemPedidoEnum
@@ -73,7 +71,7 @@ class PedidoService:
         # Cliente
         cliente = self.repo.get_cliente_por_telefone(payload.cliente_number)
         if not cliente:
-            cliente = self.repo.criar_cliente_telefone(payload.cliente_number)
+            cliente = self.repo.criar_cliente_telefone(payload.cliente_number, payload.cliente_nome)
 
         # Endereço
         endereco = self.repo.get_endereco_por_dados(cliente.id, payload.endereco)

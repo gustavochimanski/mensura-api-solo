@@ -20,8 +20,8 @@ class PedidoRepository:
     def get_cliente_por_telefone(self, telefone: str) -> Optional[ClienteDeliveryModel]:
         return self.db.query(ClienteDeliveryModel).filter_by(telefone=telefone).first()
 
-    def criar_cliente_telefone(self, telefone: str) -> ClienteDeliveryModel:
-        cliente = ClienteDeliveryModel(telefone=telefone, ativo=True)
+    def criar_cliente_telefone(self, telefone: str, nome: str) -> ClienteDeliveryModel:
+        cliente = ClienteDeliveryModel(telefone=telefone, nome=nome, ativo=True)
         self.db.add(cliente)
         self.db.flush()
         return cliente
