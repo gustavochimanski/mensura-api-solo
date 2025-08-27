@@ -7,18 +7,17 @@ class ClienteService:
     def __init__(self, db: Session):
         self.repo = ClienteRepository(db)
 
-    def get_current(self, telefone: str):
-        cli = self.repo.get_by_id(telefone)
+    def get_current(self, token: str):
+        cli = self.repo.get_by_token(token)
         if not cli:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Cliente não encontrado")
         return cli
 
     def create(self, data: ClienteCreate):
-        # poderia validar cpf/email únicos aqui
         return self.repo.create(**data.model_dump(exclude_unset=True))
 
-    def update(self, telefone: str, data: ClienteUpdate):
-        db_obj = self.repo.get_by_id(telefone)
+    def update(self, token: str, data: ClienteUpdate):
+        db_obj = self.repo.get_by_token(token)
         if not db_obj:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Cliente não existe")
         return self.repo.update(db_obj, **data.model_dump(exclude_none=True))

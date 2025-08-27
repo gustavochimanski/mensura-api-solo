@@ -9,6 +9,7 @@ class ClienteOut(BaseModel):
     email: Optional[EmailStr]
     data_nascimento: Optional[date]
     ativo: bool
+    super_token: str
     created_at: datetime
     updated_at: datetime
 

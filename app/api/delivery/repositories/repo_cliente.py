@@ -22,12 +22,6 @@ class ClienteRepository:
     def get_by_token(self, token: str) -> Optional[ClienteDeliveryModel]:
         return self.db.query(ClienteDeliveryModel).filter_by(super_token=token).first()
 
-    def list(self, ativo: Optional[bool] = None) -> List[ClienteDeliveryModel]:
-        stmt = select(ClienteDeliveryModel)
-        if ativo is not None:
-            stmt = stmt.where(ClienteDeliveryModel.ativo.is_(ativo))
-        return self.db.execute(stmt).scalars().all()
-
     def create(self, **data) -> ClienteDeliveryModel:
         obj = ClienteDeliveryModel(**data)
         self.db.add(obj)
@@ -41,6 +35,12 @@ class ClienteRepository:
         self.db.commit()
         self.db.refresh(db_obj)
         return db_obj
+
+    def list(self, ativo: Optional[bool] = None) -> List[ClienteDeliveryModel]:
+        stmt = select(ClienteDeliveryModel)
+        if ativo is not None:
+            stmt = stmt.where(ClienteDeliveryModel.ativo.is_(ativo))
+        return self.db.execute(stmt).scalars().all()
 
     def set_ativo(self, telefone: str, ativo: bool) -> Optional[ClienteDeliveryModel]:
         obj = self.get_by_id(telefone)
