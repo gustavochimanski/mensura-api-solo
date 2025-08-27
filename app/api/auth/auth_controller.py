@@ -15,7 +15,7 @@ from app.api.mensura.schemas.usuario_schema import UserResponse
 from app.api.mensura.models.user_model import UserModel
 
 
-router = APIRouter(tags=["auth"], prefix="/auth")
+router = APIRouter(tags=["auth"], prefix="/api/auth")
 
 @router.post("/token", response_model=TokenResponse)
 def login_usuario(
