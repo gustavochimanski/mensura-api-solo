@@ -8,7 +8,7 @@ from app.api.delivery.schemas.schema_endereco_dv import EnderecoOut, EnderecoCre
 from app.utils.logger import logger
 
 router = APIRouter(prefix="/api/delivery/enderecos", tags=["Delivery - Endereços"])
-
+#
 @router.get("", response_model=List[EnderecoOut])
 def listar_enderecos(
     cliente=Depends(get_cliente_by_super_token),
