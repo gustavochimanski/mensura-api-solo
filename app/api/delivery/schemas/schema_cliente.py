@@ -5,7 +5,7 @@ from pydantic import BaseModel, EmailStr, constr, ConfigDict
 class ClienteOut(BaseModel):
     nome: str
     cpf: Optional[str]
-    cliente_telefone: Optional[str]
+    telefone: Optional[str]
     email: Optional[EmailStr]
     data_nascimento: Optional[date]
     ativo: bool
@@ -17,14 +17,14 @@ class ClienteOut(BaseModel):
 class ClienteCreate(BaseModel):
     nome: constr(min_length=1, max_length=100)
     cpf: Optional[constr(max_length=14)] = None
-    cliente_telefone: Optional[constr(max_length=20)] = None
+    telefone: Optional[constr(max_length=20)] = None
     email: Optional[EmailStr] = None
     data_nascimento: Optional[date] = None
 
 class ClienteUpdate(BaseModel):
     nome: Optional[constr(min_length=1, max_length=100)] = None
     cpf: Optional[constr(max_length=14)] = None
-    cliente_telefone: Optional[constr(max_length=20)] = None
+    telefone: Optional[constr(max_length=20)] = None
     email: Optional[EmailStr] = None
     data_nascimento: Optional[date] = None
     ativo: Optional[bool] = None
