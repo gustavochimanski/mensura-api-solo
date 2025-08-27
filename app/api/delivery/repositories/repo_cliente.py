@@ -7,20 +7,23 @@ class ClienteRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def get_current(self) -> Optional[ClienteDeliveryModel]:
-        return self.db.query(ClienteDeliveryModel).first()
-
-    def get_by_id(self, telefone: str) -> Optional[ClienteDeliveryModel]:
-        return self.db.get(ClienteDeliveryModel, telefone)
-
-    def get_by_email(self, email: str) -> Optional[ClienteDeliveryModel]:
-        return self.db.query(ClienteDeliveryModel).filter(ClienteDeliveryModel.email == email).first()
-
-    def get_by_cpf(self, cpf: str) -> Optional[ClienteDeliveryModel]:
-        return self.db.query(ClienteDeliveryModel).filter(ClienteDeliveryModel.cpf == cpf).first()
-
     def get_by_token(self, token: str) -> Optional[ClienteDeliveryModel]:
         return self.db.query(ClienteDeliveryModel).filter_by(super_token=token).first()
+
+    def get_by_telefone(self, telefone: str) -> Optional[ClienteDeliveryModel]:
+        return self.db.query(ClienteDeliveryModel).filter_by(telefone=telefone).first()
+
+    def get_by_email(self, email: str) -> Optional[ClienteDeliveryModel]:
+        return self.db.query(ClienteDeliveryModel).filter_by(email=email).first()
+
+    def get_by_cpf(self, cpf: str) -> Optional[ClienteDeliveryModel]:
+        return self.db.query(ClienteDeliveryModel).filter_by(cpf=cpf).first()
+
+    def list(self, ativo: Optional[bool] = None) -> List[ClienteDeliveryModel]:
+        stmt = select(ClienteDeliveryModel)
+        if ativo is not None:
+            stmt = stmt.where(ClienteDeliveryModel.ativo.is_(ativo))
+        return self.db.execute(stmt).scalars().all()
 
     def create(self, **data) -> ClienteDeliveryModel:
         obj = ClienteDeliveryModel(**data)
@@ -30,20 +33,14 @@ class ClienteRepository:
         return obj
 
     def update(self, db_obj: ClienteDeliveryModel, **data) -> ClienteDeliveryModel:
-        for f, v in data.items():
-            setattr(db_obj, f, v)
+        for k, v in data.items():
+            setattr(db_obj, k, v)
         self.db.commit()
         self.db.refresh(db_obj)
         return db_obj
 
-    def list(self, ativo: Optional[bool] = None) -> List[ClienteDeliveryModel]:
-        stmt = select(ClienteDeliveryModel)
-        if ativo is not None:
-            stmt = stmt.where(ClienteDeliveryModel.ativo.is_(ativo))
-        return self.db.execute(stmt).scalars().all()
-
-    def set_ativo(self, telefone: str, ativo: bool) -> Optional[ClienteDeliveryModel]:
-        obj = self.get_by_id(telefone)
+    def set_ativo(self, token: str, ativo: bool) -> Optional[ClienteDeliveryModel]:
+        obj = self.get_by_token(token)
         if not obj:
             return None
         obj.ativo = ativo

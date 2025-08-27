@@ -19,7 +19,9 @@ def create_new_cliente(data: ClienteCreate, db: Session = Depends(get_db)):
     }
 
 @router.get("/me", response_model=ClienteOut, status_code=status.HTTP_200_OK)
-def read_current_cliente(cliente: "ClienteDeliveryModel" = Depends(get_cliente_by_super_token)):
+def read_current_cliente(
+    cliente: "ClienteDeliveryModel" = Depends(get_cliente_by_super_token)
+):
     logger.info(f"[Cliente] Get current {cliente.telefone}")
     return cliente
 
@@ -31,4 +33,4 @@ def update_current_cliente(
 ):
     logger.info(f"[Cliente] Update {cliente.telefone}")
     service = ClienteService(db)
-    return service.update(cliente.telefone, data)
+    return service.update(cliente.super_token, data)
