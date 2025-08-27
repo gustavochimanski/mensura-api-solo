@@ -1,9 +1,16 @@
+import base64
+import hashlib
 import secrets
 
 from sqlalchemy import Column, String, Date, Boolean, DateTime, func, Index
 from sqlalchemy.orm import relationship
 from app.database.db_connection import Base
 from pydantic import ConfigDict
+
+def default_super_token():
+    raw = secrets.token_bytes(32)
+    hashed = hashlib.sha256(raw).digest()
+    return base64.urlsafe_b64encode(hashed).rstrip(b'=').decode('ascii')
 
 class ClienteDeliveryModel(Base):
     __tablename__ = "clientes_dv"
@@ -19,7 +26,7 @@ class ClienteDeliveryModel(Base):
     email = Column(String(100), nullable=True)
     data_nascimento = Column(Date, nullable=True)
     ativo = Column(Boolean, default=True, nullable=False)
-    super_token = Column(String, unique=True, nullable=False, default=lambda: secrets.token_urlsafe(32))
+    super_token = Column(String, unique=True, nullable=False, default=default_super_token)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
