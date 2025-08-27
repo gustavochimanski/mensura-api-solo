@@ -10,7 +10,7 @@ from app.core.security import verify_password, create_access_token, ACCESS_TOKEN
 from app.database.db_connection import get_db
 
 
-from app.core.dependencies import get_current_user
+from app.core.admin_dependencies import get_current_user
 from app.api.mensura.schemas.usuario_schema import UserResponse
 from app.api.mensura.models.user_model import UserModel
 

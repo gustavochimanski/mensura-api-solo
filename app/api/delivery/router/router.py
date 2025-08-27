@@ -9,7 +9,7 @@ from app.api.delivery.router.router_vitrine import router as vitrines_router
 from app.api.delivery.router.router_cupons_dv import router as cupons_router
 from app.api.delivery.router.router_entregadores import router as entregadores_router
 from app.api.delivery.router.router_enderecos import router as enderecos_router
-from app.core.dependencies import get_current_user
+from app.core.admin_dependencies import get_current_user
 
 api_delivery = APIRouter()
 api_delivery.include_router(cardapio_router)

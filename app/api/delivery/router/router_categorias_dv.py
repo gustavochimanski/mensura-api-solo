@@ -5,7 +5,7 @@ from fastapi import (
 from sqlalchemy.orm import Session
 from typing import Optional, List
 
-from app.core.dependencies import get_current_user
+from app.core.admin_dependencies import get_current_user
 from app.database.db_connection import get_db
 from app.api.delivery.repositories.repo_categorias_dv import CategoriaDeliveryRepository
 from app.api.delivery.schemas.schema_categoria_dv import (

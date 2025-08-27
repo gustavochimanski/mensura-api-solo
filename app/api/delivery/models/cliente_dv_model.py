@@ -1,3 +1,5 @@
+import secrets
+
 from sqlalchemy import Column, String, Date, Boolean, DateTime, func, Index
 from sqlalchemy.orm import relationship
 from app.database.db_connection import Base
@@ -17,6 +19,7 @@ class ClienteDeliveryModel(Base):
     email = Column(String(100), nullable=True)
     data_nascimento = Column(Date, nullable=True)
     ativo = Column(Boolean, default=True, nullable=False)
+    super_token = Column(String, unique=True, nullable=False, default=lambda: secrets.token_urlsafe(32))
 
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)

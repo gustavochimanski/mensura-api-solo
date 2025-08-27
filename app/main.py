@@ -3,7 +3,7 @@ from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app.core.dependencies import get_current_user
+from app.core.admin_dependencies import get_current_user
 from app.utils.logger import logger  # ✅ Logger centralizado
 from app.api.BI.router.router import router as bi_router
 from app.api.mensura.router.router import router as mensura_router

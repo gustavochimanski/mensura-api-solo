@@ -9,9 +9,10 @@ class ItemPedidoRequest(BaseModel):
     observacao: Optional[str] = None
 
 class FinalizarPedidoRequest(BaseModel):
-    telefone_cliente: Optional[str] = None
     empresa_id: int
-    endereco_id: Optional[int] = None
+    telefone_cliente: Optional[str] = None
+    endereco_id: int
+    meio_pagamento_id: int
     tipo_entrega: TipoEntregaEnum = TipoEntregaEnum.DELIVERY
     origem: OrigemPedidoEnum = OrigemPedidoEnum.WEB
     observacao_geral: Optional[str] = None
