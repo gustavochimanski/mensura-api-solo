@@ -5,17 +5,26 @@ from sqlalchemy.orm import Session
 from app.api.delivery.schemas.schema_pedido_dv import FinalizarPedidoRequest, PedidoResponse
 from app.api.delivery.schemas.schema_shared_enums import PagamentoMetodoEnum, PagamentoGatewayEnum
 from app.api.delivery.services.service_pedido import PedidoService
+from app.core.client_dependecies import get_cliente_by_super_token
 from app.database.db_connection import get_db
 from app.utils.logger import logger
 
 router = APIRouter(prefix="/api/delivery/pedidos", tags=["Pedidos"])
 
+
 @router.post("/checkout", response_model=PedidoResponse, status_code=status.HTTP_201_CREATED)
-def checkout(payload: FinalizarPedidoRequest, db: Session = Depends(get_db)):
-    logger.info("[Pedidos] Checkout iniciado")
+def checkout(
+        payload: FinalizarPedidoRequest,
+        cliente: "ClienteDeliveryModel" = Depends(get_cliente_by_super_token),
+        db: Session = Depends(get_db),
+):
+    logger.info(f"[Pedidos] Checkout iniciado para cliente {cliente.telefone}")
+
+    # Setando o telefone automaticamente
+    payload.telefone_cliente = cliente.telefone
+
     svc = PedidoService(db)
     return svc.finalizar_pedido(payload)
-
 @router.post("/{pedido_id}/confirmar-pagamento", response_model=PedidoResponse, status_code=status.HTTP_200_OK)
 async def confirmar_pagamento(
     pedido_id: int = Path(..., description="ID do pedido"),

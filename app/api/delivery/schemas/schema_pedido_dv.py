@@ -10,7 +10,7 @@ class ItemPedidoRequest(BaseModel):
 
 class FinalizarPedidoRequest(BaseModel):
     empresa_id: int
-    telefone_cliente: Optional[str] = None
+    telefone_cliente: Optional[str] = None  # agora será setado pelo token
     endereco_id: int
     meio_pagamento_id: int
     tipo_entrega: TipoEntregaEnum = TipoEntregaEnum.DELIVERY
