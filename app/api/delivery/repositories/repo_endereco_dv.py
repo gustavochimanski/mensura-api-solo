@@ -10,22 +10,20 @@ class EnderecoRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def list_by_cliente(self, super_token: str):
+    def list_by_cliente(self, cliente_telefone: str):
         return (
             self.db.query(EnderecoDeliveryModel)
-            .join(EnderecoDeliveryModel.cliente)
-            .filter(EnderecoDeliveryModel.cliente.has(super_token=super_token))
+            .filter(EnderecoDeliveryModel.cliente_telefone == cliente_telefone)
             .order_by(EnderecoDeliveryModel.created_at.desc())
             .all()
         )
 
-    def get_by_cliente(self, super_token: str, end_id: int):
+    def get_by_cliente(self, cliente_telefone: str, end_id: int):
         obj = (
             self.db.query(EnderecoDeliveryModel)
-            .join(EnderecoDeliveryModel.cliente)
             .filter(
                 EnderecoDeliveryModel.id == end_id,
-                EnderecoDeliveryModel.cliente.has(super_token=super_token)
+                EnderecoDeliveryModel.cliente_telefone == cliente_telefone
             )
             .first()
         )
@@ -33,33 +31,32 @@ class EnderecoRepository:
             raise HTTPException(status_code=404, detail="Endereço não encontrado")
         return obj
 
-    def create(self, super_token: str, payload: EnderecoCreate):
-        cliente = self.db.query(ClienteDeliveryModel).filter_by(super_token=super_token).first()
-        obj = EnderecoDeliveryModel(**payload.model_dump(), cliente_id=cliente.id)
+    def create(self, cliente_telefone: str, payload: EnderecoCreate):
+        obj = EnderecoDeliveryModel(**payload.model_dump(), cliente_telefone=cliente_telefone)
         self.db.add(obj)
         self.db.commit()
         self.db.refresh(obj)
         return obj
 
-    def update(self, super_token: str, end_id: int, payload: EnderecoUpdate):
-        obj = self.get_by_cliente(super_token, end_id)
+    def update(self, cliente_telefone: str, end_id: int, payload: EnderecoUpdate):
+        obj = self.get_by_cliente(cliente_telefone, end_id)
         for k, v in payload.model_dump(exclude_unset=True).items():
             setattr(obj, k, v)
         self.db.commit()
         self.db.refresh(obj)
         return obj
 
-    def delete(self, super_token: str, end_id: int):
-        obj = self.get_by_cliente(super_token, end_id)
+    def delete(self, cliente_telefone: str, end_id: int):
+        obj = self.get_by_cliente(cliente_telefone, end_id)
         self.db.delete(obj)
         self.db.commit()
 
-    def set_padrao(self, super_token: str, end_id: int):
-        cliente = self.db.query(ClienteDeliveryModel).filter_by(super_token=super_token).first()
+    def set_padrao(self, cliente_telefone: str, end_id: int):
+        # Zera padrão dos outros endereços
         self.db.query(EnderecoDeliveryModel).filter(
-            EnderecoDeliveryModel.cliente_id == cliente.id
+            EnderecoDeliveryModel.cliente_telefone == cliente_telefone
         ).update({"is_principal": False})
-        obj = self.get_by_cliente(super_token, end_id)
+        obj = self.get_by_cliente(cliente_telefone, end_id)
         obj.is_principal = True
         self.db.commit()
         self.db.refresh(obj)
