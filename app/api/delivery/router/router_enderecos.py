@@ -15,13 +15,13 @@ router = APIRouter(prefix="/api/delivery/enderecos", tags=["Delivery - Endereço
 
 @router.get("", response_model=List[EnderecoOut])
 def listar_enderecos(
-    cliente_id: int = Query(...),
-    db: Session = Depends(get_db), dependencies=[Depends(get_current_user)]
+    telefone_cliente: int = Query(...),
+    db: Session = Depends(get_db),
 
 ):
-    logger.info(f"[Enderecos] Listar - cliente={cliente_id}")
+    logger.info(f"[Enderecos] Listar - cliente={telefone_cliente}")
     svc = EnderecosService(db)
-    return svc.list(cliente_id)
+    return svc.list(telefone_cliente)
 
 @router.get("/{endereco_id}", response_model=EnderecoOut)
 def get_endereco(
@@ -64,9 +64,9 @@ def deletar_endereco(
 @router.post("/{endereco_id}/set-padrao", response_model=EnderecoOut)
 def set_endereco_padrao(
     endereco_id: int,
-    cliente_id: int = Query(...),
+    telefone_cliente: int = Query(...),
     db: Session = Depends(get_db), dependencies=[Depends(get_current_user)]
 ):
-    logger.info(f"[Enderecos] Set padrão - id={endereco_id} cliente={cliente_id}")
+    logger.info(f"[Enderecos] Set padrão - id={endereco_id} cliente={telefone_cliente}")
     svc = EnderecosService(db)
-    return svc.set_padrao(cliente_id, endereco_id)
+    return svc.set_padrao(telefone_cliente, endereco_id)

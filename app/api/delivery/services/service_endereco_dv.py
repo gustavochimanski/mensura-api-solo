@@ -10,8 +10,8 @@ class EnderecosService:
         self.db = db
         self.repo = EnderecoRepository(db)
 
-    def list(self, cliente_id: int):
-        return [EnderecoOut.model_validate(x) for x in self.repo.list_by_cliente(cliente_id)]
+    def list(self, telefone_cliente: int):
+        return [EnderecoOut.model_validate(x) for x in self.repo.list_by_cliente(telefone_cliente)]
 
     def get(self, end_id: int):
         return EnderecoOut.model_validate(self.repo.get(end_id))
