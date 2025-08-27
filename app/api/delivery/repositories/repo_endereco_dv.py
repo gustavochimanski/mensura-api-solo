@@ -9,11 +9,11 @@ class EnderecoRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def list_by_cliente(self, cliente_id: int) -> List[EnderecoDeliveryModel]:
+    def list_by_cliente(self, telefone_cliente: int) -> List[EnderecoDeliveryModel]:
         return (
             self.db.query(EnderecoDeliveryModel)
             .options(joinedload(EnderecoDeliveryModel.cliente))
-            .filter(EnderecoDeliveryModel.cliente_id == cliente_id)
+            .filter(EnderecoDeliveryModel.cliente_telefone == telefone_cliente)
             .order_by(EnderecoDeliveryModel.created_at.desc())
             .all()
         )
