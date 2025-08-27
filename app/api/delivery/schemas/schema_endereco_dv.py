@@ -2,7 +2,7 @@ from pydantic import BaseModel, ConfigDict
 from typing import Optional
 
 class EnderecoBase(BaseModel):
-    cliente_id: int
+    cliente_telefone: int
     cep: Optional[str] = None
     logradouro: Optional[str] = None
     numero: Optional[str] = None
