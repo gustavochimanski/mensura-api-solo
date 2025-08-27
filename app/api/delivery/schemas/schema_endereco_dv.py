@@ -2,7 +2,6 @@ from pydantic import BaseModel, ConfigDict
 from typing import Optional
 
 class EnderecoBase(BaseModel):
-    cliente_telefone: int
     cep: Optional[str] = None
     logradouro: Optional[str] = None
     numero: Optional[str] = None
@@ -32,12 +31,6 @@ class EnderecoUpdate(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     is_principal: Optional[bool] = None
-
-class EnderecoResponse(EnderecoBase):
-    id: int
-
-    model_config = ConfigDict(from_attributes=True)
-
 
 class EnderecoOut(EnderecoBase):
     id: int
