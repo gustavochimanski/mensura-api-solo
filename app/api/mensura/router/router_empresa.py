@@ -5,10 +5,12 @@ import json
 
 from app.database.db_connection import get_db
 from app.api.mensura.services.empresa_service import EmpresaService
-from app.api.mensura.schemas.empresa_schema import EmpresaResponse
+from app.api.mensura.schemas.empresa_schema import EmpresaResponse, EmpresaUpdate
+from app.api.mensura.schemas.empresa_schema import EmpresaCreate
 from app.api.mensura.schemas.endereco_schema import EnderecoCreate
 
 router = APIRouter(prefix="/api/mensura/empresas", tags=["Empresas"])
+
 
 @router.post("/", response_model=EmpresaResponse)
 async def create_empresa(
@@ -20,9 +22,15 @@ async def create_empresa(
     db: Session = Depends(get_db),
 ):
     endereco_data = EnderecoCreate(**json.loads(endereco))
-    return EmpresaService(db).create_empresa(
-        nome=nome, cnpj=cnpj, slug=slug, endereco=endereco_data, logo=logo
+    empresa_data = EmpresaCreate(
+        nome=nome,
+        cnpj=cnpj,
+        slug=slug,
+        endereco=endereco_data,
+        logo=logo
     )
+    return EmpresaService(db).create_empresa(empresa_data)
+
 
 @router.put("/{id}", response_model=EmpresaResponse)
 async def update_empresa(
@@ -34,9 +42,14 @@ async def update_empresa(
     logo: UploadFile | None = None,
     db: Session = Depends(get_db),
 ):
-    return EmpresaService(db).update_empresa(
-        id=id, nome=nome, cnpj=cnpj, slug=slug, endereco_id=endereco_id, logo=logo
+    empresa_data = EmpresaUpdate(
+        nome=nome,
+        cnpj=cnpj,
+        slug=slug,
+        endereco_id=endereco_id,
+        logo=logo
     )
+    return EmpresaService(db).update_empresa(id=id, data=empresa_data)
 
 @router.get("/{id}", response_model=EmpresaResponse)
 def get_empresa(id: int, db: Session = Depends(get_db)):
