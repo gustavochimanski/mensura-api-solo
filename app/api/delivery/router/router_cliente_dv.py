@@ -11,19 +11,18 @@ router = APIRouter(prefix="/api/delivery/cliente", tags=["Cliente"])
 @router.post("/", response_model=ClienteOut, status_code=status.HTTP_201_CREATED)
 def create_new_cliente(data: ClienteCreate, db: Session = Depends(get_db)):
     logger.info("[Cliente] Create")
-    cliente = ClienteService(db).create(data)
-    return {
-        "telefone": cliente.telefone,
-        "nome": cliente.nome,
-        "super_token": cliente.super_token
-    }
+    service = ClienteService(db)
+    cliente = service.create(data)
+
+    # ✅ Garante que todos os campos do schema ClienteOut estejam presentes
+    return ClienteOut.model_validate(cliente)
+
 
 @router.get("/me", response_model=ClienteOut, status_code=status.HTTP_200_OK)
-def read_current_cliente(
-    cliente: "ClienteDeliveryModel" = Depends(get_cliente_by_super_token)
-):
+def read_current_cliente(cliente: "ClienteDeliveryModel" = Depends(get_cliente_by_super_token)):
     logger.info(f"[Cliente] Get current {cliente.telefone}")
-    return cliente
+    return ClienteOut.model_validate(cliente)
+
 
 @router.put("/me", response_model=ClienteOut, status_code=status.HTTP_200_OK)
 def update_current_cliente(
@@ -33,4 +32,7 @@ def update_current_cliente(
 ):
     logger.info(f"[Cliente] Update {cliente.telefone}")
     service = ClienteService(db)
-    return service.update(cliente.super_token, data)
+    updated_cliente = service.update(cliente.super_token, data)
+
+    # ✅ Retorna validado pelo schema
+    return ClienteOut.model_validate(updated_cliente)
