@@ -20,4 +20,4 @@ api_delivery.include_router(produtos_router, dependencies=[Depends(get_current_u
 api_delivery.include_router(vitrines_router, dependencies=[Depends(get_current_user)])
 api_delivery.include_router(cupons_router, dependencies=[Depends(get_current_user)])
 api_delivery.include_router(entregadores_router, dependencies=[Depends(get_current_user)])
-api_delivery.include_router(enderecos_router, dependencies=[Depends(get_current_user)])
+api_delivery.include_router(enderecos_router)
