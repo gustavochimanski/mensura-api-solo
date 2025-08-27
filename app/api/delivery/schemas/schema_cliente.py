@@ -16,9 +16,9 @@ class ClienteOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 class ClienteCreate(BaseModel):
-    nome: constr(min_length=1, max_length=100)
+    nome: str
     cpf: Optional[constr(max_length=14)] = None
-    telefone: Optional[constr(max_length=20)] = None
+    telefone: str
     email: Optional[EmailStr] = None
     data_nascimento: Optional[date] = None
 
