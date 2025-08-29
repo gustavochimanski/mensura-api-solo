@@ -330,7 +330,7 @@ class PedidoService:
             query = query.filter(PedidoDeliveryModel.status == status)
 
         # Ordena por criação (mais recente primeiro)
-        query = query.order_by(PedidoDeliveryModel.created_at.desc())
+        query = query.order_by(PedidoDeliveryModel.data_criacao.desc())
 
         return query.offset(skip).limit(limit).all()
 
