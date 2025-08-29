@@ -330,7 +330,7 @@ class PedidoService:
             if endereco:
                 endereco_str = ", ".join(
                     filter(None, [
-                        endereco.rua,
+                        endereco.logradouro,
                         endereco.numero,
                         endereco.bairro,
                         endereco.cidade,
