@@ -11,11 +11,12 @@ class PedidoKanbanResponse(BaseModel):
     id: int
     status: PedidoStatusEnum
     telefone_cliente: str | None = None
+    nome_cliente: str | None = None        # novo campo
     valor_total: float
     data_criacao: datetime
+    logradouro: str | None = None          # novo campo (do endereço)
 
     model_config = ConfigDict(from_attributes=True)
-
 
 
 # ======================================================================
