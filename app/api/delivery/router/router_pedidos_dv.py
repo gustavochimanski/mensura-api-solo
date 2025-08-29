@@ -92,3 +92,33 @@ def get_pedido(pedido_id: int = Path(..., description="ID do pedido"), db: Sessi
     svc = PedidoService(db)
     return svc.get_pedido_by_id(pedido_id)
 
+
+
+# ======================================================================
+# ============================ PESQUISAR PEDIDOS =======================
+# ======================================================================
+
+@router.get(
+    "/search",
+    response_model=list[PedidoKanbanResponse],
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(get_current_user)]
+)
+def pesquisar_pedidos_admin(
+    q: str = Query(..., description="Termo de busca (mínimo 2 caracteres)"),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db),
+):
+    """
+    Pesquisa pedidos (admin) pelo termo `q`.
+    Só executa se q tiver pelo menos 2 caracteres.
+    Retorna lista resumida para Kanban.
+    """
+    if len(q.strip()) < 2:
+        return []
+
+    svc = PedidoService(db)
+    return svc.search(q=q.strip(), skip=skip, limit=limit)
+
+
