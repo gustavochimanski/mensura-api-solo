@@ -335,7 +335,7 @@ class PedidoService:
                     telefone_cliente=cliente.telefone if cliente else None,
                     nome_cliente=cliente.nome if cliente else None,
                     endereco_cliente={
-                        "rua": endereco.rua,
+                        "rua": endereco.logradouro,
                         "numero": endereco.numero,
                         "bairro": endereco.bairro,
                         "cidade": endereco.cidade,
