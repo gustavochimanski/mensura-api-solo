@@ -2,6 +2,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Optional
 
+from passlib.utils.compat import join_byte_elems
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
@@ -53,6 +54,7 @@ class PedidoRepository:
     def list_all(self, limit: int = 500):
         return (
             self.db.query(PedidoDeliveryModel)
+            .options(joinedload(PedidoDeliveryModel.cliente), joinedload(PedidoDeliveryModel.endereco))
             .order_by(PedidoDeliveryModel.data_criacao.desc())
             .limit(limit)
             .all()
