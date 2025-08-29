@@ -324,7 +324,20 @@ class PedidoService:
 
         for p in pedidos:
             cliente = p.cliente
-            endereco = p.endereco  # endereço do próprio pedido
+            endereco = cliente.enderecos[0] if cliente and cliente.enderecos else None
+
+            endereco_str = None
+            if endereco:
+                endereco_str = ", ".join(
+                    filter(None, [
+                        endereco.rua,
+                        endereco.numero,
+                        endereco.bairro,
+                        endereco.cidade,
+                        endereco.cep,
+                        endereco.complemento
+                    ])
+                )
 
             resultados.append(
                 PedidoKanbanResponse(
@@ -334,14 +347,7 @@ class PedidoService:
                     data_criacao=p.data_criacao,
                     telefone_cliente=cliente.telefone if cliente else None,
                     nome_cliente=cliente.nome if cliente else None,
-                    endereco_cliente={
-                        "rua": endereco.logradouro,
-                        "numero": endereco.numero,
-                        "bairro": endereco.bairro,
-                        "cidade": endereco.cidade,
-                        "cep": endereco.cep,
-                        "complemento": endereco.complemento,
-                    } if endereco else None,
+                    endereco_cliente=endereco_str,
                 )
             )
 
