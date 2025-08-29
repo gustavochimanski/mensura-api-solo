@@ -12,10 +12,14 @@ from app.utils.logger import logger
 router = APIRouter(prefix="/api/delivery/pedidos", tags=["Pedidos"])
 
 @router.post("/checkout", response_model=PedidoResponse, status_code=status.HTTP_201_CREATED)
-def checkout(payload: FinalizarPedidoRequest, db: Session = Depends(get_db)):
+def checkout(
+        payload: FinalizarPedidoRequest,
+        db: Session = Depends(get_db),
+        cliente: ClienteDeliveryModel = Depends(get_cliente_by_super_token),
+):
     logger.info(f"[Pedidos] Checkout iniciado")
     svc = PedidoService(db)
-    return svc.finalizar_pedido(payload)
+    return svc.finalizar_pedido(payload, cliente)
 
 @router.post("/{pedido_id}/confirmar-pagamento", response_model=PedidoResponse, status_code=status.HTTP_200_OK)
 async def confirmar_pagamento(
