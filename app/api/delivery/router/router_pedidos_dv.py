@@ -5,6 +5,8 @@ from app.api.delivery.models.cliente_dv_model import ClienteDeliveryModel
 from app.api.delivery.schemas.schema_pedido_dv import FinalizarPedidoRequest, PedidoResponse
 from app.api.delivery.schemas.schema_shared_enums import PagamentoMetodoEnum, PagamentoGatewayEnum
 from app.api.delivery.services.service_pedido import PedidoService
+from app.api.mensura.models.user_model import UserModel
+from app.core.admin_dependencies import get_current_user
 from app.core.client_dependecies import get_cliente_by_super_token
 from app.database.db_connection import get_db
 from app.utils.logger import logger
@@ -51,3 +53,22 @@ def get_pedido(pedido_id: int = Path(..., description="ID do pedido"), db: Sessi
 def editar_pedido(pedido_id: int, payload: FinalizarPedidoRequest, db: Session = Depends(get_db)):
     svc = PedidoService(db)
     return svc.editar_pedido(pedido_id=pedido_id, payload=payload)
+
+
+
+# ======================================================================
+# ============================ ADMIN ===================================
+# ======================================================================
+@router.get("/", response_model=list[PedidoResponse], status_code=status.HTTP_200_OK)
+def listar_pedidos_admin(
+    user: UserModel = Depends(get_current_user),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    status_filter: str | None = Query(None, description="Filtra por status do pedido"),
+    db: Session = Depends(get_db),
+):
+    """
+    Lista pedidos do sistema (para admin) com paginação e filtro opcional por status.
+    """
+    svc = PedidoService(db)
+    return svc.listar_pedidos_admin(skip=skip, limit=limit, status=status_filter)

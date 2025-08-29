@@ -312,3 +312,25 @@ class PedidoService:
         self.repo.commit()
         self.db.refresh(pedido)
         return self._pedido_to_response(pedido)
+
+
+
+
+    # ======================================================================
+    # ============================ ADMIN ===================================
+    # ======================================================================
+
+    def listar_pedidos_admin(self, skip: int = 0, limit: int = 50, status: str | None = None):
+        """
+        Retorna pedidos com paginação e filtro por status.
+        """
+        query = self.db.query(PedidoDeliveryModel)
+
+        if status:
+            query = query.filter(PedidoDeliveryModel.status == status)
+
+        # Ordena por criação (mais recente primeiro)
+        query = query.order_by(PedidoDeliveryModel.created_at.desc())
+
+        return query.offset(skip).limit(limit).all()
+
