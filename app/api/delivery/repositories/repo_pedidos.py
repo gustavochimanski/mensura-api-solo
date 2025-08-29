@@ -53,7 +53,7 @@ class PedidoRepository:
     def list_all(self, limit: int = 500):
         return (
             self.db.query(PedidoDeliveryModel)
-            .order_by(PedidoDeliveryModel.created_at.desc())
+            .order_by(PedidoDeliveryModel.data_criacao.desc())
             .limit(limit)
             .all()
         )
