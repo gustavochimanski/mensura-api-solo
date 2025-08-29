@@ -19,7 +19,7 @@ def checkout(
 ):
     logger.info(f"[Pedidos] Checkout iniciado")
     svc = PedidoService(db)
-    return svc.finalizar_pedido(payload, cliente)
+    return svc.finalizar_pedido(payload, cliente.telefone)
 
 @router.post("/{pedido_id}/confirmar-pagamento", response_model=PedidoResponse, status_code=status.HTTP_200_OK)
 async def confirmar_pagamento(
