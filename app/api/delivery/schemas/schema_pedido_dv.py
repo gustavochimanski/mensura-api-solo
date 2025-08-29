@@ -14,7 +14,7 @@ class PedidoKanbanResponse(BaseModel):
     nome_cliente: str | None = None        # novo campo
     valor_total: float
     data_criacao: datetime
-    logradouro: str | None = None          # novo campo (do endereço)
+    endereco_cliente: str | None = None          # novo campo (do endereço)
 
     model_config = ConfigDict(from_attributes=True)
 
