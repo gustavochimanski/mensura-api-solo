@@ -50,6 +50,14 @@ class PedidoRepository:
             .first()
         )
 
+    def list_all(self, limit: int = 500):
+        return (
+            self.db.query(PedidoDeliveryModel)
+            .order_by(PedidoDeliveryModel.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+
     # --- Mutations ---
     def criar_pedido(
         self,

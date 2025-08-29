@@ -319,18 +319,6 @@ class PedidoService:
     # ======================================================================
     # ============================ ADMIN ===================================
     # ======================================================================
-
-    def listar_pedidos_admin(self, skip: int = 0, limit: int = 50, status: str | None = None):
-        """
-        Retorna pedidos com paginação e filtro por status.
-        """
-        query = self.db.query(PedidoDeliveryModel)
-
-        if status:
-            query = query.filter(PedidoDeliveryModel.status == status)
-
-        # Ordena por criação (mais recente primeiro)
-        query = query.order_by(PedidoDeliveryModel.data_criacao.desc())
-
-        return query.offset(skip).limit(limit).all()
-
+    def list_all(self):
+        # Limite pra não estourar
+        return self.repo.list_all(limit=500)
