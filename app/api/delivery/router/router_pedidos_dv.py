@@ -13,6 +13,30 @@ from app.utils.logger import logger
 
 router = APIRouter(prefix="/api/delivery/pedidos", tags=["Pedidos"])
 
+
+# ======================================================================
+# ============================ ADMIN ===================================
+# ======================================================================
+@router.get("/admin", response_model=list[PedidoResponse], status_code=status.HTTP_200_OK)
+def listar_pedidos_admin(
+    dependecies=[Depends(get_current_user)],
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    status_filter: str | None = Query(None, description="Filtra por status do pedido"),
+    db: Session = Depends(get_db),
+):
+    """
+    Lista pedidos do sistema (para admin) com paginação e filtro opcional por status.
+    """
+    svc = PedidoService(db)
+    return svc.listar_pedidos_admin(skip=skip, limit=limit, status=status_filter)
+
+
+
+# ======================================================================
+# ============================ CLIENTE ===================================
+# ======================================================================
+
 @router.post("/checkout", response_model=PedidoResponse, status_code=status.HTTP_201_CREATED)
 def checkout(
         payload: FinalizarPedidoRequest,
@@ -55,20 +79,3 @@ def editar_pedido(pedido_id: int, payload: FinalizarPedidoRequest, db: Session =
     return svc.editar_pedido(pedido_id=pedido_id, payload=payload)
 
 
-
-# ======================================================================
-# ============================ ADMIN ===================================
-# ======================================================================
-@router.get("/admin", response_model=list[PedidoResponse], status_code=status.HTTP_200_OK)
-def listar_pedidos_admin(
-    dependecies=[Depends(get_current_user)],
-    skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=200),
-    status_filter: str | None = Query(None, description="Filtra por status do pedido"),
-    db: Session = Depends(get_db),
-):
-    """
-    Lista pedidos do sistema (para admin) com paginação e filtro opcional por status.
-    """
-    svc = PedidoService(db)
-    return svc.listar_pedidos_admin(skip=skip, limit=limit, status=status_filter)
