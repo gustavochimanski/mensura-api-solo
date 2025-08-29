@@ -3,6 +3,24 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, condecimal
 from .schema_shared_enums import PedidoStatusEnum, TipoEntregaEnum, OrigemPedidoEnum
 
+
+# ======================================================================
+# ============================ ADMIN ===================================
+# ======================================================================
+class PedidoKanbanResponse(BaseModel):
+    id: int
+    status: PedidoStatusEnum
+    telefone_cliente: str | None = None
+    valor_total: float
+    data_criacao: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+
+# ======================================================================
+# ============================ CLIENTE =================================
+# ======================================================================
 class ItemPedidoRequest(BaseModel):
     produto_cod_barras: str
     quantidade: int
