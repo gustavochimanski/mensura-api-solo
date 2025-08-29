@@ -5,6 +5,7 @@ from typing import Optional, List
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.api.delivery.models.pedido_dv_model import PedidoDeliveryModel
 from app.api.delivery.repositories.repo_pedidos import PedidoRepository
 from app.api.mensura.repositories.empresa_repo import EmpresaRepository
 from app.api.delivery.schemas.schema_pedido_dv import (
@@ -250,3 +251,62 @@ class PedidoService:
         except Exception as e:
             self.repo.rollback()
             raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Erro ao confirmar pagamento: {e}")
+
+
+    def listar_pedidos(self, cliente_telefone: str, skip: int = 0, limit: int = 50) -> list[PedidoResponse]:
+        pedidos = self.repo.db.query(PedidoDeliveryModel)\
+            .filter(PedidoDeliveryModel.cliente_telefone == cliente_telefone)\
+            .order_by(PedidoDeliveryModel.data_criacao.desc())\
+            .offset(skip).limit(limit).all()
+        return [self._pedido_to_response(p) for p in pedidos]
+
+    def get_pedido_by_id(self, pedido_id: int) -> PedidoResponse:
+        pedido = self.repo.get_pedido(pedido_id)
+        if not pedido:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado")
+        return self._pedido_to_response(pedido)
+
+    def editar_pedido(self, pedido_id: int, payload: FinalizarPedidoRequest) -> PedidoResponse:
+        pedido = self.repo.get_pedido(pedido_id)
+        if not pedido:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado")
+
+        # Só altera itens/quantidades e observação (não altera cliente/endereço)
+        pedido.itens.clear()  # remove itens antigos
+
+        subtotal = Decimal("0")
+        for it in payload.itens:
+            pe = self.repo.get_produto_emp(payload.empresa_id, it.produto_cod_barras)
+            if not pe:
+                raise HTTPException(status.HTTP_404_NOT_FOUND, f"Produto {it.produto_cod_barras} não encontrado")
+            preco = _dec(pe.preco_venda)
+            subtotal += preco * it.quantidade
+
+            self.repo.adicionar_item(
+                pedido_id=pedido.id,
+                cod_barras=it.produto_cod_barras,
+                quantidade=it.quantidade,
+                preco_unitario=preco,
+                observacao=it.observacao,
+                produto_descricao_snapshot=pe.produto.descricao if pe.produto else None,
+                produto_imagem_snapshot=pe.produto.imagem if pe.produto else None,
+            )
+
+        desconto = self._aplicar_cupom(cupom_id=payload.cupom_id, subtotal=subtotal)
+        taxa_entrega, taxa_servico = self._calcular_taxas(tipo_entrega=pedido.tipo_entrega, subtotal=subtotal)
+
+        self.repo.atualizar_totais(
+            pedido,
+            subtotal=subtotal,
+            desconto=desconto,
+            taxa_entrega=taxa_entrega,
+            taxa_servico=taxa_servico,
+        )
+
+        pedido.observacao_geral = payload.observacao_geral
+        if payload.troco_para:
+            pedido.troco_para = _dec(payload.troco_para)
+
+        self.repo.commit()
+        self.db.refresh(pedido)
+        return self._pedido_to_response(pedido)
