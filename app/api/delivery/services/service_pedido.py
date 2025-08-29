@@ -315,10 +315,22 @@ class PedidoService:
 
 
 
-
     # ======================================================================
     # ============================ ADMIN ===================================
     # ======================================================================
     def list_all(self):
         # Limite pra não estourar
         return self.repo.list_all(limit=500)
+
+    def atualizar_status(self, pedido_id: int, novo_status: str):
+        pedido = self.db.query(PedidoDeliveryModel).filter_by(id=pedido_id).first()
+        if not pedido:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Pedido não encontrado"
+            )
+
+        pedido.status = novo_status
+        self.db.commit()
+        self.db.refresh(pedido)
+        return pedido

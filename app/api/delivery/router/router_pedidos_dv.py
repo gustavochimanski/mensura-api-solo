@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.api.delivery.models.cliente_dv_model import ClienteDeliveryModel
 from app.api.delivery.schemas.schema_pedido_dv import FinalizarPedidoRequest, PedidoResponse, PedidoKanbanResponse
-from app.api.delivery.schemas.schema_shared_enums import PagamentoMetodoEnum, PagamentoGatewayEnum
+from app.api.delivery.schemas.schema_shared_enums import PagamentoMetodoEnum, PagamentoGatewayEnum, PedidoStatusEnum
 from app.api.delivery.services.service_pedido import PedidoService
 from app.api.mensura.models.user_model import UserModel
 from app.core.admin_dependencies import get_current_user
@@ -31,6 +31,25 @@ def listar_pedidos_admin_kanban(
     Lista pedidos do sistema (para admin, versão resumida pro Kanban)
     """
     return PedidoService(db).list_all()
+
+
+@router.put(
+    "/{pedido_id}/status",
+    response_model=PedidoResponse,
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(get_current_user)]
+)
+def atualizar_status_pedido(
+    pedido_id: int = Path(..., description="ID do pedido"),
+    status: PedidoStatusEnum = Query(..., description="Novo status do pedido"),
+    db: Session = Depends(get_db),
+):
+    """
+    Atualiza o status de um pedido (somente admin).
+    """
+    logger.info(f"[Pedidos] Atualizar status - pedido_id={pedido_id} -> {status}")
+    svc = PedidoService(db)
+    return svc.atualizar_status(pedido_id=pedido_id, novo_status=status)
 
 
 # ======================================================================
