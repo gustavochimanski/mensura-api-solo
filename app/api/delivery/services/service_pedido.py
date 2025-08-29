@@ -16,6 +16,7 @@ from app.api.delivery.schemas.schema_shared_enums import (
     PagamentoMetodoEnum, PagamentoGatewayEnum, PagamentoStatusEnum
 )
 from app.api.delivery.services.service_pagamento_gateway import PaymentGatewayClient
+from app.utils.logger import logger
 
 QTD_MAX_ITENS = 200
 
@@ -106,7 +107,7 @@ class PedidoService:
         return min(desconto, subtotal)
 
     # ---------- Fluxo 1 ----------
-    def finalizar_pedido(self, payload: FinalizarPedidoRequest) -> PedidoResponse:
+    def finalizar_pedido(self, payload: FinalizarPedidoRequest, telefone_cliente: str) -> PedidoResponse:
         if not payload.itens:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Pedido vazio")
         if len(payload.itens) > QTD_MAX_ITENS:
@@ -117,8 +118,8 @@ class PedidoService:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Empresa não encontrada")
 
         # validações de cliente/endereço
-        if payload.telefone_cliente:
-            cliente = self.repo.get_cliente(payload.telefone_cliente)
+        if telefone_cliente:
+            cliente = self.repo.get_cliente(telefone_cliente)
             if not cliente:
                 raise HTTPException(status.HTTP_404_NOT_FOUND, "Cliente não encontrado")
 
@@ -127,12 +128,12 @@ class PedidoService:
 
             if payload.endereco_id:
                 endereco = self.repo.get_endereco(payload.endereco_id)
-                if not endereco or endereco.cliente_telefone != payload.telefone_cliente:
+                if not endereco or endereco.cliente_telefone != telefone_cliente:
                     raise HTTPException(status.HTTP_400_BAD_REQUEST, "Endereço inválido para o cliente")
 
         try:
             pedido = self.repo.criar_pedido(
-                cliente_telefone=payload.telefone_cliente,
+                cliente_telefone=telefone_cliente,
                 empresa_id=payload.empresa_id,
                 endereco_id=payload.endereco_id,
                 status=PedidoStatusEnum.P.value,
@@ -254,6 +255,7 @@ class PedidoService:
 
 
     def listar_pedidos(self, cliente_telefone: str, skip: int = 0, limit: int = 50) -> list[PedidoResponse]:
+        logger.info(cliente_telefone)
         pedidos = self.repo.db.query(PedidoDeliveryModel)\
             .filter(PedidoDeliveryModel.cliente_telefone == cliente_telefone)\
             .order_by(PedidoDeliveryModel.data_criacao.desc())\
