@@ -10,13 +10,12 @@ from app.api.delivery.router.router_cupons_dv import router as cupons_router
 from app.api.delivery.router.router_entregadores import router as entregadores_router
 from app.api.delivery.router.router_enderecos import router as enderecos_router
 from app.core.admin_dependencies import get_current_user
-from app.core.client_dependecies import get_cliente_by_super_token
 
 api_delivery = APIRouter()
 api_delivery.include_router(cardapio_router)
 api_delivery.include_router(categorias_router)
 api_delivery.include_router(cliente_router)
-api_delivery.include_router(pedidos_router, dependencies=[Depends(get_cliente_by_super_token)]),
+api_delivery.include_router(pedidos_router),
 api_delivery.include_router(produtos_router, dependencies=[Depends(get_current_user)])
 api_delivery.include_router(vitrines_router, dependencies=[Depends(get_current_user)])
 api_delivery.include_router(cupons_router, dependencies=[Depends(get_current_user)])

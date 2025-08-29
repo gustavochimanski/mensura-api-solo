@@ -1,9 +1,11 @@
 from fastapi import APIRouter, status, Path, Query, Depends
 from sqlalchemy.orm import Session
 
+from app.api.delivery.models.cliente_dv_model import ClienteDeliveryModel
 from app.api.delivery.schemas.schema_pedido_dv import FinalizarPedidoRequest, PedidoResponse
 from app.api.delivery.schemas.schema_shared_enums import PagamentoMetodoEnum, PagamentoGatewayEnum
 from app.api.delivery.services.service_pedido import PedidoService
+from app.core.client_dependecies import get_cliente_by_super_token
 from app.database.db_connection import get_db
 from app.utils.logger import logger
 
@@ -27,9 +29,14 @@ async def confirmar_pagamento(
     return await svc.confirmar_pagamento(pedido_id=pedido_id, metodo=metodo, gateway=gateway)
 
 @router.get("/", response_model=list[PedidoResponse], status_code=status.HTTP_200_OK)
-def listar_pedidos(skip: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=200), db: Session = Depends(get_db)):
+def listar_pedidos(
+    cliente: ClienteDeliveryModel = Depends(get_cliente_by_super_token),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db),
+):
     svc = PedidoService(db)
-    return svc.listar_pedidos(skip=skip, limit=limit)
+    return svc.listar_pedidos(cliente_telefone=cliente.telefone, skip=skip, limit=limit)
 
 @router.get("/{pedido_id}", response_model=PedidoResponse, status_code=status.HTTP_200_OK)
 def get_pedido(pedido_id: int = Path(..., description="ID do pedido"), db: Session = Depends(get_db)):
