@@ -16,7 +16,7 @@ api_delivery = APIRouter()
 api_delivery.include_router(cardapio_router)
 api_delivery.include_router(categorias_router)
 api_delivery.include_router(cliente_router)
-api_delivery.include_router(pedidos_router, dependencies=Depends(get_cliente_by_super_token),)
+api_delivery.include_router(pedidos_router, dependencies=[Depends(get_cliente_by_super_token)]),
 api_delivery.include_router(produtos_router, dependencies=[Depends(get_current_user)])
 api_delivery.include_router(vitrines_router, dependencies=[Depends(get_current_user)])
 api_delivery.include_router(cupons_router, dependencies=[Depends(get_current_user)])
