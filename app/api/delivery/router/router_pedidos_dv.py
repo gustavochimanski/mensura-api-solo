@@ -21,17 +21,15 @@ router = APIRouter(prefix="/api/delivery/pedidos", tags=["Pedidos"])
     "/admin/kanban",
     response_model=list[PedidoKanbanResponse],
     status_code=status.HTTP_200_OK,
+    dependencies=[Depends(get_current_user)]
 )
 def listar_pedidos_admin_kanban(
-    status_filter: str | None = Query(None, description="Filtra por status do pedido"),
     db: Session = Depends(get_db),
-   dependencies=[Depends(get_current_user)]
 ):
     """
     Lista pedidos do sistema (para admin, versão resumida pro Kanban)
     """
     return PedidoService(db).list_all()
-
 
 @router.put(
     "/{pedido_id}/status",
@@ -50,6 +48,8 @@ def atualizar_status_pedido(
     logger.info(f"[Pedidos] Atualizar status - pedido_id={pedido_id} -> {status}")
     svc = PedidoService(db)
     return svc.atualizar_status(pedido_id=pedido_id, novo_status=status)
+
+
 
 
 # ======================================================================
