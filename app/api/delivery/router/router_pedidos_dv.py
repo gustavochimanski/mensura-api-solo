@@ -18,7 +18,7 @@ router = APIRouter(prefix="/api/delivery/pedidos", tags=["Pedidos"])
 # ============================ ADMIN ===================================
 # ======================================================================
 @router.get(
-    "/admin/kanban",
+    "/admin/kanban/",
     response_model=list[PedidoKanbanResponse],
     status_code=status.HTTP_200_OK,
 )
