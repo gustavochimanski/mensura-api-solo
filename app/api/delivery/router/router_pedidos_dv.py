@@ -32,7 +32,7 @@ def listar_pedidos_admin_kanban(
     return PedidoService(db).list_all()
 
 @router.put(
-    "/{pedido_id}/status",
+    "/status/{pedido_id}",
     response_model=PedidoResponse,
     status_code=status.HTTP_200_OK,
     dependencies=[Depends(get_current_user)]
@@ -91,10 +91,4 @@ def listar_pedidos(
 def get_pedido(pedido_id: int = Path(..., description="ID do pedido"), db: Session = Depends(get_db)):
     svc = PedidoService(db)
     return svc.get_pedido_by_id(pedido_id)
-
-@router.put("/{pedido_id}", response_model=PedidoResponse, status_code=status.HTTP_200_OK)
-def editar_pedido(pedido_id: int, payload: FinalizarPedidoRequest, db: Session = Depends(get_db)):
-    svc = PedidoService(db)
-    return svc.editar_pedido(pedido_id=pedido_id, payload=payload)
-
 
