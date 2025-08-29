@@ -6,13 +6,12 @@ from sqlalchemy.orm import relationship
 from app.database.db_connection import Base
 
 PedidoStatus = SAEnum(
-    "P", "A", "R", "S", "E", "C",
+    "P", "R", "S", "E", "C",
     name="pedido_status_enum",
     create_type=False
 )
 
 # PENDENTE: P
-# ACEITO: A
 # EM_PREPARO: R
 # SAIU_PARA_ENTREGA: S
 # ENTREGUE: E
