@@ -3,15 +3,13 @@ from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional, List
 
 from fastapi import HTTPException, status
-from sqlalchemy import String, or_
 from sqlalchemy.orm import Session
 
-from app.api.delivery.models.cliente_dv_model import ClienteDeliveryModel
 from app.api.delivery.models.pedido_dv_model import PedidoDeliveryModel
 from app.api.delivery.repositories.repo_pedidos import PedidoRepository
 from app.api.mensura.repositories.empresa_repo import EmpresaRepository
 from app.api.delivery.schemas.schema_pedido_dv import (
-    FinalizarPedidoRequest, ItemPedidoRequest, PedidoResponse, ItemPedidoResponse, PedidoKanbanResponse
+    FinalizarPedidoRequest, ItemPedidoRequest, PedidoResponse, ItemPedidoResponse
 )
 from app.api.delivery.schemas.schema_shared_enums import (
     PedidoStatusEnum, TipoEntregaEnum, OrigemPedidoEnum,
@@ -336,25 +334,3 @@ class PedidoService:
         self.db.commit()
         self.db.refresh(pedido)
         return pedido
-
-    def search(self, q: str, skip: int = 0, limit: int = 50) -> list[PedidoKanbanResponse]:
-        """
-        Busca pedidos pelo termo `q` no nome do cliente, número do pedido ou outro campo.
-        """
-        query = self.db.query(PedidoDeliveryModel).join(ClienteDeliveryModel)
-
-        # Pesquisar pelo nome do cliente ou ID do pedido
-        query = query.filter(
-            or_(
-                ClienteDeliveryModel.nome.ilike(f"%{q}%"),
-                PedidoDeliveryModel.id.cast(String).ilike(f"%{q}%")
-            )
-        )
-
-        query = query.offset(skip).limit(limit).order_by(PedidoDeliveryModel.data_criacao.desc())
-
-        results = query.all()
-
-        # Mapear para PedidoKanbanResponse
-        return [PedidoKanbanResponse.from_orm(p) for p in results]
-
