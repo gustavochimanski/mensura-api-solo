@@ -10,6 +10,7 @@ from app.api.delivery.schemas.schema_parceiros import (
     BannerParceiroIn, BannerParceiroOut
 )
 from app.core.admin_dependencies import get_current_user
+from app.utils.minio_client import upload_file_to_minio
 
 router = APIRouter(prefix="/api/delivery/parceiros", tags=["Delivery - Parceiros"])
 
@@ -42,14 +43,25 @@ def create_banner(
     imagem: UploadFile | None = File(None),
     db: Session = Depends(get_db)
 ):
+    # 1️⃣ Se tiver arquivo, envia para o MinIO
+    imagem_url = None
+    if imagem:
+        # slug usado no MinIO (pode ser "banners")
+        slug = "banners"
+        imagem_url = upload_file_to_minio(db, parceiro_id, imagem, "banners")
+
+    # 2️⃣ Monta DTO
     body = BannerParceiroIn(
         nome=nome,
         tipo_banner=tipo_banner,
         ativo=ativo,
         parceiro_id=parceiro_id,
-        imagem=imagem.filename if imagem else None
+        imagem=imagem_url
     )
+
+    # 3️⃣ Cria banner
     return ParceirosService(db).create_banner(body)
+
 
 
 @router.get("/banners", response_model=list[BannerParceiroOut])
