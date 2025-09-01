@@ -139,12 +139,22 @@ class PedidoService:
                     raise HTTPException(status.HTTP_400_BAD_REQUEST, "Endereço inválido para o cliente")
 
         try:
+            empresa = self.repo_empresa.get_empresa_by_id(payload.empresa_id)
+            if not empresa:
+                raise HTTPException(status.HTTP_404_NOT_FOUND, "Empresa não encontrada")
+
+            # decide status inicial
+            status_inicial = (
+                PedidoStatusEnum.E.value  # Em preparo
+                if getattr(empresa, "aceita_pedido_automatico", False)
+                else PedidoStatusEnum.P.value  # Pendente
+            )
             pedido = self.repo.criar_pedido(
                 cliente_telefone=telefone_cliente,
                 empresa_id=payload.empresa_id,
                 endereco_id=payload.endereco_id,
                 meio_pagamento_id=payload.meio_pagamento_id,
-                status=PedidoStatusEnum.P.value,
+                status=status_inicial,
                 tipo_entrega=payload.tipo_entrega,
                 origem=payload.origem.value,
             )
