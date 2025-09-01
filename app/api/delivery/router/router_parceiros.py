@@ -45,7 +45,7 @@ def create_banner(
     tipo_banner: str = Form(...),
     ativo: bool = Form(...),
     parceiro_id: int = Form(...),
-    categoria_destino: int = Form(...),
+    categoria_id: int = Form(...),
     imagem: UploadFile | None = File(None),
     db: Session = Depends(get_db)
 
@@ -64,7 +64,7 @@ def create_banner(
         ativo=ativo,
         parceiro_id=parceiro_id,
         imagem=imagem_url,
-        categoria_id=categoria_destino
+        categoria_id=categoria_id
     )
 
     # 3️⃣ Cria banner
