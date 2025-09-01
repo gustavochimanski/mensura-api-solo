@@ -53,7 +53,12 @@ class PedidoRepository:
     def list_all(self, limit: int = 500):
         return (
             self.db.query(PedidoDeliveryModel)
-            .options(joinedload(PedidoDeliveryModel.cliente), joinedload(PedidoDeliveryModel.endereco))
+            .options(
+                joinedload(PedidoDeliveryModel.cliente)
+                .joinedload(ClienteDeliveryModel.enderecos),
+                joinedload(PedidoDeliveryModel.endereco),
+                joinedload(PedidoDeliveryModel.meio_pagamento),
+            )
             .order_by(PedidoDeliveryModel.data_criacao.desc())
             .limit(limit)
             .all()
