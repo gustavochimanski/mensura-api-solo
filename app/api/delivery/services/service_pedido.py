@@ -329,7 +329,7 @@ class PedidoService:
     def list_all(self, limit: int = 500):
         pedidos = self.repo.list_all(limit)
         resultados = []
-
+#
         for p in pedidos:
             cliente = p.cliente
             endereco = cliente.enderecos[0] if cliente and cliente.enderecos else None
