@@ -19,7 +19,7 @@ def dependency_a():
 
 
 def dependency_b():
-    get_cliente_by_super_token()
+    return get_cliente_by_super_token()
 
 
 @router.get("/")
