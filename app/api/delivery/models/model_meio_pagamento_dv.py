@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from sqlalchemy import Column, String, Boolean, Enum as SAEnum, Integer
 import uuid
 from app.database.db_connection import Base
@@ -19,7 +21,7 @@ class MeioPagamentoModel(Base):
     ativo = Column(Boolean, default=True, nullable=False)
     from sqlalchemy import DateTime, func
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
 
