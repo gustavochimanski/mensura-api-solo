@@ -13,7 +13,7 @@ class ParceiroOut(BaseModel):
     id: int
     nome: str
     ativo: bool
-    categoria_destino: str | None
+    categoria_destino: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True)
 
