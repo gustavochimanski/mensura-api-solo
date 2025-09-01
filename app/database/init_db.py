@@ -39,6 +39,8 @@ def importar_models():
     from app.api.delivery.models.model_categoria_dv import CategoriaDeliveryModel
     from app.api.delivery.models.model_vitrine_dv import VitrinesModel
     from app.api.delivery.models.model_entregador_dv import EntregadorDeliveryModel
+    from app.api.delivery.models.model_meio_pagamento_dv import MeioPagamentoModel
+    from app.api.delivery.models.model_cliente_codigo_validacao import ClienteOtpModel
     logger.info("📦 Models importados com sucesso.")
 
 def criar_tabelas():
