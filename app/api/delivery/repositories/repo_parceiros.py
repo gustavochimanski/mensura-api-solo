@@ -71,7 +71,7 @@ class ParceirosRepository:
 
     def update_banner(self, banner_id: int, data: dict) -> BannerParceiroModel:
         b = self.get_banner(banner_id)
-        for key in ["nome", "imagem", "tipo_banner", "parceiro_id"]:
+        for key in ["nome", "imagem", "tipo_banner", "parceiro_id", "ativo"]:
             if key in data and data[key] is not None:
                 setattr(b, key, data[key])
         self.db.commit()
