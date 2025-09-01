@@ -1,3 +1,4 @@
+import random
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, status, HTTPException
@@ -9,7 +10,6 @@ from app.api.delivery.schemas.schema_cliente import ClienteOut, ClienteUpdate, C
 from app.api.delivery.services.service_cliente import ClienteService
 from app.core.client_dependecies import get_cliente_by_super_token
 from app.database.db_connection import get_db
-from app.utils.gerar_codigo_utils import gerar_codigo_telefone, validar_codigo_telefone, gerar_codigo_otp
 from app.utils.logger import logger
 
 router = APIRouter(prefix="/api/delivery/cliente", tags=["Cliente"])
@@ -20,7 +20,7 @@ def novo_dispositivo(telefone: str, db: Session = Depends(get_db)):
     if not cliente:
         raise HTTPException(status_code=404, detail="Telefone não cadastrado")
 
-    codigo = gerar_codigo_otp()
+    codigo = random.randint(100000, 999999)
     expira = datetime.utcnow() + timedelta(minutes=5)
 
     otp = ClienteOtpModel(telefone=telefone, codigo=codigo, expira_em=expira)
