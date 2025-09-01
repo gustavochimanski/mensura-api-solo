@@ -11,11 +11,11 @@ from app.database.db_connection import get_db
 
 router = APIRouter(prefix="/api/delivery/meios-pagamento", tags=["Meios de Pagamento"])
 
-@router.get("/", response_model=List[MeioPagamentoResponse], dependencies=[Depends(get_current_user)])
+@router.get("/", response_model=List[MeioPagamentoResponse], dependencies=[Depends(get_cliente_by_super_token)])
 def listar_meios_pagamento(db: Session = Depends(get_db)):
     return MeioPagamentoService(db).list_all()
 
-@router.get("/admin", response_model=List[MeioPagamentoResponse], dependencies=[Depends(get_cliente_by_super_token)])
+@router.get("/admin", response_model=List[MeioPagamentoResponse], dependencies=[Depends(get_current_user)])
 def listar_meios_pagamento_admin(db: Session = Depends(get_db)):
     return MeioPagamentoService(db).list_all()
 
