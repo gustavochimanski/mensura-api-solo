@@ -17,9 +17,11 @@ class MeioPagamentoModel(Base):
     nome = Column(String(100), nullable=False, unique=True)  # Nome amigável
     tipo = Column(MeioPagamentoTipo, nullable=False)        # Categoria
     ativo = Column(Boolean, default=True, nullable=False)
-    from sqlalchemy import DateTime, func
+    from sqlalchemy import DateTime
 
     created_at = Column(DateTime, default=now_trimmed)
     updated_at = Column(DateTime, default=now_trimmed, onupdate=now_trimmed)
+    def display(self):
+        return f"{self.nome}"
 
 

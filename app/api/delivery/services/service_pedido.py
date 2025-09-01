@@ -356,7 +356,7 @@ class PedidoService:
                     telefone_cliente=cliente.telefone if cliente else None,
                     nome_cliente=cliente.nome if cliente else None,
                     endereco_cliente=endereco_str,
-                    meio_pagamento=p.meio_pagamento.descricao if p.meio_pagamento else None
+                    meio_pagamento_descricao=p.meio_pagamento.display() if p.meio_pagamento else None
                 )
             )
 
