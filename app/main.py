@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,6 +19,7 @@ BASE_DIR = Path(__file__).resolve().parent
 STATIC_IMG_DIR = BASE_DIR / "static" / "img"
 STATIC_IMG_DIR.mkdir(parents=True, exist_ok=True)
 
+BASE_URL = os.getenv("BASE_URL", "https://teste2.mensuraapi.com.br")
 # ───────────────────────────
 # Instância FastAPI
 # ───────────────────────────
@@ -28,6 +30,7 @@ app = FastAPI(
     docs_url="/swagger",
     redoc_url="/redoc",
     openapi_url="/openapi.json",
+    servers=[{"url": BASE_URL, "description": "Base URL do ambiente"}]
 )
 
 # ───────────────────────────
