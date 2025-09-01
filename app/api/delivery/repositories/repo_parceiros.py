@@ -50,7 +50,8 @@ class ParceirosRepository:
             nome=data.nome,
             parceiro_id=data.parceiro_id,
             imagem=data.imagem,
-            tipo_banner=data.tipo_banner
+            tipo_banner=data.tipo_banner,
+            categoria_id=data.categoria_id
         )
         self.db.add(b)
         self.db.commit()
