@@ -85,6 +85,6 @@ def delete_banner(banner_id: int, db: Session = Depends(get_db)):
 # ===============================================================
 # ======================== CLIENT ===============================
 # ===============================================================
-@router.get("/client/banners", response_model=list[BannerParceiroOut], dependencies=[Depends(get_current_user)])
+@router.get("/client/banners", response_model=list[BannerParceiroOut], dependencies=[Depends(get_cliente_by_super_token)])
 def list_banners(parceiro_id: Optional[int] = None, db: Session = Depends(get_db)):
     return ParceirosService(db).list_banners(parceiro_id)
