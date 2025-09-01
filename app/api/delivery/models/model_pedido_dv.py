@@ -21,7 +21,7 @@ PedidoStatus = SAEnum(
 TipoEntrega = SAEnum("DELIVERY", "RETIRADA", name="tipo_entrega_enum", create_type=False)
 OrigemPedido = SAEnum("WEB", "APP", "BALCAO", name="origem_pedido_enum", create_type=False)
 
-
+#
 class PedidoDeliveryModel(Base):
     __tablename__ = "pedidos_dv"
     __table_args__ = {"schema": "delivery"}
