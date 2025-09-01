@@ -6,6 +6,8 @@ from sqlalchemy.ext.hybrid import hybrid_property
 
 from app.api.mensura.models.association_tables import VitrineCategoriaLink
 from app.database.db_connection import Base
+from app.utils.database_utils import now_trimmed
+
 
 class CategoriaDeliveryModel(Base):
     __tablename__ = "categoria_dv"
@@ -22,8 +24,8 @@ class CategoriaDeliveryModel(Base):
     imagem = Column(String(255), nullable=True)
     posicao = Column(Integer, nullable=False, default=0)
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    created_at = Column(DateTime, default=now_trimmed, nullable=False)
+    updated_at = Column(DateTime, default=now_trimmed, onupdate=now_trimmed, nullable=False)
 
     produtos = relationship("ProdutoModel", back_populates="categoria")
 

@@ -1,8 +1,6 @@
-from datetime import datetime
-
 from sqlalchemy import Column, String, Boolean, Enum as SAEnum, Integer
-import uuid
 from app.database.db_connection import Base
+from app.utils.database_utils import now_trimmed
 
 # Enum para tipos genéricos (para agrupar métodos semelhantes)
 MeioPagamentoTipo = SAEnum(
@@ -21,7 +19,7 @@ class MeioPagamentoModel(Base):
     ativo = Column(Boolean, default=True, nullable=False)
     from sqlalchemy import DateTime, func
 
-    created_at = Column(DateTime, default=datetime.now)
-    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+    created_at = Column(DateTime, default=now_trimmed)
+    updated_at = Column(DateTime, default=now_trimmed, onupdate=now_trimmed)
 
 

@@ -2,6 +2,8 @@ from pydantic import ConfigDict
 from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, func, Numeric, Boolean
 from sqlalchemy.orm import relationship
 from app.database.db_connection import Base
+from app.utils.database_utils import now_trimmed
+
 
 class EnderecoDeliveryModel(Base):
     __tablename__ = "enderecos_dv"
@@ -26,8 +28,8 @@ class EnderecoDeliveryModel(Base):
     longitude  = Column(Numeric(10, 6), nullable=True)
     is_principal = Column(Boolean, nullable=False, default=False)
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    created_at = Column(DateTime, default=now_trimmed, nullable=False)
+    updated_at = Column(DateTime, default=now_trimmed, onupdate=now_trimmed,  nullable=False)
 
     # relacionamentos
     cliente = relationship("ClienteDeliveryModel", back_populates="enderecos")

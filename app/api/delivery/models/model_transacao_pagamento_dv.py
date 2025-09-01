@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Numeric, Enum as SAEnum, JSON, func, Index, UUID
 from sqlalchemy.orm import relationship
 from app.database.db_connection import Base
+from app.utils.database_utils import now_trimmed
 
 PagamentoGateway = SAEnum("MERCADOPAGO", "PAGSEGURO", "STRIPE", "PIX_INTERNO", "OUTRO", name="pagamento_gateway_enum", create_type=False)
 PagamentoMetodo  = SAEnum("PIX", "CREDITO", "DEBITO", "DINHEIRO", "ONLINE", "OUTRO", name="pagamento_metodo_enum", create_type=False)
@@ -18,7 +19,7 @@ class TransacaoPagamentoModel(Base):
 
     gateway = Column(PagamentoGateway, nullable=False)
 
-    meio_pagamento_id = Column(UUID(as_uuid=True), ForeignKey("delivery.meios_pagamento_dv.id"), nullable=False)
+    meio_pagamento_id = Column(Integer(as_uuid=True), ForeignKey("delivery.meios_pagamento_dv.id"), nullable=False)
     meio_pagamento = relationship("MeioPagamentoModel")
 
     valor = Column(Numeric(18, 2), nullable=False)
@@ -38,7 +39,7 @@ class TransacaoPagamentoModel(Base):
     cancelado_em = Column(DateTime(timezone=True), nullable=True)
     estornado_em = Column(DateTime(timezone=True), nullable=True)
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    created_at = Column(DateTime, default=now_trimmed, nullable=False)
+    updated_at = Column(DateTime, default=now_trimmed, onupdate=now_trimmed,  nullable=False)
 
     pedido = relationship("PedidoDeliveryModel", back_populates="transacao")

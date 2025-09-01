@@ -1,6 +1,8 @@
 from sqlalchemy import Column, Integer, String, DateTime, Numeric, Boolean, func
 from sqlalchemy.orm import relationship
 from app.database.db_connection import Base
+from app.utils.database_utils import now_trimmed
+
 
 class CupomDescontoModel(Base):
     __tablename__ = "cupons_dv"
@@ -19,7 +21,7 @@ class CupomDescontoModel(Base):
     validade_fim = Column(DateTime(timezone=True), nullable=True)
     minimo_compra = Column(Numeric(18, 2), nullable=True)
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    created_at = Column(DateTime, default=now_trimmed, nullable=False)
+    updated_at = Column(DateTime, default=now_trimmed, onupdate=now_trimmed, nullable=False)
 
     pedidos = relationship("PedidoDeliveryModel", back_populates="cupom")

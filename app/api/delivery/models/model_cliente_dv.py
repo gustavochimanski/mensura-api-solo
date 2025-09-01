@@ -7,6 +7,9 @@ from sqlalchemy.orm import relationship
 from app.database.db_connection import Base
 from pydantic import ConfigDict
 
+from app.utils.database_utils import now_trimmed
+
+
 def default_super_token():
     raw = secrets.token_bytes(32)
     hashed = hashlib.sha256(raw).digest()
@@ -28,8 +31,8 @@ class ClienteDeliveryModel(Base):
     ativo = Column(Boolean, default=True, nullable=False)
     super_token = Column(String, unique=True, nullable=False, default=default_super_token)
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    created_at = Column(DateTime, default=now_trimmed, nullable=False)
+    updated_at = Column(DateTime, default=now_trimmed, onupdate=now_trimmed, nullable=False)
 
     pedidos = relationship(
         "PedidoDeliveryModel",

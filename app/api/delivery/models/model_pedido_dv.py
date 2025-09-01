@@ -4,6 +4,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 from app.database.db_connection import Base
+from app.utils.database_utils import now_trimmed
 
 PedidoStatus = SAEnum(
     "P", "R", "S", "E", "C",
@@ -60,8 +61,8 @@ class PedidoDeliveryModel(Base):
 
     cupom_id = Column(Integer, ForeignKey("delivery.cupons_dv.id", ondelete="SET NULL"), nullable=True)
 
-    data_criacao = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    data_atualizacao = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+    data_criacao = Column(DateTime, default=now_trimmed, nullable=False)
+    data_atualizacao = Column(DateTime, default=now_trimmed, onupdate=now_trimmed,  nullable=False)
 
 
 
