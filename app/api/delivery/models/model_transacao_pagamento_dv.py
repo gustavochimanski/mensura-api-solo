@@ -19,7 +19,7 @@ class TransacaoPagamentoModel(Base):
 
     gateway = Column(PagamentoGateway, nullable=False)
 
-    meio_pagamento_id = Column(Integer(as_uuid=True), ForeignKey("delivery.meios_pagamento_dv.id"), nullable=False)
+    meio_pagamento_id = Column(Integer, ForeignKey("delivery.meios_pagamento_dv.id"), nullable=False)
     meio_pagamento = relationship("MeioPagamentoModel")
 
     valor = Column(Numeric(18, 2), nullable=False)
