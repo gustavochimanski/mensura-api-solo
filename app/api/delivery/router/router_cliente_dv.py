@@ -32,7 +32,7 @@ def novo_dispositivo(body: NovoDispositivoRequest, db: Session = Depends(get_db)
     db.commit()
 
     # envia SMS real
-    logger.info(telefone, f"Seu código de login é: {codigo}")
+    logger.info(f"Seu código de login é: {codigo}")
 
     return {"detail": "Código enviado com sucesso"}
 
