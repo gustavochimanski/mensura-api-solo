@@ -31,9 +31,26 @@ def delete_parceiro(parceiro_id: int, db: Session = Depends(get_db)):
     return ParceirosService(db).delete_parceiro(parceiro_id)
 
 # -------- BANNERS --------
-@router.post("/banners", response_model=BannerParceiroOut, status_code=status.HTTP_201_CREATED, dependencies=[Depends(get_current_user)])
-def create_banner(body: BannerParceiroIn, db: Session = Depends(get_db)):
+from fastapi import Form, UploadFile, File
+
+@router.post("/banners", response_model=BannerParceiroOut, status_code=status.HTTP_201_CREATED)
+def create_banner(
+    nome: str = Form(...),
+    tipo_banner: str = Form(...),
+    ativo: bool = Form(...),
+    parceiro_id: int = Form(...),
+    imagem: UploadFile | None = File(None),
+    db: Session = Depends(get_db)
+):
+    body = BannerParceiroIn(
+        nome=nome,
+        tipo_banner=tipo_banner,
+        ativo=ativo,
+        parceiro_id=parceiro_id,
+        imagem=imagem.filename if imagem else None
+    )
     return ParceirosService(db).create_banner(body)
+
 
 @router.get("/banners", response_model=list[BannerParceiroOut])
 def list_banners(parceiro_id: Optional[int] = None, db: Session = Depends(get_db)):
