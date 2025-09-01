@@ -15,8 +15,13 @@ class ClienteService:
 
     def create(self, data: ClienteCreate):
         # verifica telefone duplicado
-        if data.telefone and self.repo.get_by_telefone(data.telefone):
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Telefone já cadastrado")
+        existing = None
+        if data.telefone:
+            existing = self.repo.get_by_telefone(data.telefone)
+            if existing:
+                return existing  # retorna o cliente já cadastrado
+
+        # cria um novo cliente se não existir
         return self.repo.create(**data.model_dump(exclude_unset=True))
 
     def update(self, token: str, data: ClienteUpdate):
