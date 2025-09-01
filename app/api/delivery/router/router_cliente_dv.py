@@ -2,6 +2,7 @@ import random
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, status, HTTPException
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.delivery.models.model_cliente_codigo_validacao import ClienteOtpModel
@@ -14,8 +15,11 @@ from app.utils.logger import logger
 
 router = APIRouter(prefix="/api/delivery/cliente", tags=["Cliente"])
 
+class NovoDispositivoRequest(BaseModel):
+    telefone: str
 @router.post("/novo-dispositivo")
-def novo_dispositivo(telefone: str, db: Session = Depends(get_db)):
+def novo_dispositivo(body: NovoDispositivoRequest, db: Session = Depends(get_db)):
+    telefone = body.telefone
     cliente = db.query(ClienteDeliveryModel).filter_by(telefone=telefone).first()
     if not cliente:
         raise HTTPException(status_code=404, detail="Telefone não cadastrado")
@@ -32,13 +36,18 @@ def novo_dispositivo(telefone: str, db: Session = Depends(get_db)):
 
     return {"detail": "Código enviado com sucesso"}
 
+
+class ConfirmacaoCodigoRequest(BaseModel):
+    telefone: str
+    codigo: str
+
 @router.post("/confirmar-codigo")
-def confirmar_codigo(telefone: str, codigo: str, db: Session = Depends(get_db)):
-    otp = db.query(ClienteOtpModel).filter_by(telefone=telefone, codigo=codigo).first()
+def confirmar_codigo(body: ConfirmacaoCodigoRequest, db: Session = Depends(get_db)):
+    otp = db.query(ClienteOtpModel).filter_by(telefone=body.telefone, codigo=body.codigo).first()
     if not otp or otp.expira_em < datetime.utcnow():
         raise HTTPException(status_code=400, detail="Código inválido ou expirado")
 
-    cliente = db.query(ClienteDeliveryModel).filter_by(telefone=telefone).first()
+    cliente = db.query(ClienteDeliveryModel).filter_by(telefone=body.telefone).first()
     if not cliente:
         raise HTTPException(status_code=404, detail="Cliente não encontrado")
 
