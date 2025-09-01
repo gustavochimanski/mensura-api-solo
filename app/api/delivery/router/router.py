@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 
-from app.api.delivery.router.router_home_dv import router as cardapio_router
+from app.api.delivery.router.router_home_dv import router as home_router
 from app.api.delivery.router.router_categorias_dv import router as categorias_router
 from app.api.delivery.router.router_cliente_dv import router as cliente_router
 from app.api.delivery.router.router_pedidos_dv import router as pedidos_router
@@ -15,7 +15,7 @@ from app.api.delivery.router.router_parceiros import router as parceiros_router
 from app.core.admin_dependencies import get_current_user
 
 api_delivery = APIRouter()
-api_delivery.include_router(cardapio_router)
+api_delivery.include_router(home_router)
 api_delivery.include_router(categorias_router)
 api_delivery.include_router(cliente_router)
 api_delivery.include_router(pedidos_router),
