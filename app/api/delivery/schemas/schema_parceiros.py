@@ -21,7 +21,7 @@ class BannerParceiroIn(BaseModel):
     nome: constr(min_length=1, max_length=100)
     parceiro_id: int
     imagem: Optional[str] = None
-    categoria_destino: int
+    categoria_id: int
     ativo: bool
     tipo_banner: constr(min_length=1, max_length=1)  # V ou H
 

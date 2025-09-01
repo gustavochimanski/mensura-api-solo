@@ -64,7 +64,7 @@ def create_banner(
         ativo=ativo,
         parceiro_id=parceiro_id,
         imagem=imagem_url,
-        categoria_destino=categoria_destino
+        categoria_id=categoria_destino
     )
 
     # 3️⃣ Cria banner
