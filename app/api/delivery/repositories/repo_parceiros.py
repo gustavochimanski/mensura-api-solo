@@ -14,7 +14,7 @@ class ParceirosRepository:
     def create_parceiro(self, data: ParceiroIn) -> ParceiroModel:
         if self.db.query(ParceiroModel).filter_by(nome=data.nome).first():
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Parceiro já existe")
-        p = ParceiroModel(nome=data.nome)
+        p = ParceiroModel(nome=data.nome, ativo=data.ativo)
         self.db.add(p)
         self.db.commit()
         self.db.refresh(p)
