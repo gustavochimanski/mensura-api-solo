@@ -29,3 +29,13 @@ class ClienteUpdate(BaseModel):
     email: Optional[EmailStr] = None
     data_nascimento: Optional[date] = None
     ativo: Optional[bool] = None
+
+
+from pydantic import BaseModel, constr
+
+class NovoDispositivoRequest(BaseModel):
+    telefone: constr(min_length=10, max_length=11)
+
+class ConfirmacaoCodigoRequest(BaseModel):
+    telefone: constr(min_length=10, max_length=11)
+    codigo: str
