@@ -141,7 +141,7 @@ class PedidoService:
         try:
             # decide status inicial
             status_inicial = (
-                PedidoStatusEnum.E.value  # Em preparo
+                PedidoStatusEnum.R.value  # Em preparo
                 if getattr(empresa, "aceita_pedido_automatico", False)
                 else PedidoStatusEnum.P.value  # Pendente
             )
