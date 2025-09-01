@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from typing import Optional
 
 from app.api.delivery.services.service_parceiros import ParceirosService
+from app.core.client_dependecies import get_cliente_by_super_token
 from app.database.db_connection import get_db
 from app.api.delivery.schemas.schema_parceiros import (
     ParceiroIn, ParceiroOut,
@@ -12,29 +13,33 @@ from app.api.delivery.schemas.schema_parceiros import (
 from app.core.admin_dependencies import get_current_user
 from app.utils.minio_client import upload_file_to_minio
 
-router = APIRouter(prefix="/api/delivery/parceiros", tags=["Delivery - Parceiros"])
+router = APIRouter(prefix="/api/delivery", tags=["Delivery - Parceiros"])
 
-# -------- PARCEIROS --------
-@router.post("", response_model=ParceiroOut, status_code=status.HTTP_201_CREATED, dependencies=[Depends(get_current_user)])
+# ===============================================================
+# ====================== PARCEIROS ==============================
+# ===============================================================
+@router.post("/parceiros", response_model=ParceiroOut, status_code=status.HTTP_201_CREATED, dependencies=[Depends(get_current_user)])
 def create_parceiro(body: ParceiroIn, db: Session = Depends(get_db)):
     return ParceirosService(db).create_parceiro(body)
 
-@router.get("", response_model=list[ParceiroOut])
+@router.get("/parceiros", response_model=list[ParceiroOut])
 def list_parceiros(db: Session = Depends(get_db)):
     return ParceirosService(db).list_parceiros()
 
-@router.put("/{parceiro_id}", response_model=ParceiroOut, dependencies=[Depends(get_current_user)])
+@router.put("/parceiros/{parceiro_id}", response_model=ParceiroOut, dependencies=[Depends(get_current_user)])
 def update_parceiro(parceiro_id: int, body: ParceiroIn, db: Session = Depends(get_db)):
     return ParceirosService(db).update_parceiro(parceiro_id, body.model_dump(exclude_unset=True))
 
-@router.delete("/{parceiro_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(get_current_user)])
+@router.delete("/parceiros/{parceiro_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(get_current_user)])
 def delete_parceiro(parceiro_id: int, db: Session = Depends(get_db)):
     return ParceirosService(db).delete_parceiro(parceiro_id)
 
-# -------- BANNERS --------
+# ===============================================================
+# ====================== BANNERS ================================
+# ===============================================================
 from fastapi import Form, UploadFile, File
 
-@router.post("/banners", response_model=BannerParceiroOut, status_code=status.HTTP_201_CREATED)
+@router.post("/banners", response_model=BannerParceiroOut, status_code=status.HTTP_201_CREATED, dependencies=[Depends(get_current_user)])
 def create_banner(
     nome: str = Form(...),
     tipo_banner: str = Form(...),
@@ -42,6 +47,7 @@ def create_banner(
     parceiro_id: int = Form(...),
     imagem: UploadFile | None = File(None),
     db: Session = Depends(get_db)
+
 ):
     # 1️⃣ Se tiver arquivo, envia para o MinIO
     imagem_url = None
@@ -62,9 +68,7 @@ def create_banner(
     # 3️⃣ Cria banner
     return ParceirosService(db).create_banner(body)
 
-
-
-@router.get("/banners", response_model=list[BannerParceiroOut])
+@router.get("/banners", response_model=list[BannerParceiroOut], dependencies=[Depends(get_current_user)])
 def list_banners(parceiro_id: Optional[int] = None, db: Session = Depends(get_db)):
     return ParceirosService(db).list_banners(parceiro_id)
 
@@ -75,3 +79,12 @@ def update_banner(banner_id: int, body: BannerParceiroIn, db: Session = Depends(
 @router.delete("/banners/{banner_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(get_current_user)])
 def delete_banner(banner_id: int, db: Session = Depends(get_db)):
     return ParceirosService(db).delete_banner(banner_id)
+
+
+
+# ===============================================================
+# ======================== CLIENT ===============================
+# ===============================================================
+@router.get("/client/banners", response_model=list[BannerParceiroOut], dependencies=[Depends(get_current_user)])
+def list_banners(parceiro_id: Optional[int] = None, db: Session = Depends(get_db)):
+    return ParceirosService(db).list_banners(parceiro_id)
