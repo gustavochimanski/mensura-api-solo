@@ -1,0 +1,34 @@
+# app/api/delivery/schemas/schema_parceiros.py
+from pydantic import BaseModel, ConfigDict, constr
+from typing import Optional, List
+
+# -------- Parceiro --------
+class ParceiroIn(BaseModel):
+    nome: constr(min_length=1, max_length=100)
+
+    model_config = ConfigDict(from_attributes=True)
+
+class ParceiroOut(BaseModel):
+    id: int
+    nome: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+# -------- Banner Parceiro --------
+class BannerParceiroIn(BaseModel):
+    nome: constr(min_length=1, max_length=100)
+    parceiro_id: int
+    imagem: Optional[str] = None
+    tipo_banner: constr(min_length=1, max_length=1)  # V ou H
+
+    model_config = ConfigDict(from_attributes=True)
+
+class BannerParceiroOut(BaseModel):
+    id: int
+    nome: str
+    parceiro_id: int
+    imagem: Optional[str] = None
+    tipo_banner: str
+    parceiro_nome: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
