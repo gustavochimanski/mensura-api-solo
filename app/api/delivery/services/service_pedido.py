@@ -139,10 +139,6 @@ class PedidoService:
                     raise HTTPException(status.HTTP_400_BAD_REQUEST, "Endereço inválido para o cliente")
 
         try:
-            empresa = self.repo_empresa.get_empresa_by_id(payload.empresa_id)
-            if not empresa:
-                raise HTTPException(status.HTTP_404_NOT_FOUND, "Empresa não encontrada")
-
             # decide status inicial
             status_inicial = (
                 PedidoStatusEnum.E.value  # Em preparo
