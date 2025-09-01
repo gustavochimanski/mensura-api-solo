@@ -4,6 +4,8 @@ from app.database.db_connection import Base
 
 class ClienteOtpModel(Base):
     __tablename__ = "cliente_otp"
+    __table_args__ = {"schema": "delivery"}
+
 
     id = Column(Integer, primary_key=True)
     telefone = Column(String(20), nullable=False)
