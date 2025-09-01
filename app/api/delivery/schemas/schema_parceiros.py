@@ -13,6 +13,7 @@ class ParceiroOut(BaseModel):
     id: int
     nome: str
     ativo: bool
+    categoria_destino: str | None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -21,6 +22,7 @@ class BannerParceiroIn(BaseModel):
     nome: constr(min_length=1, max_length=100)
     parceiro_id: int
     imagem: Optional[str] = None
+    categoria_destino: int
     ativo: bool
     tipo_banner: constr(min_length=1, max_length=1)  # V ou H
 
@@ -34,5 +36,6 @@ class BannerParceiroOut(BaseModel):
     tipo_banner: str
     ativo: bool
     parceiro_nome: Optional[str] = None
+    href_destino: str
 
     model_config = ConfigDict(from_attributes=True)

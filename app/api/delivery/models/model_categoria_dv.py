@@ -38,6 +38,8 @@ class CategoriaDeliveryModel(Base):
         order_by=VitrineCategoriaLink.posicao,
     )
 
+    banners = relationship("BannerParceiroModel", back_populates="categoria")
+
     @hybrid_property
     def href(self) -> str:
         return f"/categorias/{self.slug}"
