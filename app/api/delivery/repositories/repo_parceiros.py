@@ -33,6 +33,8 @@ class ParceirosRepository:
         p = self.get_parceiro(parceiro_id)
         if "nome" in data and data["nome"]:
             p.nome = data["nome"]
+        if "ativo" in data:
+            p.ativo = data["ativo"]
         self.db.commit()
         self.db.refresh(p)
         return p
