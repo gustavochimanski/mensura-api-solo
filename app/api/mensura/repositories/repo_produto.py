@@ -4,7 +4,7 @@ from typing import List, Optional
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
-from app.api.delivery.models.vitrine_dv_model import VitrinesModel
+from app.api.delivery.models.model_vitrine_dv import VitrinesModel
 from app.api.mensura.models.cadprod_emp_model import ProdutoEmpModel
 from app.api.mensura.models.cadprod_model import ProdutoModel
 

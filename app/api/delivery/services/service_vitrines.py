@@ -4,7 +4,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
-from app.api.delivery.models.vitrine_dv_model import VitrinesModel
+from app.api.delivery.models.model_vitrine_dv import VitrinesModel
 from app.api.delivery.repositories.repo_vitrines import VitrineRepository
 from app.api.delivery.schemas.schema_vitrine import (
     CriarVitrineRequest,

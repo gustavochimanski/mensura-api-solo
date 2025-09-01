@@ -6,13 +6,13 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.mensura.models.cadprod_emp_model import ProdutoEmpModel
-from app.api.delivery.models.pedido_dv_model import PedidoDeliveryModel
-from app.api.delivery.models.pedido_item_dv_model import PedidoItemModel
-from app.api.delivery.models.pedido_status_historico_dv_model import PedidoStatusHistoricoModel
-from app.api.delivery.models.cupom_dv_model import CupomDescontoModel
-from app.api.delivery.models.endereco_dv_model import EnderecoDeliveryModel
-from app.api.delivery.models.cliente_dv_model import ClienteDeliveryModel
-from app.api.delivery.models.transacao_pagamento_dv_model import TransacaoPagamentoModel
+from app.api.delivery.models.model_pedido_dv import PedidoDeliveryModel
+from app.api.delivery.models.model_pedido_item_dv import PedidoItemModel
+from app.api.delivery.models.model_pedido_status_historico_dv import PedidoStatusHistoricoModel
+from app.api.delivery.models.model_cupom_dv import CupomDescontoModel
+from app.api.delivery.models.model_endereco_dv import EnderecoDeliveryModel
+from app.api.delivery.models.model_cliente_dv import ClienteDeliveryModel
+from app.api.delivery.models.model_transacao_pagamento_dv import TransacaoPagamentoModel
 
 class PedidoRepository:
     def __init__(self, db: Session):
@@ -61,19 +61,21 @@ class PedidoRepository:
 
     # --- Mutations ---
     def criar_pedido(
-        self,
-        *,
-        cliente_telefone: str | None,
-        empresa_id: int,
-        endereco_id: int | None,
-        status: str = "P",
-        tipo_entrega: str,
-        origem: str,
+            self,
+            *,
+            cliente_telefone: str | None,
+            empresa_id: int,
+            endereco_id: int | None,
+            meio_pagamento_id: int,
+            status: str = "P",
+            tipo_entrega: str,
+            origem: str,
     ) -> PedidoDeliveryModel:
         pedido = PedidoDeliveryModel(
             cliente_telefone=cliente_telefone,
             empresa_id=empresa_id,
             endereco_id=endereco_id,
+            meio_pagamento_id=meio_pagamento_id,
             status=status,
             tipo_entrega=tipo_entrega,
             origem=origem,
@@ -84,7 +86,7 @@ class PedidoRepository:
             valor_total=Decimal("0"),
         )
         self.db.add(pedido)
-        self.db.flush()  # gera id
+        self.db.flush()
         self.add_status_historico(pedido.id, status, motivo="Pedido criado")
         return pedido
 

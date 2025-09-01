@@ -5,10 +5,12 @@ from typing import Optional, List
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.delivery.models.pedido_dv_model import PedidoDeliveryModel
+from app.api.delivery.models.model_pedido_dv import PedidoDeliveryModel
 from app.api.delivery.repositories.repo_pedidos import PedidoRepository
+from app.api.delivery.schemas.schema_meio_pagamento import MeioPagamentoResponse
+from app.api.delivery.services.meio_pagamento_service import MeioPagamentoService
 from app.api.mensura.repositories.empresa_repo import EmpresaRepository
-from app.api.delivery.schemas.schema_pedido_dv import (
+from app.api.delivery.schemas.schema_pedido import (
     FinalizarPedidoRequest, ItemPedidoRequest, PedidoResponse, ItemPedidoResponse, PedidoKanbanResponse
 )
 from app.api.delivery.schemas.schema_shared_enums import (
@@ -39,6 +41,7 @@ class PedidoService:
             empresa_id=pedido.empresa_id,
             entregador_id=getattr(pedido, "entregador_id", None),
             endereco_id=pedido.endereco_id,
+            meio_pagamento=MeioPagamentoResponse.model_validate(pedido.meio_pagamento) if pedido.meio_pagamento else None,
             tipo_entrega=(
                 pedido.tipo_entrega if isinstance(pedido.tipo_entrega, TipoEntregaEnum)
                 else TipoEntregaEnum(pedido.tipo_entrega)
@@ -108,10 +111,14 @@ class PedidoService:
 
     # ---------- Fluxo 1 ----------
     def finalizar_pedido(self, payload: FinalizarPedidoRequest, telefone_cliente: str) -> PedidoResponse:
+        # Validações Principais
         if not payload.itens:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Pedido vazio")
         if len(payload.itens) > QTD_MAX_ITENS:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Itens demais no pedido")
+        meio_pagamento = MeioPagamentoService(self.db).get(payload.meio_pagamento_id)
+        if not meio_pagamento or not meio_pagamento.ativo:
+            raise HTTPException(400, "Meio de pagamento inválido ou inativo")
 
         empresa = self.repo_empresa.get_empresa_by_id(payload.empresa_id)
         if not empresa:
@@ -136,6 +143,7 @@ class PedidoService:
                 cliente_telefone=telefone_cliente,
                 empresa_id=payload.empresa_id,
                 endereco_id=payload.endereco_id,
+                meio_pagamento_id=payload.meio_pagamento_id,
                 status=PedidoStatusEnum.P.value,
                 tipo_entrega=payload.tipo_entrega,
                 origem=payload.origem.value,

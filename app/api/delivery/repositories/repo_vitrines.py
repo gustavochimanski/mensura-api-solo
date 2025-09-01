@@ -7,8 +7,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.mensura.models.cadprod_emp_model import ProdutoEmpModel
-from app.api.delivery.models.categoria_dv_model import CategoriaDeliveryModel
-from app.api.delivery.models.vitrine_dv_model import VitrinesModel
+from app.api.delivery.models.model_categoria_dv import CategoriaDeliveryModel
+from app.api.delivery.models.model_vitrine_dv import VitrinesModel
 from app.api.mensura.models.association_tables import VitrineProdutoEmpLink, VitrineCategoriaLink
 
 

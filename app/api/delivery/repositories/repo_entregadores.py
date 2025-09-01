@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import Optional, List
 from sqlalchemy.orm import Session
 
-from app.api.delivery.models.entregador_dv_model import EntregadorDeliveryModel
+from app.api.delivery.models.model_entregador_dv import EntregadorDeliveryModel
 
 class EntregadorRepository:
     def __init__(self, db: Session):

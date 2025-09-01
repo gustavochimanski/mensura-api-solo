@@ -26,11 +26,23 @@ class PedidoDeliveryModel(Base):
     __table_args__ = {"schema": "delivery"}
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    empresa_id = Column(Integer, ForeignKey("mensura.empresas.id", ondelete="RESTRICT"), nullable=False)
-    entregador_id = Column(Integer, ForeignKey("delivery.entregadores_dv.id", ondelete="SET NULL"))
-    endereco_id = Column(Integer, ForeignKey("delivery.enderecos_dv.id", ondelete="SET NULL"), nullable=True)
 
-    status = Column(PedidoStatus, nullable=False, default="PENDENTE")
+    empresa_id = Column(Integer, ForeignKey("mensura.empresas.id", ondelete="RESTRICT"), nullable=False)
+    empresa = relationship("EmpresaModel", back_populates="pedidos")
+
+    entregador_id = Column(Integer, ForeignKey("delivery.entregadores_dv.id", ondelete="SET NULL"))
+    entregador = relationship("EntregadorDeliveryModel", back_populates="pedidos")
+
+    endereco_id = Column(Integer, ForeignKey("delivery.enderecos_dv.id", ondelete="SET NULL"), nullable=True)
+    endereco = relationship("EnderecoDeliveryModel", back_populates="pedidos")
+
+    meio_pagamento_id = Column(Integer, ForeignKey("delivery.meios_pagamento_dv.id", ondelete="SET NULL"), nullable=True)
+    meio_pagamento = relationship("MeioPagamentoModel")
+
+    cliente_telefone = Column(String(20), ForeignKey("delivery.clientes_dv.telefone", ondelete="CASCADE"), nullable=False)
+    cliente = relationship("ClienteDeliveryModel",back_populates="pedidos",foreign_keys=[cliente_telefone])
+
+    status = Column(PedidoStatus, nullable=False, default="P")
     tipo_entrega = Column(TipoEntrega, nullable=False, default="DELIVERY")
     origem = Column(OrigemPedido, nullable=False, default="WEB")
 
@@ -51,21 +63,9 @@ class PedidoDeliveryModel(Base):
     data_criacao = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     data_atualizacao = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
-    cliente_telefone = Column(
-        String(20),
-        ForeignKey("delivery.clientes_dv.telefone", ondelete="CASCADE"),
-        nullable=False
-    )
 
-    cliente = relationship(
-        "ClienteDeliveryModel",
-        back_populates="pedidos",
-        foreign_keys=[cliente_telefone]  # indica que essa é a FK usada na relação
-    )
 
-    empresa = relationship("EmpresaModel", back_populates="pedidos")
-    entregador = relationship("EntregadorDeliveryModel", back_populates="pedidos")
-    endereco = relationship("EnderecoDeliveryModel", back_populates="pedidos")
+
 
     itens = relationship("PedidoItemModel", back_populates="pedido", cascade="all, delete-orphan")
     transacao = relationship("TransacaoPagamentoModel", back_populates="pedido", uselist=False,

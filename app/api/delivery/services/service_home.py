@@ -2,9 +2,9 @@
 from typing import List
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
-from app.api.delivery.repositories.repo_home_dv import HomeRepository
+from app.api.delivery.repositories.repo_home import HomeRepository
 from app.api.mensura.repositories.empresa_repo import EmpresaRepository
-from app.api.delivery.schemas.schema_home_dv import (
+from app.api.delivery.schemas.schema_home import (
     ProdutoEmpMiniDTO, ProdutoMiniDTO, VitrineComProdutosResponse,
     CategoriaMiniSchema, HomeResponse, CategoryPageResponse,  # <-- add CategoryPageResponse
 )

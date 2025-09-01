@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends, Query, HTTPException, status  # <-- add HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from app.api.delivery.schemas.schema_home_dv import HomeResponse, VitrineComProdutosResponse, CategoryPageResponse  # <-- add CategoryPageResponse
+from app.api.delivery.schemas.schema_home import HomeResponse, VitrineComProdutosResponse, CategoryPageResponse  # <-- add CategoryPageResponse
 from app.api.delivery.services.service_home import HomeService
 from app.database.db_connection import get_db
 from app.utils.logger import logger

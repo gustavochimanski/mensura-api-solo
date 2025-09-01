@@ -7,8 +7,8 @@ from fastapi import HTTPException, status
 from app.utils.slug_utils import make_slug
 
 
-from app.api.delivery.models.categoria_dv_model import CategoriaDeliveryModel
-from app.api.delivery.schemas.schema_categoria_dv import CategoriaDeliveryIn
+from app.api.delivery.models.model_categoria_dv import CategoriaDeliveryModel
+from app.api.delivery.schemas.schema_categoria import CategoriaDeliveryIn
 
 
 class CategoriaDeliveryRepository:

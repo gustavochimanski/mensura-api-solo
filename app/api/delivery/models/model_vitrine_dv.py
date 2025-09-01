@@ -1,4 +1,4 @@
-# app/api/delivery/models/vitrine_dv_model.py
+# app/api/delivery/models/model_vitrine_dv.py
 from sqlalchemy import Column, Integer, String, UniqueConstraint
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import relationship

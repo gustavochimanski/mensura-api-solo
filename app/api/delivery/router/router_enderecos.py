@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends, Path, status
 from sqlalchemy.orm import Session
 from typing import List
-from app.api.delivery.services.service_endereco_dv import EnderecosService
+from app.api.delivery.services.service_endereco import EnderecosService
 from app.core.client_dependecies import get_cliente_by_super_token
 from app.database.db_connection import get_db
-from app.api.delivery.schemas.schema_endereco_dv import EnderecoOut, EnderecoCreate, EnderecoUpdate
+from app.api.delivery.schemas.schema_endereco import EnderecoOut, EnderecoCreate, EnderecoUpdate
 from app.utils.logger import logger
 
 router = APIRouter(prefix="/api/delivery/enderecos", tags=["Delivery - Endereços"])

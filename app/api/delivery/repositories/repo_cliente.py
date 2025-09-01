@@ -1,7 +1,7 @@
 from typing import Optional, List
 from sqlalchemy.orm import Session
 from sqlalchemy import select
-from app.api.delivery.models.cliente_dv_model import ClienteDeliveryModel
+from app.api.delivery.models.model_cliente_dv import ClienteDeliveryModel
 
 class ClienteRepository:
     def __init__(self, db: Session):

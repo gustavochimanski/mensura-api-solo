@@ -2,9 +2,9 @@ from sqlalchemy.orm import Session, joinedload
 from fastapi import HTTPException
 from typing import List
 
-from app.api.delivery.models.cliente_dv_model import ClienteDeliveryModel
-from app.api.delivery.schemas.schema_endereco_dv import EnderecoCreate, EnderecoUpdate
-from app.api.delivery.models.endereco_dv_model import EnderecoDeliveryModel
+from app.api.delivery.models.model_cliente_dv import ClienteDeliveryModel
+from app.api.delivery.schemas.schema_endereco import EnderecoCreate, EnderecoUpdate
+from app.api.delivery.models.model_endereco_dv import EnderecoDeliveryModel
 
 class EnderecoRepository:
     def __init__(self, db: Session):

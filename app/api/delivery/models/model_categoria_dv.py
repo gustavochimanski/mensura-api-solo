@@ -1,4 +1,4 @@
-# app/api/delivery/models/categoria_dv_model.py
+# app/api/delivery/models/model_categoria_dv.py
 from typing import Optional
 from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, func
 from sqlalchemy.orm import relationship

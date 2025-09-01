@@ -1,8 +1,8 @@
 from fastapi import APIRouter, status, Path, Query, Depends
 from sqlalchemy.orm import Session
 
-from app.api.delivery.models.cliente_dv_model import ClienteDeliveryModel
-from app.api.delivery.schemas.schema_pedido_dv import FinalizarPedidoRequest, PedidoResponse, PedidoKanbanResponse
+from app.api.delivery.models.model_cliente_dv import ClienteDeliveryModel
+from app.api.delivery.schemas.schema_pedido import FinalizarPedidoRequest, PedidoResponse, PedidoKanbanResponse
 from app.api.delivery.schemas.schema_shared_enums import PagamentoMetodoEnum, PagamentoGatewayEnum, PedidoStatusEnum
 from app.api.delivery.services.service_pedido import PedidoService
 from app.api.mensura.models.user_model import UserModel

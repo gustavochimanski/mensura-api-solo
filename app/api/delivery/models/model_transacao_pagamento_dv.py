@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Numeric, Enum as SAEnum, JSON, func, Index
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Numeric, Enum as SAEnum, JSON, func, Index, UUID
 from sqlalchemy.orm import relationship
 from app.database.db_connection import Base
 
@@ -17,25 +17,26 @@ class TransacaoPagamentoModel(Base):
     pedido_id = Column(Integer, ForeignKey("delivery.pedidos_dv.id", ondelete="CASCADE"), nullable=False)
 
     gateway = Column(PagamentoGateway, nullable=False)
-    metodo  = Column(PagamentoMetodo, nullable=False)
 
-    valor   = Column(Numeric(18, 2), nullable=False)
-    moeda   = Column(String(3), nullable=False, default="BRL")
+    meio_pagamento_id = Column(UUID(as_uuid=True), ForeignKey("delivery.meios_pagamento_dv.id"), nullable=False)
+    meio_pagamento = relationship("MeioPagamentoModel")
 
-    status  = Column(PagamentoStatus, nullable=False, default="PENDENTE")
+    valor = Column(Numeric(18, 2), nullable=False)
+    moeda = Column(String(3), nullable=False, default="BRL")
 
-    # IDs/artefatos do provedor
+    status = Column(PagamentoStatus, nullable=False, default="PENDENTE")
+
     provider_transaction_id = Column(String(120), nullable=True)
-    qr_code = Column(String, nullable=True)            # texto/copia e cola
-    qr_code_base64 = Column(String, nullable=True)     # imagem base64, se aplicável
+    qr_code = Column(String, nullable=True)
+    qr_code_base64 = Column(String, nullable=True)
 
     payload_solicitacao = Column(JSON, nullable=True)
-    payload_retorno     = Column(JSON, nullable=True)
+    payload_retorno = Column(JSON, nullable=True)
 
     autorizado_em = Column(DateTime(timezone=True), nullable=True)
-    pago_em       = Column(DateTime(timezone=True), nullable=True)
-    cancelado_em  = Column(DateTime(timezone=True), nullable=True)
-    estornado_em  = Column(DateTime(timezone=True), nullable=True)
+    pago_em = Column(DateTime(timezone=True), nullable=True)
+    cancelado_em = Column(DateTime(timezone=True), nullable=True)
+    estornado_em = Column(DateTime(timezone=True), nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)

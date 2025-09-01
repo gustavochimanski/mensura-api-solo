@@ -29,16 +29,16 @@ def importar_models():
     from app.api.mensura.models.cadprod_emp_model import ProdutoEmpModel
     from app.api.mensura.models.cadprod_model import ProdutoModel
     # ─── Models Delivery ───────────────────────────────────────────
-    from app.api.delivery.models.transacao_pagamento_dv_model import TransacaoPagamentoModel
-    from app.api.delivery.models.pedido_dv_model import PedidoDeliveryModel
-    from app.api.delivery.models.pedido_item_dv_model import PedidoItemModel
-    from app.api.delivery.models.pedido_status_historico_dv_model import PedidoStatusHistoricoModel
-    from app.api.delivery.models.cupom_dv_model import CupomDescontoModel
-    from app.api.delivery.models.cliente_dv_model import ClienteDeliveryModel
-    from app.api.delivery.models.endereco_dv_model import EnderecoDeliveryModel
-    from app.api.delivery.models.categoria_dv_model import CategoriaDeliveryModel
-    from app.api.delivery.models.vitrine_dv_model import VitrinesModel
-    from app.api.delivery.models.entregador_dv_model import EntregadorDeliveryModel
+    from app.api.delivery.models.model_transacao_pagamento_dv import TransacaoPagamentoModel
+    from app.api.delivery.models.model_pedido_dv import PedidoDeliveryModel
+    from app.api.delivery.models.model_pedido_item_dv import PedidoItemModel
+    from app.api.delivery.models.model_pedido_status_historico_dv import PedidoStatusHistoricoModel
+    from app.api.delivery.models.model_cupom_dv import CupomDescontoModel
+    from app.api.delivery.models.model_cliente_dv import ClienteDeliveryModel
+    from app.api.delivery.models.model_endereco_dv import EnderecoDeliveryModel
+    from app.api.delivery.models.model_categoria_dv import CategoriaDeliveryModel
+    from app.api.delivery.models.model_vitrine_dv import VitrinesModel
+    from app.api.delivery.models.model_entregador_dv import EntregadorDeliveryModel
     logger.info("📦 Models importados com sucesso.")
 
 def criar_tabelas():

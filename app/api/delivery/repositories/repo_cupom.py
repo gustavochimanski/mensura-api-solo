@@ -3,7 +3,7 @@ from typing import Optional, List
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 
-from app.api.delivery.models.cupom_dv_model import CupomDescontoModel
+from app.api.delivery.models.model_cupom_dv import CupomDescontoModel
 
 class CupomRepository:
     def __init__(self, db: Session):

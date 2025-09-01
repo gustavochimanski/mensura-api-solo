@@ -1,9 +1,9 @@
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.api.delivery.models.cliente_dv_model import ClienteDeliveryModel
-from app.api.delivery.repositories.repo_endereco_dv import EnderecoRepository
-from app.api.delivery.schemas.schema_endereco_dv import EnderecoOut, EnderecoCreate, EnderecoUpdate
+from app.api.delivery.models.model_cliente_dv import ClienteDeliveryModel
+from app.api.delivery.repositories.repo_endereco import EnderecoRepository
+from app.api.delivery.schemas.schema_endereco import EnderecoOut, EnderecoCreate, EnderecoUpdate
 
 class EnderecosService:
     def __init__(self, db: Session):

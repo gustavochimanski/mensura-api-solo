@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, DateTime, ForeignKey, Enum as SAEnum, String, func, Index
 from sqlalchemy.orm import relationship
 from app.database.db_connection import Base
-from .pedido_dv_model import PedidoStatus
+from .model_pedido_dv import PedidoStatus
 
 class PedidoStatusHistoricoModel(Base):
     __tablename__ = "pedido_status_historico_dv"

@@ -1,6 +1,8 @@
 from typing import List, Optional
 from datetime import datetime
 from pydantic import BaseModel, ConfigDict, condecimal
+
+from .schema_meio_pagamento import MeioPagamentoResponse
 from .schema_shared_enums import PedidoStatusEnum, TipoEntregaEnum, OrigemPedidoEnum
 
 
@@ -56,6 +58,7 @@ class PedidoResponse(BaseModel):
     empresa_id: int
     entregador_id: Optional[int]
     endereco_id: Optional[int]
+    meio_pagamento: Optional[MeioPagamentoResponse] = None
     tipo_entrega: TipoEntregaEnum
     origem: OrigemPedidoEnum
     subtotal: float

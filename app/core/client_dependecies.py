@@ -1,6 +1,6 @@
 from fastapi import Header, HTTPException, status, Depends
 from sqlalchemy.orm import Session
-from app.api.delivery.models.cliente_dv_model import ClienteDeliveryModel
+from app.api.delivery.models.model_cliente_dv import ClienteDeliveryModel
 from app.database.db_connection import get_db
 
 def get_cliente_by_super_token(

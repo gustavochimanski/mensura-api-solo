@@ -2,8 +2,8 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 
-from app.api.delivery.repositories.repo_cupom_dv import CupomRepository
-from app.api.delivery.schemas.schema_cupom_dv import CupomCreate, CupomUpdate
+from app.api.delivery.repositories.repo_cupom import CupomRepository
+from app.api.delivery.schemas.schema_cupom import CupomCreate, CupomUpdate
 
 class CuponsService:
     def __init__(self, db: Session):
