@@ -19,3 +19,8 @@ def validar_codigo_telefone(telefone: str, codigo: str) -> bool:
     if datetime.utcnow() > info["expira_em"]:
         return False
     return info["codigo"] == codigo
+
+import random
+
+def gerar_codigo_otp() -> str:
+    return f"{random.randint(100000, 999999)}"

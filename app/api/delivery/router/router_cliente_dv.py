@@ -1,33 +1,56 @@
+from datetime import datetime, timedelta
+
 from fastapi import APIRouter, Depends, status, HTTPException
 from sqlalchemy.orm import Session
-from app.api.delivery.schemas.schema_cliente import ClienteOut, ClienteUpdate, ClienteCreate, NovoDispositivoRequest, \
-    ConfirmacaoCodigoRequest
+
+from app.api.delivery.models.model_cliente_codigo_validacao import ClienteOtpModel
+from app.api.delivery.models.model_cliente_dv import ClienteDeliveryModel
+from app.api.delivery.schemas.schema_cliente import ClienteOut, ClienteUpdate, ClienteCreate
 from app.api.delivery.services.service_cliente import ClienteService
 from app.core.client_dependecies import get_cliente_by_super_token
 from app.database.db_connection import get_db
-from app.utils.gerar_codigo_utils import gerar_codigo_telefone, validar_codigo_telefone
+from app.utils.gerar_codigo_utils import gerar_codigo_telefone, validar_codigo_telefone, gerar_codigo_otp
 from app.utils.logger import logger
 
 router = APIRouter(prefix="/api/delivery/cliente", tags=["Cliente"])
 
-@router.post("/novo-dispositivo", status_code=status.HTTP_200_OK)
-def novo_dispositivo(data: NovoDispositivoRequest, db: Session = Depends(get_db)):
-    service = ClienteService(db)
-    cliente = service.repo.get_by_telefone(data.telefone)
+@router.post("/novo-dispositivo")
+def novo_dispositivo(telefone: str, db: Session = Depends(get_db)):
+    cliente = db.query(ClienteDeliveryModel).filter_by(telefone=telefone).first()
     if not cliente:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Telefone não cadastrado")
-    gerar_codigo_telefone(data.telefone)
-    return {"msg": "Código enviado"}
+        raise HTTPException(status_code=404, detail="Telefone não cadastrado")
 
-@router.post("/confirmar-codigo", response_model=ClienteOut)
-def confirmar_codigo(data: ConfirmacaoCodigoRequest, db: Session = Depends(get_db)):
-    if not validar_codigo_telefone(data.telefone, data.codigo):
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Código inválido ou expirado")
-    service = ClienteService(db)
-    cliente = service.repo.get_by_telefone(data.telefone)
+    codigo = gerar_codigo_otp()
+    expira = datetime.utcnow() + timedelta(minutes=5)
+
+    otp = ClienteOtpModel(telefone=telefone, codigo=codigo, expira_em=expira)
+    db.add(otp)
+    db.commit()
+
+    # envia SMS real
+    logger.info(telefone, f"Seu código de login é: {codigo}")
+
+    return {"detail": "Código enviado com sucesso"}
+
+@router.post("/confirmar-codigo")
+def confirmar_codigo(telefone: str, codigo: str, db: Session = Depends(get_db)):
+    otp = db.query(ClienteOtpModel).filter_by(telefone=telefone, codigo=codigo).first()
+    if not otp or otp.expira_em < datetime.utcnow():
+        raise HTTPException(status_code=400, detail="Código inválido ou expirado")
+
+    cliente = db.query(ClienteDeliveryModel).filter_by(telefone=telefone).first()
     if not cliente:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Cliente não encontrado")
-    return ClienteOut.model_validate(cliente)
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+
+    db.delete(otp)  # remove o OTP usado
+    db.commit()
+
+    return {
+        "id": cliente.id,
+        "nome": cliente.nome,
+        "telefone": cliente.telefone,
+        "super_token": cliente.super_token,
+    }
 
 @router.post("/", response_model=ClienteOut, status_code=status.HTTP_201_CREATED)
 def create_new_cliente(data: ClienteCreate, db: Session = Depends(get_db)):
