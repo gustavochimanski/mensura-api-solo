@@ -17,7 +17,7 @@ class PedidoKanbanResponse(BaseModel):
     valor_total: float
     data_criacao: datetime
     endereco_cliente: str | None = None
-    meio_pagamento: str | None = None  # <- novo campo
+    meio_pagamento: int | None = None  # <- novo campo
     model_config = ConfigDict(from_attributes=True)
 
 
