@@ -55,7 +55,6 @@ def confirmar_codigo(body: ConfirmacaoCodigoRequest, db: Session = Depends(get_d
     db.commit()
 
     return {
-        "id": cliente.id,
         "nome": cliente.nome,
         "telefone": cliente.telefone,
         "super_token": cliente.super_token,
