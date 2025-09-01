@@ -8,12 +8,32 @@ from app.api.delivery.services.meio_pagamento_service import MeioPagamentoServic
 from app.core.admin_dependencies import get_current_user
 from app.core.client_dependecies import get_cliente_by_super_token
 from app.database.db_connection import get_db
+from fastapi import Depends, HTTPException
 
 router = APIRouter(prefix="/api/delivery/meios-pagamento", tags=["Meios de Pagamento"])
 
-@router.get("/", response_model=List[MeioPagamentoResponse], dependencies=[Depends(get_cliente_by_super_token)])
-def listar_meios_pagamento(db: Session = Depends(get_db)):
+
+
+def dependency_a():
+    return get_current_user()
+
+
+def dependency_b():
+    get_cliente_by_super_token()
+
+
+@router.get("/")
+def listar_meios_pagamento(
+        db: Session = Depends(get_db),
+        token_a: str | None = Depends(lambda: dependency_a()),
+        token_b: str | None = Depends(lambda: dependency_b()),
+):
+    # só precisa que um dos dois passe
+    if not (token_a or token_b):
+        raise HTTPException(status_code=401, detail="Não autorizado")
+
     return MeioPagamentoService(db).list_all()
+
 
 @router.get("/{meio_pagamento_id}", response_model=MeioPagamentoResponse, dependencies=[Depends(get_current_user)])
 def obter_meio_pagamento(meio_pagamento_id: int, db: Session = Depends(get_db)):
