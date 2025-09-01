@@ -9,7 +9,7 @@ from app.core.admin_dependencies import get_current_user
 from app.core.client_dependecies import get_cliente_by_super_token
 from app.database.db_connection import get_db
 
-router = APIRouter(prefix="/meios-pagamento", tags=["Meios de Pagamento"])
+router = APIRouter(prefix="api/delivery/meios-pagamento", tags=["Meios de Pagamento"])
 
 @router.get("/", response_model=List[MeioPagamentoResponse], dependencies=[Depends(get_cliente_by_super_token)])
 def listar_meios_pagamento(db: Session = Depends(get_db)):
