@@ -10,7 +10,7 @@ from app.utils.slug_utils import make_slug
 from app.api.delivery.models.model_categoria_dv import CategoriaDeliveryModel
 from app.api.delivery.schemas.schema_categoria import CategoriaDeliveryIn
 
-
+#
 class CategoriaDeliveryRepository:
     def __init__(self, db: Session):
         self.db = db
