@@ -28,3 +28,8 @@ class EmpresaUpdate(BaseModel):
     cardapio_link: Optional[str] = None
     cardapio_tema: Optional[str] = None
 
+
+class EmpresaResponse(EmpresaBase):
+    id: int
+    endereco: Optional[EnderecoResponse] = None
+    model_config = ConfigDict(from_attributes=True)
