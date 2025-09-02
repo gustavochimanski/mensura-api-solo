@@ -19,22 +19,42 @@ class EmpresaModel(Base):
     aceita_pedido_automatico = Column(Boolean, nullable=False, default=False)
 
     # Configurações de Cardápio
-    cardapio_link = Column(String(255), nullable=True, unique=True)  # URL pública do cardápio
-    cardapio_tema = Column(String(50), nullable=True, default="padrao")  # Ex: "padrao", "escuro", "minimalista"
+    cardapio_link = Column(String(255), nullable=True, unique=True)
+    cardapio_tema = Column(String(50), nullable=True, default="padrao")
 
     endereco_id = Column(
         Integer,
-        ForeignKey("mensura.enderecos.id", ondelete="all, delete",
-        single_parent=True,
-        uselist=False),
+        ForeignKey("mensura.enderecos.id", ondelete="CASCADE"),  # CASCADE para deletar no DB se a empresa for deletada
         nullable=True,
+        unique=True,  # 1:1
     )
 
     # Relationships
-    produtos_emp = relationship("ProdutoEmpModel", back_populates="empresa")
-    pedidos = relationship("PedidoDeliveryModel", back_populates="empresa", cascade="all, delete-orphan")
-    entregadores = relationship("EntregadorDeliveryModel", secondary=entregador_empresa, back_populates="empresas")
-    usuarios = relationship("UserModel", secondary=usuario_empresa, back_populates="empresas")
-    endereco = relationship("EnderecoModel", back_populates="empresa")
+    produtos_emp = relationship(
+        "ProdutoEmpModel",
+        back_populates="empresa"
+    )
+    pedidos = relationship(
+        "PedidoDeliveryModel",
+        back_populates="empresa",
+        cascade="all, delete-orphan"
+    )
+    entregadores = relationship(
+        "EntregadorDeliveryModel",
+        secondary=entregador_empresa,
+        back_populates="empresas"
+    )
+    usuarios = relationship(
+        "UserModel",
+        secondary=usuario_empresa,
+        back_populates="empresas"
+    )
+    endereco = relationship(
+        "EnderecoModel",
+        back_populates="empresa",
+        cascade="all, delete",
+        single_parent=True,
+        uselist=False  # garante 1:1
+    )
 
     model_config = ConfigDict(from_attributes=True)
