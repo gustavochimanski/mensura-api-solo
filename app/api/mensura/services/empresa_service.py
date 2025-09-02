@@ -7,6 +7,7 @@ from app.api.mensura.models.empresa_model import EmpresaModel
 from app.api.mensura.repositories.empresa_repo import EmpresaRepository
 from app.api.mensura.schemas.schema_empresa import EmpresaCreate, EmpresaUpdate
 from app.api.mensura.services.endereco_service import EnderecoService
+from app.utils.logger import logger
 from app.utils.minio_client import upload_file_to_minio, remover_arquivo_minio
 
 
@@ -101,6 +102,8 @@ class EmpresaService:
 
         if "aceita_pedido_automatico" in payload:
             empresa.aceita_pedido_automatico = bool(payload["aceita_pedido_automatico"])
+
+        logger.info(empresa.aceita_pedido_automatico)
 
         # Atualiza cardápio
         cardapio = payload.get("cardapio_link")
