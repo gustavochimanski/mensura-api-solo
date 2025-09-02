@@ -1,4 +1,5 @@
 # app/api/mensura/services/empresa_service.py
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, UploadFile
 
@@ -57,8 +58,20 @@ class EmpresaService:
             else:
                 empresa.cardapio_link = data.cardapio_link
 
-        self.db.commit()
-        self.db.refresh(empresa)
+        try:
+            self.db.commit()
+            self.db.refresh(empresa)
+        except IntegrityError as e:
+            self.db.rollback()
+            # verifica se é duplicidade de cardapio_link
+            if 'empresas_cardapio_link_key' in str(e.orig):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Cardápio link '{data.cardapio_link}' já existe."
+                )
+            # outros erros de integridade
+            raise HTTPException(status_code=400, detail=str(e.orig))
+
         return empresa
 
     # Atualiza empresa
