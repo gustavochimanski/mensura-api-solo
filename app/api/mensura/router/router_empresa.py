@@ -21,6 +21,7 @@ async def create_empresa(
     logo: UploadFile | None = None,
     cardapio_link: str | None = Form(None),
     cardapio_tema: str | None = Form("padrao"),
+    aceita_pedido_automatico: str | None = Form("false"),  # ✅ recebe string do FormData
     db: Session = Depends(get_db),
 ):
     endereco_data = EnderecoCreate(**json.loads(endereco))
@@ -31,7 +32,8 @@ async def create_empresa(
         slug=slug,
         endereco=endereco_data,
         cardapio_link=cardapio_link,
-        cardapio_tema=cardapio_tema
+        cardapio_tema=cardapio_tema,
+        aceita_pedido_automatico = aceita_pedido_automatico.lower() == "true",  # ✅ converte para boolean
     )
     return EmpresaService(db).create_empresa(empresa_data, logo=logo)
 
@@ -46,6 +48,7 @@ async def update_empresa(
     logo: UploadFile | None = None,
     cardapio_link: str | None = Form(None),
     cardapio_tema: str | None = Form(None),
+    aceita_pedido_automatico: str | None = Form(None),  # ✅ recebe string do FormData
     db: Session = Depends(get_db),
 ):
     slug = make_slug(nome)
@@ -55,7 +58,8 @@ async def update_empresa(
         slug=slug,
         endereco_id=endereco_id,
         cardapio_link=cardapio_link,
-        cardapio_tema=cardapio_tema
+        cardapio_tema=cardapio_tema,
+        aceita_pedido_automatico = aceita_pedido_automatico.lower() == "true" if aceita_pedido_automatico is not None else None,  # ✅ boolean ou None
     )
     return EmpresaService(db).update_empresa(id=id, data=empresa_data, logo=logo)
 
