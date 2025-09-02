@@ -5,13 +5,13 @@ from sqlalchemy.orm import Session
 from datetime import timedelta
 
 from app.api.mensura.repositories.auth_repo import AuthRepository
-from app.api.mensura.schemas.auth_schema import LoginRequest, TokenResponse
+from app.api.mensura.schemas.schema_auth import LoginRequest, TokenResponse
 from app.core.security import verify_password, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES
 from app.database.db_connection import get_db
 
 
 from app.core.admin_dependencies import get_current_user
-from app.api.mensura.schemas.usuario_schema import UserResponse
+from app.api.mensura.schemas.schema_usuario import UserResponse
 from app.api.mensura.models.user_model import UserModel
 
 

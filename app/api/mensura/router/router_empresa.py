@@ -5,9 +5,9 @@ import json
 
 from app.database.db_connection import get_db
 from app.api.mensura.services.empresa_service import EmpresaService
-from app.api.mensura.schemas.empresa_schema import EmpresaResponse, EmpresaUpdate
-from app.api.mensura.schemas.empresa_schema import EmpresaCreate
-from app.api.mensura.schemas.endereco_schema import EnderecoCreate
+from app.api.mensura.schemas.schema_empresa import EmpresaResponse, EmpresaUpdate
+from app.api.mensura.schemas.schema_empresa import EmpresaCreate
+from app.api.mensura.schemas.schema_endereco import EnderecoCreate
 
 router = APIRouter(prefix="/api/mensura/empresas", tags=["Empresas"])
 
@@ -40,6 +40,8 @@ async def update_empresa(
     slug: str = Form(None),
     endereco_id: int | None = Form(None),
     logo: UploadFile | None = None,
+    cardapio_link: str | None = Form(None),
+    cardapio_tema: str | None = Form(None),
     db: Session = Depends(get_db),
 ):
     empresa_data = EmpresaUpdate(
@@ -47,9 +49,11 @@ async def update_empresa(
         cnpj=cnpj,
         slug=slug,
         endereco_id=endereco_id,
-        logo=logo
+        cardapio_link=cardapio_link,
+        cardapio_tema=cardapio_tema,
     )
     return EmpresaService(db).update_empresa(id=id, data=empresa_data)
+
 
 @router.get("/{id}", response_model=EmpresaResponse)
 def get_empresa(id: int, db: Session = Depends(get_db)):

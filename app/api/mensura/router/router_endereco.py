@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.database.db_connection import get_db
 from app.api.mensura.services.endereco_service import EnderecoService
-from app.api.mensura.schemas.endereco_schema import EnderecoCreate, EnderecoUpdate, EnderecoResponse
+from app.api.mensura.schemas.schema_endereco import EnderecoCreate, EnderecoUpdate, EnderecoResponse
 
 router = APIRouter(prefix="/api/mensura/enderecos", tags=["Enderecos"])
 

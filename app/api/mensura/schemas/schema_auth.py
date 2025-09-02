@@ -1,4 +1,4 @@
-# app/api/mensura/schemas/auth_schema.py
+# app/api/mensura/schemas/schema_auth.py
 from pydantic import BaseModel, ConfigDict
 
 class LoginRequest(BaseModel):

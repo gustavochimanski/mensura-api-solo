@@ -18,6 +18,10 @@ class EmpresaModel(Base):
     logo = Column(String(255), nullable=True)
     aceita_pedido_automatico = Column(Boolean, nullable=False, default=False)
 
+    # Configurações de Cardápio
+    cardapio_link = Column(String(255), nullable=True, unique=True)  # URL pública do cardápio
+    cardapio_tema = Column(String(50), nullable=True, default="padrao")  # Ex: "padrao", "escuro", "minimalista"
+
     endereco_id = Column(
         Integer,
         ForeignKey("mensura.enderecos.id", ondelete="RESTRICT"),
@@ -30,6 +34,5 @@ class EmpresaModel(Base):
     entregadores = relationship("EntregadorDeliveryModel", secondary=entregador_empresa, back_populates="empresas")
     usuarios = relationship("UserModel", secondary=usuario_empresa, back_populates="empresas")
     endereco = relationship("EnderecoModel", back_populates="empresa")
-
 
     model_config = ConfigDict(from_attributes=True)

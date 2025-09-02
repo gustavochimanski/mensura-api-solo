@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.database.db_connection import get_db
 from app.api.mensura.services.usuario_service import UserService
-from app.api.mensura.schemas.usuario_schema import UserCreate, UserUpdate, UserResponse
+from app.api.mensura.schemas.schema_usuario import UserCreate, UserUpdate, UserResponse
 
 router = APIRouter(prefix="/api/mensura/usuarios", tags=["Usuarios"])
 

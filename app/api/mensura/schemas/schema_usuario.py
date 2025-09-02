@@ -1,4 +1,4 @@
-# app/api/mensura/schemas/usuario_schema.py
+# app/api/mensura/schemas/schema_usuario.py
 from pydantic import BaseModel, ConfigDict
 from typing import Optional, List
 

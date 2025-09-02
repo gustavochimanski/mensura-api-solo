@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.api.mensura.repositories.usuarios_repo import UsuarioRepository
 from app.api.mensura.repositories.empresa_repo import EmpresaRepository
-from app.api.mensura.schemas.usuario_schema import UserCreate, UserUpdate
+from app.api.mensura.schemas.schema_usuario import UserCreate, UserUpdate
 from app.api.mensura.models.user_model import UserModel
 from app.core.security import hash_password
 

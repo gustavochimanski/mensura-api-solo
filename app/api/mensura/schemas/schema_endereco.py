@@ -1,4 +1,4 @@
-# app/api/mensura/schemas/endereco_schema.py
+# app/api/mensura/schemas/schema_endereco.py
 from pydantic import BaseModel, ConfigDict
 from typing import Optional
 
