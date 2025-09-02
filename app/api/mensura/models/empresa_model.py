@@ -24,7 +24,9 @@ class EmpresaModel(Base):
 
     endereco_id = Column(
         Integer,
-        ForeignKey("mensura.enderecos.id", ondelete="RESTRICT"),
+        ForeignKey("mensura.enderecos.id", ondelete="all, delete",
+        single_parent=True,
+        uselist=False),
         nullable=True,
     )
 
