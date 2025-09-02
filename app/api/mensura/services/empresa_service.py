@@ -79,9 +79,19 @@ class EmpresaService:
         empresa = self.get_empresa(id)
         payload = data.model_dump(exclude_unset=True)
 
-        # Atualiza dados comuns
-        update_data = {k: v for k, v in payload.items() if k not in ("cardapio_link",)}
-        empresa = self.repo_emp.update(empresa, update_data)
+        # Atualiza dados da empresa (exceto endereço e cardapio_link)
+        update_data = {k: v for k, v in payload.items() if k not in ("cardapio_link", "endereco")}
+        for key, value in update_data.items():
+            setattr(empresa, key, value)
+
+        # Atualiza endereço
+        if payload.get("endereco"):
+            if empresa.endereco:
+                self.endereco_service.update_endereco(empresa.endereco.id, payload["endereco"])
+            else:
+                # cria novo endereço se não existia
+                endereco = self.endereco_service.create_endereco(payload["endereco"])
+                empresa.endereco = endereco
 
         # Atualiza logo
         if logo:
