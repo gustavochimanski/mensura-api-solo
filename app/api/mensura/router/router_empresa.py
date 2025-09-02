@@ -7,6 +7,7 @@ from app.database.db_connection import get_db
 from app.api.mensura.services.empresa_service import EmpresaService
 from app.api.mensura.schemas.schema_empresa import EmpresaResponse, EmpresaUpdate, EmpresaCreate
 from app.api.mensura.schemas.schema_endereco import EnderecoCreate
+from app.utils.slug_utils import make_slug
 
 router = APIRouter(prefix="/api/mensura/empresas", tags=["Empresas"])
 
@@ -16,7 +17,6 @@ router = APIRouter(prefix="/api/mensura/empresas", tags=["Empresas"])
 async def create_empresa(
     nome: str = Form(...),
     cnpj: str | None = Form(None),
-    slug: str = Form(...),
     endereco: str = Form(...),  # JSON string
     logo: UploadFile | None = None,
     cardapio_link: str | None = Form(None),
@@ -24,6 +24,7 @@ async def create_empresa(
     db: Session = Depends(get_db),
 ):
     endereco_data = EnderecoCreate(**json.loads(endereco))
+    slug = make_slug(nome)
     empresa_data = EmpresaCreate(
         nome=nome,
         cnpj=cnpj,
@@ -41,13 +42,13 @@ async def update_empresa(
     id: int,
     nome: str | None = Form(None),
     cnpj: str | None = Form(None),
-    slug: str | None = Form(None),
     endereco_id: int | None = Form(None),
     logo: UploadFile | None = None,
     cardapio_link: str | None = Form(None),
     cardapio_tema: str | None = Form(None),
     db: Session = Depends(get_db),
 ):
+    slug = make_slug(nome)
     empresa_data = EmpresaUpdate(
         nome=nome,
         cnpj=cnpj,
