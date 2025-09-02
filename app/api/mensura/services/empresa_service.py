@@ -1,4 +1,4 @@
-# app/api/mensura/services/empresa_service.p
+# app/api/mensura/services/empresa_service.py
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, UploadFile
 
@@ -24,62 +24,51 @@ class EmpresaService:
     def list_empresas(self, skip: int = 0, limit: int = 100):
         return self.repo_emp.list(skip, limit)
 
-    def create_empresa(self, data: EmpresaCreate):
-        if data.cnpj and self.repo_emp.get_emp_by_cnpj(data.cnpj):
-            raise HTTPException(status_code=400, detail="Empresa já cadastrada (CNPJ)")
-
-        endereco = self.endereco_service.create_endereco(data.endereco)
-
+    def create_empresa(self, data: EmpresaCreate, logo: UploadFile | None = None):
         empresa = EmpresaModel(
             nome=data.nome,
             cnpj=data.cnpj,
             slug=data.slug,
-            endereco_id=endereco.id,
+            endereco_id=data.endereco.id,
             cardapio_tema=data.cardapio_tema,
         )
         empresa = self.repo_emp.create(empresa)
 
-        # Upload da logo (se for arquivo)
-        if isinstance(data.logo, UploadFile):
-            logo_url = upload_file_to_minio(self.db, empresa.id, data.logo, "logo")
+        if logo:
+            logo_url = upload_file_to_minio(self.db, empresa.id, logo, "logo")
             empresa.logo = logo_url
-
-        # Upload do cardápio (se for arquivo)
-        if isinstance(data.cardapio_link, UploadFile):
-            cardapio_url = upload_file_to_minio(self.db, empresa.id, data.cardapio_link, "cardapio")
-            empresa.cardapio_link = cardapio_url
-        elif isinstance(data.cardapio_link, str):
-            empresa.cardapio_link = data.cardapio_link
 
         self.db.commit()
         self.db.refresh(empresa)
         return empresa
 
-    def update_empresa(self, id: int, data: EmpresaUpdate):
+    def update_empresa(self, id: int, data: EmpresaUpdate, logo: UploadFile | None = None):
         empresa = self.get_empresa(id)
         payload = data.model_dump(exclude_unset=True)
 
-        novo_cnpj = payload.get("cnpj")
-        if novo_cnpj and novo_cnpj != empresa.cnpj:
-            existente = self.repo_emp.get_emp_by_cnpj(novo_cnpj)
-            if existente and existente.id != id:
-                raise HTTPException(status_code=400, detail="CNPJ já cadastrado em outra empresa")
+        # atualiza campos normais
+        update_data = {k: v for k, v in payload.items() if k not in ("endereco_id", "cardapio_link")}
+        empresa = self.repo_emp.update(empresa, update_data)
 
-        if "endereco_id" in payload and payload["endereco_id"] is not None:
-            endereco = self.endereco_service.get_endereco(payload["endereco_id"])
-            empresa.endereco_id = endereco.id
-
-        if "slug" in payload and payload["slug"] != empresa.slug:
-            existente = self.repo_emp.get_emp_by_slug(payload["slug"])
-            if existente and existente.id != id:
-                raise HTTPException(status_code=400, detail="Slug já em uso por outra empresa")
-
-        # Se vier logo nova
-        if isinstance(data.logo, UploadFile):
+        # atualiza logo
+        if logo:
             if empresa.logo:
                 remover_arquivo_minio(empresa.logo)
-            logo_url = upload_file_to_minio(self.db, empresa.id, data.logo, "logo")
+            logo_url = upload_file_to_minio(self.db, empresa.id, logo, "logo")
             empresa.logo = logo_url
+
+        # atualiza cardapio_link se for arquivo
+        if isinstance(payload.get("cardapio_link"), UploadFile):
+            if empresa.cardapio_link:
+                remover_arquivo_minio(empresa.cardapio_link)
+            cardapio_url = upload_file_to_minio(self.db, empresa.id, payload["cardapio_link"], "cardapio")
+            empresa.cardapio_link = cardapio_url
+        elif isinstance(payload.get("cardapio_link"), str):
+            empresa.cardapio_link = payload["cardapio_link"]
+
+        self.db.commit()
+        self.db.refresh(empresa)
+        return empresa
 
         # Se vier cardápio novo
         if isinstance(data.cardapio_link, UploadFile):

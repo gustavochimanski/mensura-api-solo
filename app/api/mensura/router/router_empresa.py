@@ -17,7 +17,7 @@ async def create_empresa(
     nome: str = Form(...),
     cnpj: str | None = Form(None),
     slug: str = Form(...),
-    endereco: str = Form(...),  # JSON string
+    endereco: str = Form(...),
     logo: UploadFile | None = None,
     db: Session = Depends(get_db),
 ):
@@ -27,9 +27,10 @@ async def create_empresa(
         cnpj=cnpj,
         slug=slug,
         endereco=endereco_data,
-        logo=logo
+        logo=None  # ⚠️ não passa o UploadFile aqui
     )
-    return EmpresaService(db).create_empresa(empresa_data)
+    empresa = EmpresaService(db).create_empresa(empresa_data, logo)  # envia logo separado
+    return empresa
 
 
 @router.put("/{id}", response_model=EmpresaResponse)
@@ -39,9 +40,9 @@ async def update_empresa(
     cnpj: str | None = Form(None),
     slug: str = Form(None),
     endereco_id: int | None = Form(None),
-    logo: UploadFile | None = None,
     cardapio_link: str | None = Form(None),
     cardapio_tema: str | None = Form(None),
+    logo: UploadFile | None = None,
     db: Session = Depends(get_db),
 ):
     empresa_data = EmpresaUpdate(
@@ -52,7 +53,10 @@ async def update_empresa(
         cardapio_link=cardapio_link,
         cardapio_tema=cardapio_tema,
     )
-    return EmpresaService(db).update_empresa(id=id, data=empresa_data)
+
+    # Passa logo separadamente
+    return EmpresaService(db).update_empresa(id=id, data=empresa_data, logo=logo)
+
 
 
 @router.get("/{id}", response_model=EmpresaResponse)
