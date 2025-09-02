@@ -99,6 +99,9 @@ class EmpresaService:
                 remover_arquivo_minio(empresa.logo)
             empresa.logo = upload_file_to_minio(self.db, empresa.id, logo, "logo")
 
+        if "aceita_pedido_automatico" in payload:
+            empresa.aceita_pedido_automatico = bool(payload["aceita_pedido_automatico"])
+
         # Atualiza cardápio
         cardapio = payload.get("cardapio_link")
         if cardapio:
