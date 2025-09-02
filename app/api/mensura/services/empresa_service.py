@@ -103,8 +103,6 @@ class EmpresaService:
         if "aceita_pedido_automatico" in payload:
             empresa.aceita_pedido_automatico = bool(payload["aceita_pedido_automatico"])
 
-        logger.info(empresa.aceita_pedido_automatico)
-
         # Atualiza cardápio
         cardapio = payload.get("cardapio_link")
         if cardapio:
