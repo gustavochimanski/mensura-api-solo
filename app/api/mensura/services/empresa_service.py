@@ -44,7 +44,7 @@ class EmpresaService:
             slug=data.slug,
             endereco_id=endereco.id,
             cardapio_tema=data.cardapio_tema,
-            aceita_pedido_automatico=data.aceita_pedido_automatico or False,
+            aceita_pedido_automatico = str(data.aceita_pedido_automatico).lower() == "true",
         )
         empresa = self.repo_emp.create(empresa)
 
@@ -101,7 +101,7 @@ class EmpresaService:
             empresa.logo = upload_file_to_minio(self.db, empresa.id, logo, "logo")
 
         if "aceita_pedido_automatico" in payload:
-            empresa.aceita_pedido_automatico = bool(payload["aceita_pedido_automatico"])
+            empresa.aceita_pedido_automatico = str(payload["aceita_pedido_automatico"]).lower() == "true"
 
         # Atualiza cardápio
         cardapio = payload.get("cardapio_link")
