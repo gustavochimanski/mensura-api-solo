@@ -16,6 +16,7 @@ class PedidoKanbanResponse(BaseModel):
     nome_cliente: str | None = None
     valor_total: float
     data_criacao: datetime
+    observacao_geral: Optional[str] = None
     endereco_cliente: str | None = None
     meio_pagamento_descricao: str | None = None  # <- novo campo
     model_config = ConfigDict(from_attributes=True)
