@@ -42,6 +42,7 @@ class EmpresaService:
             slug=data.slug,
             endereco_id=endereco.id,
             cardapio_tema=data.cardapio_tema,
+            aceita_pedido_automatico=data.aceita_pedido_automatico or False,
         )
         empresa = self.repo_emp.create(empresa)
 

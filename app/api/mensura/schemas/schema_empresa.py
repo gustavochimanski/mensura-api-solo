@@ -10,22 +10,21 @@ class EmpresaBase(BaseModel):
     cnpj: Optional[str] = None
     slug: str
     logo: Optional[str] = None
-    # Configurações do Cardápio
+    aceita_pedido_automatico: Optional[bool] = False  # <--- novo campo
     cardapio_link: Optional[str] = None
     cardapio_tema: Optional[str] = "padrao"
 
+
 class EmpresaCreate(EmpresaBase):
-    endereco: EnderecoCreate  # JSON do endereço
+    endereco: EnderecoCreate
+
 
 class EmpresaUpdate(BaseModel):
     nome: Optional[str] = None
     cnpj: Optional[str] = None
     slug: Optional[str] = None
     endereco_id: Optional[int] = None
+    aceita_pedido_automatico: Optional[bool] = None  # <--- novo campo
     cardapio_link: Optional[str] = None
     cardapio_tema: Optional[str] = None
 
-class EmpresaResponse(EmpresaBase):
-    id: int
-    endereco: Optional[EnderecoResponse] = None
-    model_config = ConfigDict(from_attributes=True)
