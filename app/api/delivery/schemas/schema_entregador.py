@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 from pydantic import BaseModel, ConfigDict, constr
 
 class EntregadorCreate(BaseModel):
@@ -19,6 +19,12 @@ class EntregadorUpdate(BaseModel):
     placa: Optional[str] = None
     acrescimo_taxa: Optional[float] = None
 
+class EmpresaMiniOut(BaseModel):
+    id: int
+    nome: str
+
+    model_config = ConfigDict(from_attributes=True)
+
 class EntregadorOut(BaseModel):
     id: int
     nome: str
@@ -29,5 +35,6 @@ class EntregadorOut(BaseModel):
     acrescimo_taxa: Optional[float]
     created_at: datetime
     updated_at: datetime
+    empresas: List[EmpresaMiniOut] = []
 
     model_config = ConfigDict(from_attributes=True)
