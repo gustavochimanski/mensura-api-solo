@@ -31,6 +31,12 @@ class EntregadoresService:
         self.repo.vincular_empresa(entregador_id, empresa_id)
         return self.get(entregador_id)  # retorna o entregador atualizado
 
+    def desvincular_empresa(self, entregador_id: int, empresa_id: int):
+        # garante que o entregador existe
+        self.get(entregador_id)
+        self.repo.desvincular_empresa(entregador_id, empresa_id)
+        return self.get(entregador_id)  # retorna o entregador atualizado
+
     def delete(self, id_: int):
         obj = self.get(id_)
         self.repo.delete(obj)

@@ -48,6 +48,18 @@ class EntregadorRepository:
         self.db.execute(stmt)
         self.db.commit()
 
+    def desvincular_empresa(self, entregador_id: int, empresa_id: int):
+        """
+        Remove o vínculo do entregador com a empresa.
+        """
+        self.db.execute(
+            entregador_empresa.delete().where(
+                (entregador_empresa.c.entregador_id == entregador_id) &
+                (entregador_empresa.c.empresa_id == empresa_id)
+            )
+        )
+        self.db.commit()
+
     def delete(self, obj: EntregadorDeliveryModel):
         self.db.delete(obj)
         self.db.commit()
