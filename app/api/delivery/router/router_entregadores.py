@@ -13,12 +13,11 @@ router = APIRouter(prefix="/api/delivery/entregadores", tags=["Delivery - Entreg
 
 @router.get("", response_model=List[EntregadorOut])
 def listar_entregadores(
-    empresa_id: int = Query(...),
     db: Session = Depends(get_db),
 ):
-    logger.info(f"[Entregadores] Listar - empresa={empresa_id}")
+    logger.info(f"[Entregadores] Listar ")
     svc = EntregadoresService(db)
-    return svc.list(empresa_id)
+    return svc.list()
 
 @router.get("/{entregador_id}", response_model=EntregadorOut)
 def get_entregador(
