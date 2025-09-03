@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional, List
 
@@ -332,8 +334,8 @@ class PedidoService:
     # ======================================================================
     # ============================ ADMIN ===================================
     # ======================================================================
-    def list_all(self, limit: int = 500):
-        pedidos = self.repo.list_all(limit)
+    def list_all_kanban(self, limit: int = 500, date_filter: date | None = None):
+        pedidos = self.repo.list_all_kanban(limit=limit, date_filter=date_filter)
         resultados = []
 
         for p in pedidos:

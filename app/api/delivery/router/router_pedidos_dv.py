@@ -1,3 +1,5 @@
+from datetime import date
+
 from fastapi import APIRouter, status, Path, Query, Depends
 from sqlalchemy.orm import Session
 
@@ -25,11 +27,13 @@ router = APIRouter(prefix="/api/delivery/pedidos", tags=["Pedidos"])
 )
 def listar_pedidos_admin_kanban(
     db: Session = Depends(get_db),
+    date_filter: date | None = Query(None, description="Filtrar pedidos por data (YYYY-MM-DD)")
 ):
     """
     Lista pedidos do sistema (para admin, versão resumida pro Kanban)
     """
-    return PedidoService(db).list_all()
+    return PedidoService(db).list_all_kanban(date_filter=date_filter)
+
 
 @router.put(
     "/status/{pedido_id}",

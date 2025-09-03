@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from datetime import date
 from decimal import Decimal
 from typing import Optional
 
@@ -50,8 +52,8 @@ class PedidoRepository:
             .first()
         )
 
-    def list_all(self, limit: int = 500):
-        return (
+    def list_all_kanban(self, limit: int = 500, date_filter: date | None = None):
+        query = (
             self.db.query(PedidoDeliveryModel)
             .options(
                 joinedload(PedidoDeliveryModel.cliente)
@@ -60,9 +62,12 @@ class PedidoRepository:
                 joinedload(PedidoDeliveryModel.meio_pagamento),
             )
             .order_by(PedidoDeliveryModel.data_criacao.desc())
-            .limit(limit)
-            .all()
         )
+
+        if date_filter:
+            query = query.filter(func.date(PedidoDeliveryModel.data_criacao) == date_filter)
+
+        return query.limit(limit).all()
 
     # --- Mutations ---
     def criar_pedido(
