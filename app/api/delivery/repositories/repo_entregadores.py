@@ -1,8 +1,6 @@
-from __future__ import annotations
 from typing import Optional, List
-
-from sqlalchemy import insert
 from sqlalchemy.orm import Session
+from sqlalchemy.dialects.postgresql import insert
 
 from app.api.delivery.models.model_entregador_dv import EntregadorDeliveryModel
 from app.api.mensura.models.association_tables import entregador_empresa
@@ -19,7 +17,7 @@ class EntregadorRepository:
         return self.db.get(EntregadorDeliveryModel, id_)
 
     def create_with_empresa(self, **data) -> EntregadorDeliveryModel:
-        empresa_id = data.pop("empresa_id", None)  # remove para não quebrar a tabela
+        empresa_id = data.pop("empresa_id", None)
         obj = EntregadorDeliveryModel(**data)
         self.db.add(obj)
         self.db.commit()
@@ -29,12 +27,11 @@ class EntregadorRepository:
             stmt = insert(entregador_empresa).values(
                 entregador_id=obj.id,
                 empresa_id=empresa_id
-            ).prefix_with("ON CONFLICT DO NOTHING")
+            ).on_conflict_do_nothing()
             self.db.execute(stmt)
             self.db.commit()
 
         return obj
-
 
     def update(self, obj: EntregadorDeliveryModel, **data) -> EntregadorDeliveryModel:
         for f, v in data.items():
@@ -47,7 +44,7 @@ class EntregadorRepository:
         stmt = insert(entregador_empresa).values(
             entregador_id=entregador_id,
             empresa_id=empresa_id
-        ).prefix_with("ON CONFLICT DO NOTHING")  # evita duplicidade
+        ).on_conflict_do_nothing()
         self.db.execute(stmt)
         self.db.commit()
 
