@@ -47,6 +47,15 @@ def atualizar_entregador(
     svc = EntregadoresService(db)
     return svc.update(entregador_id, payload)
 
+@router.post("/{entregador_id}/vincular_empresa", response_model=EntregadorOut)
+def vincular_entregador_empresa(
+    entregador_id: int,
+    empresa_id: int = Query(..., description="ID da empresa a ser vinculada"),
+    db: Session = Depends(get_db),
+):
+    svc = EntregadoresService(db)
+    return svc.vincular_empresa(entregador_id, empresa_id)
+
 @router.delete("/{entregador_id}", status_code=status.HTTP_204_NO_CONTENT)
 def deletar_entregador(
     entregador_id: int,

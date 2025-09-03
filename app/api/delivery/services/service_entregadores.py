@@ -19,11 +19,17 @@ class EntregadoresService:
         return obj
 
     def create(self, data: EntregadorCreate):
-        return self.repo.create(**data.model_dump(exclude_unset=True))
+        return self.repo.create_with_empresa(**data.model_dump(exclude_unset=True))
 
     def update(self, id_: int, data: EntregadorUpdate):
         obj = self.get(id_)
         return self.repo.update(obj, **data.model_dump(exclude_none=True))
+
+    def vincular_empresa(self, entregador_id: int, empresa_id: int):
+        # primeiro garante que o entregador existe
+        self.get(entregador_id)
+        self.repo.vincular_empresa(entregador_id, empresa_id)
+        return self.get(entregador_id)  # retorna o entregador atualizado
 
     def delete(self, id_: int):
         obj = self.get(id_)

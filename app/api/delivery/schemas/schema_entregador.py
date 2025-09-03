@@ -9,6 +9,7 @@ class EntregadorCreate(BaseModel):
     veiculo_tipo: Optional[str] = None  # moto, bike, carro
     placa: Optional[str] = None
     acrescimo_taxa: Optional[float] = 0.0
+    empresa_id: int
 
 class EntregadorUpdate(BaseModel):
     nome: Optional[constr(min_length=1)] = None
