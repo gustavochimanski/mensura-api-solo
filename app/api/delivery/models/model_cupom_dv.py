@@ -1,8 +1,12 @@
 from sqlalchemy import Column, Integer, String, DateTime, Numeric, Boolean, ForeignKey
 from sqlalchemy.orm import relationship
+from sqlalchemy.ext.associationproxy import association_proxy
 from app.database.db_connection import Base
 from app.utils.database_utils import now_trimmed
 
+# ----------------------
+# CUPOM
+# ----------------------
 class CupomDescontoModel(Base):
     __tablename__ = "cupons_dv"
     __table_args__ = {"schema": "delivery"}
@@ -25,19 +29,16 @@ class CupomDescontoModel(Base):
     created_at = Column(DateTime, default=now_trimmed, nullable=False)
     updated_at = Column(DateTime, default=now_trimmed, onupdate=now_trimmed, nullable=False)
 
-    # relacionamento N:N com Parceiro
-    parceiro_links = relationship(
-        "CupomParceiroLinkModel",
-        back_populates="cupom",
-        cascade="all, delete-orphan"
-    )
-    contatos = relationship("ContatoParceiroModel", back_populates="cupom_parceiro_link", cascade="all, delete-orphan")
-    pedidos = relationship("PedidoDeliveryModel", back_populates="cupom")
+    # Relação com parceiros via link
+    parceiro_links = relationship("CupomParceiroLinkModel", back_populates="cupom", cascade="all, delete-orphan")
+
+    # Proxy para acessar todos os contatos de um cupom direto
+    contatos = association_proxy("parceiro_links", "contatos")
 
     @property
     def link_whatsapp(self) -> str | None:
-        # link para o primeiro parceiro ativo (exemplo)
         if not self.monetizado or not self.parceiro_links:
             return None
         parceiro = self.parceiro_links[0].parceiro
         return f"https://api.whatsapp.com/send?text=Olá! Vim pelo {parceiro.nome}. Código do cupom: {self.codigo}"
+
