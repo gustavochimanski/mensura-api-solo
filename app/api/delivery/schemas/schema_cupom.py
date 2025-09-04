@@ -1,16 +1,21 @@
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, ConfigDict, constr
+from pydantic import BaseModel, constr, ConfigDict
 
 class CupomCreate(BaseModel):
     codigo: constr(min_length=1, max_length=30)
     descricao: Optional[constr(max_length=120)] = None
     desconto_valor: Optional[float] = None
-    desconto_percentual: Optional[float] = None  # 0-100
+    desconto_percentual: Optional[float] = None
     ativo: bool = True
     validade_inicio: Optional[datetime] = None
     validade_fim: Optional[datetime] = None
     minimo_compra: Optional[float] = None
+
+    monetizado: bool = False
+    parceiro_id: Optional[int] = None
+    valor_por_lead: Optional[float] = None
+
 
 class CupomUpdate(BaseModel):
     descricao: Optional[constr(max_length=120)] = None
@@ -20,6 +25,11 @@ class CupomUpdate(BaseModel):
     validade_inicio: Optional[datetime] = None
     validade_fim: Optional[datetime] = None
     minimo_compra: Optional[float] = None
+
+    monetizado: Optional[bool] = None
+    parceiro_id: Optional[int] = None
+    valor_por_lead: Optional[float] = None
+
 
 class CupomOut(BaseModel):
     id: int
@@ -33,5 +43,10 @@ class CupomOut(BaseModel):
     minimo_compra: Optional[float]
     created_at: datetime
     updated_at: datetime
+
+    monetizado: bool
+    parceiro_id: Optional[int]
+    valor_por_lead: Optional[float]
+    link_whatsapp: Optional[str]
 
     model_config = ConfigDict(from_attributes=True)

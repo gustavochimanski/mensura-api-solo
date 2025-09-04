@@ -1,8 +1,6 @@
-from __future__ import annotations
 from typing import Optional, List
 from sqlalchemy.orm import Session
 from sqlalchemy import select
-
 from app.api.delivery.models.model_cupom_dv import CupomDescontoModel
 
 class CupomRepository:
