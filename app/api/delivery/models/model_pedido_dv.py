@@ -60,6 +60,7 @@ class PedidoDeliveryModel(Base):
     troco_para = Column(Numeric(18, 2), nullable=True)
 
     cupom_id = Column(Integer, ForeignKey("delivery.cupons_dv.id", ondelete="SET NULL"), nullable=True)
+    cupom = relationship("CupomDescontoModel", back_populates="pedidos")
 
     data_criacao = Column(DateTime, default=now_trimmed, nullable=False)
     data_atualizacao = Column(DateTime, default=now_trimmed, onupdate=now_trimmed,  nullable=False)
@@ -72,6 +73,5 @@ class PedidoDeliveryModel(Base):
     transacao = relationship("TransacaoPagamentoModel", back_populates="pedido", uselist=False,
                              cascade="all, delete-orphan")
     historicos = relationship("PedidoStatusHistoricoModel", back_populates="pedido", cascade="all, delete-orphan")
-    cupom = relationship("CupomDescontoModel", back_populates="pedidos")
 
     model_config = ConfigDict(from_attributes=True)

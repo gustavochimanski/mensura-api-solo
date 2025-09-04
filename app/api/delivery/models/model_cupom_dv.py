@@ -40,6 +40,13 @@ class CupomDescontoModel(Base):
     # Proxy para acessar todos os contatos de um cupom direto
     contatos = association_proxy("parceiro_links", "contatos")
 
+    # No CupomDescontoModel
+    pedidos = relationship(
+        "PedidoDeliveryModel",
+        back_populates="cupom",
+        cascade="all, delete-orphan",
+    )
+
     @property
     def link_whatsapp(self) -> str | None:
         if not self.monetizado or not self.parceiro_links:
