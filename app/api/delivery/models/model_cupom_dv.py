@@ -31,7 +31,7 @@ class CupomDescontoModel(Base):
         back_populates="cupom",
         cascade="all, delete-orphan"
     )
-
+    contatos = relationship("ContatoParceiroModel", back_populates="cupom_parceiro_link", cascade="all, delete-orphan")
     pedidos = relationship("PedidoDeliveryModel", back_populates="cupom")
 
     @property
