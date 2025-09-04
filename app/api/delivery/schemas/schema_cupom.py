@@ -14,7 +14,7 @@ class CupomCreate(BaseModel):
 
     monetizado: bool = False
     valor_por_lead: Optional[float] = None
-    parceiros_ids: Optional[List[int]] = []
+    parceiros_ids: Optional[List[int]] = None
 
 class CupomUpdate(BaseModel):
     descricao: Optional[constr(max_length=120)] = None

@@ -30,7 +30,12 @@ class CupomDescontoModel(Base):
     updated_at = Column(DateTime, default=now_trimmed, onupdate=now_trimmed, nullable=False)
 
     # Relação com parceiros via link
-    parceiro_links = relationship("CupomParceiroLinkModel", back_populates="cupom", cascade="all, delete-orphan")
+    parceiro_links = relationship(
+        "CupomParceiroLinkModel",
+        back_populates="cupom",
+        cascade="all, delete-orphan"
+    )
+    contatos = association_proxy("parceiro_links", "contatos")
 
     # Proxy para acessar todos os contatos de um cupom direto
     contatos = association_proxy("parceiro_links", "contatos")

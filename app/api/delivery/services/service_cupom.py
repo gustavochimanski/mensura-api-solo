@@ -16,7 +16,7 @@ class CuponsService:
 
     def create(self, data: CupomCreate):
         payload = data.model_dump(exclude_unset=True)
-        parceiros_ids = payload.pop("parceiros_ids", [])
+        parceiros_ids = payload.pop("parceiros_ids") or []
 
         cupom = CupomDescontoModel(**payload)
         self.repo.create(cupom)
@@ -44,12 +44,20 @@ class CuponsService:
         return cupom
 
     def _vincular_parceiros(self, cupom: CupomDescontoModel, parceiros_ids: List[int]):
-        cupom.parceiro_links.clear()
-        self.db.commit()
-        for parceiro_id in parceiros_ids:
-            parceiro = self.db.get(ParceiroModel, parceiro_id)
+        # Validação antecipada
+        parceiros = []
+        for pid in parceiros_ids:
+            parceiro = self.db.get(ParceiroModel, pid)
             if not parceiro or not parceiro.ativo:
-                raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Parceiro {parceiro_id} inválido ou inativo")
+                raise HTTPException(status.HTTP_400_BAD_REQUEST,
+                                    f"Parceiro {pid} inválido ou inativo")
+            parceiros.append(parceiro)
+
+        # Limpa links antigos
+        cupom.parceiro_links.clear()
+
+        # Cria novos links
+        for parceiro in parceiros:
             link = CupomParceiroLinkModel(
                 cupom=cupom,
                 parceiro=parceiro,
@@ -57,4 +65,7 @@ class CuponsService:
                 link_whatsapp=f"https://api.whatsapp.com/send?text=Olá! Vim pelo {parceiro.nome}. Código do cupom: {cupom.codigo}"
             )
             self.db.add(link)
+
         self.db.commit()
+        self.db.refresh(cupom)
+
