@@ -56,7 +56,7 @@ class CupomParceiroLinkModel(Base):
 
 
 class ContatoParceiroModel(Base):
-    __tablename__ = "contatos_parceiros"
+    __tablename__ = "parceiros_contatos"
     __table_args__ = {"schema": "delivery"}
 
     id = Column(Integer, primary_key=True, autoincrement=True)
