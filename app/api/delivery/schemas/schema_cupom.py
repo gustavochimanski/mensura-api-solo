@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 from pydantic import BaseModel, constr, ConfigDict
 
 class CupomCreate(BaseModel):
@@ -13,9 +13,8 @@ class CupomCreate(BaseModel):
     minimo_compra: Optional[float] = None
 
     monetizado: bool = False
-    parceiro_id: Optional[int] = None
     valor_por_lead: Optional[float] = None
-
+    parceiros_ids: Optional[List[int]] = []
 
 class CupomUpdate(BaseModel):
     descricao: Optional[constr(max_length=120)] = None
@@ -27,9 +26,8 @@ class CupomUpdate(BaseModel):
     minimo_compra: Optional[float] = None
 
     monetizado: Optional[bool] = None
-    parceiro_id: Optional[int] = None
     valor_por_lead: Optional[float] = None
-
+    parceiros_ids: Optional[List[int]] = None
 
 class CupomOut(BaseModel):
     id: int
@@ -45,7 +43,6 @@ class CupomOut(BaseModel):
     updated_at: datetime
 
     monetizado: bool
-    parceiro_id: Optional[int]
     valor_por_lead: Optional[float]
     link_whatsapp: Optional[str]
 

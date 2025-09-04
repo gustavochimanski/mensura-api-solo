@@ -19,21 +19,25 @@ class CupomDescontoModel(Base):
     validade_fim = Column(DateTime(timezone=True), nullable=True)
     minimo_compra = Column(Numeric(18, 2), nullable=True)
 
-    # --- monetização ---
     monetizado = Column(Boolean, nullable=False, default=False)
-    parceiro_id = Column(Integer, ForeignKey("delivery.parceiros.id", ondelete="SET NULL"), nullable=True)
     valor_por_lead = Column(Numeric(18, 2), nullable=True)
-
-    parceiro = relationship("ParceiroModel")
 
     created_at = Column(DateTime, default=now_trimmed, nullable=False)
     updated_at = Column(DateTime, default=now_trimmed, onupdate=now_trimmed, nullable=False)
+
+    # relacionamento N:N com Parceiro
+    parceiro_links = relationship(
+        "CupomParceiroLinkModel",
+        back_populates="cupom",
+        cascade="all, delete-orphan"
+    )
 
     pedidos = relationship("PedidoDeliveryModel", back_populates="cupom")
 
     @property
     def link_whatsapp(self) -> str | None:
-        if not self.monetizado or not self.parceiro:
+        # link para o primeiro parceiro ativo (exemplo)
+        if not self.monetizado or not self.parceiro_links:
             return None
-        texto = f"Olá! Vim pelo {self.parceiro.nome}. Código do cupom: {self.codigo}"
-        return f"https://api.whatsapp.com/send?text={texto}"
+        parceiro = self.parceiro_links[0].parceiro
+        return f"https://api.whatsapp.com/send?text=Olá! Vim pelo {parceiro.nome}. Código do cupom: {self.codigo}"

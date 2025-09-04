@@ -1,42 +1,60 @@
+from typing import List
+
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 
+from app.api.delivery.models.model_cupom_dv import CupomDescontoModel
 from app.api.delivery.repositories.repo_cupom import CupomRepository
-from app.api.delivery.models.model_parceiros_dv import ParceiroModel
+from app.api.delivery.models.model_parceiros_dv import ParceiroModel, CupomParceiroLinkModel
 from app.api.delivery.schemas.schema_cupom import CupomCreate, CupomUpdate
+
 
 class CuponsService:
     def __init__(self, db: Session):
-        self.repo = CupomRepository(db)
         self.db = db
-
-    def list(self):
-        return self.repo.list()
-
-    def get(self, id_: int):
-        obj = self.repo.get(id_)
-        if not obj:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Cupom não encontrado")
-        return obj
+        self.repo = CupomRepository(db)
 
     def create(self, data: CupomCreate):
         payload = data.model_dump(exclude_unset=True)
-        if payload.get("monetizado") and payload.get("parceiro_id"):
-            parceiro = self.db.get(ParceiroModel, payload["parceiro_id"])
-            if not parceiro or not parceiro.ativo:
-                raise HTTPException(status.HTTP_400_BAD_REQUEST, "Parceiro inválido ou inativo")
-        return self.repo.create(**payload)
+        parceiros_ids = payload.pop("parceiros_ids", [])
+
+        cupom = CupomDescontoModel(**payload)
+        self.repo.create(cupom)
+
+        if payload.get("monetizado") and parceiros_ids:
+            self._vincular_parceiros(cupom, parceiros_ids)
+        return cupom
 
     def update(self, id_: int, data: CupomUpdate):
-        obj = self.get(id_)
+        cupom = self.repo.get(id_)
         payload = data.model_dump(exclude_none=True)
-        if payload.get("monetizado") and payload.get("parceiro_id"):
-            parceiro = self.db.get(ParceiroModel, payload["parceiro_id"])
-            if not parceiro or not parceiro.ativo:
-                raise HTTPException(status.HTTP_400_BAD_REQUEST, "Parceiro inválido ou inativo")
-        return self.repo.update(obj, **payload)
+        parceiros_ids = payload.pop("parceiros_ids", None)
 
-    def delete(self, id_: int):
-        obj = self.get(id_)
-        self.repo.delete(obj)
-        return {"ok": True}
+        for k, v in payload.items():
+            setattr(cupom, k, v)
+        self.repo.update(cupom)
+
+        if "monetizado" in payload:
+            if payload["monetizado"] and parceiros_ids:
+                self._vincular_parceiros(cupom, parceiros_ids)
+            elif not payload["monetizado"]:
+                cupom.parceiro_links.clear()
+                self.db.commit()
+
+        return cupom
+
+    def _vincular_parceiros(self, cupom: CupomDescontoModel, parceiros_ids: List[int]):
+        cupom.parceiro_links.clear()
+        self.db.commit()
+        for parceiro_id in parceiros_ids:
+            parceiro = self.db.get(ParceiroModel, parceiro_id)
+            if not parceiro or not parceiro.ativo:
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Parceiro {parceiro_id} inválido ou inativo")
+            link = CupomParceiroLinkModel(
+                cupom=cupom,
+                parceiro=parceiro,
+                valor_por_indicacao=cupom.valor_por_lead or 0,
+                link_whatsapp=f"https://api.whatsapp.com/send?text=Olá! Vim pelo {parceiro.nome}. Código do cupom: {cupom.codigo}"
+            )
+            self.db.add(link)
+        self.db.commit()

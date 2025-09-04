@@ -7,25 +7,22 @@ class CupomRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def list(self) -> List[CupomDescontoModel]:
-        return self.db.execute(select(CupomDescontoModel)).scalars().all()
+    def list(self):
+        return self.db.query(CupomDescontoModel).all()
 
-    def get(self, id_: int) -> Optional[CupomDescontoModel]:
+    def get(self, id_: int):
         return self.db.get(CupomDescontoModel, id_)
 
-    def get_by_code(self, codigo: str) -> Optional[CupomDescontoModel]:
+    def get_by_code(self, codigo: str):
         return self.db.query(CupomDescontoModel).filter(CupomDescontoModel.codigo == codigo).first()
 
-    def create(self, **data) -> CupomDescontoModel:
-        obj = CupomDescontoModel(**data)
+    def create(self, obj: CupomDescontoModel):
         self.db.add(obj)
         self.db.commit()
         self.db.refresh(obj)
         return obj
 
-    def update(self, obj: CupomDescontoModel, **data) -> CupomDescontoModel:
-        for f, v in data.items():
-            setattr(obj, f, v)
+    def update(self, obj: CupomDescontoModel):
         self.db.commit()
         self.db.refresh(obj)
         return obj
