@@ -15,21 +15,24 @@ from app.api.public.router import router as public_router
 from app.api.auth import auth_controller
 
 # ───────────────────────────
-# Diretórios
+# Configurações básicas
 # ───────────────────────────
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_IMG_DIR = BASE_DIR / "static" / "img"
 STATIC_IMG_DIR.mkdir(parents=True, exist_ok=True)
 
 BASE_URL = os.getenv("BASE_URL", "https://teste2.mensuraapi.com.br")
+TITLE = "API de Varejo"
+VERSION = "1.0.0"
+DESCRIPTION = "Endpoints de relatórios, metas, dashboard e compras"
 
 # ───────────────────────────
 # Instância FastAPI
 # ───────────────────────────
 app = FastAPI(
-    title="API de Varejo",
-    version="1.0.0",
-    description="Endpoints de relatórios, metas, dashboard e compras",
+    title=TITLE,
+    version=VERSION,
+    description=DESCRIPTION,
     docs_url="/swagger",
     redoc_url="/redoc",
     openapi_url="/openapi.json",
@@ -62,12 +65,12 @@ def custom_openapi():
     if app.openapi_schema:
         return app.openapi_schema
     openapi_schema = get_openapi(
-        title=app.title,
-        version=app.version,
-        description=app.description,
+        title=TITLE,
+        version=VERSION,
+        description=DESCRIPTION,
         routes=app.routes,
     )
-    # Adiciona o BearerAuth apenas como opção no Swagger
+    # Adiciona o BearerAuth como opção no Swagger (não global)
     openapi_schema["components"]["securitySchemes"] = {
         "BearerAuth": {
             "type": "http",
@@ -75,7 +78,6 @@ def custom_openapi():
             "bearerFormat": "JWT",
         }
     }
-    # Não aplica globalmente → só aparece como opção no Swagger
     app.openapi_schema = openapi_schema
     return app.openapi_schema
 
