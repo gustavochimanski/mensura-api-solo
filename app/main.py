@@ -3,6 +3,8 @@ from pathlib import Path
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.security import OAuth2PasswordBearer
+from fastapi.openapi.utils import get_openapi
 
 from app.core.admin_dependencies import get_current_user
 from app.utils.logger import logger  # ✅ Logger centralizado
@@ -20,6 +22,7 @@ STATIC_IMG_DIR = BASE_DIR / "static" / "img"
 STATIC_IMG_DIR.mkdir(parents=True, exist_ok=True)
 
 BASE_URL = os.getenv("BASE_URL", "https://teste2.mensuraapi.com.br")
+
 # ───────────────────────────
 # Instância FastAPI
 # ───────────────────────────
@@ -35,7 +38,7 @@ app = FastAPI(
 
 # ───────────────────────────
 # Middlewares
-# ───────────────────────────]
+# ───────────────────────────
 origins = ["*"]
 app.add_middleware(
     CORSMiddleware,
@@ -51,21 +54,48 @@ app.add_middleware(
 app.mount("/img", StaticFiles(directory=str(STATIC_IMG_DIR)), name="img")
 
 # ───────────────────────────
+# Segurança (Bearer JWT apenas para Swagger UI)
+# ───────────────────────────
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    openapi_schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+    )
+    # Adiciona o BearerAuth apenas como opção no Swagger
+    openapi_schema["components"]["securitySchemes"] = {
+        "BearerAuth": {
+            "type": "http",
+            "scheme": "bearer",
+            "bearerFormat": "JWT",
+        }
+    }
+    # Não aplica globalmente → só aparece como opção no Swagger
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+app.openapi = custom_openapi
+
+# ───────────────────────────
 # Startup
 # ───────────────────────────
 @app.on_event("startup")
 def startup():
     from app.database.init_db import inicializar_banco
     logger.info("🔥 Iniciando API e banco de dados...")
-    logger.info("TESTANDO DOKCEREEEEEEEEEEEE")
     inicializar_banco()
     logger.info("✅ API iniciada com sucesso.")
 
 # ───────────────────────────
 # Rotas
 # ───────────────────────────
-app.include_router(auth_controller.router)
-app.include_router(api_delivery, )
+app.include_router(auth_controller.router)  # rota /auth/login
+app.include_router(api_delivery)
 app.include_router(mensura_router, dependencies=[Depends(get_current_user)])
 app.include_router(bi_router, dependencies=[Depends(get_current_user)])
-app.include_router(public_router,  dependencies=[Depends(get_current_user)])
+app.include_router(public_router, dependencies=[Depends(get_current_user)])
