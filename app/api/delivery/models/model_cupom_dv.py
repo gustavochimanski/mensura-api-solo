@@ -1,8 +1,8 @@
 from sqlalchemy import Column, Integer, String, DateTime, Numeric, Boolean, ForeignKey
 from sqlalchemy.orm import relationship
-from sqlalchemy.ext.associationproxy import association_proxy
 from app.database.db_connection import Base
 from app.utils.database_utils import now_trimmed
+
 
 # ----------------------
 # CUPOM
@@ -26,21 +26,12 @@ class CupomDescontoModel(Base):
     monetizado = Column(Boolean, nullable=False, default=False)
     valor_por_lead = Column(Numeric(18, 2), nullable=True)
 
+    parceiro_id = Column(Integer, ForeignKey("delivery.parceiros.id", ondelete="CASCADE"), nullable=False)
+    parceiro = relationship("ParceiroModel", back_populates="cupons")
+
     created_at = Column(DateTime, default=now_trimmed, nullable=False)
     updated_at = Column(DateTime, default=now_trimmed, onupdate=now_trimmed, nullable=False)
 
-    # Relação com parceiros via link
-    parceiro_links = relationship(
-        "CupomParceiroLinkModel",
-        back_populates="cupom",
-        cascade="all, delete-orphan"
-    )
-    contatos = association_proxy("parceiro_links", "contatos")
-
-    # Proxy para acessar todos os contatos de um cupom direto
-    contatos = association_proxy("parceiro_links", "contatos")
-
-    # No CupomDescontoModel
     pedidos = relationship(
         "PedidoDeliveryModel",
         back_populates="cupom",
@@ -49,8 +40,13 @@ class CupomDescontoModel(Base):
 
     @property
     def link_whatsapp(self) -> str | None:
-        if not self.monetizado or not self.parceiro_links:
+        """
+        Gera link de WhatsApp usando o telefone do parceiro.
+        Exemplo: https://wa.me/5511999999999?text=...
+        """
+        if not self.monetizado or not self.parceiro or not self.parceiro.telefone:
             return None
-        parceiro = self.parceiro_links[0].parceiro
-        return f"https://api.whatsapp.com/send?text=Olá! Vim pelo {parceiro.nome}. Código do cupom: {self.codigo}"
 
+        telefone = self.parceiro.telefone.strip().replace(" ", "").replace("-", "")
+        texto = f"Olá! Vim pelo parceiro {self.parceiro.nome}. Código do cupom: {self.codigo}"
+        return f"https://wa.me/{telefone}?text={texto}"
