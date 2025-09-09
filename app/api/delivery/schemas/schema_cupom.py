@@ -14,7 +14,9 @@ class CupomCreate(BaseModel):
 
     monetizado: bool = False
     valor_por_lead: Optional[float] = None
-    parceiros_ids: Optional[List[int]] = None
+    parceiro_id: Optional[int] = None
+
+    model_config = ConfigDict(from_attributes=True)
 
 class CupomUpdate(BaseModel):
     descricao: Optional[constr(max_length=120)] = None
@@ -27,7 +29,9 @@ class CupomUpdate(BaseModel):
 
     monetizado: Optional[bool] = None
     valor_por_lead: Optional[float] = None
-    parceiros_ids: Optional[List[int]] = None
+    parceiro_id: Optional[int] = None
+
+    model_config = ConfigDict(from_attributes=True)
 
 class CupomOut(BaseModel):
     id: int
