@@ -1,6 +1,8 @@
 from typing import List, Optional
 from sqlalchemy.orm import Session, joinedload
 from fastapi import HTTPException, status
+
+from app.api.delivery.models.model_cupom_dv import CupomDescontoModel
 from app.api.delivery.models.model_parceiros_dv import ParceiroModel, BannerParceiroModel
 from app.api.delivery.schemas.schema_parceiros import ParceiroIn, BannerParceiroIn
 
@@ -31,8 +33,9 @@ class ParceirosRepository:
         parceiro = (
             self.db.query(ParceiroModel)
             .options(
-                joinedload(ParceiroModel.cupons).joinedload("links"),
-                joinedload(ParceiroModel.banners).joinedload("categoria")
+                joinedload(ParceiroModel.cupons).joinedload(CupomDescontoModel.links),
+                # se CupomDescontoModel tiver 'links'
+                joinedload(ParceiroModel.banners).joinedload(BannerParceiroModel.categoria)
             )
             .filter(ParceiroModel.id == parceiro_id)
             .first()
