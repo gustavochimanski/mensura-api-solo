@@ -52,7 +52,6 @@ class CuponsService:
 
     # ---------------- LIST COM LINKS ----------------
     def list(self) -> List[CupomDescontoModel]:
-        # Usa joinedload para trazer os links junto
         return (
             self.db.query(CupomDescontoModel)
             .options(joinedload(CupomDescontoModel.links))

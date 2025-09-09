@@ -7,9 +7,6 @@ class CupomRepository:
         self.db = db
 
     # ---------------- CUPOM ----------------
-    def list(self):
-        return self.db.query(CupomDescontoModel).all()
-
     def get(self, id_: int):
         return self.db.get(CupomDescontoModel, id_)
 

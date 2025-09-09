@@ -24,7 +24,7 @@ class CupomDescontoModel(Base):
     monetizado = Column(Boolean, nullable=False, default=False)
     valor_por_lead = Column(Numeric(18, 2), nullable=True)
 
-    parceiro_id = Column(Integer, ForeignKey("delivery.parceiros.id", ondelete="CASCADE"), nullable=False)
+    parceiro_id = Column(Integer, ForeignKey("delivery.parceiros.id", ondelete="CASCADE"), nullable=True)
     parceiro = relationship("ParceiroModel", back_populates="cupons")
 
     created_at = Column(DateTime, default=now_trimmed, nullable=False)
