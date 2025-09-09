@@ -16,6 +16,8 @@ class EmpresaModel(Base):
     cnpj = Column(String(20), nullable=True, unique=True)
     slug = Column(String(50), nullable=False, unique=True)
     logo = Column(String(255), nullable=True)
+    telefone = Column(String(255), nullable=True)
+
     aceita_pedido_automatico = Column(Boolean, nullable=False, default=False)
 
     # Configurações de Cardápio

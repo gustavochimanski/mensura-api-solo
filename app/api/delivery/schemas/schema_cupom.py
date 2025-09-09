@@ -2,35 +2,6 @@ from datetime import datetime
 from typing import Optional, List
 from pydantic import BaseModel, constr, ConfigDict
 
-class CupomCreate(BaseModel):
-    codigo: constr(min_length=1, max_length=30)
-    descricao: Optional[constr(max_length=120)] = None
-    desconto_valor: Optional[float] = None
-    desconto_percentual: Optional[float] = None
-    ativo: bool = True
-    validade_inicio: Optional[datetime] = None
-    validade_fim: Optional[datetime] = None
-
-    monetizado: bool = False
-    valor_por_lead: Optional[float] = None
-    parceiro_id: Optional[int] = None
-
-    model_config = ConfigDict(from_attributes=True)
-
-class CupomUpdate(BaseModel):
-    descricao: Optional[constr(max_length=120)] = None
-    desconto_valor: Optional[float] = None
-    desconto_percentual: Optional[float] = None
-    ativo: Optional[bool] = None
-    validade_inicio: Optional[datetime] = None
-    validade_fim: Optional[datetime] = None
-
-    monetizado: Optional[bool] = None
-    valor_por_lead: Optional[float] = None
-    parceiro_id: Optional[int] = None
-
-    model_config = ConfigDict(from_attributes=True)
-
 class CupomOut(BaseModel):
     id: int
     codigo: str
@@ -45,6 +16,18 @@ class CupomOut(BaseModel):
 
     monetizado: bool
     valor_por_lead: Optional[float]
-    link_whatsapp: Optional[str]
+
+    # ✅ Substituímos o link único por uma lista de links
+    links: List["CupomLinkOut"] = []
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ------------------- Links -------------------
+class CupomLinkOut(BaseModel):
+    id: int
+    cupom_id: int
+    titulo: str
+    url: str
 
     model_config = ConfigDict(from_attributes=True)

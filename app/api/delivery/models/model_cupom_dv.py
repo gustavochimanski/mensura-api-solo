@@ -3,7 +3,6 @@ from sqlalchemy.orm import relationship
 from app.database.db_connection import Base
 from app.utils.database_utils import now_trimmed
 
-
 # ----------------------
 # CUPOM
 # ----------------------
@@ -37,15 +36,26 @@ class CupomDescontoModel(Base):
         cascade="all, delete-orphan",
     )
 
-    @property
-    def link_whatsapp(self) -> str | None:
-        """
-        Gera link de WhatsApp usando o telefone do parceiro.
-        Exemplo: https://wa.me/5511999999999?text=...
-        """
-        if not self.monetizado or not self.parceiro or not self.parceiro.telefone:
-            return None
+    # Relação para os links
+    links = relationship(
+        "CupomLinkModel",
+        back_populates="cupom",
+        cascade="all, delete-orphan"
+    )
 
-        telefone = self.parceiro.telefone.strip().replace(" ", "").replace("-", "")
-        texto = f"Olá! Vim pelo parceiro {self.parceiro.nome}. Código do cupom: {self.codigo}"
-        return f"https://wa.me/{telefone}?text={texto}"
+
+# ----------------------
+# LINKS DO CUPOM
+# ----------------------
+class CupomLinkModel(Base):
+    __tablename__ = "cupons_links_dv"
+    __table_args__ = {"schema": "delivery"}
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    cupom_id = Column(Integer, ForeignKey("delivery.cupons_dv.id", ondelete="CASCADE"), nullable=False)
+    titulo = Column(String(100), nullable=False)
+    url = Column(String(500), nullable=False)
+
+    cupom = relationship("CupomDescontoModel", back_populates="links")
+    created_at = Column(DateTime, default=now_trimmed, nullable=False)
+    updated_at = Column(DateTime, default=now_trimmed, onupdate=now_trimmed, nullable=False)

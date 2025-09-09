@@ -13,7 +13,7 @@ class ParceiroModel(Base):
     id = Column(Integer, primary_key=True)
     nome = Column(String(100), nullable=False, unique=True)
     ativo = Column(Boolean, nullable=False, default=False)
-    telefone = Column(String(20), nullable=True)  # <- Novo campo
+    telefone = Column(String(20), nullable=True)
 
     banners = relationship("BannerParceiroModel", back_populates="parceiro", cascade="all, delete-orphan")
     cupons = relationship("CupomDescontoModel", back_populates="parceiro", cascade="all, delete-orphan")
