@@ -21,7 +21,6 @@ class CupomDescontoModel(Base):
     ativo = Column(Boolean, nullable=False, default=True)
     validade_inicio = Column(DateTime(timezone=True), nullable=True)
     validade_fim = Column(DateTime(timezone=True), nullable=True)
-    minimo_compra = Column(Numeric(18, 2), nullable=True)
 
     monetizado = Column(Boolean, nullable=False, default=False)
     valor_por_lead = Column(Numeric(18, 2), nullable=True)

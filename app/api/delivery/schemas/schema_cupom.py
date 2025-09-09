@@ -10,7 +10,6 @@ class CupomCreate(BaseModel):
     ativo: bool = True
     validade_inicio: Optional[datetime] = None
     validade_fim: Optional[datetime] = None
-    minimo_compra: Optional[float] = None
 
     monetizado: bool = False
     valor_por_lead: Optional[float] = None
@@ -25,7 +24,6 @@ class CupomUpdate(BaseModel):
     ativo: Optional[bool] = None
     validade_inicio: Optional[datetime] = None
     validade_fim: Optional[datetime] = None
-    minimo_compra: Optional[float] = None
 
     monetizado: Optional[bool] = None
     valor_por_lead: Optional[float] = None
@@ -42,7 +40,6 @@ class CupomOut(BaseModel):
     ativo: bool
     validade_inicio: Optional[datetime]
     validade_fim: Optional[datetime]
-    minimo_compra: Optional[float]
     created_at: datetime
     updated_at: datetime
 
