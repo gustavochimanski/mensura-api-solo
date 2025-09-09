@@ -7,6 +7,7 @@ from app.api.delivery.schemas.schema_parceiros import (
 )
 from app.api.delivery.schemas.schema_cupom import CupomLinkOut, CupomParceiroOut
 from app.api.delivery.services.service_parceiros import ParceirosService
+from app.api.mensura.repositories.empresa_repo import EmpresaRepository
 from app.database.db_connection import get_db
 from app.core.admin_dependencies import get_current_user
 from app.utils.minio_client import upload_file_to_minio
@@ -41,9 +42,11 @@ def create_banner(
     imagem: UploadFile | None = File(None),
     db: Session = Depends(get_db)
 ):
+
+    empresa = EmpresaRepository(db).get_first()
     imagem_url = None
     if imagem:
-        imagem_url = upload_file_to_minio(db, parceiro_id, imagem, "banners")
+        imagem_url = upload_file_to_minio(db, empresa.id, imagem, "banners")
 
     body = BannerParceiroIn(
         nome=nome,

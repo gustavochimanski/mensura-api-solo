@@ -76,3 +76,7 @@ class EmpresaRepository:
             .filter(EmpresaModel.slug == slug)
             .first()
         )
+
+
+    def get_first(self):
+        return self.db.query(EmpresaModel).first()
