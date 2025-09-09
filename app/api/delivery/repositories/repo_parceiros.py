@@ -1,5 +1,5 @@
 from typing import List, Optional
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from fastapi import HTTPException, status
 from app.api.delivery.models.model_parceiros_dv import ParceiroModel, BannerParceiroModel
 from app.api.delivery.schemas.schema_parceiros import ParceiroIn, BannerParceiroIn
@@ -8,7 +8,7 @@ class ParceirosRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    # ---------- Parceiros ----------
+    # Parceiros
     def create_parceiro(self, data: ParceiroIn) -> ParceiroModel:
         if self.db.query(ParceiroModel).filter_by(nome=data.nome).first():
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Parceiro já existe")
@@ -27,6 +27,20 @@ class ParceirosRepository:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Parceiro não encontrado")
         return p
 
+    def get_parceiro_completo(self, parceiro_id: int):
+        parceiro = (
+            self.db.query(ParceiroModel)
+            .options(
+                joinedload(ParceiroModel.cupons).joinedload("links"),
+                joinedload(ParceiroModel.banners).joinedload("categoria")
+            )
+            .filter(ParceiroModel.id == parceiro_id)
+            .first()
+        )
+        if not parceiro:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Parceiro não encontrado")
+        return parceiro
+
     def update_parceiro(self, parceiro_id: int, data: dict) -> ParceiroModel:
         p = self.get_parceiro(parceiro_id)
         for key in ["nome", "ativo"]:
@@ -41,7 +55,7 @@ class ParceirosRepository:
         self.db.delete(p)
         self.db.commit()
 
-    # ---------- Banners ----------
+    # Banners
     def create_banner(self, data: BannerParceiroIn) -> BannerParceiroModel:
         b = BannerParceiroModel(
             nome=data.nome,

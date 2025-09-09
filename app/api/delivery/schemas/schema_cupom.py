@@ -71,3 +71,16 @@ class CupomOut(BaseModel):
     links: List[CupomLinkOut] = []
 
     model_config = ConfigDict(from_attributes=True)
+
+class CupomParceiroOut(BaseModel):
+    id: int
+    codigo: str
+    descricao: Optional[str]
+    desconto_valor: Optional[float]
+    desconto_percentual: Optional[float]
+    ativo: bool
+    monetizado: bool
+    valor_por_lead: Optional[float]
+    links: List[CupomLinkOut] = []
+
+    model_config = ConfigDict(from_attributes=True)
