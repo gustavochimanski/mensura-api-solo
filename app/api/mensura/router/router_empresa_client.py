@@ -13,9 +13,8 @@ from app.database.db_connection import get_db
 router = APIRouter(prefix="/api/mensura/client/emp", tags=["Empresas Client"])
 @router.get("/", response_model=List[EmpresaClientOut], dependencies=[Depends(get_cliente_by_super_token)] )
 def buscar_empresa_client(
+    empresa_id: int,
     db: Session = Depends(get_db)
 ):
     repo_emp = EmpresaRepository(db)
-    empresas = repo_emp.list()
-
-    return empresas
+    return repo_emp.get_empresa_by_id(empresa_id)
