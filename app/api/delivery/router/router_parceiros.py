@@ -32,7 +32,7 @@ def delete_parceiro(parceiro_id: int, db: Session = Depends(get_db)):
     return ParceirosService(db).delete_parceiro(parceiro_id)
 
 # CRUD Banners
-@router.post("/banners", response_model=BannerParceiroOut, status_code=status.HTTP_201_CREATED, dependencies=[Depends()])
+@router.post("/banners", response_model=BannerParceiroOut, status_code=status.HTTP_201_CREATED, dependencies=[Depends(get_current_user)])
 def create_banner(
     nome: str = Form(...),
     tipo_banner: str = Form(...),
