@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field, condecimal
 from typing import Optional
 
-
+#
 class RegiaoEntregaBase(BaseModel):
     cep: Optional[str] = Field(None, example="01001-000")
     bairro: str = Field(..., example="Centro")
