@@ -10,7 +10,7 @@ from app.database.db_connection import get_db
 
 
 router = APIRouter(prefix="/api/mensura/client/emp", tags=["Empresas Client"])
-@router.get("/", dependencies=[Depends(get_cliente_by_super_token)] )
+@router.get("/", )
 def buscar_empresa_client(
     db: Session = Depends(get_db)
 ):
