@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.api.mensura.repositories.empresa_repo import EmpresaRepository
+from app.api.mensura.schemas.schema_empresa_client import EmpresaClientOut
 from app.core.client_dependecies import get_cliente_by_super_token
 from app.database.db_connection import get_db
 
