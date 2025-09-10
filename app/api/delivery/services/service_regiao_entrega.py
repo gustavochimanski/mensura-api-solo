@@ -33,7 +33,6 @@ class RegiaoEntregaService:
 
         bairro, cidade, uf = payload.bairro, payload.cidade, payload.uf
         lat, lon, cep = None, None, payload.cep
-        rua, numero = None, None
 
         # 1️⃣ Consulta Geoapify mini
         query = f"{bairro or ''}, {cidade or ''} - {uf or ''}, Brasil"
@@ -48,8 +47,6 @@ class RegiaoEntregaService:
             lat = mini.latitude
             lon = mini.longitude
             cep = mini.cep or cep
-            rua = mini.rua
-            numero = mini.numero
 
         # 2️⃣ Bairro é obrigatório
         if not bairro:
@@ -85,7 +82,6 @@ class RegiaoEntregaService:
             bairro=bairro,
             cidade=cidade,
             uf=uf,
-            numero=numero,
             latitude=lat,
             longitude=lon,
             taxa_entrega=payload.taxa_entrega,
@@ -130,8 +126,6 @@ class RegiaoEntregaService:
             mini: GeoapifyMini = mini_list[0]
             data["latitude"] = mini.latitude
             data["longitude"] = mini.longitude
-            data["rua"] = mini.rua
-            data["numero"] = mini.numero
             data["cep"] = mini.cep
         else:
             lat, lon = await geo.get_coordinates(query)
