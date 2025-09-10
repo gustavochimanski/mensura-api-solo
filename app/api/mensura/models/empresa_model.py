@@ -60,5 +60,9 @@ class EmpresaModel(Base):
         single_parent=True,
         uselist=False  # garante 1:1
     )
+    regioes_entrega = relationship(
+        "RegiaoEntregaModel",
+        back_populates="empresa"
+    )
 
     model_config = ConfigDict(from_attributes=True)
