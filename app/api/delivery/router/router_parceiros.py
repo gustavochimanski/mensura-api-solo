@@ -8,6 +8,7 @@ from app.api.delivery.schemas.schema_parceiros import (
 from app.api.delivery.schemas.schema_cupom import CupomLinkOut, CupomParceiroOut
 from app.api.delivery.services.service_parceiros import ParceirosService
 from app.api.mensura.repositories.empresa_repo import EmpresaRepository
+from app.core.client_dependecies import get_cliente_by_super_token
 from app.database.db_connection import get_db
 from app.core.admin_dependencies import get_current_user
 from app.utils.minio_client import upload_file_to_minio
@@ -58,7 +59,7 @@ def create_banner(
     )
     return ParceirosService(db).create_banner(body)
 
-@router.get("/client/banners", response_model=list[BannerParceiroOut])
+@router.get("/client/banners", response_model=list[BannerParceiroOut],  dependencies=[Depends(get_cliente_by_super_token)])
 def list_banners(parceiro_id: Optional[int] = None, db: Session = Depends(get_db)):
     return ParceirosService(db).list_banners(parceiro_id)
 
