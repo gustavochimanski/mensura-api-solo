@@ -1,8 +1,6 @@
 # app/api/mensura/routes/empresa_router.py
-from fastapi import APIRouter, Depends, UploadFile, Form
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from typing import List
-import json
 
 from app.api.mensura.repositories.empresa_repo import EmpresaRepository
 from app.core.client_dependecies import get_cliente_by_super_token
