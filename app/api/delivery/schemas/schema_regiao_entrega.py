@@ -1,24 +1,28 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, condecimal
 from typing import Optional
+
 
 class RegiaoEntregaBase(BaseModel):
     cep: Optional[str] = Field(None, example="01001-000")
-    bairro: str
-    cidade: str
-    uf: str
-    taxa_entrega: float
+    bairro: str = Field(..., example="Centro")
+    cidade: str = Field(..., example="São Paulo")
+    uf: str = Field(..., min_length=2, max_length=2, example="SP")
+    taxa_entrega: condecimal(gt=0, decimal_places=2) = Field(..., example=8.90)
     ativo: bool = True
+    latitude: Optional[float] = Field(None, ge=-90, le=90)
+    longitude: Optional[float] = Field(None, ge=-180, le=180)
+
 
 class RegiaoEntregaCreate(RegiaoEntregaBase):
-    empresa_id: int
+    empresa_id: int = Field(..., example=1)
+
 
 class RegiaoEntregaUpdate(RegiaoEntregaBase):
     pass
 
+
 class RegiaoEntregaOut(RegiaoEntregaBase):
     id: int
-    latitude: Optional[float]
-    longitude: Optional[float]
 
     class Config:
         from_attributes = True
