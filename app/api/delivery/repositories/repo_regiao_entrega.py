@@ -1,3 +1,5 @@
+from math import isclose
+
 from sqlalchemy.orm import Session
 from app.api.delivery.models.model_regiao_entrega import RegiaoEntregaModel
 
@@ -16,12 +18,25 @@ class RegiaoEntregaRepository:
             self.db.query(RegiaoEntregaModel)
             .filter(
                 RegiaoEntregaModel.empresa_id == empresa_id,
-                RegiaoEntregaModel.bairro.ilike(bairro.strip()),  # case insensitive
+                RegiaoEntregaModel.bairro.ilike(bairro.strip()),
                 RegiaoEntregaModel.cidade.ilike(cidade.strip()),
                 RegiaoEntregaModel.uf.ilike(uf.strip()),
             )
             .first()
         )
+
+    def get_by_coordinates(self, empresa_id: int, lat: float, lon: float, tolerance: float = 0.001):
+        """Retorna se já existe região com coordenadas próximas (~100m de raio)"""
+        results = (
+            self.db.query(RegiaoEntregaModel)
+            .filter(RegiaoEntregaModel.empresa_id == empresa_id)
+            .all()
+        )
+        for r in results:
+            if r.latitude and r.longitude:
+                if isclose(r.latitude, lat, abs_tol=tolerance) and isclose(r.longitude, lon, abs_tol=tolerance):
+                    return r
+        return None
 
     def create(self, regiao: RegiaoEntregaModel):
         self.db.add(regiao)

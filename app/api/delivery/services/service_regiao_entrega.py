@@ -51,16 +51,8 @@ class RegiaoEntregaService:
         logger.info(f"[RegiaoEntregaService] Criando região: {payload}")
 
         bairro, cidade, uf = payload.bairro, payload.cidade, payload.uf
-        # ✅ verifica duplicidade
-        existing = self.repo.get_by_location(payload.empresa_id, bairro, cidade, uf)
-        if existing:
-            logger.warning(
-                f"[RegiaoEntregaService] Região já cadastrada: "
-                f"empresa_id={payload.empresa_id}, bairro={bairro}, cidade={cidade}, uf={uf}"
-            )
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Essa região já está cadastrada")
 
-        # se vier CEP, tenta preencher dados via ViaCEP
+        # se vier CEP → normaliza
         if payload.cep:
             data_cep = await self._via_cep(payload.cep.replace("-", ""))
             bairro = data_cep.get("bairro") or bairro
@@ -68,18 +60,28 @@ class RegiaoEntregaService:
             uf = data_cep.get("uf") or uf
             logger.info(f"[RegiaoEntregaService] Dados ViaCEP: bairro={bairro}, cidade={cidade}, uf={uf}")
 
-        # ✅ bairro é obrigatório
+        # bairro é obrigatório
         if not bairro:
-            logger.error("[RegiaoEntregaService] Bairro é obrigatório")
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Bairro é obrigatório")
 
-        # Consulta Geoapify usando bairro obrigatório
+        # consulta coordenadas
         query = f"{bairro}, {cidade} - {uf}, Brasil"
         geo = GeoapifyClient()
         lat, lon = await geo.get_coordinates(query)
 
-        logger.info(f"[RegiaoEntregaService] Coordenadas Geoapify: lat={lat}, lon={lon}")
+        # checa duplicidade por localização textual
+        existing = self.repo.get_by_location(payload.empresa_id, bairro, cidade, uf)
+        if existing:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Essa região já está cadastrada (bairro/cidade/uf)")
 
+        # checa duplicidade por coordenadas (caso mesmo bairro venha grafado diferente)
+        if lat and lon:
+            existing_coords = self.repo.get_by_coordinates(payload.empresa_id, lat, lon)
+            if existing_coords:
+                raise HTTPException(status.HTTP_400_BAD_REQUEST,
+                                    "Essa região já está cadastrada (coordenadas próximas)")
+
+        # cria registro
         regiao = RegiaoEntregaModel(
             empresa_id=payload.empresa_id,
             cep=payload.cep,
@@ -93,7 +95,6 @@ class RegiaoEntregaService:
         )
 
         created = self.repo.create(regiao)
-        logger.info(f"[RegiaoEntregaService] Região criada: {created.id}")
         return created
 
     async def update(self, regiao_id: int, payload: RegiaoEntregaUpdate):
