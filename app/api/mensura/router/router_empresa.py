@@ -21,7 +21,9 @@ async def create_empresa(
     logo: UploadFile | None = None,
     cardapio_link: str | None = Form(None),
     cardapio_tema: str | None = Form("padrao"),
-    aceita_pedido_automatico: str | None = Form("false"),  # ✅ recebe string do FormData
+    aceita_pedido_automatico: str | None = Form("false"),
+    tempo_entrega_maximo: int = Form(...),
+    taxa_minima_entrega: float = Form(...),
     db: Session = Depends(get_db),
 ):
     endereco_data = EnderecoCreate(**json.loads(endereco))
@@ -33,7 +35,9 @@ async def create_empresa(
         endereco=endereco_data,
         cardapio_link=cardapio_link,
         cardapio_tema=cardapio_tema,
-        aceita_pedido_automatico = aceita_pedido_automatico.lower() == "true",  # ✅ converte para boolean
+        aceita_pedido_automatico = aceita_pedido_automatico.lower() == "true",
+        tempo_entrega_maximo=tempo_entrega_maximo,
+        taxa_minima_entrega=taxa_minima_entrega
     )
     return EmpresaService(db).create_empresa(empresa_data, logo=logo)
 
@@ -48,7 +52,9 @@ async def update_empresa(
     logo: UploadFile | None = None,
     cardapio_link: str | None = Form(None),
     cardapio_tema: str | None = Form(None),
-    aceita_pedido_automatico: str | None = Form(None),  # ✅ recebe string do FormData
+    aceita_pedido_automatico: str | None = Form(None),
+    tempo_entrega_maximo: int = Form(...),
+    taxa_minima_entrega: float = Form(...),
     db: Session = Depends(get_db),
 ):
     slug = make_slug(nome)
@@ -59,7 +65,9 @@ async def update_empresa(
         endereco_id=endereco_id,
         cardapio_link=cardapio_link,
         cardapio_tema=cardapio_tema,
-        aceita_pedido_automatico = aceita_pedido_automatico.lower() == "true" if aceita_pedido_automatico is not None else None,  # ✅ boolean ou None
+        aceita_pedido_automatico = aceita_pedido_automatico.lower() == "true" if aceita_pedido_automatico is not None else None,
+        tempo_entrega_maximo=tempo_entrega_maximo,
+        taxa_minima_entrega=taxa_minima_entrega
     )
     return EmpresaService(db).update_empresa(id=id, data=empresa_data, logo=logo)
 

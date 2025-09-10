@@ -44,7 +44,9 @@ class EmpresaService:
             slug=data.slug,
             endereco_id=endereco.id,
             cardapio_tema=data.cardapio_tema,
-            aceita_pedido_automatico = str(data.aceita_pedido_automatico).lower() == "true",
+            aceita_pedido_automatico=str(data.aceita_pedido_automatico).lower() == "true",
+            tempo_entrega_maximo=data.tempo_entrega_maximo,
+            taxa_minima_entrega=data.taxa_minima_entrega
         )
         empresa = self.repo_emp.create(empresa)
 
