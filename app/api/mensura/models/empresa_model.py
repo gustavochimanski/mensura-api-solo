@@ -1,5 +1,5 @@
 # app/api/mensura/models/empresa_model.py
-from sqlalchemy import Column, Integer, String, ForeignKey, Boolean
+from sqlalchemy import Column, Integer, String, ForeignKey, Boolean, Numeric
 from sqlalchemy.orm import relationship
 from pydantic import ConfigDict
 
@@ -23,6 +23,8 @@ class EmpresaModel(Base):
     # Configurações de Cardápio
     cardapio_link = Column(String(255), nullable=True, unique=True)
     cardapio_tema = Column(String(50), nullable=True, default="padrao")
+    tempo_entrega_maximo = Column(Integer, nullable=False, default=60)  # minutos
+    taxa_minima_entrega = Column(Numeric(10, 2), nullable=False, default=0)  # R$
 
     endereco_id = Column(
         Integer,
