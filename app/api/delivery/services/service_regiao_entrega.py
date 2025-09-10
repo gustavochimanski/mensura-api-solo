@@ -5,7 +5,7 @@ from app.api.delivery.models.model_regiao_entrega import RegiaoEntregaModel
 from app.api.delivery.repositories.repo_regiao_entrega import RegiaoEntregaRepository
 from app.api.delivery.schemas.schema_regiao_entrega import RegiaoEntregaCreate, RegiaoEntregaUpdate
 from app.config import settings
-from app.utils.geopapify_client import GeoapifyClient
+from app.utils.geopapify_client import GeoapifyClient, GeoapifyMini
 from app.utils.logger import logger
 
 
@@ -33,18 +33,23 @@ class RegiaoEntregaService:
 
         bairro, cidade, uf = payload.bairro, payload.cidade, payload.uf
         lat, lon, cep = None, None, payload.cep
+        rua, numero = None, None
 
         # 1️⃣ Consulta Geoapify mini
         query = f"{bairro or ''}, {cidade or ''} - {uf or ''}, Brasil"
         geo = GeoapifyClient()
-        mini = await geo.geocode_mini(query)
-        if mini:
-            bairro = mini.get("bairro") or bairro
-            cidade = mini.get("cidade") or cidade
-            uf = mini.get("uf") or uf
-            lat = mini.get("latitude")
-            lon = mini.get("longitude")
-            cep = mini.get("cep") or cep
+        mini_list = await geo.geocode_mini(query)
+
+        if mini_list and len(mini_list) > 0:
+            mini: GeoapifyMini = mini_list[0]  # pega a primeira feature
+            bairro = mini.bairro or bairro
+            cidade = mini.cidade or cidade
+            uf = mini.codigo_estado or uf
+            lat = mini.latitude
+            lon = mini.longitude
+            cep = mini.cep or cep
+            rua = mini.rua
+            numero = mini.numero
 
         # 2️⃣ Bairro é obrigatório
         if not bairro:
@@ -80,6 +85,8 @@ class RegiaoEntregaService:
             bairro=bairro,
             cidade=cidade,
             uf=uf,
+            rua=rua,
+            numero=numero,
             latitude=lat,
             longitude=lon,
             taxa_entrega=payload.taxa_entrega,
@@ -115,15 +122,21 @@ class RegiaoEntregaService:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Bairro é obrigatório")
         data["bairro"] = bairro_final
 
-        # Atualiza coordenadas
+        # Atualiza coordenadas via Geoapify
         geo = GeoapifyClient()
-        lat, lon = await geo.get_coordinates(
-            data.get("bairro"),
-            data.get("cidade") or regiao.cidade,
-            data.get("uf") or regiao.uf,
-        )
-        data["latitude"], data["longitude"] = lat, lon
-        logger.info(f"[RegiaoEntregaService] Coordenadas Geoapify atualizadas: lat={lat}, lon={lon}")
+        query = f"{data.get('bairro')}, {data.get('cidade') or regiao.cidade} - {data.get('uf') or regiao.uf}, Brasil"
+        mini_list = await geo.geocode_mini(query)
+
+        if mini_list and len(mini_list) > 0:
+            mini: GeoapifyMini = mini_list[0]
+            data["latitude"] = mini.latitude
+            data["longitude"] = mini.longitude
+            data["rua"] = mini.rua
+            data["numero"] = mini.numero
+            data["cep"] = mini.cep
+        else:
+            lat, lon = await geo.get_coordinates(query)
+            data["latitude"], data["longitude"] = lat, lon
 
         updated = self.repo.update(regiao, data)
         logger.info(f"[RegiaoEntregaService] Região atualizada: {updated.id}")
