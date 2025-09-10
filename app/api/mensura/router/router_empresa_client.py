@@ -1,4 +1,6 @@
 # app/api/mensura/routes/empresa_router.py
+from typing import List
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
@@ -9,7 +11,7 @@ from app.database.db_connection import get_db
 
 
 router = APIRouter(prefix="/api/mensura/client/emp", tags=["Empresas Client"])
-@router.get("/", response_model=EmpresaClientOut, dependencies=[Depends(get_cliente_by_super_token)] )
+@router.get("/", response_model=List[EmpresaClientOut], dependencies=[Depends(get_cliente_by_super_token)] )
 def buscar_empresa_client(
     db: Session = Depends(get_db)
 ):
