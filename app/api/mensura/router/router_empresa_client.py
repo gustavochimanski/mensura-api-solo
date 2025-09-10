@@ -9,7 +9,7 @@ from app.core.client_dependecies import get_cliente_by_super_token
 from app.database.db_connection import get_db
 
 
-router = APIRouter(prefix="/api/mensura/empresas", tags=["Empresas Client"])
+router = APIRouter(prefix="/api/mensura/emp", tags=["Empresas Client"])
 @router.get("/client", dependencies=[Depends(get_cliente_by_super_token)] )
 def buscar_empresa_client(
     db: Session = Depends(get_db)
