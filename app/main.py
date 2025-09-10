@@ -66,6 +66,6 @@ def startup():
 # ───────────────────────────
 app.include_router(auth_controller.router)
 app.include_router(api_delivery)
-app.include_router(mensura_router, dependencies=[Depends(get_current_user)])
+app.include_router(mensura_router)
 app.include_router(bi_router, dependencies=[Depends(get_current_user)])
 app.include_router(public_router,  dependencies=[Depends(get_current_user)])
