@@ -27,12 +27,13 @@ router = APIRouter(prefix="/api/delivery/pedidos", tags=["Pedidos"])
 )
 def listar_pedidos_admin_kanban(
     db: Session = Depends(get_db),
-    date_filter: date | None = Query(None, description="Filtrar pedidos por data (YYYY-MM-DD)")
+    date_filter: date | None = Query(None, description="Filtrar pedidos por data (YYYY-MM-DD)"),
+    empresa_id: int = Query()
 ):
     """
     Lista pedidos do sistema (para admin, versão resumida pro Kanban)
     """
-    return PedidoService(db).list_all_kanban(date_filter=date_filter)
+    return PedidoService(db).list_all_kanban(date_filter=date_filter, empresa_id=empresa_id)
 
 
 @router.put(

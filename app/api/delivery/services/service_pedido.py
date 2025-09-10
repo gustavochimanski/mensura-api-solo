@@ -369,8 +369,8 @@ class PedidoService:
     # ======================================================================
     # ============================ ADMIN ===================================
     # ======================================================================
-    def list_all_kanban(self, limit: int = 500, date_filter: date | None = None):
-        pedidos = self.repo.list_all_kanban(limit=limit, date_filter=date_filter)
+    def list_all_kanban(self, limit: int = 500, date_filter: date | None = None, empresa_id: int=1):
+        pedidos = self.repo.list_all_kanban(limit=limit, date_filter=date_filter, empresa_id=empresa_id)
         resultados = []
 
         for p in pedidos:
