@@ -5,6 +5,7 @@ from app.api.delivery.models.model_regiao_entrega import RegiaoEntregaModel
 from app.api.delivery.repositories.repo_regiao_entrega import RegiaoEntregaRepository
 from app.api.delivery.schemas.schema_regiao_entrega import RegiaoEntregaCreate, RegiaoEntregaUpdate
 from app.config import settings
+from app.utils.geopapify_client import GeoapifyClient
 from app.utils.logger import logger
 
 
@@ -65,7 +66,10 @@ class RegiaoEntregaService:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Bairro é obrigatório")
 
         # Consulta Geoapify usando bairro obrigatório
-        lat, lon = await self._geoapify(bairro, cidade, uf)
+        query = f"{bairro}, {cidade} - {uf}, Brasil"
+        geo = GeoapifyClient()
+        lat, lon = await geo.get_coordinates(query)
+
         logger.info(f"[RegiaoEntregaService] Coordenadas Geoapify: lat={lat}, lon={lon}")
 
         regiao = RegiaoEntregaModel(
