@@ -7,6 +7,8 @@ if not os.getenv("RUNNING_IN_DOCKER"):
     dotenv_path = Path(__file__).resolve().parents[2] / ".env"
     load_dotenv(dotenv_path=dotenv_path)
 
+GEOAPIFY_KEY = os.getenv("GEOAPIFY_KEY")
+
 # Configuração de conexão
 DB_CONFIG = {
     'database': os.getenv('DB_NAME'),
