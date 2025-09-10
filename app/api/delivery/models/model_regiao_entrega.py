@@ -9,7 +9,7 @@ class RegiaoEntregaModel(Base):
     __table_args__ = {"schema": "delivery"}
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    empresa_id = Column(Integer, ForeignKey("delivery.empresas_dv.id"), nullable=False)
+    empresa_id = Column(Integer, ForeignKey("mensura.empresas.id"), nullable=False)
 
     cep = Column(String(9), nullable=True)  # 8 dígitos ou com hífen
     bairro = Column(String(120), nullable=False)
@@ -27,4 +27,4 @@ class RegiaoEntregaModel(Base):
     updated_at = Column(DateTime, default=now_trimmed, onupdate=now_trimmed, nullable=False)
 
 
-    empresa = relationship("EmpresaDeliveryModel", back_populates="regioes_entrega")
+    empresa = relationship("EmpresaModel", back_populates="regioes_entrega")
