@@ -51,37 +51,47 @@ class RegiaoEntregaService:
         logger.info(f"[RegiaoEntregaService] Criando região: {payload}")
 
         bairro, cidade, uf = payload.bairro, payload.cidade, payload.uf
+        lat, lon = None, None
 
-        # se vier CEP → normaliza
-        if payload.cep:
-            data_cep = await self._via_cep(payload.cep.replace("-", ""))
-            bairro = data_cep.get("bairro") or bairro
-            cidade = data_cep.get("localidade") or cidade
-            uf = data_cep.get("uf") or uf
-            logger.info(f"[RegiaoEntregaService] Dados ViaCEP: bairro={bairro}, cidade={cidade}, uf={uf}")
+        # 1 Consulta Geoapify
+        query = f"{bairro or ''}, {cidade or ''} - {uf or ''}, Brasil"
+        geo = GeoapifyClient()
+        raw = await geo.geocode_raw(query)
+        if raw:
+            feature = raw["features"][0]["properties"]
+            bairro = feature.get("suburb") or bairro
+            cidade = feature.get("city") or cidade or feature.get("state_district")
+            uf = feature.get("state_code") or uf
+            coords = raw["features"][0]["geometry"]["coordinates"]
+            lat, lon = coords[1], coords[0]
+            logger.info(
+                f"[RegiaoEntregaService] Dados Geoapify (sem CEP): bairro={bairro}, cidade={cidade}, uf={uf}, lat={lat}, lon={lon}")
 
-        # bairro é obrigatório
+        # 3️⃣ Bairro é obrigatório (depois das normalizações)
         if not bairro:
+            logger.error("[RegiaoEntregaService] Bairro é obrigatório")
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Bairro é obrigatório")
 
-        # consulta coordenadas
-        query = f"{bairro}, {cidade} - {uf}, Brasil"
-        geo = GeoapifyClient()
-        lat, lon = await geo.get_coordinates(query)
+        # 4️⃣ Se ainda não pegamos coordenadas, tenta buscar agora
+        if not lat or not lon:
+            query = f"{bairro}, {cidade} - {uf}, Brasil"
+            geo = GeoapifyClient()
+            lat, lon = await geo.get_coordinates(query)
+            logger.info(f"[RegiaoEntregaService] Coordenadas Geoapify: lat={lat}, lon={lon}")
 
-        # checa duplicidade por localização textual
+        # 5️⃣ Verifica duplicidade (bairro + cidade + uf)
         existing = self.repo.get_by_location(payload.empresa_id, bairro, cidade, uf)
         if existing:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Essa região já está cadastrada (bairro/cidade/uf)")
 
-        # checa duplicidade por coordenadas (caso mesmo bairro venha grafado diferente)
+        # 6️⃣ Verifica duplicidade por coordenadas (para nomes de bairro diferentes mas mesmo local)
         if lat and lon:
             existing_coords = self.repo.get_by_coordinates(payload.empresa_id, lat, lon)
             if existing_coords:
                 raise HTTPException(status.HTTP_400_BAD_REQUEST,
                                     "Essa região já está cadastrada (coordenadas próximas)")
 
-        # cria registro
+        # 7️⃣ Cria a região
         regiao = RegiaoEntregaModel(
             empresa_id=payload.empresa_id,
             cep=payload.cep,
@@ -95,6 +105,7 @@ class RegiaoEntregaService:
         )
 
         created = self.repo.create(regiao)
+        logger.info(f"[RegiaoEntregaService] Região criada: {created.id}")
         return created
 
     async def update(self, regiao_id: int, payload: RegiaoEntregaUpdate):
