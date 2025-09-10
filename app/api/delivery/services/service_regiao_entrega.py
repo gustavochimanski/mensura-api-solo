@@ -48,16 +48,23 @@ class RegiaoEntregaService:
 
     async def create(self, payload: RegiaoEntregaCreate):
         logger.info(f"[RegiaoEntregaService] Criando região: {payload}")
+
         bairro, cidade, uf = payload.bairro, payload.cidade, payload.uf
 
         # se vier CEP, tenta preencher dados via ViaCEP
         if payload.cep:
-            data = await self._via_cep(payload.cep.replace("-", ""))
-            bairro = data.get("bairro", bairro)
-            cidade = data.get("localidade", cidade)
-            uf = data.get("uf", uf)
+            data_cep = await self._via_cep(payload.cep.replace("-", ""))
+            bairro = data_cep.get("bairro") or bairro
+            cidade = data_cep.get("localidade") or cidade
+            uf = data_cep.get("uf") or uf
             logger.info(f"[RegiaoEntregaService] Dados ViaCEP: bairro={bairro}, cidade={cidade}, uf={uf}")
 
+        # ✅ bairro é obrigatório
+        if not bairro:
+            logger.error("[RegiaoEntregaService] Bairro é obrigatório")
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Bairro é obrigatório")
+
+        # Consulta Geoapify usando bairro obrigatório
         lat, lon = await self._geoapify(bairro, cidade, uf)
         logger.info(f"[RegiaoEntregaService] Coordenadas Geoapify: lat={lat}, lon={lon}")
 
@@ -72,12 +79,14 @@ class RegiaoEntregaService:
             taxa_entrega=payload.taxa_entrega,
             ativo=payload.ativo,
         )
+
         created = self.repo.create(regiao)
         logger.info(f"[RegiaoEntregaService] Região criada: {created.id}")
         return created
 
     async def update(self, regiao_id: int, payload: RegiaoEntregaUpdate):
         logger.info(f"[RegiaoEntregaService] Atualizando região {regiao_id} com {payload}")
+
         regiao = self.repo.get(regiao_id)
         if not regiao:
             logger.warning(f"[RegiaoEntregaService] Região {regiao_id} não encontrada")
@@ -85,21 +94,29 @@ class RegiaoEntregaService:
 
         data = payload.model_dump(exclude_unset=True)
 
+        # Atualiza dados via CEP se fornecido
         if "cep" in data and data["cep"]:
             via_cep = await self._via_cep(data["cep"].replace("-", ""))
-            data["bairro"] = via_cep.get("bairro", data.get("bairro"))
-            data["cidade"] = via_cep.get("localidade", data.get("cidade"))
-            data["uf"] = via_cep.get("uf", data.get("uf"))
+            data["bairro"] = via_cep.get("bairro") or data.get("bairro")
+            data["cidade"] = via_cep.get("localidade") or data.get("cidade")
+            data["uf"] = via_cep.get("uf") or data.get("uf")
             logger.info(f"[RegiaoEntregaService] Dados ViaCEP atualizados: {data}")
 
-        if "bairro" in data or "cidade" in data or "uf" in data:
-            lat, lon = await self._geoapify(
-                data.get("bairro", regiao.bairro),
-                data.get("cidade", regiao.cidade),
-                data.get("uf", regiao.uf),
-            )
-            data["latitude"], data["longitude"] = lat, lon
-            logger.info(f"[RegiaoEntregaService] Coordenadas Geoapify atualizadas: lat={lat}, lon={lon}")
+        # ✅ bairro é obrigatório
+        bairro_final = data.get("bairro") or regiao.bairro
+        if not bairro_final:
+            logger.error(f"[RegiaoEntregaService] Bairro obrigatório ausente na atualização")
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Bairro é obrigatório")
+        data["bairro"] = bairro_final
+
+        # Atualiza coordenadas
+        lat, lon = await self._geoapify(
+            data.get("bairro"),
+            data.get("cidade") or regiao.cidade,
+            data.get("uf") or regiao.uf,
+        )
+        data["latitude"], data["longitude"] = lat, lon
+        logger.info(f"[RegiaoEntregaService] Coordenadas Geoapify atualizadas: lat={lat}, lon={lon}")
 
         updated = self.repo.update(regiao, data)
         logger.info(f"[RegiaoEntregaService] Região atualizada: {updated.id}")
