@@ -6,8 +6,8 @@ from fastapi import HTTPException, UploadFile
 from app.api.mensura.models.empresa_model import EmpresaModel
 from app.api.mensura.repositories.empresa_repo import EmpresaRepository
 from app.api.mensura.schemas.schema_empresa import EmpresaCreate, EmpresaUpdate
+from app.api.mensura.schemas.schema_endereco import EnderecoUpdate
 from app.api.mensura.services.endereco_service import EnderecoService
-from app.utils.logger import logger
 from app.utils.minio_client import upload_file_to_minio, remover_arquivo_minio
 
 
@@ -88,9 +88,9 @@ class EmpresaService:
             setattr(empresa, key, value)
 
         # Atualiza endereço
-        # Atualiza endereço
         if payload.get("endereco") and payload.get("endereco_id"):
-            self.endereco_service.update_endereco(payload["endereco_id"], payload["endereco"])
+            endereco_data = EnderecoUpdate(**payload["endereco"])  # <-- conversão
+            self.endereco_service.update_endereco(payload["endereco_id"], endereco_data)
 
         # Atualiza logo
         if logo:
