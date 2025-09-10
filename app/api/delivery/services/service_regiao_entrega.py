@@ -85,7 +85,6 @@ class RegiaoEntregaService:
             bairro=bairro,
             cidade=cidade,
             uf=uf,
-            rua=rua,
             numero=numero,
             latitude=lat,
             longitude=lon,
