@@ -58,7 +58,7 @@ def create_banner(
     )
     return ParceirosService(db).create_banner(body)
 
-@router.get("/banners", response_model=list[BannerParceiroOut])
+@router.get("/client/banners", response_model=list[BannerParceiroOut])
 def list_banners(parceiro_id: Optional[int] = None, db: Session = Depends(get_db)):
     return ParceirosService(db).list_banners(parceiro_id)
 
