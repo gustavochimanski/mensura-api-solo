@@ -33,4 +33,5 @@ class EmpresaResponse(EmpresaBase):
     id: int
     endereco_id: Optional[int] = None
     endereco: Optional[EnderecoResponse] = None
+
     model_config = ConfigDict(from_attributes=True)
