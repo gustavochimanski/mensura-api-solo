@@ -52,7 +52,7 @@ class PedidoRepository:
             .first()
         )
 
-    def list_all_kanban(self, limit: int = 500, date_filter: date | None = None, empresa_id:int = 1):
+    def list_all_kanban(self, limit: int = 500, date_filter: date | None = None, empresa_id: int = 1):
         query = (
             self.db.query(PedidoDeliveryModel)
             .options(
@@ -61,14 +61,12 @@ class PedidoRepository:
                 joinedload(PedidoDeliveryModel.endereco),
                 joinedload(PedidoDeliveryModel.meio_pagamento),
             )
+            .filter(PedidoDeliveryModel.empresa_id == empresa_id)
             .order_by(PedidoDeliveryModel.data_criacao.desc())
         )
 
         if date_filter:
-            query = query.filter(
-                func.date(PedidoDeliveryModel.data_criacao) == date_filter,
-                PedidoDeliveryModel.empresa_id == empresa_id
-            )
+            query = query.filter(func.date(PedidoDeliveryModel.data_criacao) == date_filter)
 
         return query.limit(limit).all()
 
