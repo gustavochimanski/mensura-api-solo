@@ -4,7 +4,6 @@ from typing import Optional
 class RegiaoEntregaBase(BaseModel):
     cep: Optional[str] = Field(None, example="01001-000")
     logradouro: Optional[str]
-    complemento: Optional[str]
     unidade: Optional[str]
     bairro: str
     cidade: str
