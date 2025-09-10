@@ -3,7 +3,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional
 from app.api.mensura.schemas.schema_endereco import EnderecoResponse, EnderecoCreate
 
-class EmpresaOut(BaseModel):
+class EmpresaClientOut(BaseModel):
     nome: str
     logo: Optional[str] = None
     cardapio_tema: Optional[str] = "padrao"
