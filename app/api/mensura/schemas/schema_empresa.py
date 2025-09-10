@@ -1,9 +1,7 @@
-# app/api/mensura/schemas/empresa_schema.py
+# app/api/mensura/schemas/schema_empresa.py
 from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional
-
 from app.api.mensura.schemas.schema_endereco import EnderecoResponse, EnderecoCreate
-
 
 class EmpresaBase(BaseModel):
     nome: str
@@ -16,24 +14,23 @@ class EmpresaBase(BaseModel):
     tempo_entrega_maximo: int = Field(..., gt=0)
     taxa_minima_entrega: float = Field(..., ge=0)
 
-
 class EmpresaCreate(EmpresaBase):
-    endereco: EnderecoCreate
-
+    endereco: EnderecoCreate  # obrigatório na criação
 
 class EmpresaUpdate(BaseModel):
     nome: Optional[str] = None
     cnpj: Optional[str] = None
     slug: Optional[str] = None
-    endereco_id: Optional[int] = None
+    endereco_id: Optional[int] = None  # para atualizar endereço existente
     aceita_pedido_automatico: Optional[bool] = None
     cardapio_link: Optional[str] = None
     cardapio_tema: Optional[str] = None
-    tempo_entrega_maximo: int | None = Field(None, gt=0)
-    taxa_minima_entrega: float | None = Field(None, ge=0)
-
+    endereco: Optional[EnderecoCreate] = None  # novo objeto para atualizar
+    tempo_entrega_maximo: Optional[int] = Field(None, gt=0)
+    taxa_minima_entrega: Optional[float] = Field(None, ge=0)
 
 class EmpresaResponse(EmpresaBase):
     id: int
+    endereco_id: Optional[int] = None
     endereco: Optional[EnderecoResponse] = None
     model_config = ConfigDict(from_attributes=True)

@@ -88,13 +88,9 @@ class EmpresaService:
             setattr(empresa, key, value)
 
         # Atualiza endereço
-        if payload.get("endereco"):
-            if empresa.endereco:
-                self.endereco_service.update_endereco(empresa.endereco.id, payload["endereco"])
-            else:
-                # cria novo endereço se não existia
-                endereco = self.endereco_service.create_endereco(payload["endereco"])
-                empresa.endereco = endereco
+        # Atualiza endereço
+        if payload.get("endereco") and payload.get("endereco_id"):
+            self.endereco_service.update_endereco(payload["endereco_id"], payload["endereco"])
 
         # Atualiza logo
         if logo:

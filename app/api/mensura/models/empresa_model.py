@@ -28,7 +28,7 @@ class EmpresaModel(Base):
 
     endereco_id = Column(
         Integer,
-        ForeignKey("mensura.enderecos.id", ondelete="CASCADE"),  # CASCADE para deletar no DB se a empresa for deletada
+        ForeignKey("mensura.enderecos.id", ondelete="CASCADE"),
         nullable=True,
         unique=True,  # 1:1
     )
