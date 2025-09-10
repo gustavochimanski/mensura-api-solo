@@ -11,6 +11,18 @@ class RegiaoEntregaRepository:
     def get(self, regiao_id: int):
         return self.db.query(RegiaoEntregaModel).filter_by(id=regiao_id).first()
 
+    def get_by_location(self, empresa_id: int, bairro: str, cidade: str, uf: str):
+        return (
+            self.db.query(RegiaoEntregaModel)
+            .filter(
+                RegiaoEntregaModel.empresa_id == empresa_id,
+                RegiaoEntregaModel.bairro.ilike(bairro.strip()),  # case insensitive
+                RegiaoEntregaModel.cidade.ilike(cidade.strip()),
+                RegiaoEntregaModel.uf.ilike(uf.strip()),
+            )
+            .first()
+        )
+
     def create(self, regiao: RegiaoEntregaModel):
         self.db.add(regiao)
         self.db.commit()

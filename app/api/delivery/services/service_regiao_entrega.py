@@ -51,6 +51,14 @@ class RegiaoEntregaService:
         logger.info(f"[RegiaoEntregaService] Criando região: {payload}")
 
         bairro, cidade, uf = payload.bairro, payload.cidade, payload.uf
+        # ✅ verifica duplicidade
+        existing = self.repo.get_by_location(payload.empresa_id, bairro, cidade, uf)
+        if existing:
+            logger.warning(
+                f"[RegiaoEntregaService] Região já cadastrada: "
+                f"empresa_id={payload.empresa_id}, bairro={bairro}, cidade={cidade}, uf={uf}"
+            )
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Essa região já está cadastrada")
 
         # se vier CEP, tenta preencher dados via ViaCEP
         if payload.cep:
