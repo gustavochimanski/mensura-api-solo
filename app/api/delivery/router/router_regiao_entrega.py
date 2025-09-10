@@ -15,10 +15,6 @@ def list_regioes(empresa_id: int, db: Session = Depends(get_db)):
 def get_regiao(regiao_id: int, db: Session = Depends(get_db)):
     return RegiaoEntregaService(db).get(regiao_id)
 
-def search_regiao(text: str):
-    geo_api_fy = GeoapifyClient()
-    return geo_api_fy.geocode_raw(text)
-
 @router.post("/", response_model=RegiaoEntregaOut)
 async def create_regiao(payload: RegiaoEntregaCreate, db: Session = Depends(get_db)):
     return await RegiaoEntregaService(db).create(payload)
