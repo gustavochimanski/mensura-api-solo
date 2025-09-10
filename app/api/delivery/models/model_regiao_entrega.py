@@ -1,0 +1,18 @@
+from sqlalchemy import Column, Integer, String, DateTime, Numeric, Boolean, ForeignKey
+from sqlalchemy.orm import relationship
+from app.database.db_connection import Base
+from app.utils.database_utils import now_trimmed
+
+
+class RegiaoEntregaModel(Base):
+    __tablename__ = "regioes_entrega"
+    __table_args__ = {"schema": "delivery"}
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    empresa_id = Column(Integer, ForeignKey("delivery.empresas.id"), nullable=False)
+    bairro = Column(String(120), nullable=False)
+    taxa_entrega = Column(Numeric(10, 2), nullable=False, default=0)
+
+    ativo = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, default=now_trimmed, nullable=False)
+    updated_at = Column(DateTime, default=now_trimmed, onupdate=now_trimmed, nullable=False)

@@ -82,9 +82,31 @@ class PedidoService:
             ],
         )
 
-    def _calcular_taxas(self, *, tipo_entrega: TipoEntregaEnum, subtotal: Decimal) -> tuple[Decimal, Decimal]:
-        taxa_entrega = _dec(8.90) if tipo_entrega == TipoEntregaEnum.DELIVERY else _dec(0)
-        taxa_servico = (subtotal * Decimal("0.05")).quantize(Decimal("0.01"))
+    def _calcular_taxas(
+            self,
+            *,
+            tipo_entrega: TipoEntregaEnum,
+            subtotal: Decimal,
+            endereco=None,
+            empresa_id: int | None = None,
+    ) -> tuple[Decimal, Decimal]:
+        from app.api.delivery.models.model_regiao_entrega import RegiaoEntregaModel
+
+        taxa_entrega = _dec(0)
+        if tipo_entrega == TipoEntregaEnum.DELIVERY and endereco and empresa_id:
+            regiao = (
+                self.db.query(RegiaoEntregaModel)
+                .filter_by(empresa_id=empresa_id, bairro=endereco.bairro, ativo=True)
+                .first()
+            )
+            if not regiao:
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    f"Não entregamos no bairro {endereco.bairro}"
+                )
+            taxa_entrega = _dec(regiao.taxa_entrega)
+
+        taxa_servico = (subtotal * Decimal("0.01")).quantize(Decimal("0.01"))
         return taxa_entrega, taxa_servico
 
     def _aplicar_cupom(self, *, cupom_id: Optional[int], subtotal: Decimal) -> Decimal:
@@ -180,7 +202,10 @@ class PedidoService:
 
             desconto = self._aplicar_cupom(cupom_id=payload.cupom_id, subtotal=subtotal)
             taxa_entrega, taxa_servico = self._calcular_taxas(
-                tipo_entrega=payload.tipo_entrega, subtotal=subtotal
+                tipo_entrega=payload.tipo_entrega,
+                subtotal=subtotal,
+                endereco=endereco,
+                empresa_id=payload.empresa_id,
             )
 
             self.repo.atualizar_totais(
@@ -284,13 +309,15 @@ class PedidoService:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado")
         return self._pedido_to_response(pedido)
 
+    # ====================== EDITAR PEDIDO =================================
+    # ======================================================================
     def editar_pedido(self, pedido_id: int, payload: FinalizarPedidoRequest) -> PedidoResponse:
         pedido = self.repo.get_pedido(pedido_id)
         if not pedido:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado")
 
-        # Só altera itens/quantidades e observação (não altera cliente/endereço)
-        pedido.itens.clear()  # remove itens antigos
+        # Só altera itens/quantidades e observação
+        pedido.itens.clear()
 
         subtotal = Decimal("0")
         for it in payload.itens:
@@ -311,7 +338,17 @@ class PedidoService:
             )
 
         desconto = self._aplicar_cupom(cupom_id=payload.cupom_id, subtotal=subtotal)
-        taxa_entrega, taxa_servico = self._calcular_taxas(tipo_entrega=pedido.tipo_entrega, subtotal=subtotal)
+
+        endereco = None
+        if pedido.endereco_id:
+            endereco = self.repo.get_endereco(pedido.endereco_id)
+
+        taxa_entrega, taxa_servico = self._calcular_taxas(
+            tipo_entrega=pedido.tipo_entrega,
+            subtotal=subtotal,
+            endereco=endereco,
+            empresa_id=pedido.empresa_id,
+        )
 
         self.repo.atualizar_totais(
             pedido,
@@ -328,8 +365,6 @@ class PedidoService:
         self.repo.commit()
         self.db.refresh(pedido)
         return self._pedido_to_response(pedido)
-
-
 
     # ======================================================================
     # ============================ ADMIN ===================================
