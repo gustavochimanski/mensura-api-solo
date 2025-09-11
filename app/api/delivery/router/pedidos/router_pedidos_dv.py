@@ -1,15 +1,12 @@
-from datetime import date
 from typing import List
 
 from fastapi import APIRouter, status, Path, Query, Depends, Body, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.delivery.models.model_cliente_dv import ClienteDeliveryModel
-from app.api.delivery.schemas.schema_pedido import FinalizarPedidoRequest, PedidoResponse, PedidoKanbanResponse, \
-    EditarPedidoRequest, ItemPedidoEditar
-from app.api.delivery.schemas.schema_shared_enums import PagamentoMetodoEnum, PagamentoGatewayEnum, PedidoStatusEnum
-from app.api.delivery.services.service_pedido import PedidoService
-from app.core.admin_dependencies import get_current_user
+from app.api.delivery.schemas.schema_pedido import FinalizarPedidoRequest, PedidoResponse, EditarPedidoRequest, ItemPedidoEditar
+from app.api.delivery.schemas.schema_shared_enums import PagamentoMetodoEnum, PagamentoGatewayEnum
+from app.api.delivery.services.pedidos.service_pedido import PedidoService
 from app.core.client_dependecies import get_cliente_by_super_token
 from app.database.db_connection import get_db
 from app.utils.logger import logger

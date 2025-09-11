@@ -223,7 +223,7 @@ class PedidoService:
 
             if payload.endereco_id:
                 endereco = self.repo.get_endereco(payload.endereco_id)
-                if not endereco or endereco.cliente_telefone != telefone_cliente:
+                if not endereco or endereco.cliente.telefone != telefone_cliente:
                     raise HTTPException(status.HTTP_400_BAD_REQUEST, "Endereço inválido para o cliente")
 
         try:
