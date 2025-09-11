@@ -25,8 +25,8 @@ def checkout(
     svc = PedidoService(db)
     return svc.finalizar_pedido(payload, cliente.id)
 
-# =====================================================================
-# ==================== CONFIRMAR PAGAMENTO ============================
+# ======================================================================
+# ==================== CONFIRMAR PAGAMENTO =============================
 @router.post("/{pedido_id}/confirmar-pagamento", response_model=PedidoResponse, status_code=status.HTTP_200_OK)
 async def confirmar_pagamento(
     pedido_id: int = Path(..., description="ID do pedido"),
