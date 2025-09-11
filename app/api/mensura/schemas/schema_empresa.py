@@ -12,7 +12,6 @@ class EmpresaBase(BaseModel):
     cardapio_tema: Optional[str] = "padrao"
     aceita_pedido_automatico: bool = False
     tempo_entrega_maximo: int = Field(..., gt=0)
-    taxa_minima_entrega: float = Field(..., ge=0)
 
 class EmpresaCreate(EmpresaBase):
     endereco: EnderecoCreate  # obrigatório na criação
@@ -27,7 +26,6 @@ class EmpresaUpdate(BaseModel):
     cardapio_tema: Optional[str] = None
     endereco: Optional[EnderecoCreate] = None  # novo objeto para atualizar
     tempo_entrega_maximo: Optional[int] = Field(None, gt=0)
-    taxa_minima_entrega: Optional[float] = Field(None, ge=0)
 
 class EmpresaResponse(EmpresaBase):
     id: int
