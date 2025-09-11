@@ -212,6 +212,7 @@ class PedidoRepository:
             produto_imagem_snapshot=produto_imagem_snapshot,
         )
         self.db.add(item)
+        self.db.flush()
         return item
 
     def atualizar_item(self, item_id: int, quantidade: int | None = None,
