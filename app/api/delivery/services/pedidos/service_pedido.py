@@ -46,20 +46,21 @@ class PedidoService:
         subtotal = self.db.query(
             func.sum(PedidoItemModel.quantidade * PedidoItemModel.preco_unitario)
         ).filter(PedidoItemModel.pedido_id == pedido.id).scalar() or Decimal("0")
-
-        subtotal = Decimal(subtotal)  # força Decimal
+        subtotal = Decimal(subtotal)
 
         # 2️⃣ Desconto do cupom
-        desconto = self._aplicar_cupom(cupom_id=pedido.cupom_id, subtotal=subtotal)
+        desconto = self._aplicar_cupom(cupom_id=pedido.cupom_id, subtotal=subtotal) or Decimal("0")
 
         # 3️⃣ Taxas
-        endereco = pedido.endereco  # relacionamento já carregado
+        endereco = pedido.endereco
         taxa_entrega, taxa_servico = self._calcular_taxas(
             tipo_entrega=pedido.tipo_entrega,
             subtotal=subtotal,
             endereco=endereco,
             empresa_id=pedido.empresa_id,
         )
+        taxa_entrega = taxa_entrega or Decimal("0")
+        taxa_servico = taxa_servico or Decimal("0")
 
         # 4️⃣ Atualiza no pedido
         pedido.subtotal = subtotal
@@ -69,6 +70,14 @@ class PedidoService:
         pedido.valor_total = subtotal - desconto + taxa_entrega + taxa_servico
         if pedido.valor_total < 0:
             pedido.valor_total = Decimal("0")
+
+        # 🔍 Log para depuração antes do commit
+        logger.info(
+            f"[Pedido {pedido.id}] Totais recalculados: "
+            f"subtotal={pedido.subtotal}, desconto={pedido.desconto}, "
+            f"taxa_entrega={pedido.taxa_entrega}, taxa_servico={pedido.taxa_servico}, "
+            f"valor_total={pedido.valor_total}, troco_para={getattr(pedido, 'troco_para', None)}"
+        )
 
         # 5️⃣ Commit e refresh
         self.repo.commit()
@@ -239,6 +248,8 @@ class PedidoService:
                 origem=payload.origem.value,
             )
 
+            logger.info(payload)
+
             subtotal = Decimal("0")
             for it in payload.itens:
                 pe = self.repo.get_produto_emp(payload.empresa_id, it.produto_cod_barras)
@@ -259,10 +270,6 @@ class PedidoService:
                     produto_descricao_snapshot=pe.produto.descricao if pe.produto else None,
                     produto_imagem_snapshot=pe.produto.imagem if pe.produto else None,
                 )
-
-                self.db.flush()  # 🔑 garante que os itens estão no banco antes de calcular subtotal
-                # recalcula subtotal real do banco
-                self._recalcular_pedido(pedido)
 
             desconto = self._aplicar_cupom(cupom_id=payload.cupom_id, subtotal=subtotal)
             taxa_entrega, taxa_servico = self._calcular_taxas(
