@@ -127,7 +127,7 @@ class EmpresaService:
         que impedem a remoção da empresa.
         Faz COUNT por tabela (não carrega relationships inteiras).
         """
-        produtos_qtd = self.db.query(func.count(ProdutoEmpModel.id))\
+        produtos_qtd = self.db.query(func.count(ProdutoEmpModel.cod_barras))\
             .filter(ProdutoEmpModel.empresa_id == empresa_id).scalar() or 0
 
         pedidos_qtd = self.db.query(func.count(PedidoDeliveryModel.id))\
