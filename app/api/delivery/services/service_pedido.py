@@ -46,7 +46,6 @@ class PedidoService:
             entregador_id=getattr(pedido, "entregador_id", None),
             endereco_id=pedido.endereco_id,
             meio_pagamento_id=pedido.meio_pagamento_id,
-            meio_pagamento_descricao=pedido.meio_pagamento_descricao,
             tipo_entrega=(
                 pedido.tipo_entrega if isinstance(pedido.tipo_entrega, TipoEntregaEnum)
                 else TipoEntregaEnum(pedido.tipo_entrega)
