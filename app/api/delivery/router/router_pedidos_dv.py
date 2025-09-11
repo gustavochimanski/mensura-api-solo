@@ -1,6 +1,6 @@
 from datetime import date
 
-from fastapi import APIRouter, status, Path, Query, Depends
+from fastapi import APIRouter, status, Path, Query, Depends, Body
 from sqlalchemy.orm import Session
 
 from app.api.delivery.models.model_cliente_dv import ClienteDeliveryModel
@@ -55,6 +55,37 @@ def atualizar_status_pedido(
     return svc.atualizar_status(pedido_id=pedido_id, novo_status=status)
 
 
+# ====================== ATUALIZAR PEDIDO ======================
+@router.put(
+    "/{pedido_id}/editar",
+    response_model=PedidoResponse,
+    status_code=status.HTTP_200_OK
+)
+def atualizar_pedido(
+        pedido_id: int = Path(..., description="ID do pedido a ser atualizado"),
+        payload: FinalizarPedidoRequest = Body(...),
+        db: Session = Depends(get_db),
+        cliente=Depends(get_cliente_by_super_token)  # garante que o cliente só edita seus pedidos
+):
+    """
+    Atualiza dados de um pedido existente:
+    - meio_pagamento_id
+    - endereco_id
+    - cupom_id
+    - observacao_geral
+    - troco_para
+    - itens
+    """
+    svc = PedidoService(db)
+
+    # Verifica se o pedido pertence ao cliente
+    pedido = svc.repo.get_pedido(pedido_id)
+    if not pedido or pedido.cliente_telefone != cliente.telefone:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Pedido não encontrado para este cliente")
+
+    # Atualiza o pedido via serviço
+    return svc.editar_pedido(pedido_id, payload)
 
 
 # ======================================================================
