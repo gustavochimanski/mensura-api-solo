@@ -491,10 +491,6 @@ class PedidoService:
         if not pedido:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
 
-        # Calcula subtotal antes das alterações
-        subtotal_original = sum(_dec(i.preco_unitario) * i.quantidade for i in pedido.itens)
-
-        # Flag para indicar se houve mudança no total
         total_alterado = False
 
         for item in itens:
@@ -504,7 +500,7 @@ class PedidoService:
                 it_db = self.repo.get_item_by_id(item.id)
                 if not it_db:
                     raise HTTPException(status.HTTP_404_NOT_FOUND, f"Item {item.id} não encontrado")
-                # só marca como alterado se quantidade mudar
+
                 if item.quantidade is not None and item.quantidade != it_db.quantidade:
                     it_db.quantidade = item.quantidade
                     total_alterado = True
@@ -518,13 +514,15 @@ class PedidoService:
                 if not it_db:
                     raise HTTPException(status.HTTP_404_NOT_FOUND, f"Item {item.id} não encontrado")
                 self.db.delete(it_db)
-                total_alterado = True  # remoção altera o total
+                total_alterado = True
 
             else:
                 raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Ação inválida: {item.acao}")
 
-        # Só recalcula e persiste se houve alteração no total
         if total_alterado:
+            # Garante que alterações de itens estão no banco antes de recalcular
+            self.db.flush()
             self._recalcular_pedido(pedido)
 
         return self._pedido_to_response(pedido)
+
