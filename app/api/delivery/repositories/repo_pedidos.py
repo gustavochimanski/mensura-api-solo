@@ -76,7 +76,7 @@ class PedidoRepository:
     def criar_pedido(
             self,
             *,
-            cliente_id: str | None,
+            cliente_id: int | None,
             empresa_id: int,
             endereco_id: int | None,
             meio_pagamento_id: int,

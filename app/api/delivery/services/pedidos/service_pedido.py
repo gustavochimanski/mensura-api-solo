@@ -79,7 +79,7 @@ class PedidoService:
         return PedidoResponse(
             id=pedido.id,
             status=PedidoStatusEnum(pedido.status),
-            telefone_cliente=pedido.cliente_telefone,
+            telefone_cliente=pedido.cliente.telefone if pedido.cliente else None,  # ⚡ via relacionamento
             empresa_id=pedido.empresa_id,
             entregador_id=getattr(pedido, "entregador_id", None),
             endereco_id=pedido.endereco_id,
@@ -98,13 +98,9 @@ class PedidoService:
             taxa_servico=float(pedido.taxa_servico or 0),
             valor_total=float(pedido.valor_total or 0),
             previsao_entrega=getattr(pedido, "previsao_entrega", None),
-            distancia_km=(
-                float(pedido.distancia_km) if getattr(pedido, "distancia_km", None) is not None else None
-            ),
+            distancia_km=(float(pedido.distancia_km) if getattr(pedido, "distancia_km", None) is not None else None),
             observacao_geral=getattr(pedido, "observacao_geral", None),
-            troco_para=(
-                float(pedido.troco_para) if getattr(pedido, "troco_para", None) is not None else None
-            ),
+            troco_para=(float(pedido.troco_para) if getattr(pedido, "troco_para", None) is not None else None),
             cupom_id=getattr(pedido, "cupom_id", None),
             data_criacao=getattr(pedido, "data_criacao", getattr(pedido, "created_at", None)),
             data_atualizacao=getattr(pedido, "data_atualizacao", getattr(pedido, "updated_at", None)),
@@ -198,12 +194,13 @@ class PedidoService:
         return min(desconto, subtotal)
 
     # ---------- Fluxo 1 ----------
-    def finalizar_pedido(self, payload: FinalizarPedidoRequest, telefone_cliente: str) -> PedidoResponse:
-        # Validações Principais
+    def finalizar_pedido(self, payload: FinalizarPedidoRequest, cliente_id: int) -> PedidoResponse:
+        # Validações principais
         if not payload.itens:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Pedido vazio")
         if len(payload.itens) > QTD_MAX_ITENS:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Itens demais no pedido")
+
         meio_pagamento = MeioPagamentoService(self.db).get(payload.meio_pagamento_id)
         if not meio_pagamento or not meio_pagamento.ativo:
             raise HTTPException(400, "Meio de pagamento inválido ou inativo")
@@ -212,29 +209,28 @@ class PedidoService:
         if not empresa:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Empresa não encontrada")
 
-        # validações de cliente/endereço
-        if telefone_cliente:
-            cliente = self.repo.get_cliente(telefone_cliente)
-            if not cliente:
-                raise HTTPException(status.HTTP_404_NOT_FOUND, "Cliente não encontrado")
+        # Cliente
+        cliente = self.repo.get_cliente_by_id(cliente_id)
+        if not cliente:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Cliente não encontrado")
 
-            if payload.tipo_entrega == TipoEntregaEnum.DELIVERY and not payload.endereco_id:
-                raise HTTPException(status.HTTP_400_BAD_REQUEST, "Endereço é obrigatório para delivery")
+        if payload.tipo_entrega == TipoEntregaEnum.DELIVERY and not payload.endereco_id:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Endereço é obrigatório para delivery")
 
-            if payload.endereco_id:
-                endereco = self.repo.get_endereco(payload.endereco_id)
-                if not endereco or endereco.cliente.telefone != telefone_cliente:
-                    raise HTTPException(status.HTTP_400_BAD_REQUEST, "Endereço inválido para o cliente")
+        endereco = None
+        if payload.endereco_id:
+            endereco = self.repo.get_endereco(payload.endereco_id)
+            if not endereco or endereco.cliente_id != cliente_id:
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, "Endereço inválido para o cliente")
 
         try:
-            # decide status inicial
             status_inicial = (
                 PedidoStatusEnum.R.value  # Em preparo
                 if getattr(empresa, "aceita_pedido_automatico", False)
                 else PedidoStatusEnum.P.value  # Pendente
             )
             pedido = self.repo.criar_pedido(
-                cliente_telefone=telefone_cliente,
+                cliente_id=cliente_id,  # ⚡ aqui mudou
                 empresa_id=payload.empresa_id,
                 endereco_id=payload.endereco_id,
                 meio_pagamento_id=payload.meio_pagamento_id,
@@ -358,12 +354,10 @@ class PedidoService:
             self.repo.rollback()
             raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Erro ao confirmar pagamento: {e}")
 
-
-    def listar_pedidos(self, cliente_telefone: str, skip: int = 0, limit: int = 50) -> list[PedidoResponse]:
-        logger.info(cliente_telefone)
-        pedidos = self.repo.db.query(PedidoDeliveryModel)\
-            .filter(PedidoDeliveryModel.cliente_telefone == cliente_telefone)\
-            .order_by(PedidoDeliveryModel.data_criacao.desc())\
+    def listar_pedidos(self, cliente_id: int, skip: int = 0, limit: int = 50) -> list[PedidoResponse]:
+        pedidos = self.repo.db.query(PedidoDeliveryModel) \
+            .filter(PedidoDeliveryModel.cliente_id == cliente_id) \
+            .order_by(PedidoDeliveryModel.data_criacao.desc()) \
             .offset(skip).limit(limit).all()
         return [self._pedido_to_response(p) for p in pedidos]
 

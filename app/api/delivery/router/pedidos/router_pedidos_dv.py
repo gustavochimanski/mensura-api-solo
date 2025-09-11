@@ -23,7 +23,7 @@ def checkout(
 ):
     logger.info(f"[Pedidos] Checkout iniciado")
     svc = PedidoService(db)
-    return svc.finalizar_pedido(payload, cliente.telefone)
+    return svc.finalizar_pedido(payload, cliente.id)
 
 # ======================================================================
 # ==================== CONFIRMAR PAGAMENTO =============================
@@ -48,7 +48,7 @@ def listar_pedidos(
     db: Session = Depends(get_db),
 ):
     svc = PedidoService(db)
-    return svc.listar_pedidos(cliente_telefone=cliente.telefone, skip=skip, limit=limit)
+    return svc.listar_pedidos(cliente_id=cliente.id, skip=skip, limit=limit)
 
 # ======================================================================
 # ===================== GET PEDIDO BY ID ===============================
