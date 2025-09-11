@@ -5,9 +5,9 @@ from decimal import Decimal
 from typing import Optional
 
 from fastapi import HTTPException
+from starlette import status
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
-from starlette import status
 
 from app.api.mensura.models.cadprod_emp_model import ProdutoEmpModel
 from app.api.delivery.models.model_pedido_dv import PedidoDeliveryModel
@@ -18,11 +18,12 @@ from app.api.delivery.models.model_endereco_dv import EnderecoDeliveryModel
 from app.api.delivery.models.model_cliente_dv import ClienteDeliveryModel
 from app.api.delivery.models.model_transacao_pagamento_dv import TransacaoPagamentoModel
 
+
 class PedidoRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    # --- Validations / Queries ---
+    # ------------- Validations / Queries -------------
     def get_cliente(self, telefone: str) -> Optional[ClienteDeliveryModel]:
         return self.db.query(ClienteDeliveryModel).filter_by(telefone=telefone).first()
 
@@ -50,11 +51,11 @@ class PedidoRepository:
         return (
             self.db.query(PedidoDeliveryModel)
             .options(
-                joinedload(PedidoDeliveryModel.itens),  # itens do pedido
-                joinedload(PedidoDeliveryModel.cliente),  # cliente
-                joinedload(PedidoDeliveryModel.endereco),  # endereço do pedido
-                joinedload(PedidoDeliveryModel.meio_pagamento),  # meio de pagamento
-                # joinedload(PedidoDeliveryModel.transacao),     # descomente se quiser transação carregada
+                joinedload(PedidoDeliveryModel.itens),
+                joinedload(PedidoDeliveryModel.cliente),
+                joinedload(PedidoDeliveryModel.endereco),
+                joinedload(PedidoDeliveryModel.meio_pagamento),
+                # joinedload(PedidoDeliveryModel.transacao),
             )
             .filter(PedidoDeliveryModel.id == pedido_id)
             .first()
@@ -64,8 +65,7 @@ class PedidoRepository:
         query = (
             self.db.query(PedidoDeliveryModel)
             .options(
-                joinedload(PedidoDeliveryModel.cliente)
-                .joinedload(ClienteDeliveryModel.enderecos),
+                joinedload(PedidoDeliveryModel.cliente).joinedload(ClienteDeliveryModel.enderecos),
                 joinedload(PedidoDeliveryModel.endereco),
                 joinedload(PedidoDeliveryModel.meio_pagamento),
             )
@@ -78,20 +78,21 @@ class PedidoRepository:
 
         return query.limit(limit).all()
 
-    # --- Mutations ---
+    # -------------------- Mutations -------------------
     def criar_pedido(
-            self,
-            *,
-            cliente_id: int | None,
-            empresa_id: int,
-            endereco_id: int | None,
-            meio_pagamento_id: int,
-            status: str = "P",
-            tipo_entrega: str,
-            origem: str,
+        self,
+        *,
+        cliente_id: int | None,
+        empresa_id: int,
+        endereco_id: int | None,
+        meio_pagamento_id: int,
+        status: str = "P",
+        tipo_entrega: str,
+        origem: str,
     ) -> PedidoDeliveryModel:
+        # ⚠️ Setar SOMENTE os campos escalares/FKs aqui; nada de refresh agora
         pedido = PedidoDeliveryModel(
-            cliente_id=cliente_id,
+            cliente_id=int(cliente_id) if cliente_id is not None else None,
             empresa_id=empresa_id,
             endereco_id=endereco_id,
             meio_pagamento_id=meio_pagamento_id,
@@ -105,22 +106,20 @@ class PedidoRepository:
             valor_total=Decimal("0"),
         )
         self.db.add(pedido)
-        self.db.flush()
+        self.db.flush()  # garante ID do pedido
 
         self.add_status_historico(pedido.id, status, motivo="Pedido criado")
-
-        # 🔹 Refresh para manter cliente e outros relacionamentos
-        self.db.refresh(pedido)
+        # ❌ NÃO fazer refresh aqui; evita rehidratar com potencial NULL de triggers/DFs
         return pedido
 
     def atualizar_totais(
-            self,
-            pedido: PedidoDeliveryModel,
-            *,
-            subtotal: Decimal,
-            desconto: Decimal,
-            taxa_entrega: Decimal,
-            taxa_servico: Decimal,
+        self,
+        pedido: PedidoDeliveryModel,
+        *,
+        subtotal: Decimal,
+        desconto: Decimal,
+        taxa_entrega: Decimal,
+        taxa_servico: Decimal,
     ) -> None:
         pedido.subtotal = subtotal
         pedido.desconto = desconto
@@ -129,12 +128,12 @@ class PedidoRepository:
         pedido.valor_total = subtotal - desconto + taxa_entrega + taxa_servico
         if pedido.valor_total < 0:
             pedido.valor_total = Decimal("0")
-
-        # 🔹 Importante: flush + refresh para manter cliente, itens e outros relacionamentos
+        # Apenas flush — não precisa de refresh
         self.db.flush()
-        self.db.refresh(pedido)
 
-    def add_status_historico(self, pedido_id: int, status: str, motivo: str | None = None, criado_por: str | None = "system"):
+    def add_status_historico(
+        self, pedido_id: int, status: str, motivo: str | None = None, criado_por: str | None = "system"
+    ):
         hist = PedidoStatusHistoricoModel(
             pedido_id=pedido_id,
             status=status,
@@ -147,7 +146,7 @@ class PedidoRepository:
         pedido.status = novo_status
         self.add_status_historico(pedido.id, novo_status, motivo=motivo)
 
-    # --- Transação de pagamento ---
+    # ----------------- Transação pagamento -------------
     def criar_transacao_pagamento(
         self,
         *,
@@ -178,7 +177,7 @@ class PedidoRepository:
         payload_retorno: dict | None = None,
         qr_code: str | None = None,
         qr_code_base64: str | None = None,
-        timestamp_field: str | None = None,  # ex: "pago_em"
+        timestamp_field: str | None = None,
     ):
         tx.status = status
         if provider_transaction_id is not None:
@@ -192,23 +191,20 @@ class PedidoRepository:
         if timestamp_field:
             setattr(tx, timestamp_field, func.now())
 
-    # --- Unit of Work ---
+    # ---------------- Unit of Work ---------------------
     def commit(self):
         self.db.commit()
 
     def rollback(self):
         self.db.rollback()
 
-# ======================================================================
-# ======================= ITENS PEDIDO =================================
-# ======================================================================
+    # --------------- ITENS PEDIDO ----------------------
     def get_item_by_id(self, item_id: int) -> Optional[PedidoItemModel]:
         return self.db.get(PedidoItemModel, item_id)
 
     def adicionar_item(
         self,
         *,
-        pedido: PedidoDeliveryModel,  # ⚡ passar o objeto, não só o ID
         pedido_id: int,
         cod_barras: str,
         quantidade: int,
@@ -217,8 +213,8 @@ class PedidoRepository:
         produto_descricao_snapshot: str | None,
         produto_imagem_snapshot: str | None,
     ) -> PedidoItemModel:
+        # ⚠️ Evitar passar o objeto pedido E o pedido_id juntos.
         item = PedidoItemModel(
-            pedido=pedido,
             pedido_id=pedido_id,
             produto_cod_barras=cod_barras,
             quantidade=quantidade,
@@ -231,8 +227,12 @@ class PedidoRepository:
         self.db.flush()
         return item
 
-    def atualizar_item(self, item_id: int, quantidade: int | None = None,
-                       observacao: str | None = None) -> PedidoItemModel:
+    def atualizar_item(
+        self,
+        item_id: int,
+        quantidade: int | None = None,
+        observacao: str | None = None
+    ) -> PedidoItemModel:
         item = self.get_item_by_id(item_id)
         if not item:
             raise HTTPException(status.HTTP_404_NOT_FOUND, f"Item {item_id} não encontrado")
@@ -240,6 +240,5 @@ class PedidoRepository:
             item.quantidade = quantidade
         if observacao is not None:
             item.observacao = observacao
+        self.db.flush()
         return item
-
-
