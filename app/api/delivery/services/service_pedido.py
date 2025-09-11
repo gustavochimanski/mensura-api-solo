@@ -37,6 +37,33 @@ class PedidoService:
         self.repo_empresa = EmpresaRepository(db)
         self.gateway = PaymentGatewayClient()  # MOCK
 
+    # Helper para recalcular e persistir os totais do pedido
+    def _recalcular_pedido(self, pedido: PedidoDeliveryModel):
+        """Recalcula subtotal, desconto, taxas e valor total do pedido e salva no banco."""
+        # Calcula subtotal a partir dos itens
+        subtotal = sum(_dec(i.preco_unitario) * i.quantidade for i in pedido.itens)
+        desconto = self._aplicar_cupom(cupom_id=pedido.cupom_id, subtotal=subtotal)
+        endereco = self.repo.get_endereco(pedido.endereco_id) if pedido.endereco_id else None
+        taxa_entrega, taxa_servico = self._calcular_taxas(
+            tipo_entrega=pedido.tipo_entrega,
+            subtotal=subtotal,
+            endereco=endereco,
+            empresa_id=pedido.empresa_id,
+        )
+
+        # Atualiza o pedido
+        self.repo.atualizar_totais(
+            pedido,
+            subtotal=subtotal,
+            desconto=desconto,
+            taxa_entrega=taxa_entrega,
+            taxa_servico=taxa_servico
+        )
+
+        # Commit e refresh para persistir no banco
+        self.repo.commit()
+        self.db.refresh(pedido)
+
     # ---------- Helper: monta a resposta padronizada ----------
     def _pedido_to_response(self, pedido) -> PedidoResponse:
         return PedidoResponse(
@@ -344,29 +371,6 @@ class PedidoService:
     # ======================================================================
     # ============================ ADMIN ===================================
     # ======================================================================
-    # Helper para recalcular valores do pedido
-    def _recalcular_pedido(self, pedido: PedidoDeliveryModel):
-        """Recalcula subtotal, desconto, taxas e valor total do pedido."""
-        subtotal = sum(_dec(i.preco_unitario) * i.quantidade for i in pedido.itens)
-        desconto = self._aplicar_cupom(cupom_id=pedido.cupom_id, subtotal=subtotal)
-        endereco = self.repo.get_endereco(pedido.endereco_id) if pedido.endereco_id else None
-        taxa_entrega, taxa_servico = self._calcular_taxas(
-            tipo_entrega=pedido.tipo_entrega,
-            subtotal=subtotal,
-            endereco=endereco,
-            empresa_id=pedido.empresa_id,
-        )
-        self.repo.atualizar_totais(
-            pedido,
-            subtotal=subtotal,
-            desconto=desconto,
-            taxa_entrega=taxa_entrega,
-            taxa_servico=taxa_servico
-        )
-        self.repo.commit()
-        self.db.refresh(pedido)
-
-
     def list_all_kanban(self, limit: int = 500, date_filter: date | None = None, empresa_id: int=1):
         pedidos = self.repo.list_all_kanban(limit=limit, date_filter=date_filter, empresa_id=empresa_id)
         resultados = []
@@ -471,12 +475,12 @@ class PedidoService:
 
     # ================== EDITAR ITENS PEDIDO ===============================
     # ======================================================================
+    # Método completo de atualização de itens
     def atualizar_itens_pedido(self, pedido_id: int, itens: list[ItemPedidoEditar]) -> PedidoResponse:
         pedido = self.repo.get_pedido(pedido_id)
         if not pedido:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
 
-        subtotal = Decimal("0")
         for item in itens:
             if item.acao == "adicionar":
                 if not item.produto_cod_barras:
@@ -485,11 +489,11 @@ class PedidoService:
                 if not pe or not pe.disponivel or not (pe.produto and pe.produto.ativo):
                     raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Produto indisponível: {item.produto_cod_barras}")
                 preco = _dec(pe.preco_venda)
-                subtotal += preco * (item.quantidade or 1)
+                quantidade = item.quantidade or 1
                 self.repo.adicionar_item(
                     pedido_id=pedido.id,
                     cod_barras=item.produto_cod_barras,
-                    quantidade=item.quantidade or 1,
+                    quantidade=quantidade,
                     preco_unitario=preco,
                     observacao=item.observacao,
                     produto_descricao_snapshot=pe.produto.descricao if pe.produto else None,
@@ -502,34 +506,23 @@ class PedidoService:
                 it_db = self.repo.get_item_by_id(item.id)
                 if not it_db:
                     raise HTTPException(status.HTTP_404_NOT_FOUND, f"Item {item.id} não encontrado")
-                quantidade = item.quantidade or it_db.quantidade
-                preco = _dec(it_db.preco_unitario)
-                subtotal += preco * quantidade
-                self.repo.atualizar_item(item.id, quantidade=quantidade, observacao=item.observacao)
+                if item.quantidade is not None:
+                    it_db.quantidade = item.quantidade
+                if item.observacao is not None:
+                    it_db.observacao = item.observacao
 
             elif item.acao == "remover":
                 if not item.id:
                     raise HTTPException(status.HTTP_400_BAD_REQUEST, "ID do item obrigatório para remover")
-                self.repo.remover_item(item.id)
+                it_db = self.repo.get_item_by_id(item.id)
+                if not it_db:
+                    raise HTTPException(status.HTTP_404_NOT_FOUND, f"Item {item.id} não encontrado")
+                self.db.delete(it_db)
 
             else:
                 raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Ação inválida: {item.acao}")
 
-        # Recalcular desconto e taxas
-        desconto = self._aplicar_cupom(cupom_id=pedido.cupom_id, subtotal=subtotal)
-        endereco = self.repo.get_endereco(pedido.endereco_id) if pedido.endereco_id else None
-        taxa_entrega, taxa_servico = self._calcular_taxas(
-            tipo_entrega=pedido.tipo_entrega,
-            subtotal=subtotal,
-            endereco=endereco,
-            empresa_id=pedido.empresa_id,
-        )
-        self.repo.atualizar_totais(
-            pedido, subtotal=subtotal, desconto=desconto,
-            taxa_entrega=taxa_entrega, taxa_servico=taxa_servico
-        )
+        # Recalcula e persiste o pedido após todas as alterações
+        self._recalcular_pedido(pedido)
 
-        self.repo.commit()
-        self.db.refresh(pedido)
         return self._pedido_to_response(pedido)
-
