@@ -1,8 +1,10 @@
 # app/api/mensura/services/empresa_service.py
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, UploadFile
 
+from app.api.delivery.models.model_regiao_entrega import RegiaoEntregaModel
 from app.api.mensura.models.empresa_model import EmpresaModel
 from app.api.mensura.repositories.empresa_repo import EmpresaRepository
 from app.api.mensura.schemas.schema_empresa import EmpresaCreate, EmpresaUpdate
@@ -10,6 +12,10 @@ from app.api.mensura.schemas.schema_endereco import EnderecoUpdate
 from app.api.mensura.services.endereco_service import EnderecoService
 from app.utils.minio_client import upload_file_to_minio, remover_arquivo_minio
 
+
+from app.api.mensura.models.association_tables import entregador_empresa, usuario_empresa
+from app.api.mensura.models.cadprod_emp_model import ProdutoEmpModel
+from app.api.delivery.models.model_pedido_dv import PedidoDeliveryModel
 
 class EmpresaService:
     def __init__(self, db: Session):
@@ -114,28 +120,101 @@ class EmpresaService:
         self.db.refresh(empresa)
         return empresa
 
-    # Deleta empresa
+    # ---------- HELPER: CONTAGEM DE VÍNCULOS QUE BLOQUEIAM A REMOÇÃO ----------
+    def _collect_delete_blockers(self, empresa_id: int) -> dict[str, int]:
+        """
+        Retorna um dicionário com contagens de vínculos relevantes
+        que impedem a remoção da empresa.
+        Faz COUNT por tabela (não carrega relationships inteiras).
+        """
+        produtos_qtd = self.db.query(func.count(ProdutoEmpModel.id))\
+            .filter(ProdutoEmpModel.empresa_id == empresa_id).scalar() or 0
+
+        pedidos_qtd = self.db.query(func.count(PedidoDeliveryModel.id))\
+            .filter(PedidoDeliveryModel.empresa_id == empresa_id).scalar() or 0
+
+        regioes_qtd = self.db.query(func.count(RegiaoEntregaModel.id))\
+            .filter(RegiaoEntregaModel.empresa_id == empresa_id).scalar() or 0
+
+        entregadores_qtd = self.db.query(func.count())\
+            .select_from(entregador_empresa)\
+            .filter(entregador_empresa.c.empresa_id == empresa_id).scalar() or 0
+
+        usuarios_qtd = self.db.query(func.count())\
+            .select_from(usuario_empresa)\
+            .filter(usuario_empresa.c.empresa_id == empresa_id).scalar() or 0
+
+        return {
+            "produtos_emp": produtos_qtd,
+            "pedidos": pedidos_qtd,
+            "regioes_entrega": regioes_qtd,
+            "entregadores": entregadores_qtd,
+            "usuarios": usuarios_qtd,
+        }
+
+    # ---------- DELETE COM TODAS AS VERIFICAÇÕES ----------
     def delete_empresa(self, id: int):
         empresa = self.get_empresa(id)
 
-        if empresa.usuarios and len(empresa.usuarios) > 0:
-            raise HTTPException(status_code=400, detail="Empresa possui usuários vinculados.")
+        # 1) Checa vínculos que bloqueiam a remoção
+        blockers = self._collect_delete_blockers(id)
 
-        # Remove arquivos
-        if empresa.logo:
-            remover_arquivo_minio(empresa.logo)
-        if empresa.cardapio_link:
-            remover_arquivo_minio(empresa.cardapio_link)
+        # Se houver qualquer vínculo, bloqueia e retorna uma lista amigável
+        itens_bloqueio = []
+        if blockers["produtos_emp"] > 0:
+            itens_bloqueio.append(f"{blockers['produtos_emp']} produto(s) vinculado(s)")
+        if blockers["pedidos"] > 0:
+            itens_bloqueio.append(f"{blockers['pedidos']} pedido(s) vinculado(s)")
+        if blockers["regioes_entrega"] > 0:
+            itens_bloqueio.append(f"{blockers['regioes_entrega']} região(ões) de entrega vinculada(s)")
+        if blockers["entregadores"] > 0:
+            itens_bloqueio.append(f"{blockers['entregadores']} vínculo(s) com entregadores")
+        if blockers["usuarios"] > 0:
+            itens_bloqueio.append(f"{blockers['usuarios']} vínculo(s) com usuários")
 
-        endereco_id = empresa.endereco_id
-        self.repo_emp.delete(empresa)
-
-        # Remove endereço se ninguém mais usa
-        if endereco_id:
-            count = (
-                self.repo_emp.db.query(EmpresaModel)
-                .filter(EmpresaModel.endereco_id == endereco_id)
-                .count()
+        if itens_bloqueio:
+            detalhes = (
+                "Não é possível remover a empresa porque ainda existem relacionamentos vinculados: "
+                + "; ".join(itens_bloqueio)
+                + ".\n"
+                "- Desvincule ou delete os itens acima antes de remover a empresa.\n"
+                "Sugestão de ordem: produtos → regiões de entrega → entregadores/usuários → pedidos (ou arquivar) → empresa."
             )
-            if count == 0:
+            raise HTTPException(status_code=400, detail=detalhes)
+
+        # 2) Sem vínculos: prossegue com remoção
+        try:
+            # Remove arquivos (se existirem) antes do DELETE efetivo
+            if empresa.logo:
+                remover_arquivo_minio(empresa.logo)
+                empresa.logo = None
+            if empresa.cardapio_link:
+                remover_arquivo_minio(empresa.cardapio_link)
+                empresa.cardapio_link = None
+
+            endereco_id = empresa.endereco_id
+
+            # Como já garantimos que não existem vínculos em M:N, por segurança
+            # limpamos associações (caso o mapeamento esteja carregado).
+            # Isso evita lixo em tabela associativa em bancos sem FK ON DELETE CASCADE.
+            if empresa.entregadores:
+                empresa.entregadores.clear()
+            if empresa.usuarios:
+                empresa.usuarios.clear()
+
+            # Persiste limpezas prévias
+            self.db.flush()
+
+            # Deleta a empresa
+            self.repo_emp.delete(empresa)
+            self.db.flush()
+
+            # 3) Apaga o endereço 1:1 (é unique=True; ninguém mais usa)
+            if endereco_id:
                 self.endereco_service.delete_endereco(endereco_id)
+
+            self.db.commit()
+
+        except Exception as e:
+            self.db.rollback()
+            raise HTTPException(status_code=400, detail=f"Falha ao remover empresa: {str(e)}")
