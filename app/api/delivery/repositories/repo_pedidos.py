@@ -50,8 +50,11 @@ class PedidoRepository:
         return (
             self.db.query(PedidoDeliveryModel)
             .options(
-                joinedload(PedidoDeliveryModel.itens),
-                #joinedload(PedidoDeliveryModel.transacao),
+                joinedload(PedidoDeliveryModel.itens),  # itens do pedido
+                joinedload(PedidoDeliveryModel.cliente),  # cliente
+                joinedload(PedidoDeliveryModel.endereco),  # endereço do pedido
+                joinedload(PedidoDeliveryModel.meio_pagamento),  # meio de pagamento
+                # joinedload(PedidoDeliveryModel.transacao),     # descomente se quiser transação carregada
             )
             .filter(PedidoDeliveryModel.id == pedido_id)
             .first()

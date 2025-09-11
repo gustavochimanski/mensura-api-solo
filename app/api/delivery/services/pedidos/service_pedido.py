@@ -41,10 +41,10 @@ class PedidoService:
 
     # Helper para recalcular e persistir os totais do pedido
     def _recalcular_pedido(self, pedido: PedidoDeliveryModel):
-        """Recalcula subtotal, desconto, taxas e valor total do pedido de forma segura."""
-        # ⚡ garante que todos os relacionamentos estão carregados
-        self.db.refresh(pedido)
-
+        """
+        Recalcula subtotal, desconto, taxas e valor total do pedido
+        sem perder relacionamentos como cliente, itens e endereço.
+        """
         # 1️⃣ Subtotal = soma de todos os itens
         subtotal = self.db.query(
             func.sum(PedidoItemModel.quantidade * PedidoItemModel.preco_unitario)
@@ -55,7 +55,7 @@ class PedidoService:
         desconto = self._aplicar_cupom(cupom_id=pedido.cupom_id, subtotal=subtotal)
 
         # 3️⃣ Taxas
-        endereco = pedido.endereco  # ⚡ já carregado
+        endereco = pedido.endereco  # relacionamento já carregado
         taxa_entrega, taxa_servico = self._calcular_taxas(
             tipo_entrega=pedido.tipo_entrega,
             subtotal=subtotal,
@@ -63,16 +63,22 @@ class PedidoService:
             empresa_id=pedido.empresa_id,
         )
 
-        # 4️⃣ Atualiza os campos do pedido sem criar novo objeto
+        # 4️⃣ Atualiza no pedido
         pedido.subtotal = subtotal
         pedido.desconto = desconto
         pedido.taxa_entrega = taxa_entrega
         pedido.taxa_servico = taxa_servico
-        pedido.valor_total = max(subtotal - desconto + taxa_entrega + taxa_servico, Decimal("0"))
+        pedido.valor_total = subtotal - desconto + taxa_entrega + taxa_servico
+        if pedido.valor_total < 0:
+            pedido.valor_total = Decimal("0")
 
-        # 5️⃣ Persiste no banco
+        # 5️⃣ Flush ao invés de commit para não quebrar transação externa
         self.db.flush()
-        self.db.refresh(pedido)  # ⚡ mantém todos relacionamentos intactos
+
+        # 6️⃣ Refresh somente os relacionamentos essenciais
+        self.db.refresh(pedido, attribute_names=["cliente", "itens", "endereco"])
+
+        # Agora todos os relacionamentos continuam intactos e `_pedido_to_response` funciona sem perder dados
 
     # ---------- Helper: monta a resposta padronizada ----------
     def _pedido_to_response(self, pedido) -> PedidoResponse:
@@ -123,45 +129,23 @@ class PedidoService:
             *,
             tipo_entrega: TipoEntregaEnum,
             subtotal: Decimal,
-            endereco: EnderecoDeliveryModel | None = None,
+            endereco=None,
             empresa_id: int | None = None,
     ) -> tuple[Decimal, Decimal]:
-
         from app.api.delivery.models.model_regiao_entrega import RegiaoEntregaModel
 
         def haversine(lat1, lon1, lat2, lon2):
+            """
+            Retorna a distância em km entre dois pontos geográficos.
+            """
             lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
             dlat = lat2 - lat1
             dlon = lon2 - lon1
+
             a = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2
             c = 2 * asin(sqrt(a))
-            return 6371 * c  # km
-
-        taxa_entrega = _dec(0)
-        if tipo_entrega == TipoEntregaEnum.DELIVERY and endereco and empresa_id:
-            regioes = (
-                self.db.query(RegiaoEntregaModel)
-                .filter(RegiaoEntregaModel.empresa_id == empresa_id, RegiaoEntregaModel.ativo == True)
-                .all()
-            )
-
-            regiao_encontrada = None
-            for reg in regioes:
-                distancia = haversine(endereco.latitude, endereco.longitude, reg.latitude, reg.longitude)
-                if distancia <= float(2.0):  # ⚡ pode trocar para reg.raio_km
-                    regiao_encontrada = reg
-                    break
-
-            if not regiao_encontrada:
-                raise HTTPException(
-                    status.HTTP_400_BAD_REQUEST,
-                    f"Não entregamos neste endereço (lat: {endereco.latitude}, lon: {endereco.longitude})"
-                )
-
-            taxa_entrega = _dec(regiao_encontrada.taxa_entrega)
-
-        taxa_servico = (subtotal * Decimal("0.05")).quantize(Decimal("0.01"))  # 5% padrão
-        return taxa_entrega, taxa_servico
+            km = 6371 * c  # raio da Terra em km
+            return km
 
         # ------------------ cálculo da taxa ------------------
         taxa_entrega = _dec(0)
@@ -283,6 +267,7 @@ class PedidoService:
                     produto_descricao_snapshot=pe.produto.descricao if pe.produto else None,
                     produto_imagem_snapshot=pe.produto.imagem if pe.produto else None,
                 )
+            logger.info(f'CLIENTE_ID: {cliente_id}')
 
 
             desconto = self._aplicar_cupom(cupom_id=payload.cupom_id, subtotal=subtotal)
