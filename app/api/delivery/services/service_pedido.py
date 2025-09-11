@@ -1,19 +1,18 @@
 from __future__ import annotations
 
 from datetime import date
-from decimal import Decimal, ROUND_HALF_UP
-from typing import Optional, List
+from decimal import  ROUND_HALF_UP
+from typing import Optional
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.delivery.models.model_pedido_dv import PedidoDeliveryModel
 from app.api.delivery.repositories.repo_pedidos import PedidoRepository
-from app.api.delivery.schemas.schema_meio_pagamento import MeioPagamentoResponse
 from app.api.delivery.services.meio_pagamento_service import MeioPagamentoService
 from app.api.mensura.repositories.empresa_repo import EmpresaRepository
 from app.api.delivery.schemas.schema_pedido import (
-    FinalizarPedidoRequest, ItemPedidoRequest, PedidoResponse, ItemPedidoResponse, PedidoKanbanResponse,
+    FinalizarPedidoRequest, PedidoResponse, ItemPedidoResponse, PedidoKanbanResponse,
     EditarPedidoRequest, ItemPedidoEditar
 )
 from app.api.delivery.schemas.schema_shared_enums import (
@@ -23,7 +22,9 @@ from app.api.delivery.schemas.schema_shared_enums import (
 from app.api.delivery.services.service_pagamento_gateway import PaymentGatewayClient
 from app.utils.logger import logger
 from math import radians, cos, sin, asin, sqrt
+
 from decimal import Decimal
+from sqlalchemy import func
 
 QTD_MAX_ITENS = 200
 
@@ -41,7 +42,11 @@ class PedidoService:
     def _recalcular_pedido(self, pedido: PedidoDeliveryModel):
         """Recalcula subtotal, desconto, taxas e valor total do pedido e salva no banco."""
         # 1️⃣ Subtotal = soma de todos os itens
-        subtotal = sum(_dec(i.preco_unitario) * i.quantidade for i in pedido.itens)
+        subtotal = self.db.query(
+            func.sum(PedidoItemModel.quantidade * PedidoItemModel.preco_unitario)
+        ).filter(PedidoItemModel.pedido_id == pedido.id).scalar() or Decimal("0")
+
+        subtotal = Decimal(subtotal)  # força Decimal
 
         # 2️⃣ Desconto do cupom
         desconto = self._aplicar_cupom(cupom_id=pedido.cupom_id, subtotal=subtotal)
