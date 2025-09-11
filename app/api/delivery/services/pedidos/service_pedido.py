@@ -271,6 +271,7 @@ class PedidoService:
                 empresa_id=payload.empresa_id,
             )
 
+            logger.info(f'CLIENTE_ID: {cliente_id}')
 
 
             self.repo.atualizar_totais(
@@ -280,6 +281,7 @@ class PedidoService:
                 taxa_entrega=taxa_entrega,
                 taxa_servico=taxa_servico,
             )
+            logger.info(f'CLIENTE_ID: {cliente_id}')
 
             pedido.observacao_geral = payload.observacao_geral
             if payload.troco_para:
