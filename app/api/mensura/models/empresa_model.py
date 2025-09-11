@@ -24,7 +24,6 @@ class EmpresaModel(Base):
     cardapio_link = Column(String(255), nullable=True, unique=True)
     cardapio_tema = Column(String(50), nullable=True, default="padrao")
     tempo_entrega_maximo = Column(Integer, nullable=False, default=60)  # minutos
-    taxa_minima_entrega = Column(Numeric(10, 2), nullable=False, default=0)  # R$
 
     endereco_id = Column(
         Integer,
