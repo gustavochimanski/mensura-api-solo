@@ -30,6 +30,12 @@ class EditarPedidoRequest(BaseModel):
     observacao_geral: Optional[str] = None
     troco_para: Optional[condecimal(max_digits=18, decimal_places=2)] = None
 
+class ItemPedidoEditar(BaseModel):
+    produto_cod_barras: str
+    quantidade: Optional[int] = None
+    observacao: Optional[str] = None
+    acao: str  # "adicionar", "atualizar", "remover"
+
 # ======================================================================
 # ============================ CLIENTE =================================
 # ======================================================================

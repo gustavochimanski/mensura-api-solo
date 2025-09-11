@@ -1,11 +1,12 @@
 from datetime import date
+from typing import List
 
-from fastapi import APIRouter, status, Path, Query, Depends, Body
+from fastapi import APIRouter, status, Path, Query, Depends, Body, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.delivery.models.model_cliente_dv import ClienteDeliveryModel
 from app.api.delivery.schemas.schema_pedido import FinalizarPedidoRequest, PedidoResponse, PedidoKanbanResponse, \
-    EditarPedidoRequest
+    EditarPedidoRequest, ItemPedidoEditar
 from app.api.delivery.schemas.schema_shared_enums import PagamentoMetodoEnum, PagamentoGatewayEnum, PedidoStatusEnum
 from app.api.delivery.services.service_pedido import PedidoService
 from app.api.mensura.models.user_model import UserModel
@@ -37,6 +38,8 @@ def listar_pedidos_admin_kanban(
     return PedidoService(db).list_all_kanban(date_filter=date_filter, empresa_id=empresa_id)
 
 
+# ======================================================================
+# ==================== ATUALIZAR STATUS PEDIDO  ========================
 @router.put(
     "/status/{pedido_id}",
     response_model=PedidoResponse,
@@ -56,7 +59,8 @@ def atualizar_status_pedido(
     return svc.atualizar_status(pedido_id=pedido_id, novo_status=status)
 
 
-# ====================== ATUALIZAR PEDIDO ======================
+# ======================================================================
+# ================= ATUALIZAR INFO GERAL PEDIDO ========================
 @router.put(
     "/{pedido_id}/editar",
     response_model=PedidoResponse,
@@ -84,9 +88,33 @@ def atualizar_pedido(
 
 
 # ======================================================================
+# ==================== ATUALIZAR ITENS PEDIDO ==========================
+@router.put("/{pedido_id}/itens", response_model=PedidoResponse)
+def atualizar_itens(
+    pedido_id: int = Path(..., description="ID do pedido"),
+    itens: List[ItemPedidoEditar] = ...,
+    db: Session = Depends(get_db),
+    cliente: ClienteDeliveryModel = Depends(get_cliente_by_super_token)
+):
+    """
+    Atualiza os itens de um pedido: adicionar, atualizar quantidade/observação ou remover.
+    """
+    svc = PedidoService(db)
+    # Verifica se o pedido pertence ao cliente
+    pedido = svc.repo.get_pedido(pedido_id)
+    if not pedido:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
+    if pedido.cliente_telefone != cliente.telefone:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Pedido não pertence ao cliente")
+
+    return svc.atualizar_itens_pedido(pedido_id, itens)
+
+
+
+
+# ======================================================================
 # ============================ CLIENTE =================================
 # ======================================================================
-
 @router.post("/checkout", response_model=PedidoResponse, status_code=status.HTTP_201_CREATED)
 def checkout(
         payload: FinalizarPedidoRequest,

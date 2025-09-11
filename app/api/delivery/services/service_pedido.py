@@ -14,7 +14,7 @@ from app.api.delivery.services.meio_pagamento_service import MeioPagamentoServic
 from app.api.mensura.repositories.empresa_repo import EmpresaRepository
 from app.api.delivery.schemas.schema_pedido import (
     FinalizarPedidoRequest, ItemPedidoRequest, PedidoResponse, ItemPedidoResponse, PedidoKanbanResponse,
-    EditarPedidoRequest
+    EditarPedidoRequest, ItemPedidoEditar
 )
 from app.api.delivery.schemas.schema_shared_enums import (
     PedidoStatusEnum, TipoEntregaEnum, OrigemPedidoEnum,
@@ -336,6 +336,66 @@ class PedidoService:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado")
         return self._pedido_to_response(pedido)
 
+
+
+
+
+    # ======================================================================
+    # ============================ ADMIN ===================================
+    # ======================================================================
+    def list_all_kanban(self, limit: int = 500, date_filter: date | None = None, empresa_id: int=1):
+        pedidos = self.repo.list_all_kanban(limit=limit, date_filter=date_filter, empresa_id=empresa_id)
+        resultados = []
+
+        for p in pedidos:
+            cliente = p.cliente
+            endereco = cliente.enderecos[0] if cliente and cliente.enderecos else None
+
+            endereco_str = None
+            if endereco:
+                endereco_str = ", ".join(
+                    filter(None, [
+                        endereco.logradouro,
+                        endereco.numero,
+                        endereco.bairro,
+                        endereco.cidade,
+                        endereco.cep,
+                        endereco.complemento
+                    ])
+                )
+
+            resultados.append(
+                PedidoKanbanResponse(
+                    id=p.id,
+                    status=p.status,
+                    valor_total=p.valor_total,
+                    data_criacao=p.data_criacao,
+                    telefone_cliente=cliente.telefone if cliente else None,
+                    nome_cliente=cliente.nome if cliente else None,
+                    endereco_cliente=endereco_str,
+                    meio_pagamento_descricao=p.meio_pagamento.display() if p.meio_pagamento else None,
+                    observacao_geral=p.observacao_geral,
+                    meio_pagamento_id=p.meio_pagamento.id
+                )
+            )
+
+        return resultados
+
+    # ====================== ATUALIZA PEDIDO ===============================
+    # ======================================================================
+    def atualizar_status(self, pedido_id: int, novo_status: str):
+        pedido = self.db.query(PedidoDeliveryModel).filter_by(id=pedido_id).first()
+        if not pedido:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Pedido não encontrado"
+            )
+
+        pedido.status = novo_status
+        self.db.commit()
+        self.db.refresh(pedido)
+        return pedido
+
     # ====================== EDITAR PEDIDO =================================
     # ======================================================================
     def editar_pedido_parcial(self, pedido_id: int, payload: EditarPedidoRequest) -> PedidoResponse:
@@ -385,56 +445,58 @@ class PedidoService:
         self.db.refresh(pedido)
         return self._pedido_to_response(pedido)
 
+    # ================== EDITAR ITENS PEDIDO ===============================
     # ======================================================================
-    # ============================ ADMIN ===================================
-    # ======================================================================
-    def list_all_kanban(self, limit: int = 500, date_filter: date | None = None, empresa_id: int=1):
-        pedidos = self.repo.list_all_kanban(limit=limit, date_filter=date_filter, empresa_id=empresa_id)
-        resultados = []
-
-        for p in pedidos:
-            cliente = p.cliente
-            endereco = cliente.enderecos[0] if cliente and cliente.enderecos else None
-
-            endereco_str = None
-            if endereco:
-                endereco_str = ", ".join(
-                    filter(None, [
-                        endereco.logradouro,
-                        endereco.numero,
-                        endereco.bairro,
-                        endereco.cidade,
-                        endereco.cep,
-                        endereco.complemento
-                    ])
-                )
-
-            resultados.append(
-                PedidoKanbanResponse(
-                    id=p.id,
-                    status=p.status,
-                    valor_total=p.valor_total,
-                    data_criacao=p.data_criacao,
-                    telefone_cliente=cliente.telefone if cliente else None,
-                    nome_cliente=cliente.nome if cliente else None,
-                    endereco_cliente=endereco_str,
-                    meio_pagamento_descricao=p.meio_pagamento.display() if p.meio_pagamento else None,
-                    observacao_geral=p.observacao_geral,
-                    meio_pagamento_id=p.meio_pagamento.id
-                )
-            )
-
-        return resultados
-
-    def atualizar_status(self, pedido_id: int, novo_status: str):
-        pedido = self.db.query(PedidoDeliveryModel).filter_by(id=pedido_id).first()
+    def atualizar_itens_pedido(self, pedido_id: int, itens: list[ItemPedidoEditar]) -> PedidoResponse:
+        pedido = self.repo.get_pedido(pedido_id)
         if not pedido:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Pedido não encontrado"
-            )
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
 
-        pedido.status = novo_status
-        self.db.commit()
+        subtotal = Decimal("0")
+        for item in itens:
+            pe = self.repo.get_produto_emp(pedido.empresa_id, item.produto_cod_barras)
+            if not pe:
+                raise HTTPException(status.HTTP_404_NOT_FOUND, f"Produto {item.produto_cod_barras} não encontrado")
+
+            if item.acao == "adicionar":
+                if not pe.disponivel or not (pe.produto and pe.produto.ativo):
+                    raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Produto indisponível: {item.produto_cod_barras}")
+                preco = _dec(pe.preco_venda)
+                subtotal += preco * (item.quantidade or 1)
+                self.repo.adicionar_item(
+                    pedido_id=pedido.id,
+                    cod_barras=item.produto_cod_barras,
+                    quantidade=item.quantidade or 1,
+                    preco_unitario=preco,
+                    observacao=item.observacao,
+                    produto_descricao_snapshot=pe.produto.descricao if pe.produto else None,
+                    produto_imagem_snapshot=pe.produto.imagem if pe.produto else None,
+                )
+            elif item.acao == "atualizar":
+                self.repo.atualizar_item(
+                    pedido_id=pedido.id,
+                    cod_barras=item.produto_cod_barras,
+                    quantidade=item.quantidade,
+                    observacao=item.observacao
+                )
+                subtotal += _dec(pe.preco_venda) * (item.quantidade or 0)
+            elif item.acao == "remover":
+                self.repo.remover_item(pedido_id=pedido.id, cod_barras=item.produto_cod_barras)
+            else:
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Ação inválida: {item.acao}")
+
+        # Recalcular desconto e taxas
+        desconto = self._aplicar_cupom(cupom_id=pedido.cupom_id, subtotal=subtotal)
+        endereco = self.repo.get_endereco(pedido.endereco_id) if pedido.endereco_id else None
+        taxa_entrega, taxa_servico = self._calcular_taxas(
+            tipo_entrega=pedido.tipo_entrega,
+            subtotal=subtotal,
+            endereco=endereco,
+            empresa_id=pedido.empresa_id,
+        )
+        self.repo.atualizar_totais(pedido, subtotal=subtotal, desconto=desconto,
+                                   taxa_entrega=taxa_entrega, taxa_servico=taxa_servico)
+
+        self.repo.commit()
         self.db.refresh(pedido)
-        return pedido
+        return self._pedido_to_response(pedido)
