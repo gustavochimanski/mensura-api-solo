@@ -46,7 +46,7 @@ class PedidoRepository:
             self.db.query(PedidoDeliveryModel)
             .options(
                 joinedload(PedidoDeliveryModel.itens),
-                joinedload(PedidoDeliveryModel.transacao),
+                #joinedload(PedidoDeliveryModel.transacao),
             )
             .filter(PedidoDeliveryModel.id == pedido_id)
             .first()

@@ -18,6 +18,7 @@ class PedidoKanbanResponse(BaseModel):
     data_criacao: datetime
     observacao_geral: Optional[str] = None
     endereco_cliente: str | None = None
+    meio_pagamento_id: int
     meio_pagamento_descricao: str | None = None  # <- novo campo
     model_config = ConfigDict(from_attributes=True)
 
