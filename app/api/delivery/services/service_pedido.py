@@ -479,11 +479,17 @@ class PedidoService:
 
     # ================== EDITAR ITENS PEDIDO ===============================
     # ======================================================================
-    # Método completo de atualização de itens
+    # Metodo completo de atualização de itens
     def atualizar_itens_pedido(self, pedido_id: int, itens: list[ItemPedidoEditar]) -> PedidoResponse:
         pedido = self.repo.get_pedido(pedido_id)
         if not pedido:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
+
+        # Calcula subtotal antes das alterações
+        subtotal_original = sum(_dec(i.preco_unitario) * i.quantidade for i in pedido.itens)
+
+        # Flag para indicar se houve mudança no total
+        total_alterado = False
 
         for item in itens:
             if item.acao == "adicionar":
@@ -503,6 +509,7 @@ class PedidoService:
                     produto_descricao_snapshot=pe.produto.descricao if pe.produto else None,
                     produto_imagem_snapshot=pe.produto.imagem if pe.produto else None,
                 )
+                total_alterado = True  # qualquer adição altera o total
 
             elif item.acao == "atualizar":
                 if not item.id:
@@ -510,8 +517,10 @@ class PedidoService:
                 it_db = self.repo.get_item_by_id(item.id)
                 if not it_db:
                     raise HTTPException(status.HTTP_404_NOT_FOUND, f"Item {item.id} não encontrado")
-                if item.quantidade is not None:
+                # só marca como alterado se quantidade mudar
+                if item.quantidade is not None and item.quantidade != it_db.quantidade:
                     it_db.quantidade = item.quantidade
+                    total_alterado = True
                 if item.observacao is not None:
                     it_db.observacao = item.observacao
 
@@ -522,11 +531,13 @@ class PedidoService:
                 if not it_db:
                     raise HTTPException(status.HTTP_404_NOT_FOUND, f"Item {item.id} não encontrado")
                 self.db.delete(it_db)
+                total_alterado = True  # remoção altera o total
 
             else:
                 raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Ação inválida: {item.acao}")
 
-        # Recalcula e persiste o pedido após todas as alterações
-        self._recalcular_pedido(pedido)
+        # Só recalcula e persiste se houve alteração no total
+        if total_alterado:
+            self._recalcular_pedido(pedido)
 
         return self._pedido_to_response(pedido)
