@@ -94,7 +94,6 @@ def atualizar_itens(
     pedido_id: int = Path(..., description="ID do pedido"),
     itens: List[ItemPedidoEditar] = ...,
     db: Session = Depends(get_db),
-    cliente: ClienteDeliveryModel = Depends(get_cliente_by_super_token)
 ):
     """
     Atualiza os itens de um pedido: adicionar, atualizar quantidade/observação ou remover.
@@ -104,8 +103,6 @@ def atualizar_itens(
     pedido = svc.repo.get_pedido(pedido_id)
     if not pedido:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
-    if pedido.cliente_telefone != cliente.telefone:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Pedido não pertence ao cliente")
 
     return svc.atualizar_itens_pedido(pedido_id, itens)
 
