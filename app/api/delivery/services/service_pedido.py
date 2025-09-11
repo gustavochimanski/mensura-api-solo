@@ -119,7 +119,7 @@ class PedidoService:
             regiao_encontrada = None
             for reg in regioes:
                 distancia = haversine(endereco.latitude, endereco.longitude, reg.latitude, reg.longitude)
-                if distancia <= float(1.0):  # reg.raio_km é o raio de entrega da região
+                if distancia <= float(2.0):  # reg.raio_km é o raio de entrega da região
                     regiao_encontrada = reg
                     break
 
