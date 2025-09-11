@@ -259,6 +259,8 @@ class PedidoService:
                     produto_descricao_snapshot=pe.produto.descricao if pe.produto else None,
                     produto_imagem_snapshot=pe.produto.imagem if pe.produto else None,
                 )
+                logger.info(f'CLIENTE_ID: {cliente_id}')
+
 
             desconto = self._aplicar_cupom(cupom_id=payload.cupom_id, subtotal=subtotal)
             taxa_entrega, taxa_servico = self._calcular_taxas(
@@ -268,7 +270,6 @@ class PedidoService:
                 empresa_id=payload.empresa_id,
             )
 
-            logger.info(f'CLIENTE_ID: {cliente_id}')
 
 
             self.repo.atualizar_totais(
