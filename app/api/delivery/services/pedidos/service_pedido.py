@@ -249,7 +249,8 @@ class PedidoService:
 
                 preco = _dec(pe.preco_venda)
                 subtotal += preco * it.quantidade
-
+                logger.info(
+                    f"Adicionando item ao pedido_id={pedido.id}: cod_barras={it.produto_cod_barras}, quantidade={it.quantidade}")
                 self.repo.adicionar_item(
                     pedido_id=pedido.id,
                     cod_barras=it.produto_cod_barras,
