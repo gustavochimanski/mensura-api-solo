@@ -45,7 +45,8 @@ class PedidoService:
             empresa_id=pedido.empresa_id,
             entregador_id=getattr(pedido, "entregador_id", None),
             endereco_id=pedido.endereco_id,
-            meio_pagamento=MeioPagamentoResponse.model_validate(pedido.meio_pagamento) if pedido.meio_pagamento else None,
+            meio_pagamento_id=pedido.meio_pagamento_id,
+            meio_pagamento_descricao=pedido.meio_pagamento_descricao,
             tipo_entrega=(
                 pedido.tipo_entrega if isinstance(pedido.tipo_entrega, TipoEntregaEnum)
                 else TipoEntregaEnum(pedido.tipo_entrega)
@@ -331,6 +332,7 @@ class PedidoService:
     def get_pedido_by_id(self, pedido_id: int) -> PedidoResponse:
         pedido = self.repo.get_pedido(pedido_id)
         if not pedido:
+
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado")
         return self._pedido_to_response(pedido)
 

@@ -60,7 +60,8 @@ class PedidoResponse(BaseModel):
     empresa_id: int
     entregador_id: Optional[int]
     endereco_id: Optional[int]
-    meio_pagamento: Optional[MeioPagamentoResponse] = None
+    meio_pagamento_id: Optional[int] = None  # só o id agora
+    meio_pagamento_descricao: Optional[str] = None  # opcional, se q
     tipo_entrega: TipoEntregaEnum
     origem: OrigemPedidoEnum
     subtotal: float
