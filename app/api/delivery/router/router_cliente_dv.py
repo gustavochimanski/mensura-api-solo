@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.api.delivery.models.model_cliente_codigo_validacao import ClienteOtpModel
 from app.api.delivery.models.model_cliente_dv import ClienteDeliveryModel
+from app.api.delivery.repositories.repo_cliente import ClienteRepository
 from app.api.delivery.schemas.schema_cliente import ClienteOut, ClienteUpdate, ClienteCreate
 from app.api.delivery.services.service_cliente import ClienteService
 from app.core.client_dependecies import get_cliente_by_super_token
@@ -96,11 +97,17 @@ def update_current_cliente(
 # ======================================================================
 # ============================= ADMIN ==================================
 # ======================================================================
-@router.post("/admin", response_model=ClienteOut, status_code=status.HTTP_201_CREATED)
-def create_new_cliente(data: ClienteCreate, db: Session = Depends(get_db)):
-    logger.info("[Cliente] Create")
+@router.put("/admin-update", response_model=ClienteOut, status_code=status.HTTP_200_OK)
+def update_current_cliente(
+    data: ClienteUpdate,
+    telefone: str,
+    db: Session = Depends(get_db)
+):
+    logger.info(f"[Cliente] Update {telefone}")
+    repo = ClienteRepository(db)
+    cliente = repo.get_by_telefone(telefone)
     service = ClienteService(db)
-    cliente = service.create(data)
+    updated_cliente = service.update(cliente.super_token, data)
 
-    # ✅ Garante que todos os campos do schema ClienteOut estejam presentes
-    return ClienteOut.model_validate(cliente)
+    # ✅ Retorna validado pelo schema
+    return ClienteOut.model_validate(updated_cliente)
