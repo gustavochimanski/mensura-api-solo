@@ -454,12 +454,11 @@ class PedidoService:
 
         subtotal = Decimal("0")
         for item in itens:
-            pe = self.repo.get_produto_emp(pedido.empresa_id, item.produto_cod_barras)
-            if not pe:
-                raise HTTPException(status.HTTP_404_NOT_FOUND, f"Produto {item.produto_cod_barras} não encontrado")
-
             if item.acao == "adicionar":
-                if not pe.disponivel or not (pe.produto and pe.produto.ativo):
+                if not item.produto_cod_barras:
+                    raise HTTPException(status.HTTP_400_BAD_REQUEST, "Produto cod_barras obrigatório para adicionar")
+                pe = self.repo.get_produto_emp(pedido.empresa_id, item.produto_cod_barras)
+                if not pe or not pe.disponivel or not (pe.produto and pe.produto.ativo):
                     raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Produto indisponível: {item.produto_cod_barras}")
                 preco = _dec(pe.preco_venda)
                 subtotal += preco * (item.quantidade or 1)
@@ -472,16 +471,23 @@ class PedidoService:
                     produto_descricao_snapshot=pe.produto.descricao if pe.produto else None,
                     produto_imagem_snapshot=pe.produto.imagem if pe.produto else None,
                 )
+
             elif item.acao == "atualizar":
-                self.repo.atualizar_item(
-                    pedido_id=pedido.id,
-                    cod_barras=item.produto_cod_barras,
-                    quantidade=item.quantidade,
-                    observacao=item.observacao
-                )
-                subtotal += _dec(pe.preco_venda) * (item.quantidade or 0)
+                if not item.id:
+                    raise HTTPException(status.HTTP_400_BAD_REQUEST, "ID do item obrigatório para atualizar")
+                it_db = self.repo.get_item_by_id(item.id)
+                if not it_db:
+                    raise HTTPException(status.HTTP_404_NOT_FOUND, f"Item {item.id} não encontrado")
+                quantidade = item.quantidade or it_db.quantidade
+                preco = _dec(it_db.preco_unitario)
+                subtotal += preco * quantidade
+                self.repo.atualizar_item(item.id, quantidade=quantidade, observacao=item.observacao)
+
             elif item.acao == "remover":
-                self.repo.remover_item(pedido_id=pedido.id, cod_barras=item.produto_cod_barras)
+                if not item.id:
+                    raise HTTPException(status.HTTP_400_BAD_REQUEST, "ID do item obrigatório para remover")
+                self.repo.remover_item(item.id)
+
             else:
                 raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Ação inválida: {item.acao}")
 
@@ -494,9 +500,12 @@ class PedidoService:
             endereco=endereco,
             empresa_id=pedido.empresa_id,
         )
-        self.repo.atualizar_totais(pedido, subtotal=subtotal, desconto=desconto,
-                                   taxa_entrega=taxa_entrega, taxa_servico=taxa_servico)
+        self.repo.atualizar_totais(
+            pedido, subtotal=subtotal, desconto=desconto,
+            taxa_entrega=taxa_entrega, taxa_servico=taxa_servico
+        )
 
         self.repo.commit()
         self.db.refresh(pedido)
         return self._pedido_to_response(pedido)
+

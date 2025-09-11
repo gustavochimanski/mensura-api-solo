@@ -4,8 +4,10 @@ from datetime import date
 from decimal import Decimal
 from typing import Optional
 
+from fastapi import HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
+from starlette import status
 
 from app.api.mensura.models.cadprod_emp_model import ProdutoEmpModel
 from app.api.delivery.models.model_pedido_dv import PedidoDeliveryModel
@@ -101,29 +103,6 @@ class PedidoRepository:
         self.add_status_historico(pedido.id, status, motivo="Pedido criado")
         return pedido
 
-    def adicionar_item(
-        self,
-        *,
-        pedido_id: int,
-        cod_barras: str,
-        quantidade: int,
-        preco_unitario: Decimal,
-        observacao: str | None,
-        produto_descricao_snapshot: str | None,
-        produto_imagem_snapshot: str | None,
-    ) -> PedidoItemModel:
-        item = PedidoItemModel(
-            pedido_id=pedido_id,
-            produto_cod_barras=cod_barras,
-            quantidade=quantidade,
-            preco_unitario=preco_unitario,
-            observacao=observacao,
-            produto_descricao_snapshot=produto_descricao_snapshot,
-            produto_imagem_snapshot=produto_imagem_snapshot,
-        )
-        self.db.add(item)
-        return item
-
     def atualizar_totais(
         self,
         pedido: PedidoDeliveryModel,
@@ -205,5 +184,56 @@ class PedidoRepository:
 
     def rollback(self):
         self.db.rollback()
+
+# ======================================================================
+# ======================= ITENS PEDIDO =================================
+# ======================================================================
+    def get_item_by_id(self, item_id: int) -> Optional[PedidoItemModel]:
+        return self.db.get(PedidoItemModel, item_id)
+
+    def adicionar_item(
+        self,
+        *,
+        pedido_id: int,
+        cod_barras: str,
+        quantidade: int,
+        preco_unitario: Decimal,
+        observacao: str | None,
+        produto_descricao_snapshot: str | None,
+        produto_imagem_snapshot: str | None,
+    ) -> PedidoItemModel:
+        item = PedidoItemModel(
+            pedido_id=pedido_id,
+            produto_cod_barras=cod_barras,
+            quantidade=quantidade,
+            preco_unitario=preco_unitario,
+            observacao=observacao,
+            produto_descricao_snapshot=produto_descricao_snapshot,
+            produto_imagem_snapshot=produto_imagem_snapshot,
+        )
+        self.db.add(item)
+        return item
+
+    def atualizar_item(self, item_id: int, quantidade: int | None = None,
+                       observacao: str | None = None) -> PedidoItemModel:
+        item = self.get_item_by_id(item_id)
+        if not item:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, f"Item {item_id} não encontrado")
+        if quantidade is not None:
+            item.quantidade = quantidade
+        if observacao is not None:
+            item.observacao = observacao
+        return item
+
+    def atualizar_item(self, item_id: int, quantidade: int | None = None,
+                       observacao: str | None = None) -> PedidoItemModel:
+        item = self.get_item_by_id(item_id)
+        if not item:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, f"Item {item_id} não encontrado")
+        if quantidade is not None:
+            item.quantidade = quantidade
+        if observacao is not None:
+            item.observacao = observacao
+        return item
 
 

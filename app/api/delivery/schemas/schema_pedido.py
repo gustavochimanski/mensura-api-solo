@@ -31,10 +31,12 @@ class EditarPedidoRequest(BaseModel):
     troco_para: Optional[condecimal(max_digits=18, decimal_places=2)] = None
 
 class ItemPedidoEditar(BaseModel):
-    produto_cod_barras: str
+    id: Optional[int] = None           # ID do item já existente no pedido
+    produto_cod_barras: Optional[str] = None  # Apenas para adicionar
     quantidade: Optional[int] = None
     observacao: Optional[str] = None
     acao: str  # "adicionar", "atualizar", "remover"
+
 
 # ======================================================================
 # ============================ CLIENTE =================================
