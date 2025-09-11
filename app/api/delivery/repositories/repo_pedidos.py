@@ -26,6 +26,9 @@ class PedidoRepository:
     def get_cliente(self, telefone: str) -> Optional[ClienteDeliveryModel]:
         return self.db.query(ClienteDeliveryModel).filter_by(telefone=telefone).first()
 
+    def get_cliente_by_id(self, id: int) -> Optional[ClienteDeliveryModel]:
+        return self.db.query(ClienteDeliveryModel).filter(ClienteDeliveryModel.id == id).first()
+
     def get_endereco(self, endereco_id: int) -> Optional[EnderecoDeliveryModel]:
         return self.db.get(EnderecoDeliveryModel, endereco_id)
 
