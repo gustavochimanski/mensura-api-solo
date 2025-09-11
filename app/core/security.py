@@ -6,7 +6,7 @@ from jose import jwt
 # Carregue essas variáveis do seu .env em produção!
 SECRET_KEY = "SECRETO"
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 90
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
