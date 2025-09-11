@@ -261,7 +261,6 @@ class PedidoService:
                     produto_descricao_snapshot=pe.produto.descricao if pe.produto else None,
                     produto_imagem_snapshot=pe.produto.imagem if pe.produto else None,
                 )
-                logger.info(f'CLIENTE_ID: {cliente_id}')
 
 
             desconto = self._aplicar_cupom(cupom_id=payload.cupom_id, subtotal=subtotal)
@@ -285,6 +284,7 @@ class PedidoService:
             pedido.observacao_geral = payload.observacao_geral
             if payload.troco_para:
                 pedido.troco_para = _dec(payload.troco_para)
+            logger.info(f'CLIENTE_ID: {cliente_id}')
 
             self.repo.commit()
             self.db.refresh(pedido)
