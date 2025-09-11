@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends
 from app.api.delivery.router.router_home_dv import router as home_router
 from app.api.delivery.router.router_categorias_dv import router as categorias_router
 from app.api.delivery.router.router_cliente_dv import router as cliente_router
-from app.api.delivery.router.router_pedidos_dv import router as pedidos_router
+from app.api.delivery.router.pedidos.router_pedidos_dv import router as pedidos_router
 from app.api.delivery.router.router_produtos_dv import router as produtos_router
 from app.api.delivery.router.router_vitrine import router as vitrines_router
 from app.api.delivery.router.router_cupons_dv import router as cupons_router

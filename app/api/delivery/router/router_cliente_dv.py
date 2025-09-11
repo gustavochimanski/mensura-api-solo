@@ -75,39 +75,52 @@ def create_new_cliente(data: ClienteCreate, db: Session = Depends(get_db)):
     return ClienteOut.model_validate(cliente)
 
 @router.get("/me", response_model=ClienteOut, status_code=status.HTTP_200_OK)
-def read_current_cliente(cliente: "ClienteDeliveryModel" = Depends(get_cliente_by_super_token)):
+def read_current_cliente(cliente: ClienteDeliveryModel = Depends(get_cliente_by_super_token)):
     logger.info(f"[Cliente] Get current {cliente.telefone}")
+
+    if not cliente:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Cliente não encontrado")
+
     return ClienteOut.model_validate(cliente)
+
 
 
 @router.put("/me", response_model=ClienteOut, status_code=status.HTTP_200_OK)
 def update_current_cliente(
     data: ClienteUpdate,
-    cliente: "ClienteDeliveryModel" = Depends(get_cliente_by_super_token),
+    cliente: ClienteDeliveryModel = Depends(get_cliente_by_super_token),
     db: Session = Depends(get_db)
 ):
     logger.info(f"[Cliente] Update {cliente.telefone}")
+
+    if not cliente:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Cliente não encontrado")
+
     service = ClienteService(db)
     updated_cliente = service.update(cliente.super_token, data)
 
-    # ✅ Retorna validado pelo schema
     return ClienteOut.model_validate(updated_cliente)
+
+
 
 
 # ======================================================================
 # ============================= ADMIN ==================================
 # ======================================================================
 @router.put("/admin-update", response_model=ClienteOut, status_code=status.HTTP_200_OK)
-def update_current_cliente(
+def update_cliente_admin(
     data: ClienteUpdate,
     telefone: str,
     db: Session = Depends(get_db)
 ):
-    logger.info(f"[Cliente] Update {telefone}")
+    logger.info(f"[Cliente Admin] Update {telefone}")
+
     repo = ClienteRepository(db)
     cliente = repo.get_by_telefone(telefone)
+    if not cliente:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Cliente não encontrado")
+
     service = ClienteService(db)
     updated_cliente = service.update(cliente.super_token, data)
 
-    # ✅ Retorna validado pelo schema
     return ClienteOut.model_validate(updated_cliente)
