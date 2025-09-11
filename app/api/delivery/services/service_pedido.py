@@ -21,6 +21,8 @@ from app.api.delivery.schemas.schema_shared_enums import (
 )
 from app.api.delivery.services.service_pagamento_gateway import PaymentGatewayClient
 from app.utils.logger import logger
+from math import radians, cos, sin, asin, sqrt
+from decimal import Decimal
 
 QTD_MAX_ITENS = 200
 
@@ -92,24 +94,42 @@ class PedidoService:
     ) -> tuple[Decimal, Decimal]:
         from app.api.delivery.models.model_regiao_entrega import RegiaoEntregaModel
 
+        def haversine(lat1, lon1, lat2, lon2):
+            """
+            Retorna a distância em km entre dois pontos geográficos.
+            """
+            lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
+            dlat = lat2 - lat1
+            dlon = lon2 - lon1
+
+            a = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2
+            c = 2 * asin(sqrt(a))
+            km = 6371 * c  # raio da Terra em km
+            return km
+
+        # ------------------ cálculo da taxa ------------------
         taxa_entrega = _dec(0)
         if tipo_entrega == TipoEntregaEnum.DELIVERY and endereco and empresa_id:
-            regiao = (
+            regioes = (
                 self.db.query(RegiaoEntregaModel)
-                .filter(
-                    RegiaoEntregaModel.empresa_id == empresa_id,
-                    RegiaoEntregaModel.ativo == True,
-                    RegiaoEntregaModel.latitude == endereco.latitude,
-                    RegiaoEntregaModel.longitude == endereco.longitude,
-                )
-                .first()
+                .filter(RegiaoEntregaModel.empresa_id == empresa_id, RegiaoEntregaModel.ativo == True)
+                .all()
             )
-            if not regiao:
+
+            regiao_encontrada = None
+            for reg in regioes:
+                distancia = haversine(endereco.latitude, endereco.longitude, reg.latitude, reg.longitude)
+                if distancia <= float(reg.raio_km):  # reg.raio_km é o raio de entrega da região
+                    regiao_encontrada = reg
+                    break
+
+            if not regiao_encontrada:
                 raise HTTPException(
                     status.HTTP_400_BAD_REQUEST,
-                    f"Não entregamos neste endereço ({endereco.latitude}, {endereco.longitude})"
+                    f"Não entregamos neste endereço (lat: {endereco.latitude}, lon: {endereco.longitude})"
                 )
-            taxa_entrega = _dec(regiao.taxa_entrega)
+
+            taxa_entrega = _dec(regiao_encontrada.taxa_entrega)
 
         taxa_servico = (subtotal * Decimal("0.01")).quantize(Decimal("0.01"))
         return taxa_entrega, taxa_servico
