@@ -23,6 +23,13 @@ class PedidoKanbanResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class EditarPedidoRequest(BaseModel):
+    meio_pagamento_id: Optional[int] = None
+    endereco_id: Optional[int] = None
+    cupom_id: Optional[int] = None
+    observacao_geral: Optional[str] = None
+    troco_para: Optional[condecimal(max_digits=18, decimal_places=2)] = None
+
 # ======================================================================
 # ============================ CLIENTE =================================
 # ======================================================================

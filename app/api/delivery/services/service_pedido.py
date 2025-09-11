@@ -337,74 +337,48 @@ class PedidoService:
 
     # ====================== EDITAR PEDIDO =================================
     # ======================================================================
-    def editar_pedido(self, pedido_id: int, payload: FinalizarPedidoRequest) -> PedidoResponse:
+    def editar_pedido_parcial(self, pedido_id: int, payload: EditarPedidoRequest) -> PedidoResponse:
         pedido = self.repo.get_pedido(pedido_id)
         if not pedido:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
 
-        # ---------- VALIDAÇÕES DE MEIO DE PAGAMENTO ----------
-        if payload.meio_pagamento_id:
+        # Atualiza meio de pagamento
+        if payload.meio_pagamento_id is not None:
             meio_pagamento = MeioPagamentoService(self.db).get(payload.meio_pagamento_id)
             if not meio_pagamento or not meio_pagamento.ativo:
                 raise HTTPException(status.HTTP_400_BAD_REQUEST, "Meio de pagamento inválido ou inativo")
             pedido.meio_pagamento_id = payload.meio_pagamento_id
 
-        # ---------- VALIDAÇÕES DE ENDEREÇO ----------
-        if payload.endereco_id:
+        # Atualiza endereço
+        if payload.endereco_id is not None:
             endereco = self.repo.get_endereco(payload.endereco_id)
             if not endereco:
                 raise HTTPException(status.HTTP_404_NOT_FOUND, "Endereço não encontrado")
             pedido.endereco_id = payload.endereco_id
         else:
-            endereco = None  # usado para cálculo de taxa
+            endereco = None
 
-        # ---------- ATUALIZA CUPOM ----------
-        pedido.cupom_id = payload.cupom_id
+        # Atualiza cupom
+        if payload.cupom_id is not None:
+            pedido.cupom_id = payload.cupom_id
 
-        # ---------- ATUALIZA ITENS ----------
-        pedido.itens.clear()
-        subtotal = Decimal("0")
-        for it in payload.itens:
-            pe = self.repo.get_produto_emp(payload.empresa_id, it.produto_cod_barras)
-            if not pe:
-                raise HTTPException(status.HTTP_404_NOT_FOUND, f"Produto {it.produto_cod_barras} não encontrado")
-            if not pe.disponivel or not (pe.produto and pe.produto.ativo):
-                raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Produto indisponível: {it.produto_cod_barras}")
+        # Observação e troco
+        if payload.observacao_geral is not None:
+            pedido.observacao_geral = payload.observacao_geral
+        if payload.troco_para is not None:
+            pedido.troco_para = _dec(payload.troco_para)
 
-            preco = _dec(pe.preco_venda)
-            subtotal += preco * it.quantidade
-
-            self.repo.adicionar_item(
-                pedido_id=pedido.id,
-                cod_barras=it.produto_cod_barras,
-                quantidade=it.quantidade,
-                preco_unitario=preco,
-                observacao=it.observacao,
-                produto_descricao_snapshot=pe.produto.descricao if pe.produto else None,
-                produto_imagem_snapshot=pe.produto.imagem if pe.produto else None,
-            )
-
-        # ---------- APLICA CUPOM E TAXAS ----------
-        desconto = self._aplicar_cupom(cupom_id=payload.cupom_id, subtotal=subtotal)
+        # Recalcula subtotal/taxas apenas se endereço ou cupom mudou
+        subtotal = pedido.subtotal or 0
+        desconto = self._aplicar_cupom(cupom_id=pedido.cupom_id, subtotal=subtotal)
         taxa_entrega, taxa_servico = self._calcular_taxas(
             tipo_entrega=pedido.tipo_entrega,
             subtotal=subtotal,
             endereco=endereco,
             empresa_id=pedido.empresa_id,
         )
-
-        self.repo.atualizar_totais(
-            pedido,
-            subtotal=subtotal,
-            desconto=desconto,
-            taxa_entrega=taxa_entrega,
-            taxa_servico=taxa_servico,
-        )
-
-        # ---------- OBSERVAÇÃO E TROCO ----------
-        pedido.observacao_geral = payload.observacao_geral
-        if payload.troco_para:
-            pedido.troco_para = _dec(payload.troco_para)
+        self.repo.atualizar_totais(pedido, subtotal=subtotal, desconto=desconto,
+                                   taxa_entrega=taxa_entrega, taxa_servico=taxa_servico)
 
         self.repo.commit()
         self.db.refresh(pedido)

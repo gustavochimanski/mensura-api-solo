@@ -4,7 +4,8 @@ from fastapi import APIRouter, status, Path, Query, Depends, Body
 from sqlalchemy.orm import Session
 
 from app.api.delivery.models.model_cliente_dv import ClienteDeliveryModel
-from app.api.delivery.schemas.schema_pedido import FinalizarPedidoRequest, PedidoResponse, PedidoKanbanResponse
+from app.api.delivery.schemas.schema_pedido import FinalizarPedidoRequest, PedidoResponse, PedidoKanbanResponse, \
+    EditarPedidoRequest
 from app.api.delivery.schemas.schema_shared_enums import PagamentoMetodoEnum, PagamentoGatewayEnum, PedidoStatusEnum
 from app.api.delivery.services.service_pedido import PedidoService
 from app.api.mensura.models.user_model import UserModel
@@ -63,7 +64,7 @@ def atualizar_status_pedido(
 )
 def atualizar_pedido(
         pedido_id: int = Path(..., description="ID do pedido a ser atualizado"),
-        payload: FinalizarPedidoRequest = Body(...),
+        payload: EditarPedidoRequest = Body(...),
         db: Session = Depends(get_db),
         cliente=Depends(get_cliente_by_super_token)  # garante que o cliente só edita seus pedidos
 ):
