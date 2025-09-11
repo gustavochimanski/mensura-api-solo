@@ -17,6 +17,10 @@ router = APIRouter(prefix="/api/delivery/cliente", tags=["Cliente"])
 
 class NovoDispositivoRequest(BaseModel):
     telefone: str
+
+# ======================================================================
+# ============================ CLIENTE =================================
+# ======================================================================
 @router.post("/novo-dispositivo")
 def novo_dispositivo(body: NovoDispositivoRequest, db: Session = Depends(get_db)):
     telefone = body.telefone
@@ -87,3 +91,16 @@ def update_current_cliente(
 
     # ✅ Retorna validado pelo schema
     return ClienteOut.model_validate(updated_cliente)
+
+
+# ======================================================================
+# ============================= ADMIN ==================================
+# ======================================================================
+@router.post("/admin", response_model=ClienteOut, status_code=status.HTTP_201_CREATED)
+def create_new_cliente(data: ClienteCreate, db: Session = Depends(get_db)):
+    logger.info("[Cliente] Create")
+    service = ClienteService(db)
+    cliente = service.create(data)
+
+    # ✅ Garante que todos os campos do schema ClienteOut estejam presentes
+    return ClienteOut.model_validate(cliente)
