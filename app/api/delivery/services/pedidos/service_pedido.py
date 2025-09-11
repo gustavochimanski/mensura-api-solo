@@ -76,6 +76,11 @@ class PedidoService:
 
     # ---------- Helper: monta a resposta padronizada ----------
     def _pedido_to_response(self, pedido) -> PedidoResponse:
+        def _float(value):
+            if value is None:
+                return 0.0
+            return float(value)
+
         return PedidoResponse(
             id=pedido.id,
             status=PedidoStatusEnum(pedido.status),
@@ -92,15 +97,15 @@ class PedidoService:
                 pedido.origem if isinstance(pedido.origem, OrigemPedidoEnum)
                 else OrigemPedidoEnum(pedido.origem)
             ),
-            subtotal=float(pedido.subtotal or 0),
-            desconto=float(pedido.desconto or 0),
-            taxa_entrega=float(pedido.taxa_entrega or 0),
-            taxa_servico=float(pedido.taxa_servico or 0),
-            valor_total=float(pedido.valor_total or 0),
+            subtotal=_float(pedido.subtotal),
+            desconto=_float(pedido.desconto),
+            taxa_entrega=_float(pedido.taxa_entrega),
+            taxa_servico=_float(pedido.taxa_servico),
+            valor_total=_float(pedido.valor_total),
+            troco_para=_float(pedido.troco_para) if pedido.troco_para is not None else None,
+            distancia_km=_float(pedido.distancia_km) if pedido.distancia_km is not None else None,
             previsao_entrega=getattr(pedido, "previsao_entrega", None),
-            distancia_km=(float(pedido.distancia_km) if getattr(pedido, "distancia_km", None) is not None else None),
             observacao_geral=getattr(pedido, "observacao_geral", None),
-            troco_para=(float(pedido.troco_para) if getattr(pedido, "troco_para", None) is not None else None),
             cupom_id=getattr(pedido, "cupom_id", None),
             data_criacao=getattr(pedido, "data_criacao", getattr(pedido, "created_at", None)),
             data_atualizacao=getattr(pedido, "data_atualizacao", getattr(pedido, "updated_at", None)),
