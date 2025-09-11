@@ -229,7 +229,6 @@ class PedidoRepository:
         )
         self.db.add(item)
         self.db.flush()
-        self.db.refresh(pedido)  # ⚡ garante que cliente_id e outros campos não se percam
         return item
 
     def atualizar_item(self, item_id: int, quantidade: int | None = None,

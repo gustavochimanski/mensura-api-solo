@@ -264,7 +264,6 @@ class PedidoService:
 
 
             desconto = self._aplicar_cupom(cupom_id=payload.cupom_id, subtotal=subtotal)
-            logger.info(f'CLIENTE_ID: {cliente_id}')
             taxa_entrega, taxa_servico = self._calcular_taxas(
                 tipo_entrega=payload.tipo_entrega,
                 subtotal=subtotal,
@@ -290,7 +289,7 @@ class PedidoService:
             logger.info(f'CLIENTE_ID: {cliente_id}')
 
             self.repo.commit()
-            self.db.refresh(pedido)
+            pedido = self.repo.get_pedido(pedido.id)  # já vem com joinedload
 
         except HTTPException:
             self.repo.rollback()
@@ -482,7 +481,7 @@ class PedidoService:
         self.repo.atualizar_totais(pedido, subtotal=subtotal, desconto=desconto, taxa_entrega=taxa_entrega, taxa_servico=taxa_servico)
 
         self.repo.commit()
-        self.db.refresh(pedido)
+        pedido = self.repo.get_pedido(pedido.id)  # garantir cliente/endereco/meio_pagamento carregados
         return self._pedido_to_response(pedido)
 
     # ================== EDITAR ITENS PEDIDO ===============================
@@ -547,9 +546,11 @@ class PedidoService:
                 raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Ação inválida: {item.acao}")
 
         if total_alterado:
-            self.db.flush()  # garante que alterações já estão refletidas
-            self._recalcular_pedido(pedido)
-
+            self.db.flush()  # garante itens atualizados
+            self._recalcular_pedido(pedido)  # agora só faz flush interno
+            self.repo.commit()  # 👍 commit centralizado
+            pedido = self.repo.get_pedido(pedido.id)  # 👍 reconsulta com joinedload para resposta fresca
         return self._pedido_to_response(pedido)
+
 
 
