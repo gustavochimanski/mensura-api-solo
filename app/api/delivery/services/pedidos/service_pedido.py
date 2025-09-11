@@ -229,7 +229,6 @@ class PedidoService:
                 if getattr(empresa, "aceita_pedido_automatico", False)
                 else PedidoStatusEnum.P.value  # Pendente
             )
-            logger.info(f'CLIENTE_ID: {cliente_id}')
             pedido = self.repo.criar_pedido(
                 cliente_id=cliente_id,
                 empresa_id=payload.empresa_id,
@@ -239,6 +238,7 @@ class PedidoService:
                 tipo_entrega=payload.tipo_entrega,
                 origem=payload.origem.value,
             )
+            logger.info(f'CLIENTE_ID: {cliente_id}')
 
             subtotal = Decimal("0")
             for it in payload.itens:
