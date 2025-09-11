@@ -103,17 +103,21 @@ class PedidoRepository:
         )
         self.db.add(pedido)
         self.db.flush()
+
         self.add_status_historico(pedido.id, status, motivo="Pedido criado")
+
+        # 🔹 Refresh para manter cliente e outros relacionamentos
+        self.db.refresh(pedido)
         return pedido
 
     def atualizar_totais(
-        self,
-        pedido: PedidoDeliveryModel,
-        *,
-        subtotal: Decimal,
-        desconto: Decimal,
-        taxa_entrega: Decimal,
-        taxa_servico: Decimal,
+            self,
+            pedido: PedidoDeliveryModel,
+            *,
+            subtotal: Decimal,
+            desconto: Decimal,
+            taxa_entrega: Decimal,
+            taxa_servico: Decimal,
     ) -> None:
         pedido.subtotal = subtotal
         pedido.desconto = desconto
@@ -122,6 +126,10 @@ class PedidoRepository:
         pedido.valor_total = subtotal - desconto + taxa_entrega + taxa_servico
         if pedido.valor_total < 0:
             pedido.valor_total = Decimal("0")
+
+        # 🔹 Importante: flush + refresh para manter cliente, itens e outros relacionamentos
+        self.db.flush()
+        self.db.refresh(pedido)
 
     def add_status_historico(self, pedido_id: int, status: str, motivo: str | None = None, criado_por: str | None = "system"):
         hist = PedidoStatusHistoricoModel(

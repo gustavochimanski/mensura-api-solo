@@ -479,8 +479,7 @@ class PedidoService:
             endereco=endereco,
             empresa_id=pedido.empresa_id,
         )
-        self.repo.atualizar_totais(pedido, subtotal=subtotal, desconto=desconto,
-                                   taxa_entrega=taxa_entrega, taxa_servico=taxa_servico)
+        self.repo.atualizar_totais(pedido, subtotal=subtotal, desconto=desconto, taxa_entrega=taxa_entrega, taxa_servico=taxa_servico)
 
         self.repo.commit()
         self.db.refresh(pedido)
