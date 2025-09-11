@@ -211,7 +211,6 @@ class PedidoService:
 
         # Cliente
         cliente = self.repo.get_cliente_by_id(cliente_id)
-        logger.info(cliente.id)
         if not cliente:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Cliente não encontrado")
 
@@ -230,8 +229,9 @@ class PedidoService:
                 if getattr(empresa, "aceita_pedido_automatico", False)
                 else PedidoStatusEnum.P.value  # Pendente
             )
+            logger.info(f'CLIENTE_ID: {cliente_id}')
             pedido = self.repo.criar_pedido(
-                cliente_id=cliente_id,  # ⚡ aqui mudou
+                cliente_id=cliente_id,
                 empresa_id=payload.empresa_id,
                 endereco_id=payload.endereco_id,
                 meio_pagamento_id=payload.meio_pagamento_id,
@@ -239,8 +239,6 @@ class PedidoService:
                 tipo_entrega=payload.tipo_entrega,
                 origem=payload.origem.value,
             )
-
-            logger.info(payload)
 
             subtotal = Decimal("0")
             for it in payload.itens:
