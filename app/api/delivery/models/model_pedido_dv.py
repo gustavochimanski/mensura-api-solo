@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from pydantic import ConfigDict
 from sqlalchemy import (
     Column, Integer, String, DateTime, ForeignKey, Numeric, Enum as SAEnum, Date, func
@@ -65,13 +67,27 @@ class PedidoDeliveryModel(Base):
     data_criacao = Column(DateTime, default=now_trimmed, nullable=False)
     data_atualizacao = Column(DateTime, default=now_trimmed, onupdate=now_trimmed,  nullable=False)
 
-
-
-
-
     itens = relationship("PedidoItemModel", back_populates="pedido", cascade="all, delete-orphan")
     transacao = relationship("TransacaoPagamentoModel", back_populates="pedido", uselist=False,
                              cascade="all, delete-orphan")
     historicos = relationship("PedidoStatusHistoricoModel", back_populates="pedido", cascade="all, delete-orphan")
+
+
+    # ---- PROPRIEDADES CALCULADAS ----
+    @property
+    def subtotal_calc(self) -> Decimal:
+        return sum(
+            (item.preco_unitario or Decimal("0")) * (item.quantidade or 0)
+            for item in self.itens
+        ) or Decimal("0")
+
+    @property
+    def valor_total_calc(self) -> Decimal:
+        subtotal = self.subtotal_calc
+        desconto = self.desconto or Decimal("0")
+        taxa_entrega = self.taxa_entrega or Decimal("0")
+        taxa_servico = self.taxa_servico or Decimal("0")
+        total = subtotal - desconto + taxa_entrega + taxa_servico
+        return total if total > 0 else Decimal("0")
 
     model_config = ConfigDict(from_attributes=True)

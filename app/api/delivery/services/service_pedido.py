@@ -498,26 +498,7 @@ class PedidoService:
         total_alterado = False
 
         for item in itens:
-            if item.acao == "adicionar":
-                if not item.produto_cod_barras:
-                    raise HTTPException(status.HTTP_400_BAD_REQUEST, "Produto cod_barras obrigatório para adicionar")
-                pe = self.repo.get_produto_emp(pedido.empresa_id, item.produto_cod_barras)
-                if not pe or not pe.disponivel or not (pe.produto and pe.produto.ativo):
-                    raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Produto indisponível: {item.produto_cod_barras}")
-                preco = _dec(pe.preco_venda)
-                quantidade = item.quantidade or 1
-                self.repo.adicionar_item(
-                    pedido_id=pedido.id,
-                    cod_barras=item.produto_cod_barras,
-                    quantidade=quantidade,
-                    preco_unitario=preco,
-                    observacao=item.observacao,
-                    produto_descricao_snapshot=pe.produto.descricao if pe.produto else None,
-                    produto_imagem_snapshot=pe.produto.imagem if pe.produto else None,
-                )
-                total_alterado = True  # qualquer adição altera o total
-
-            elif item.acao == "atualizar":
+            if item.acao == "atualizar":
                 if not item.id:
                     raise HTTPException(status.HTTP_400_BAD_REQUEST, "ID do item obrigatório para atualizar")
                 it_db = self.repo.get_item_by_id(item.id)
