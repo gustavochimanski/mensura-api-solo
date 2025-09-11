@@ -88,7 +88,7 @@ class PedidoRepository:
             origem: str,
     ) -> PedidoDeliveryModel:
         pedido = PedidoDeliveryModel(
-            id=cliente_id,
+            cliente_id=cliente_id,
             empresa_id=empresa_id,
             endereco_id=endereco_id,
             meio_pagamento_id=meio_pagamento_id,
