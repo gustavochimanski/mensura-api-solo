@@ -197,6 +197,7 @@ class PedidoRepository:
     def adicionar_item(
         self,
         *,
+        pedido: PedidoDeliveryModel,  # ⚡ passar o objeto, não só o ID
         pedido_id: int,
         cod_barras: str,
         quantidade: int,
@@ -206,6 +207,7 @@ class PedidoRepository:
         produto_imagem_snapshot: str | None,
     ) -> PedidoItemModel:
         item = PedidoItemModel(
+            pedido=pedido,
             pedido_id=pedido_id,
             produto_cod_barras=cod_barras,
             quantidade=quantidade,
@@ -216,6 +218,7 @@ class PedidoRepository:
         )
         self.db.add(item)
         self.db.flush()
+        self.db.refresh(pedido)  # ⚡ garante que cliente_id e outros campos não se percam
         return item
 
     def atualizar_item(self, item_id: int, quantidade: int | None = None,
