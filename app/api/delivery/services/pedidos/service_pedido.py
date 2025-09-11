@@ -252,6 +252,7 @@ class PedidoService:
                 logger.info(
                     f"Adicionando item ao pedido_id={pedido.id}: cod_barras={it.produto_cod_barras}, quantidade={it.quantidade}")
                 self.repo.adicionar_item(
+                    pedido=pedido,
                     pedido_id=pedido.id,
                     cod_barras=it.produto_cod_barras,
                     quantidade=it.quantidade,
