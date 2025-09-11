@@ -60,13 +60,13 @@ def atualizar_status_pedido(
 @router.put(
     "/{pedido_id}/editar",
     response_model=PedidoResponse,
-    status_code=status.HTTP_200_OK
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(get_current_user)]
 )
 def atualizar_pedido(
         pedido_id: int = Path(..., description="ID do pedido a ser atualizado"),
         payload: EditarPedidoRequest = Body(...),
         db: Session = Depends(get_db),
-        cliente=Depends(get_cliente_by_super_token)  # garante que o cliente só edita seus pedidos
 ):
     """
     Atualiza dados de um pedido existente:
@@ -79,14 +79,8 @@ def atualizar_pedido(
     """
     svc = PedidoService(db)
 
-    # Verifica se o pedido pertence ao cliente
-    pedido = svc.repo.get_pedido(pedido_id)
-    if not pedido or pedido.cliente_telefone != cliente.telefone:
-        from fastapi import HTTPException
-        raise HTTPException(status_code=404, detail="Pedido não encontrado para este cliente")
-
     # Atualiza o pedido via serviço
-    return svc.editar_pedido(pedido_id, payload)
+    return svc.editar_pedido_parcial(pedido_id, payload)
 
 
 # ======================================================================

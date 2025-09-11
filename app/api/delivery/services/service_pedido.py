@@ -13,7 +13,8 @@ from app.api.delivery.schemas.schema_meio_pagamento import MeioPagamentoResponse
 from app.api.delivery.services.meio_pagamento_service import MeioPagamentoService
 from app.api.mensura.repositories.empresa_repo import EmpresaRepository
 from app.api.delivery.schemas.schema_pedido import (
-    FinalizarPedidoRequest, ItemPedidoRequest, PedidoResponse, ItemPedidoResponse, PedidoKanbanResponse
+    FinalizarPedidoRequest, ItemPedidoRequest, PedidoResponse, ItemPedidoResponse, PedidoKanbanResponse,
+    EditarPedidoRequest
 )
 from app.api.delivery.schemas.schema_shared_enums import (
     PedidoStatusEnum, TipoEntregaEnum, OrigemPedidoEnum,
