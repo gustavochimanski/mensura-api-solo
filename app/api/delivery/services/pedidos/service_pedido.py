@@ -41,15 +41,13 @@ class PedidoService:
 
     # Helper para recalcular e persistir os totais do pedido
     def _recalcular_pedido(self, pedido: PedidoDeliveryModel):
-        """
-        Recalcula subtotal, desconto, taxas e valor total do pedido
-        sem perder relacionamentos como cliente, itens e endereço.
-        """
+        """Recalcula subtotal, desconto, taxas e valor total do pedido e salva no banco."""
         # 1️⃣ Subtotal = soma de todos os itens
         subtotal = self.db.query(
             func.sum(PedidoItemModel.quantidade * PedidoItemModel.preco_unitario)
         ).filter(PedidoItemModel.pedido_id == pedido.id).scalar() or Decimal("0")
-        subtotal = Decimal(subtotal)
+
+        subtotal = Decimal(subtotal)  # força Decimal
 
         # 2️⃣ Desconto do cupom
         desconto = self._aplicar_cupom(cupom_id=pedido.cupom_id, subtotal=subtotal)
@@ -72,13 +70,9 @@ class PedidoService:
         if pedido.valor_total < 0:
             pedido.valor_total = Decimal("0")
 
-        # 5️⃣ Flush ao invés de commit para não quebrar transação externa
-        self.db.flush()
-
-        # 6️⃣ Refresh somente os relacionamentos essenciais
-        self.db.refresh(pedido, attribute_names=["cliente", "itens", "endereco"])
-
-        # Agora todos os relacionamentos continuam intactos e `_pedido_to_response` funciona sem perder dados
+        # 5️⃣ Commit e refresh
+        self.repo.commit()
+        self.db.refresh(pedido)
 
     # ---------- Helper: monta a resposta padronizada ----------
     def _pedido_to_response(self, pedido) -> PedidoResponse:
@@ -268,9 +262,9 @@ class PedidoService:
                     produto_imagem_snapshot=pe.produto.imagem if pe.produto else None,
                 )
 
+
             desconto = self._aplicar_cupom(cupom_id=payload.cupom_id, subtotal=subtotal)
             logger.info(f'CLIENTE_ID: {cliente_id}')
-
             taxa_entrega, taxa_servico = self._calcular_taxas(
                 tipo_entrega=payload.tipo_entrega,
                 subtotal=subtotal,
