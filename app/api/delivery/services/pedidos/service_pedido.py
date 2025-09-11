@@ -264,7 +264,6 @@ class PedidoService:
 
 
             desconto = self._aplicar_cupom(cupom_id=payload.cupom_id, subtotal=subtotal)
-            logger.info(f'CLIENTE_ID: {cliente_id}')
             taxa_entrega, taxa_servico = self._calcular_taxas(
                 tipo_entrega=payload.tipo_entrega,
                 subtotal=subtotal,
