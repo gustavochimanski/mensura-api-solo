@@ -40,10 +40,14 @@ class PedidoService:
     # Helper para recalcular e persistir os totais do pedido
     def _recalcular_pedido(self, pedido: PedidoDeliveryModel):
         """Recalcula subtotal, desconto, taxas e valor total do pedido e salva no banco."""
-        # Calcula subtotal a partir dos itens
+        # 1️⃣ Subtotal = soma de todos os itens
         subtotal = sum(_dec(i.preco_unitario) * i.quantidade for i in pedido.itens)
+
+        # 2️⃣ Desconto do cupom
         desconto = self._aplicar_cupom(cupom_id=pedido.cupom_id, subtotal=subtotal)
-        endereco = self.repo.get_endereco(pedido.endereco_id) if pedido.endereco_id else None
+
+        # 3️⃣ Taxas
+        endereco = pedido.endereco  # relacionamento já carregado
         taxa_entrega, taxa_servico = self._calcular_taxas(
             tipo_entrega=pedido.tipo_entrega,
             subtotal=subtotal,
@@ -51,16 +55,16 @@ class PedidoService:
             empresa_id=pedido.empresa_id,
         )
 
-        # Atualiza o pedido
-        self.repo.atualizar_totais(
-            pedido,
-            subtotal=subtotal,
-            desconto=desconto,
-            taxa_entrega=taxa_entrega,
-            taxa_servico=taxa_servico
-        )
+        # 4️⃣ Atualiza no pedido
+        pedido.subtotal = subtotal
+        pedido.desconto = desconto
+        pedido.taxa_entrega = taxa_entrega
+        pedido.taxa_servico = taxa_servico
+        pedido.valor_total = subtotal - desconto + taxa_entrega + taxa_servico
+        if pedido.valor_total < 0:
+            pedido.valor_total = Decimal("0")
 
-        # Commit e refresh para persistir no banco
+        # 5️⃣ Commit e refresh
         self.repo.commit()
         self.db.refresh(pedido)
 
