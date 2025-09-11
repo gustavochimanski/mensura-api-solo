@@ -24,7 +24,7 @@ class PedidoRepository:
 
     # --- Validations / Queries ---
     def get_cliente(self, telefone: str) -> Optional[ClienteDeliveryModel]:
-        return self.db.get(ClienteDeliveryModel, telefone)
+        return self.db.query(ClienteDeliveryModel).filter_by(telefone=telefone).first()
 
     def get_endereco(self, endereco_id: int) -> Optional[EnderecoDeliveryModel]:
         return self.db.get(EnderecoDeliveryModel, endereco_id)
