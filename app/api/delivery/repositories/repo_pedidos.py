@@ -76,7 +76,7 @@ class PedidoRepository:
     def criar_pedido(
             self,
             *,
-            cliente_telefone: str | None,
+            cliente_id: str | None,
             empresa_id: int,
             endereco_id: int | None,
             meio_pagamento_id: int,
@@ -85,7 +85,7 @@ class PedidoRepository:
             origem: str,
     ) -> PedidoDeliveryModel:
         pedido = PedidoDeliveryModel(
-            cliente_telefone=cliente_telefone,
+            id=cliente_id,
             empresa_id=empresa_id,
             endereco_id=endereco_id,
             meio_pagamento_id=meio_pagamento_id,
