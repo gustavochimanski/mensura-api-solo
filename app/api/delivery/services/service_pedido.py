@@ -96,13 +96,18 @@ class PedidoService:
         if tipo_entrega == TipoEntregaEnum.DELIVERY and endereco and empresa_id:
             regiao = (
                 self.db.query(RegiaoEntregaModel)
-                .filter_by(empresa_id=empresa_id, bairro=endereco.bairro, ativo=True)
+                .filter(
+                    RegiaoEntregaModel.empresa_id == empresa_id,
+                    RegiaoEntregaModel.ativo == True,
+                    RegiaoEntregaModel.latitude == endereco.latitude,
+                    RegiaoEntregaModel.longitude == endereco.longitude,
+                )
                 .first()
             )
             if not regiao:
                 raise HTTPException(
                     status.HTTP_400_BAD_REQUEST,
-                    f"Não entregamos no bairro {endereco.bairro}"
+                    f"Não entregamos neste endereço ({endereco.latitude}, {endereco.longitude})"
                 )
             taxa_entrega = _dec(regiao.taxa_entrega)
 
