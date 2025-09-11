@@ -2,7 +2,7 @@ import base64
 import hashlib
 import secrets
 
-from sqlalchemy import Column, String, Date, Boolean, DateTime, func, Index
+from sqlalchemy import Column, String, Date, Boolean, DateTime, func, Index, Integer
 from sqlalchemy.orm import relationship
 from app.database.db_connection import Base
 from pydantic import ConfigDict
@@ -15,6 +15,7 @@ def default_super_token():
     hashed = hashlib.sha256(raw).digest()
     return base64.urlsafe_b64encode(hashed).rstrip(b'=').decode('ascii')
 
+
 class ClienteDeliveryModel(Base):
     __tablename__ = "clientes_dv"
     __table_args__ = (
@@ -23,7 +24,8 @@ class ClienteDeliveryModel(Base):
         {"schema": "delivery"},
     )
 
-    telefone = Column(String(20), primary_key=True)  # PK principal
+    id = Column(Integer, primary_key=True, autoincrement=True)  # PK interna e imutável
+    telefone = Column(String(20), nullable=False, unique=True)  # telefone é só um dado mutável
     nome = Column(String(100), nullable=False)
     cpf = Column(String(14), unique=True, nullable=True)
     email = Column(String(100), nullable=True)
@@ -34,14 +36,18 @@ class ClienteDeliveryModel(Base):
     created_at = Column(DateTime, default=now_trimmed, nullable=False)
     updated_at = Column(DateTime, default=now_trimmed, onupdate=now_trimmed, nullable=False)
 
+    # Relacionamentos usando cliente_id como FK
     pedidos = relationship(
         "PedidoDeliveryModel",
         back_populates="cliente",
         cascade="all, delete-orphan",
-        foreign_keys="PedidoDeliveryModel.cliente_telefone"  # especifica a FK correta
+        foreign_keys="PedidoDeliveryModel.cliente_id"  # agora referencia id, não telefone
     )
 
-    enderecos = relationship("EnderecoDeliveryModel", back_populates="cliente", cascade="all, delete-orphan")
+    enderecos = relationship(
+        "EnderecoDeliveryModel",
+        back_populates="cliente",
+        cascade="all, delete-orphan"
+    )
 
     model_config = ConfigDict(from_attributes=True)
-#

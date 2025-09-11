@@ -11,8 +11,8 @@ class EnderecoDeliveryModel(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
 
-    # FK para cliente (telefone como PK)
-    cliente_telefone = Column(String(20), ForeignKey("delivery.clientes_dv.telefone", ondelete="CASCADE"), nullable=False)
+    # FK para cliente usando id agora
+    cliente_id = Column(Integer, ForeignKey("delivery.clientes_dv.id", ondelete="CASCADE"), nullable=False)
 
     cep         = Column(String(10),  nullable=True)
     logradouro  = Column(String(100), nullable=True)

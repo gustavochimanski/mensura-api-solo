@@ -42,8 +42,12 @@ class PedidoDeliveryModel(Base):
     meio_pagamento_id = Column(Integer, ForeignKey("delivery.meios_pagamento_dv.id", ondelete="SET NULL"), nullable=True)
     meio_pagamento = relationship("MeioPagamentoModel")
 
-    cliente_telefone = Column(String(20), ForeignKey("delivery.clientes_dv.telefone", ondelete="CASCADE"), nullable=False)
-    cliente = relationship("ClienteDeliveryModel",back_populates="pedidos",foreign_keys=[cliente_telefone])
+    cliente_id = Column(Integer, ForeignKey("delivery.clientes_dv.id", ondelete="CASCADE"), nullable=False)
+    cliente = relationship(
+        "ClienteDeliveryModel",
+        back_populates="pedidos",
+        foreign_keys=[cliente_id]
+    )
 
     status = Column(PedidoStatus, nullable=False, default="P")
     tipo_entrega = Column(TipoEntrega, nullable=False, default="DELIVERY")
