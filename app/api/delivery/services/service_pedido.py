@@ -135,6 +135,7 @@ class PedidoService:
         taxa_servico = (subtotal * Decimal("0.01")).quantize(Decimal("0.01"))
         return taxa_entrega, taxa_servico
 
+
     def _aplicar_cupom(self, *, cupom_id: Optional[int], subtotal: Decimal) -> Decimal:
         if not cupom_id:
             return _dec(0)
@@ -343,6 +344,29 @@ class PedidoService:
     # ======================================================================
     # ============================ ADMIN ===================================
     # ======================================================================
+    # Helper para recalcular valores do pedido
+    def _recalcular_pedido(self, pedido: PedidoDeliveryModel):
+        """Recalcula subtotal, desconto, taxas e valor total do pedido."""
+        subtotal = sum(_dec(i.preco_unitario) * i.quantidade for i in pedido.itens)
+        desconto = self._aplicar_cupom(cupom_id=pedido.cupom_id, subtotal=subtotal)
+        endereco = self.repo.get_endereco(pedido.endereco_id) if pedido.endereco_id else None
+        taxa_entrega, taxa_servico = self._calcular_taxas(
+            tipo_entrega=pedido.tipo_entrega,
+            subtotal=subtotal,
+            endereco=endereco,
+            empresa_id=pedido.empresa_id,
+        )
+        self.repo.atualizar_totais(
+            pedido,
+            subtotal=subtotal,
+            desconto=desconto,
+            taxa_entrega=taxa_entrega,
+            taxa_servico=taxa_servico
+        )
+        self.repo.commit()
+        self.db.refresh(pedido)
+
+
     def list_all_kanban(self, limit: int = 500, date_filter: date | None = None, empresa_id: int=1):
         pedidos = self.repo.list_all_kanban(limit=limit, date_filter=date_filter, empresa_id=empresa_id)
         resultados = []

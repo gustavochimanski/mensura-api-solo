@@ -225,15 +225,4 @@ class PedidoRepository:
             item.observacao = observacao
         return item
 
-    def atualizar_item(self, item_id: int, quantidade: int | None = None,
-                       observacao: str | None = None) -> PedidoItemModel:
-        item = self.get_item_by_id(item_id)
-        if not item:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, f"Item {item_id} não encontrado")
-        if quantidade is not None:
-            item.quantidade = quantidade
-        if observacao is not None:
-            item.observacao = observacao
-        return item
-
 
