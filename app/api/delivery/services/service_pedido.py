@@ -516,13 +516,38 @@ class PedidoService:
                 self.db.delete(it_db)
                 total_alterado = True
 
+            elif item.acao == "novo-item":
+                if not item.produto_cod_barras:
+                    raise HTTPException(status.HTTP_400_BAD_REQUEST, "Código de barras obrigatório para adicionar")
+                if not item.quantidade or item.quantidade <= 0:
+                    raise HTTPException(status.HTTP_400_BAD_REQUEST, "Quantidade deve ser maior que zero")
+
+                pe = self.repo.get_produto_emp(pedido.empresa_id, item.produto_cod_barras)
+                if not pe:
+                    raise HTTPException(status.HTTP_404_NOT_FOUND, f"Produto {item.produto_cod_barras} não encontrado")
+                if not pe.disponivel or not (pe.produto and pe.produto.ativo):
+                    raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Produto indisponível: {item.produto_cod_barras}")
+
+                preco = _dec(pe.preco_venda)
+
+                self.repo.adicionar_item(
+                    pedido_id=pedido.id,
+                    cod_barras=item.produto_cod_barras,
+                    quantidade=item.quantidade,
+                    preco_unitario=preco,
+                    observacao=item.observacao,
+                    produto_descricao_snapshot=pe.produto.descricao if pe.produto else None,
+                    produto_imagem_snapshot=pe.produto.imagem if pe.produto else None,
+                )
+                total_alterado = True
+
             else:
                 raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Ação inválida: {item.acao}")
 
         if total_alterado:
-            # Garante que alterações de itens estão no banco antes de recalcular
-            self.db.flush()
+            self.db.flush()  # garante que alterações já estão refletidas
             self._recalcular_pedido(pedido)
 
         return self._pedido_to_response(pedido)
+
 
