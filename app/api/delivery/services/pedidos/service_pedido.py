@@ -238,7 +238,6 @@ class PedidoService:
                 tipo_entrega=payload.tipo_entrega,
                 origem=payload.origem.value,
             )
-            logger.info(f'CLIENTE_ID: {cliente_id}')
 
             subtotal = Decimal("0")
             for it in payload.itens:
@@ -268,6 +267,9 @@ class PedidoService:
                 endereco=endereco,
                 empresa_id=payload.empresa_id,
             )
+
+            logger.info(f'CLIENTE_ID: {cliente_id}')
+
 
             self.repo.atualizar_totais(
                 pedido,
