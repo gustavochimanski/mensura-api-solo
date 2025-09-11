@@ -8,6 +8,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.delivery.models.model_pedido_dv import PedidoDeliveryModel
+from app.api.delivery.models.model_pedido_item_dv import PedidoItemModel
 from app.api.delivery.repositories.repo_pedidos import PedidoRepository
 from app.api.delivery.services.meio_pagamento_service import MeioPagamentoService
 from app.api.mensura.repositories.empresa_repo import EmpresaRepository
