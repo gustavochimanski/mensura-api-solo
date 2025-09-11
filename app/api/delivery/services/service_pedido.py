@@ -426,6 +426,7 @@ class PedidoService:
                     endereco_cliente=endereco_str,
                     meio_pagamento_descricao=p.meio_pagamento.display() if p.meio_pagamento else None,
                     observacao_geral=p.observacao_geral,
+                    meio_pagamento_id=p.meio_pagamento.id
                 )
             )
 
