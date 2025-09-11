@@ -53,9 +53,6 @@ class ItemPedidoResponse(BaseModel):
     produto_imagem_snapshot: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
 
-class MeioPagMini(BaseModel):
-    id: int
-
 class PedidoResponse(BaseModel):
     id: int
     status: PedidoStatusEnum
@@ -63,7 +60,7 @@ class PedidoResponse(BaseModel):
     empresa_id: int
     entregador_id: Optional[int]
     endereco_id: Optional[int]
-    meio_pagamento: Optional[MeioPagMini] = None
+    meio_pagamento: Optional[MeioPagamentoResponse] = None
     tipo_entrega: TipoEntregaEnum
     origem: OrigemPedidoEnum
     subtotal: float
