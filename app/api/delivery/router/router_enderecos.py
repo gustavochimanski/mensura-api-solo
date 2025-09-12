@@ -9,6 +9,11 @@ from app.utils.logger import logger
 
 router = APIRouter(prefix="/api/delivery/enderecos", tags=["Delivery - Endereços"])
 
+# SEGURANÇA: Este router implementa verificações para garantir que clientes
+# só possam acessar e modificar seus próprios endereços. As verificações são
+# feitas no repositório através do método get_by_cliente() que valida o
+# cliente_id antes de qualquer operação.
+
 @router.get("", response_model=List[EnderecoOut])
 def listar_enderecos(
     cliente=Depends(get_cliente_by_super_token),
@@ -26,7 +31,11 @@ def get_endereco(
 ):
     logger.info(f"[Enderecos] Get - id={endereco_id} cliente={cliente.super_token}")
     svc = EnderecosService(db)
-    return svc.get(cliente.super_token, endereco_id)
+    try:
+        return svc.get(cliente.super_token, endereco_id)
+    except Exception as e:
+        logger.warning(f"[Enderecos] Tentativa de acesso negado - id={endereco_id} cliente={cliente.super_token} erro={str(e)}")
+        raise
 
 @router.post("", response_model=EnderecoOut, status_code=status.HTTP_201_CREATED)
 def criar_endereco(
@@ -47,7 +56,11 @@ def atualizar_endereco(
 ):
     logger.info(f"[Enderecos] Update - id={endereco_id} cliente={cliente.super_token}")
     svc = EnderecosService(db)
-    return svc.update(cliente.super_token, endereco_id, payload)
+    try:
+        return svc.update(cliente.super_token, endereco_id, payload)
+    except Exception as e:
+        logger.warning(f"[Enderecos] Tentativa de modificação negada - id={endereco_id} cliente={cliente.super_token} erro={str(e)}")
+        raise
 
 @router.delete("/{endereco_id}", status_code=status.HTTP_204_NO_CONTENT)
 def deletar_endereco(
@@ -57,8 +70,12 @@ def deletar_endereco(
 ):
     logger.info(f"[Enderecos] Delete - id={endereco_id} cliente={cliente.super_token}")
     svc = EnderecosService(db)
-    svc.delete(cliente.super_token, endereco_id)
-    return None
+    try:
+        svc.delete(cliente.super_token, endereco_id)
+        return None
+    except Exception as e:
+        logger.warning(f"[Enderecos] Tentativa de exclusão negada - id={endereco_id} cliente={cliente.super_token} erro={str(e)}")
+        raise
 
 @router.post("/{endereco_id}/set-padrao", response_model=EnderecoOut)
 def set_endereco_padrao(
@@ -68,4 +85,8 @@ def set_endereco_padrao(
 ):
     logger.info(f"[Enderecos] Set padrão - id={endereco_id} cliente={cliente.super_token}")
     svc = EnderecosService(db)
-    return svc.set_padrao(cliente.super_token, endereco_id)
+    try:
+        return svc.set_padrao(cliente.super_token, endereco_id)
+    except Exception as e:
+        logger.warning(f"[Enderecos] Tentativa de definir padrão negada - id={endereco_id} cliente={cliente.super_token} erro={str(e)}")
+        raise
