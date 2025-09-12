@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.core.admin_dependencies import get_current_user
 from app.utils.logger import logger  # ✅ Logger centralizado
-from app.config.settings import CORS_ORIGINS, BASE_URL as SETTINGS_BASE_URL, ENABLE_DOCS
+from app.config.settings import CORS_ORIGINS, CORS_ALLOW_ALL, BASE_URL as SETTINGS_BASE_URL, ENABLE_DOCS
 from app.api.BI.router.router import router as bi_router
 from app.api.mensura.router.router import router as mensura_router
 from app.api.delivery.router.router import api_delivery
@@ -39,8 +39,15 @@ app = FastAPI(
 # ───────────────────────────
 # CORS
 # ───────────────────────────
-allowed_origins = CORS_ORIGINS or ["*"]
-allow_credentials = bool(CORS_ORIGINS)
+# Regra:
+# - Se CORS_ALLOW_ALL=true => allow_origins=["*"], allow_credentials=False
+# - Caso contrário => allow_origins=CORS_ORIGINS (se vazio cai para ["*"]), allow_credentials=True somente quando houver origens explícitas
+if CORS_ALLOW_ALL:
+    allowed_origins = ["*"]
+    allow_credentials = False
+else:
+    allowed_origins = CORS_ORIGINS or ["*"]
+    allow_credentials = bool(CORS_ORIGINS)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
