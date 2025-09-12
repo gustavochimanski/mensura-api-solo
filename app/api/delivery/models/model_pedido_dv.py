@@ -21,7 +21,7 @@ PedidoStatus = SAEnum(
 # SAIU_PARA_ENTREGA: S
 # ENTREGUE: E
 # CANCELADO: C
-#
+
 TipoEntrega = SAEnum("DELIVERY", "RETIRADA", name="tipo_entrega_enum", create_type=False)
 OrigemPedido = SAEnum("WEB", "APP", "BALCAO", name="origem_pedido_enum", create_type=False)
 
