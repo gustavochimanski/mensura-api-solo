@@ -16,10 +16,25 @@ def ensure_unaccent():
         logger.info("unaccent instalado com sucesso")
 
 def ensure_postgis():
-    with engine.connect() as conn:
-        conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis;"))
-        conn.commit()
-        logger.info("PostGIS instalado com sucesso")
+    try:
+        with engine.connect() as conn:
+            # Verifica se a extensão PostGIS está disponível
+            result = conn.execute(text("""
+                SELECT EXISTS(
+                    SELECT 1 FROM pg_available_extensions 
+                    WHERE name = 'postgis'
+                );
+            """))
+            is_available = result.scalar()
+            
+            if is_available:
+                conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis;"))
+                conn.commit()
+                logger.info("PostGIS instalado com sucesso")
+            else:
+                logger.warning("PostGIS não está disponível no servidor PostgreSQL. Pulando instalação.")
+    except Exception as e:
+        logger.warning(f"Erro ao instalar PostGIS: {e}. Continuando sem PostGIS.")
 
 def criar_schemas():
     try:
