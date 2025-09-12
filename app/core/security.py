@@ -4,6 +4,10 @@ from passlib.context import CryptContext
 from jose import jwt
 from app.config.settings import SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES
 
+# Validação de SECRET_KEY
+if not SECRET_KEY or not isinstance(SECRET_KEY, str):
+    raise RuntimeError("SECRET_KEY não configurada. Defina SECRET_KEY no .env ou variáveis de ambiente.")
+
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
