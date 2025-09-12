@@ -29,9 +29,9 @@ OrigemPedido = SAEnum("WEB", "APP", "BALCAO", name="origem_pedido_enum", create_
 class PedidoDeliveryModel(Base):
     __tablename__ = "pedidos_dv"
     __table_args__ = (
-        {"schema": "delivery"},
         Index("idx_pedidos_endereco_snapshot_gin", "endereco_snapshot", postgresql_using="gin"),
         Index("idx_pedidos_endereco_geo_gist", "endereco_geo", postgresql_using="gist"),
+        {"schema": "delivery"}
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
