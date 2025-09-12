@@ -1,5 +1,7 @@
 import logging
 from sqlalchemy import text, quoted_name
+from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.exc import IntegrityError
 from .db_connection import engine, Base, SessionLocal
 from app.core.security import hash_password
 from app.api.mensura.models.user_model import UserModel
@@ -76,19 +78,28 @@ def criar_usuario_admin_padrao():
     """Cria o usuário 'admin' com senha padrão caso não exista."""
     try:
         with SessionLocal() as session:
-            usuario = session.query(UserModel).filter(UserModel.username == "admin").one_or_none()
-            if usuario:
-                logger.info("🔹 Usuário admin já existe. Pulando criação.")
-                return
-
-            novo_usuario = UserModel(
-                username="admin",
-                hashed_password=hash_password("123456"),
-                type_user="admin",
+            stmt = (
+                insert(UserModel)
+                .values(
+                    username="admin",
+                    hashed_password=hash_password("123456"),
+                    type_user="admin",
+                )
+                .on_conflict_do_nothing(index_elements=[UserModel.username])
             )
-            session.add(novo_usuario)
+            result = session.execute(stmt)
             session.commit()
-            logger.info("✅ Usuário admin criado com sucesso (senha padrão: 123456).")
+            if hasattr(result, "rowcount") and result.rowcount == 0:
+                logger.info("🔹 Usuário admin já existe. Pulando criação.")
+            else:
+                logger.info("✅ Usuário admin criado com sucesso (senha padrão: 123456).")
+    except IntegrityError:
+        # Em caso de corrida entre múltiplos processos
+        try:
+            session.rollback()
+        except Exception:
+            pass
+        logger.info("🔹 Usuário admin já existe (detectado por integridade).")
     except Exception as e:
         logger.error(f"❌ Erro ao criar usuário admin: {e}", exc_info=True)
 
