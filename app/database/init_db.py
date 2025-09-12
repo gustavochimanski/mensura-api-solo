@@ -81,7 +81,7 @@ def criar_usuario_admin_padrao():
             stmt = (
                 insert(UserModel)
                 .values(
-                    username="admin",
+                    username="super",
                     hashed_password=hash_password("123456"),
                     type_user="admin",
                 )
