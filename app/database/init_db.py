@@ -7,7 +7,7 @@ from app.core.security import hash_password
 from app.api.mensura.models.user_model import UserModel
 
 logger = logging.getLogger(__name__)
-SCHEMAS = ["mensura", "bi", "delivery"]
+SCHEMAS = ["mensura", "bi", "delivery", "pdv"]
 
 def ensure_unaccent():
     with engine.connect() as conn:
