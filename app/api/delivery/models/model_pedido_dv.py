@@ -75,7 +75,7 @@ class PedidoDeliveryModel(Base):
     cupom = relationship("CupomDescontoModel", back_populates="pedidos")
 
     # SNAPSHOT DO ENDEREÇO - dados congelados no momento da criação do pedido
-    endereco_snapshot = Column(JSONB, nullable=False)  # Dados completos do endereço no momento do pedido
+    endereco_snapshot = Column(JSONB, nullable=True)  # Dados completos do endereço no momento do pedido (opcional para retirada)
     endereco_geo = Column(Geography(geometry_type="POINT", srid=4326), nullable=True)  # Ponto geográfico para consultas avançadas
     
     data_criacao = Column(DateTime, default=now_trimmed, nullable=False)

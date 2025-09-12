@@ -67,7 +67,7 @@ class PedidoService:
             troco_para=(float(pedido.troco_para) if getattr(pedido, "troco_para", None) is not None else None),
             cupom_id=getattr(pedido, "cupom_id", None),
             endereco_snapshot=getattr(pedido, "endereco_snapshot", None),
-            endereco_geography=getattr(pedido, "endereco_geography", None),
+            endereco_geography=getattr(pedido, "endereco_geo", None),
             data_criacao=getattr(pedido, "data_criacao", getattr(pedido, "created_at", None)),
             data_atualizacao=getattr(pedido, "data_atualizacao", getattr(pedido, "updated_at", None)),
             itens=[
@@ -276,9 +276,11 @@ class PedidoService:
         if len(payload.itens) > QTD_MAX_ITENS:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Itens demais no pedido")
 
-        meio_pagamento = MeioPagamentoService(self.db).get(payload.meio_pagamento_id)
-        if not meio_pagamento or not meio_pagamento.ativo:
-            raise HTTPException(400, "Meio de pagamento inválido ou inativo")
+        meio_pagamento = None
+        if payload.meio_pagamento_id:
+            meio_pagamento = MeioPagamentoService(self.db).get(payload.meio_pagamento_id)
+            if not meio_pagamento or not meio_pagamento.ativo:
+                raise HTTPException(400, "Meio de pagamento inválido ou inativo")
 
         empresa = self.repo_empresa.get_empresa_by_id(payload.empresa_id)
         if not empresa:
@@ -304,6 +306,11 @@ class PedidoService:
             # Extrai coordenadas para relatórios geográficos
             endereco_latitude = float(endereco.latitude) if endereco.latitude else None
             endereco_longitude = float(endereco.longitude) if endereco.longitude else None
+            
+            # Cria ponto geográfico para consultas PostGIS
+            if endereco_latitude and endereco_longitude:
+                from sqlalchemy import text
+                endereco_geo = text(f"ST_GeomFromText('POINT({endereco_longitude} {endereco_latitude})', 4326)")
             
             # Cria snapshot do endereço para preservar dados no momento do pedido
             endereco_snapshot = {
@@ -338,8 +345,7 @@ class PedidoService:
                 tipo_entrega=payload.tipo_entrega.value if hasattr(payload.tipo_entrega, "value") else payload.tipo_entrega,
                 origem=payload.origem.value if hasattr(payload.origem, "value") else payload.origem,
                 endereco_snapshot=endereco_snapshot,
-                endereco_latitude=endereco_latitude,
-                endereco_longitude=endereco_longitude,
+                endereco_geo=endereco_geo,  # Corrigido: usar endereco_geo em vez de coordenadas separadas
             )
 
             logger.info(f"[finalizar_pedido] criado pedido_id={pedido.id} cliente_id={pedido.cliente_id}")
@@ -393,7 +399,7 @@ class PedidoService:
             logger.info(f"[finalizar_pedido] após commit cliente_id={pedido.cliente_id}")
 
             # Se for PIX_ONLINE, processa o pagamento automaticamente
-            if (hasattr(payload, 'meio_pagamento') and 
+            if (meio_pagamento and 
                 hasattr(meio_pagamento, 'metodo') and 
                 meio_pagamento.metodo == PagamentoMetodoEnum.PIX_ONLINE):
                 try:

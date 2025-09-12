@@ -35,7 +35,7 @@ class ItemPedidoEditar(BaseModel):
     produto_cod_barras: Optional[str] = None  # Apenas para adicionar
     quantidade: Optional[int] = None
     observacao: Optional[str] = None
-    acao: str  # "adicionar", "atualizar", "remover"
+    acao: str  # "novo-item", "atualizar", "remover"
 
 
 # ======================================================================
@@ -49,8 +49,8 @@ class ItemPedidoRequest(BaseModel):
 class FinalizarPedidoRequest(BaseModel):
     empresa_id: int
     cliente_id: Optional[str] = None  # agora será setado pelo token
-    endereco_id: int
-    meio_pagamento_id: int
+    endereco_id: Optional[int] = None  # Opcional para permitir retirada
+    meio_pagamento_id: Optional[int] = None  # Opcional para permitir edição posterior
     tipo_entrega: TipoEntregaEnum = TipoEntregaEnum.DELIVERY
     origem: OrigemPedidoEnum = OrigemPedidoEnum.WEB
     observacao_geral: Optional[str] = None
@@ -75,7 +75,7 @@ class PedidoResponse(BaseModel):
     empresa_id: int
     entregador_id: Optional[int]
     endereco_id: Optional[int]
-    meio_pagamento_id: int
+    meio_pagamento_id: Optional[int] = None
     tipo_entrega: TipoEntregaEnum
     origem: OrigemPedidoEnum
     subtotal: float
@@ -89,7 +89,7 @@ class PedidoResponse(BaseModel):
     troco_para: Optional[float] = None
     cupom_id: Optional[int] = None
     endereco_snapshot: Optional[dict] = None  # Snapshot do endereço no momento do pedido
-    endereco_geo: Optional[str] = None  # Ponto geográfico para consultas avançadas
+    endereco_geography: Optional[str] = None  # Ponto geográfico para consultas avançadas
     data_criacao: datetime
     data_atualizacao: datetime
     itens: List[ItemPedidoResponse]
