@@ -17,3 +17,18 @@ DB_CONFIG = {
     'host': os.getenv('DB_HOST'),
     'port': int(os.getenv('DB_PORT', 5432)),
 }
+
+# SSL do banco (opcional)
+DB_SSL_MODE = os.getenv('DB_SSL_MODE')  # ex.: require, verify-ca, verify-full
+
+# JWT / Segurança
+SECRET_KEY = os.getenv("SECRET_KEY")
+ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 90))
+
+# CORS
+CORS_ORIGINS = [o.strip() for o in os.getenv("CORS_ORIGINS", "").split(",") if o.strip()]
+
+# FastAPI / App
+BASE_URL = os.getenv("BASE_URL", "")
+ENABLE_DOCS = os.getenv("ENABLE_DOCS", "true").lower() in ("1", "true", "yes")

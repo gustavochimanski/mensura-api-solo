@@ -29,7 +29,7 @@ def login_usuario(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Credenciais inválidas",
-            headers={"WWW-Authenticate": "None"}
+            headers={"WWW-Authenticate": "Bearer"}
         )
 
     # 2. Gera JWT com 30 minutos de validade

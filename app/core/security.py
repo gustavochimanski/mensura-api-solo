@@ -2,11 +2,7 @@
 from datetime import datetime, timedelta
 from passlib.context import CryptContext
 from jose import jwt
-
-# Carregue essas variáveis do seu .env em produção!
-SECRET_KEY = "SECRETO"
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 90
+from app.config.settings import SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
