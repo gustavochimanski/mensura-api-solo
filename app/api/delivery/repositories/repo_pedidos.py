@@ -90,7 +90,7 @@ class PedidoRepository:
         tipo_entrega: str,
         origem: str,
         endereco_snapshot: dict | None = None,
-        endereco_geo: str | None = None,
+        endereco_geo = None,
     ) -> PedidoDeliveryModel:
         # ⚠️ Setar SOMENTE os campos escalares/FKs aqui; nada de refresh agora
         pedido = PedidoDeliveryModel(

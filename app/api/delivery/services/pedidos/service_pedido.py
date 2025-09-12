@@ -67,7 +67,7 @@ class PedidoService:
             troco_para=(float(pedido.troco_para) if getattr(pedido, "troco_para", None) is not None else None),
             cupom_id=getattr(pedido, "cupom_id", None),
             endereco_snapshot=getattr(pedido, "endereco_snapshot", None),
-            endereco_geography=getattr(pedido, "endereco_geo", None),
+            endereco_geography=str(getattr(pedido, "endereco_geo", None)) if getattr(pedido, "endereco_geo", None) is not None else None,
             data_criacao=getattr(pedido, "data_criacao", getattr(pedido, "created_at", None)),
             data_atualizacao=getattr(pedido, "data_atualizacao", getattr(pedido, "updated_at", None)),
             itens=[
@@ -309,8 +309,8 @@ class PedidoService:
             
             # Cria ponto geográfico para consultas PostGIS
             if endereco_latitude and endereco_longitude:
-                from sqlalchemy import text
-                endereco_geo = text(f"ST_GeomFromText('POINT({endereco_longitude} {endereco_latitude})', 4326)")
+                from geoalchemy2 import WKTElement
+                endereco_geo = WKTElement(f'POINT({endereco_longitude} {endereco_latitude})', srid=4326)
             
             # Cria snapshot do endereço para preservar dados no momento do pedido
             endereco_snapshot = {
