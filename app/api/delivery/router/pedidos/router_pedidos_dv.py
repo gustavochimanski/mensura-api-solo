@@ -16,14 +16,14 @@ router = APIRouter(prefix="/api/delivery/pedidos", tags=["Pedidos"])
 # ======================================================================
 # =========================== CHECKOUT =================================
 @router.post("/checkout", response_model=PedidoResponse, status_code=status.HTTP_201_CREATED)
-def checkout(
+async def checkout(
         payload: FinalizarPedidoRequest,
         db: Session = Depends(get_db),
         cliente: ClienteDeliveryModel = Depends(get_cliente_by_super_token),
 ):
     logger.info(f"[Pedidos] Checkout iniciado")
     svc = PedidoService(db)
-    return svc.finalizar_pedido(payload, cliente.id)
+    return await svc.finalizar_pedido(payload, cliente.id)
 
 # ======================================================================
 # ==================== CONFIRMAR PAGAMENTO =============================
