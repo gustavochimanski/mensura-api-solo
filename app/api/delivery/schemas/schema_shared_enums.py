@@ -25,6 +25,7 @@ class PagamentoGatewayEnum(str, Enum):
 
 class PagamentoMetodoEnum(str, Enum):
     PIX = "PIX"
+    PIX_ONLINE = "PIX_ONLINE"
     CREDITO = "CREDITO"
     DEBITO = "DEBITO"
     DINHEIRO = "DINHEIRO"

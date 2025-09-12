@@ -4,7 +4,7 @@ from app.database.db_connection import Base
 from app.utils.database_utils import now_trimmed
 
 PagamentoGateway = SAEnum("MERCADOPAGO", "PAGSEGURO", "STRIPE", "PIX_INTERNO", "OUTRO", name="pagamento_gateway_enum", create_type=False)
-PagamentoMetodo  = SAEnum("PIX", "CREDITO", "DEBITO", "DINHEIRO", "ONLINE", "OUTRO", name="pagamento_metodo_enum", create_type=False)
+PagamentoMetodo  = SAEnum("PIX", "PIX_ONLINE", "CREDITO", "DEBITO", "DINHEIRO", "ONLINE", "OUTRO", name="pagamento_metodo_enum", create_type=False)
 PagamentoStatus  = SAEnum("PENDENTE", "AUTORIZADO", "PAGO", "RECUSADO", "CANCELADO", "ESTORNADO", name="pagamento_status_enum", create_type=False)
 
 class TransacaoPagamentoModel(Base):

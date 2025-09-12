@@ -23,7 +23,7 @@ from app.api.delivery.schemas.schema_shared_enums import (
     PedidoStatusEnum, TipoEntregaEnum, OrigemPedidoEnum,
     PagamentoMetodoEnum, PagamentoGatewayEnum, PagamentoStatusEnum
 )
-from app.api.delivery.services.service_pagamento_gateway import PaymentGatewayClient
+from app.api.delivery.services.service_pagamento_gateway import PaymentGatewayClient, PaymentResult
 from app.utils.logger import logger
 
 
@@ -155,6 +155,10 @@ class PedidoService:
 
         return min(desconto, subtotal)
 
+    def _deve_usar_gateway(self, metodo: PagamentoMetodoEnum) -> bool:
+        """Determina se o método de pagamento deve usar o gateway de pagamento."""
+        return metodo == PagamentoMetodoEnum.PIX_ONLINE
+
     def _recalcular_pedido(self, pedido: PedidoDeliveryModel):
         """Recalcula subtotal, desconto, taxas e valor total do pedido e salva no banco."""
         subtotal = self.db.query(
@@ -186,7 +190,7 @@ class PedidoService:
         self.db.refresh(pedido)
 
     # ---------------- Fluxos ----------------
-    def finalizar_pedido(self, payload: FinalizarPedidoRequest, cliente_id: int) -> PedidoResponse:
+    async def finalizar_pedido(self, payload: FinalizarPedidoRequest, cliente_id: int) -> PedidoResponse:
         # Validações
         if not payload.itens:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Pedido vazio")
@@ -281,6 +285,21 @@ class PedidoService:
             self.repo.commit()
             logger.info(f"[finalizar_pedido] após commit cliente_id={pedido.cliente_id}")
 
+            # Se for PIX_ONLINE, processa o pagamento automaticamente
+            if (hasattr(payload, 'meio_pagamento') and 
+                hasattr(meio_pagamento, 'metodo') and 
+                meio_pagamento.metodo == PagamentoMetodoEnum.PIX_ONLINE):
+                try:
+                    await self.confirmar_pagamento(
+                        pedido_id=pedido.id,
+                        metodo=PagamentoMetodoEnum.PIX_ONLINE
+                    )
+                    # Recarrega o pedido após confirmação de pagamento
+                    pedido = self.repo.get_pedido(pedido.id)
+                except Exception as e:
+                    logger.error(f"Erro ao processar pagamento PIX_ONLINE: {e}")
+                    # Continua mesmo com erro no pagamento
+
             # Recarrega fresco para resposta (com cliente/endereço/meio_pagamento)
             pedido = self.repo.get_pedido(pedido.id)
             logger.info(f"[finalizar_pedido] get_pedido cliente_id={pedido.cliente_id if pedido else None}")
@@ -299,7 +318,7 @@ class PedidoService:
         *,
         pedido_id: int,
         metodo: PagamentoMetodoEnum = PagamentoMetodoEnum.PIX,
-        gateway: PagamentoGatewayEnum = PagamentoGatewayEnum.PIX_INTERNO,
+        gateway: PagamentoGatewayEnum = None,
     ) -> PedidoResponse:
         pedido = self.repo.get_pedido(pedido_id)
         if not pedido:
@@ -311,6 +330,13 @@ class PedidoService:
         if pedido.transacao and pedido.transacao.status in ("PAGO", "AUTORIZADO"):
             return self._pedido_to_response(pedido)
 
+        # Determina o gateway baseado no método de pagamento
+        if gateway is None:
+            if self._deve_usar_gateway(metodo):
+                gateway = PagamentoGatewayEnum.PIX_INTERNO  # ou outro gateway de PIX online
+            else:
+                gateway = PagamentoGatewayEnum.PIX_INTERNO
+
         try:
             tx = self.repo.criar_transacao_pagamento(
                 pedido_id=pedido.id,
@@ -319,13 +345,24 @@ class PedidoService:
                 valor=_dec(pedido.valor_total),
             )
 
-            result = await self.gateway.charge(
-                order_id=pedido.id,
-                amount=_dec(pedido.valor_total),
-                metodo=metodo,
-                gateway=gateway,
-                metadata={"empresa_id": pedido.empresa_id},
-            )
+            # Se deve usar gateway, chama o gateway de pagamento
+            if self._deve_usar_gateway(metodo):
+                result = await self.gateway.charge(
+                    order_id=pedido.id,
+                    amount=_dec(pedido.valor_total),
+                    metodo=metodo,
+                    gateway=gateway,
+                    metadata={"empresa_id": pedido.empresa_id},
+                )
+            else:
+                # Para outros métodos, simula pagamento direto (sem gateway)
+                result = PaymentResult(
+                    status=PagamentoStatusEnum.PAGO,
+                    provider_transaction_id=f"direct_{pedido.id}_{metodo.value}",
+                    payload={"metodo": metodo.value, "gateway": "DIRETO"},
+                    qr_code=None,
+                    qr_code_base64=None,
+                )
 
             if result.status == PagamentoStatusEnum.PAGO:
                 self.repo.atualizar_transacao_status(
