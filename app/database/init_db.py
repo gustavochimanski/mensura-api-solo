@@ -77,6 +77,7 @@ def criar_tabelas():
 
         # pega todas as Table objects que o Base conhece
         all_tables = list(Base.metadata.tables.values())
+        logger.info(f"📊 Total de tabelas encontradas: {len(all_tables)}")
 
         # filtra pelas tabelas que pertencem aos schemas que você gerencia
         tables_para_criar = [
@@ -84,16 +85,55 @@ def criar_tabelas():
             for t in all_tables
             if t.schema in SCHEMAS
         ]
+        
+        logger.info(f"📋 Tabelas para criar nos schemas {SCHEMAS}:")
+        for table in tables_para_criar:
+            logger.info(f"  - {table.schema}.{table.name}")
 
-        # cria apenas essas tabelas
-        Base.metadata.create_all(
-            bind=engine,
-            tables=tables_para_criar
-        )
+        # Ordena as tabelas por dependências (tabelas sem FK primeiro)
+        def get_table_dependencies(table):
+            dependencies = set()
+            for fk in table.foreign_keys:
+                if fk.column.table.schema in SCHEMAS:
+                    dependencies.add(fk.column.table)
+            return dependencies
 
-        logger.info("✅ Tabelas criadas com sucesso (somente nos schemas da aplicação).")
+        # Ordenação topológica das tabelas
+        ordered_tables = []
+        remaining_tables = set(tables_para_criar)
+        
+        while remaining_tables:
+            # Encontra tabelas sem dependências pendentes
+            ready_tables = []
+            for table in remaining_tables:
+                deps = get_table_dependencies(table)
+                if deps.issubset(set(ordered_tables)):
+                    ready_tables.append(table)
+            
+            if not ready_tables:
+                # Se não há tabelas prontas, adiciona as restantes (pode haver dependências circulares)
+                ready_tables = list(remaining_tables)
+            
+            for table in ready_tables:
+                ordered_tables.append(table)
+                remaining_tables.remove(table)
+
+        logger.info("🔧 Criando tabelas na ordem correta:")
+        for table in ordered_tables:
+            logger.info(f"  - {table.schema}.{table.name}")
+
+        # Cria as tabelas na ordem correta
+        for table in ordered_tables:
+            try:
+                table.create(engine, checkfirst=True)
+                logger.info(f"✅ Tabela {table.schema}.{table.name} criada com sucesso")
+            except Exception as table_error:
+                logger.error(f"❌ Erro ao criar tabela {table.schema}.{table.name}: {table_error}")
+                # Continua com as próximas tabelas mesmo se uma falhar
+
+        logger.info("✅ Processo de criação de tabelas concluído.")
     except Exception as e:
-        logger.error(f"❌ Erro ao criar tabelas: {e}", exc_info=True)
+        logger.error(f"❌ Erro geral ao criar tabelas: {e}", exc_info=True)
 
 def criar_usuario_admin_padrao():
     """Cria o usuário 'admin' com senha padrão caso não exista."""

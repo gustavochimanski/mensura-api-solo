@@ -30,7 +30,7 @@ class PedidoDeliveryModel(Base):
     __tablename__ = "pedidos_dv"
     __table_args__ = (
         Index("idx_pedidos_endereco_snapshot_gin", "endereco_snapshot", postgresql_using="gin"),
-        Index("idx_pedidos_endereco_geo_gist", "endereco_geo", postgresql_using="gist"),
+        # Index("idx_pedidos_endereco_geo_gist", "endereco_geo", postgresql_using="gist"),  # TEMPORARIAMENTE COMENTADO
         {"schema": "delivery"}
     )
 
@@ -76,7 +76,7 @@ class PedidoDeliveryModel(Base):
 
     # SNAPSHOT DO ENDEREÇO - dados congelados no momento da criação do pedido
     endereco_snapshot = Column(JSONB, nullable=False)  # Dados completos do endereço no momento do pedido
-    endereco_geo = Column(Geography(geometry_type="POINT", srid=4326), nullable=True)  # Ponto geográfico para consultas avançadas
+    # endereco_geo = Column(Geography(geometry_type="POINT", srid=4326), nullable=True)  # Ponto geográfico para consultas avançadas - TEMPORARIAMENTE COMENTADO
     
     data_criacao = Column(DateTime, default=now_trimmed, nullable=False)
     data_atualizacao = Column(DateTime, default=now_trimmed, onupdate=now_trimmed,  nullable=False)
