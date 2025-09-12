@@ -8,7 +8,6 @@ from math import radians, cos, sin, asin, sqrt
 from fastapi import HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
-from geoalchemy2 import WKTElement
 
 from app.api.delivery.models.model_pedido_dv import PedidoDeliveryModel
 from app.api.delivery.models.model_pedido_item_dv import PedidoItemModel
@@ -68,7 +67,7 @@ class PedidoService:
             troco_para=(float(pedido.troco_para) if getattr(pedido, "troco_para", None) is not None else None),
             cupom_id=getattr(pedido, "cupom_id", None),
             endereco_snapshot=getattr(pedido, "endereco_snapshot", None),
-            endereco_geo=getattr(pedido, "endereco_geo", None),
+            endereco_geography=getattr(pedido, "endereco_geography", None),
             data_criacao=getattr(pedido, "data_criacao", getattr(pedido, "created_at", None)),
             data_atualizacao=getattr(pedido, "data_atualizacao", getattr(pedido, "updated_at", None)),
             itens=[
@@ -191,10 +190,10 @@ class PedidoService:
         # Query usando PostGIS ST_DWithin (muito mais eficiente)
         query = text(f"""
             SELECT p.*, 
-                   ST_Distance(p.endereco_geo, {ponto_centro}) as distancia_metros
+                   ST_Distance(p.endereco_geography, {ponto_centro}) as distancia_metros
             FROM delivery.pedidos_dv p
-            WHERE p.endereco_geo IS NOT NULL
-              AND ST_DWithin(p.endereco_geo, {ponto_centro}, :raio_metros)
+            WHERE p.endereco_geography IS NOT NULL
+              AND ST_DWithin(p.endereco_geography, {ponto_centro}, :raio_metros)
             ORDER BY distancia_metros
         """)
         
@@ -322,11 +321,6 @@ class PedidoService:
                 "cliente_id": endereco.cliente_id,
                 "snapshot_em": str(now_trimmed())
             }
-            
-            # Cria ponto geográfico se latitude/longitude existirem
-            if endereco_latitude and endereco_longitude:
-                wkt_point = f"POINT({endereco_longitude} {endereco_latitude})"
-                endereco_geo = WKTElement(wkt_point, srid=4326)
 
         try:
             status_inicial = (
@@ -344,7 +338,8 @@ class PedidoService:
                 tipo_entrega=payload.tipo_entrega.value if hasattr(payload.tipo_entrega, "value") else payload.tipo_entrega,
                 origem=payload.origem.value if hasattr(payload.origem, "value") else payload.origem,
                 endereco_snapshot=endereco_snapshot,
-                endereco_geo=endereco_geo,
+                endereco_latitude=endereco_latitude,
+                endereco_longitude=endereco_longitude,
             )
 
             logger.info(f"[finalizar_pedido] criado pedido_id={pedido.id} cliente_id={pedido.cliente_id}")

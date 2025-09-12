@@ -128,7 +128,11 @@ def criar_tabelas():
                 table.create(engine, checkfirst=True)
                 logger.info(f"✅ Tabela {table.schema}.{table.name} criada com sucesso")
             except Exception as table_error:
-                logger.error(f"❌ Erro ao criar tabela {table.schema}.{table.name}: {table_error}")
+                # Se for erro de duplicação, apenas avisa (não é crítico)
+                if "duplicate key value violates unique constraint" in str(table_error) or "already exists" in str(table_error):
+                    logger.info(f"ℹ️ Tabela {table.schema}.{table.name} já existe (pulando)")
+                else:
+                    logger.error(f"❌ Erro ao criar tabela {table.schema}.{table.name}: {table_error}")
                 # Continua com as próximas tabelas mesmo se uma falhar
 
         logger.info("✅ Processo de criação de tabelas concluído.")
@@ -165,14 +169,14 @@ def criar_usuario_admin_padrao():
         logger.error(f"❌ Erro ao criar usuário admin: {e}", exc_info=True)
 
 def inicializar_banco():
+    logger.info("🔹 Instalando extensões...")
+    ensure_unaccent()
+    ensure_postgis()
     logger.info("🔹 Criando schemas...")
     criar_schemas()
     logger.info("🔹 Criando tabelas...")
     criar_tabelas()
     logger.info("🔹 Garantindo usuário admin padrão...")
     criar_usuario_admin_padrao()
-    logger.info("🔹 Instalando extensões...")
-    ensure_unaccent()
-    ensure_postgis()
     logger.info("✅ Banco inicializado com sucesso.")
 
