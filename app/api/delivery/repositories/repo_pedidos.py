@@ -89,6 +89,8 @@ class PedidoRepository:
         status: str = "P",
         tipo_entrega: str,
         origem: str,
+        endereco_snapshot: dict | None = None,
+        endereco_geo: str | None = None,
     ) -> PedidoDeliveryModel:
         # ⚠️ Setar SOMENTE os campos escalares/FKs aqui; nada de refresh agora
         pedido = PedidoDeliveryModel(
@@ -99,6 +101,8 @@ class PedidoRepository:
             status=status,
             tipo_entrega=tipo_entrega,
             origem=origem,
+            endereco_snapshot=endereco_snapshot,
+            endereco_geo=endereco_geo,
             subtotal=Decimal("0"),
             desconto=Decimal("0"),
             taxa_entrega=Decimal("0"),

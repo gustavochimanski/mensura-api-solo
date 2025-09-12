@@ -88,6 +88,8 @@ class PedidoResponse(BaseModel):
     observacao_geral: Optional[str] = None
     troco_para: Optional[float] = None
     cupom_id: Optional[int] = None
+    endereco_snapshot: Optional[dict] = None  # Snapshot do endereço no momento do pedido
+    endereco_geo: Optional[str] = None  # Ponto geográfico para consultas avançadas
     data_criacao: datetime
     data_atualizacao: datetime
     itens: List[ItemPedidoResponse]

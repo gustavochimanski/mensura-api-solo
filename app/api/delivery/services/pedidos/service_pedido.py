@@ -8,6 +8,7 @@ from math import radians, cos, sin, asin, sqrt
 from fastapi import HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
+from geoalchemy2 import WKTElement
 
 from app.api.delivery.models.model_pedido_dv import PedidoDeliveryModel
 from app.api.delivery.models.model_pedido_item_dv import PedidoItemModel
@@ -25,6 +26,7 @@ from app.api.delivery.schemas.schema_shared_enums import (
 )
 from app.api.delivery.services.service_pagamento_gateway import PaymentGatewayClient, PaymentResult
 from app.utils.logger import logger
+from app.utils.database_utils import now_trimmed
 
 
 QTD_MAX_ITENS = 200
@@ -65,6 +67,8 @@ class PedidoService:
             observacao_geral=getattr(pedido, "observacao_geral", None),
             troco_para=(float(pedido.troco_para) if getattr(pedido, "troco_para", None) is not None else None),
             cupom_id=getattr(pedido, "cupom_id", None),
+            endereco_snapshot=getattr(pedido, "endereco_snapshot", None),
+            endereco_geo=getattr(pedido, "endereco_geo", None),
             data_criacao=getattr(pedido, "data_criacao", getattr(pedido, "created_at", None)),
             data_atualizacao=getattr(pedido, "data_atualizacao", getattr(pedido, "updated_at", None)),
             itens=[
@@ -159,6 +163,82 @@ class PedidoService:
         """Determina se o método de pagamento deve usar o gateway de pagamento."""
         return metodo == PagamentoMetodoEnum.PIX_ONLINE
 
+    def verificar_endereco_em_uso(self, endereco_id: int) -> bool:
+        """Verifica se um endereço está sendo usado em pedidos ativos (não cancelados/entregues)."""
+        pedidos_ativos = (
+            self.db.query(PedidoDeliveryModel)
+            .filter(
+                PedidoDeliveryModel.endereco_id == endereco_id,
+                PedidoDeliveryModel.status.in_(["P", "R", "S"])  # Pendente, Em preparo, Saiu para entrega
+            )
+            .count()
+        )
+        return pedidos_ativos > 0
+
+    def get_pedidos_por_regiao(self, latitude_centro: float, longitude_centro: float, raio_km: float = 5.0):
+        """
+        Retorna pedidos dentro de uma região geográfica específica usando PostGIS.
+        Muito mais eficiente que cálculos manuais de distância.
+        """
+        from sqlalchemy import text
+        
+        # Cria ponto central
+        ponto_centro = f"ST_GeomFromText('POINT({longitude_centro} {latitude_centro})', 4326)"
+        
+        # Converte raio de km para metros
+        raio_metros = raio_km * 1000
+        
+        # Query usando PostGIS ST_DWithin (muito mais eficiente)
+        query = text(f"""
+            SELECT p.*, 
+                   ST_Distance(p.endereco_geo, {ponto_centro}) as distancia_metros
+            FROM delivery.pedidos_dv p
+            WHERE p.endereco_geo IS NOT NULL
+              AND ST_DWithin(p.endereco_geo, {ponto_centro}, :raio_metros)
+            ORDER BY distancia_metros
+        """)
+        
+        result = self.db.execute(query, {"raio_metros": raio_metros})
+        
+        pedidos_na_regiao = []
+        for row in result:
+            pedido = self.db.query(PedidoDeliveryModel).filter_by(id=row.id).first()
+            if pedido:
+                pedidos_na_regiao.append({
+                    "pedido": pedido,
+                    "distancia_km": row.distancia_metros / 1000  # Converte para km
+                })
+        
+        return pedidos_na_regiao
+
+    def get_pedidos_por_poligono(self, coordenadas_poligono: list):
+        """
+        Retorna pedidos dentro de um polígono específico.
+        Útil para análise por bairros, regiões administrativas, etc.
+        """
+        from sqlalchemy import text
+        
+        # Formata coordenadas como polígono WKT
+        coords_str = ", ".join([f"{lon} {lat}" for lon, lat in coordenadas_poligono])
+        poligono_wkt = f"POLYGON(({coords_str}))"
+        
+        query = text("""
+            SELECT p.*
+            FROM delivery.pedidos_dv p
+            WHERE p.endereco_geo IS NOT NULL
+              AND ST_Within(p.endereco_geo, ST_GeomFromText(:poligono, 4326))
+        """)
+        
+        result = self.db.execute(query, {"poligono": poligono_wkt})
+        
+        pedidos = []
+        for row in result:
+            pedido = self.db.query(PedidoDeliveryModel).filter_by(id=row.id).first()
+            if pedido:
+                pedidos.append(pedido)
+        
+        return pedidos
+
     def _recalcular_pedido(self, pedido: PedidoDeliveryModel):
         """Recalcula subtotal, desconto, taxas e valor total do pedido e salva no banco."""
         subtotal = self.db.query(
@@ -213,10 +293,40 @@ class PedidoService:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Endereço é obrigatório para delivery")
 
         endereco = None
+        endereco_snapshot = None
+        endereco_geo = None
+        endereco_latitude = None
+        endereco_longitude = None
         if payload.endereco_id:
             endereco = self.repo.get_endereco(payload.endereco_id)
             if not endereco or endereco.cliente_id != cliente_id:
                 raise HTTPException(status.HTTP_400_BAD_REQUEST, "Endereço inválido para o cliente")
+            
+            # Extrai coordenadas para relatórios geográficos
+            endereco_latitude = float(endereco.latitude) if endereco.latitude else None
+            endereco_longitude = float(endereco.longitude) if endereco.longitude else None
+            
+            # Cria snapshot do endereço para preservar dados no momento do pedido
+            endereco_snapshot = {
+                "id": endereco.id,
+                "logradouro": endereco.logradouro,
+                "numero": endereco.numero,
+                "complemento": endereco.complemento,
+                "bairro": endereco.bairro,
+                "cidade": endereco.cidade,
+                "estado": endereco.estado,
+                "cep": endereco.cep,
+                "latitude": endereco_latitude,
+                "longitude": endereco_longitude,
+                "is_principal": endereco.is_principal,
+                "cliente_id": endereco.cliente_id,
+                "snapshot_em": str(now_trimmed())
+            }
+            
+            # Cria ponto geográfico se latitude/longitude existirem
+            if endereco_latitude and endereco_longitude:
+                wkt_point = f"POINT({endereco_longitude} {endereco_latitude})"
+                endereco_geo = WKTElement(wkt_point, srid=4326)
 
         try:
             status_inicial = (
@@ -233,6 +343,8 @@ class PedidoService:
                 status=status_inicial,
                 tipo_entrega=payload.tipo_entrega.value if hasattr(payload.tipo_entrega, "value") else payload.tipo_entrega,
                 origem=payload.origem.value if hasattr(payload.origem, "value") else payload.origem,
+                endereco_snapshot=endereco_snapshot,
+                endereco_geo=endereco_geo,
             )
 
             logger.info(f"[finalizar_pedido] criado pedido_id={pedido.id} cliente_id={pedido.cliente_id}")

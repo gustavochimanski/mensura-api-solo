@@ -2,8 +2,10 @@ from decimal import Decimal
 
 from pydantic import ConfigDict
 from sqlalchemy import (
-    Column, Integer, String, DateTime, ForeignKey, Numeric, Enum as SAEnum, Date, func
+    Column, Integer, String, DateTime, ForeignKey, Numeric, Enum as SAEnum, Date, func, JSON, Index
 )
+from sqlalchemy.dialects.postgresql import JSONB
+from geoalchemy2 import Geography
 from sqlalchemy.orm import relationship
 from app.database.db_connection import Base
 from app.utils.database_utils import now_trimmed
@@ -26,7 +28,11 @@ OrigemPedido = SAEnum("WEB", "APP", "BALCAO", name="origem_pedido_enum", create_
 #
 class PedidoDeliveryModel(Base):
     __tablename__ = "pedidos_dv"
-    __table_args__ = {"schema": "delivery"}
+    __table_args__ = (
+        {"schema": "delivery"},
+        Index("idx_pedidos_endereco_snapshot_gin", "endereco_snapshot", postgresql_using="gin"),
+        Index("idx_pedidos_endereco_geo_gist", "endereco_geo", postgresql_using="gist"),
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
 
@@ -68,6 +74,10 @@ class PedidoDeliveryModel(Base):
     cupom_id = Column(Integer, ForeignKey("delivery.cupons_dv.id", ondelete="SET NULL"), nullable=True)
     cupom = relationship("CupomDescontoModel", back_populates="pedidos")
 
+    # SNAPSHOT DO ENDEREÇO - dados congelados no momento da criação do pedido
+    endereco_snapshot = Column(JSONB, nullable=False)  # Dados completos do endereço no momento do pedido
+    endereco_geo = Column(Geography(geometry_type="POINT", srid=4326), nullable=True)  # Ponto geográfico para consultas avançadas
+    
     data_criacao = Column(DateTime, default=now_trimmed, nullable=False)
     data_atualizacao = Column(DateTime, default=now_trimmed, onupdate=now_trimmed,  nullable=False)
 
