@@ -13,7 +13,13 @@ def ensure_unaccent():
     with engine.connect() as conn:
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS unaccent;"))
         conn.commit()
-        logger.info("unnacent instalado Banco inicializado com sucesso")
+        logger.info("unaccent instalado com sucesso")
+
+def ensure_postgis():
+    with engine.connect() as conn:
+        conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis;"))
+        conn.commit()
+        logger.info("PostGIS instalado com sucesso")
 
 def criar_schemas():
     try:
@@ -110,6 +116,8 @@ def inicializar_banco():
     criar_tabelas()
     logger.info("🔹 Garantindo usuário admin padrão...")
     criar_usuario_admin_padrao()
-    logger.info("✅ Banco inicializado com sucesso.")
+    logger.info("🔹 Instalando extensões...")
     ensure_unaccent()
+    ensure_postgis()
+    logger.info("✅ Banco inicializado com sucesso.")
 
