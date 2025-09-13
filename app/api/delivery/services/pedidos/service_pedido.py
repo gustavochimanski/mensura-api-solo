@@ -47,6 +47,7 @@ class PedidoService:
         return PedidoResponse(
             id=pedido.id,
             status=PedidoStatusEnum(pedido.status),
+            cliente_id=pedido.cliente.id if pedido.cliente else None,
             telefone_cliente=pedido.cliente.telefone if pedido.cliente else None,
             empresa_id=pedido.empresa_id,
             entregador_id=getattr(pedido, "entregador_id", None),
@@ -548,6 +549,7 @@ class PedidoService:
                 PedidoKanbanResponse(
                     id=p.id,
                     status=p.status,
+                    cliente_id=cliente.id if cliente else None,
                     valor_total=p.valor_total,
                     data_criacao=p.data_criacao,
                     telefone_cliente=cliente.telefone if cliente else None,

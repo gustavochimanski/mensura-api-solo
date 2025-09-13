@@ -107,16 +107,16 @@ def update_current_cliente(
 # ======================================================================
 # ============================= ADMIN ==================================
 # ======================================================================
-@router.put("/admin-update", response_model=ClienteOut, status_code=status.HTTP_200_OK)
+@router.put("/admin-update/{cliente_id}", response_model=ClienteOut, status_code=status.HTTP_200_OK)
 def update_cliente_admin(
+    cliente_id: int,
     data: ClienteUpdate,
-    telefone: str,
     db: Session = Depends(get_db)
 ):
-    logger.info(f"[Cliente Admin] Update {telefone}")
+    logger.info(f"[Cliente Admin] Update ID {cliente_id}")
 
     repo = ClienteRepository(db)
-    cliente = repo.get_by_telefone(telefone)
+    cliente = repo.get_by_id(cliente_id)
     if not cliente:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Cliente não encontrado")
 

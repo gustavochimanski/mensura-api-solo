@@ -12,6 +12,7 @@ from .schema_shared_enums import PedidoStatusEnum, TipoEntregaEnum, OrigemPedido
 class PedidoKanbanResponse(BaseModel):
     id: int
     status: PedidoStatusEnum
+    cliente_id: int | None = None
     telefone_cliente: str | None = None
     nome_cliente: str | None = None
     valor_total: float
@@ -71,6 +72,7 @@ class ItemPedidoResponse(BaseModel):
 class PedidoResponse(BaseModel):
     id: int
     status: PedidoStatusEnum
+    cliente_id: Optional[int] = None
     telefone_cliente: Optional[str] = None
     empresa_id: int
     entregador_id: Optional[int]

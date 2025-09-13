@@ -3,6 +3,7 @@ from typing import Optional
 from pydantic import BaseModel, EmailStr, constr, ConfigDict
 
 class ClienteOut(BaseModel):
+    id: int
     nome: str
     cpf: Optional[str]
     telefone: Optional[str]

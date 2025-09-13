@@ -19,6 +19,9 @@ class ClienteRepository:
     def get_by_cpf(self, cpf: str) -> Optional[ClienteDeliveryModel]:
         return self.db.query(ClienteDeliveryModel).filter_by(cpf=cpf).first()
 
+    def get_by_id(self, id: int) -> Optional[ClienteDeliveryModel]:
+        return self.db.query(ClienteDeliveryModel).filter(ClienteDeliveryModel.id == id).first()
+
     def list(self, ativo: Optional[bool] = None) -> List[ClienteDeliveryModel]:
         stmt = select(ClienteDeliveryModel)
         if ativo is not None:
