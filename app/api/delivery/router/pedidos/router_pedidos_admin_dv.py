@@ -1,7 +1,7 @@
 from datetime import date
 from typing import List
 
-from clientes.mensura_api.app.api.delivery.models.model_cliente_dv import ClienteDeliveryModel
+from app.api.mensura.models.user_model import UserModel
 from fastapi import APIRouter, status, Path, Query, Depends, Body, HTTPException
 from sqlalchemy.orm import Session
 
@@ -20,7 +20,7 @@ router = APIRouter(prefix="/api/delivery/pedidos", tags=["Pedidos"])
 @router.get("/{pedido_id}", response_model=PedidoResponseCompleto, status_code=status.HTTP_200_OK)
 def get_pedido(
     pedido_id: int = Path(..., description="ID do pedido"), 
-    cliente: ClienteDeliveryModel = Depends(get_current_user),
+    user: UserModel = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     svc = PedidoService(db)
