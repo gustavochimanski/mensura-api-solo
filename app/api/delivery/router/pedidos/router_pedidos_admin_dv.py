@@ -1,11 +1,12 @@
 from datetime import date
 from typing import List
 
+from clientes.mensura_api.app.api.delivery.models.model_cliente_dv import ClienteDeliveryModel
 from fastapi import APIRouter, status, Path, Query, Depends, Body, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.delivery.schemas.schema_pedido import PedidoResponse, PedidoKanbanResponse, \
-    EditarPedidoRequest, ItemPedidoEditar
+    EditarPedidoRequest, ItemPedidoEditar, PedidoResponseCompleto
 from app.api.delivery.schemas.schema_shared_enums import PedidoStatusEnum
 from app.api.delivery.services.pedidos.service_pedido import PedidoService
 from app.core.admin_dependencies import get_current_user
@@ -14,6 +15,16 @@ from app.utils.logger import logger
 
 router = APIRouter(prefix="/api/delivery/pedidos", tags=["Pedidos"])
 
+# ======================================================================
+# ===================== GET PEDIDO BY ID ===============================
+@router.get("/{pedido_id}", response_model=PedidoResponseCompleto, status_code=status.HTTP_200_OK)
+def get_pedido(
+    pedido_id: int = Path(..., description="ID do pedido"), 
+    cliente: ClienteDeliveryModel = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    svc = PedidoService(db)
+    return svc.get_pedido_by_id_completo(pedido_id)
 
 # ======================================================================
 # ============================ KANBAN ==================================

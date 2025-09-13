@@ -50,16 +50,7 @@ def listar_pedidos(
     svc = PedidoService(db)
     return svc.listar_pedidos(cliente_id=cliente.id, skip=skip, limit=limit)
 
-# ======================================================================
-# ===================== GET PEDIDO BY ID ===============================
-@router.get("/{pedido_id}", response_model=PedidoResponseCompleto, status_code=status.HTTP_200_OK)
-def get_pedido(
-    pedido_id: int = Path(..., description="ID do pedido"), 
-    cliente: ClienteDeliveryModel = Depends(get_cliente_by_super_token),
-    db: Session = Depends(get_db)
-):
-    svc = PedidoService(db)
-    return svc.get_pedido_by_id_completo(pedido_id)
+
 
 # ======================================================================
 # ===================  ATUALIZA ITENS PEDIDO ===========================
