@@ -53,7 +53,7 @@ class ClienteAdminUpdate(BaseModel):
     email: Optional[EmailStr] = None
     data_nascimento: Optional[date] = None
     ativo: Optional[bool] = None
-    enderecos: Optional[List[EnderecoUpdateAdmin]] = None
+    endereco: Optional[EnderecoUpdateAdmin] = None
 
 
 from pydantic import BaseModel, constr
