@@ -3,6 +3,7 @@ from typing import Optional, Tuple, Dict, Any, List
 import httpx
 from app.config import settings
 from app.utils.logger import logger
+from app.utils.viacep_client import ViaCepClient, ViaCepResponse
 
 
 class GeoapifyMini(BaseModel):
@@ -86,9 +87,70 @@ class GeoapifyClient:
             endereco_formatado=props.get("formatted")
         )
 
+    @staticmethod
+    def viacep_to_mini(viacep_data: ViaCepResponse) -> GeoapifyMini:
+        """Converte dados do ViaCEP para o formato GeoapifyMini"""
+        return GeoapifyMini(
+            estado=viacep_data.uf or "",
+            codigo_estado="",  # ViaCEP não fornece código do estado
+            cidade=viacep_data.localidade or "",
+            bairro=viacep_data.bairro,
+            distrito=None,
+            rua=viacep_data.logradouro,
+            numero=None,
+            cep=viacep_data.cep,
+            pais="Brasil",
+            latitude=None,  # ViaCEP não fornece coordenadas
+            longitude=None,
+            endereco_formatado=f"{viacep_data.logradouro}, {viacep_data.bairro}, {viacep_data.localidade}/{viacep_data.uf}, {viacep_data.cep}" if viacep_data.logradouro else None
+        )
+
     async def geocode_mini(self, query: str) -> Optional[List[GeoapifyMini]]:
         """Retorna a lista de features mapeadas para GeoapifyMini"""
         data = await self.geocode_raw(query)
         if not data or not data.get("features"):
             return None
         return [self.to_mini_feature(f) for f in data["features"]]
+
+    async def search_endereco_com_cep(self, query: str) -> Optional[List[GeoapifyMini]]:
+        """
+        Busca endereço com validação de CEP.
+        Se a query contém um CEP, primeiro consulta o ViaCEP.
+        Depois complementa com busca no Geoapify para obter coordenadas.
+        """
+        logger.info(f"[Geoapify] Buscando endereço com validação de CEP: {query}")
+        
+        viacep_client = ViaCepClient()
+        resultados = []
+        
+        # Verifica se a query contém um CEP
+        cep_encontrado = viacep_client.extrair_cep_da_query(query)
+        
+        if cep_encontrado:
+            logger.info(f"[Geoapify] CEP detectado na query: {cep_encontrado}")
+            
+            # Busca no ViaCEP primeiro
+            viacep_data = await viacep_client.buscar_cep(cep_encontrado)
+            
+            if viacep_data:
+                # Converte para formato GeoapifyMini
+                resultado_viacep = self.viacep_to_mini(viacep_data)
+                resultados.append(resultado_viacep)
+                
+                # Tenta obter coordenadas do Geoapify usando o endereço completo
+                endereco_completo = f"{viacep_data.logradouro}, {viacep_data.bairro}, {viacep_data.localidade}, {viacep_data.uf}"
+                geoapify_resultados = await self.geocode_mini(endereco_completo)
+                
+                if geoapify_resultados:
+                    # Atualiza o resultado com coordenadas do Geoapify
+                    resultado_viacep.latitude = geoapify_resultados[0].latitude
+                    resultado_viacep.longitude = geoapify_resultados[0].longitude
+                    logger.info(f"[Geoapify] Coordenadas obtidas do Geoapify: {resultado_viacep.latitude}, {resultado_viacep.longitude}")
+                
+                return resultados
+            else:
+                logger.warning(f"[Geoapify] CEP não encontrado no ViaCEP: {cep_encontrado}")
+        
+        # Se não há CEP ou CEP não foi encontrado, usa busca normal do Geoapify
+        logger.info(f"[Geoapify] Usando busca normal do Geoapify para: {query}")
+        return await self.geocode_mini(query)
