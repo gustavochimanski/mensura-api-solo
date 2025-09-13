@@ -131,26 +131,50 @@ def update_cliente_admin(
     # Atualizar dados do cliente
     updated_cliente = service.update(cliente.super_token, ClienteUpdate(**cliente_data))
     
-    # Atualizar endereços se fornecidos
+    # Processar ações de endereços se fornecidas
     if enderecos_data:
         from app.api.delivery.repositories.repo_endereco import EnderecoRepository
-        from app.api.delivery.schemas.schema_endereco import EnderecoUpdate
+        from app.api.delivery.schemas.schema_endereco import EnderecoCreate, EnderecoUpdate
         
         endereco_repo = EnderecoRepository(db)
         
         for endereco_data in enderecos_data:
-            endereco_dict = endereco_data.model_dump(exclude={'id'})
+            acao = endereco_data.acao
             endereco_id = endereco_data.id
             
-            if endereco_id:
+            if acao == "add":
+                # Adicionar novo endereço
+                endereco_dict = endereco_data.model_dump(exclude={'acao', 'id'})
+                # Remove campos None para não enviar dados vazios
+                endereco_dict = {k: v for k, v in endereco_dict.items() if v is not None}
+                endereco_repo.create(cliente_id, EnderecoCreate(**endereco_dict))
+                logger.info(f"[Cliente Admin] Endereço adicionado para cliente {cliente_id}")
+                
+            elif acao == "update":
                 # Atualizar endereço existente
-                try:
+                if not endereco_id:
+                    raise HTTPException(
+                        status.HTTP_400_BAD_REQUEST, 
+                        "ID do endereço é obrigatório para atualização"
+                    )
+                
+                endereco_dict = endereco_data.model_dump(exclude={'acao', 'id'})
+                # Remove campos None para não sobrescrever com None
+                endereco_dict = {k: v for k, v in endereco_dict.items() if v is not None}
+                
+                if endereco_dict:  # Só atualiza se houver dados para atualizar
                     endereco_repo.update(cliente_id, endereco_id, EnderecoUpdate(**endereco_dict))
-                except HTTPException:
-                    # Se endereço não existir, criar novo
-                    endereco_repo.create(cliente_id, EnderecoUpdate(**endereco_dict))
-            else:
-                # Criar novo endereço
-                endereco_repo.create(cliente_id, EnderecoUpdate(**endereco_dict))
+                    logger.info(f"[Cliente Admin] Endereço {endereco_id} atualizado para cliente {cliente_id}")
+                
+            elif acao == "remove":
+                # Remover endereço
+                if not endereco_id:
+                    raise HTTPException(
+                        status.HTTP_400_BAD_REQUEST, 
+                        "ID do endereço é obrigatório para remoção"
+                    )
+                
+                endereco_repo.delete(cliente_id, endereco_id)
+                logger.info(f"[Cliente Admin] Endereço {endereco_id} removido do cliente {cliente_id}")
 
     return ClienteOut.model_validate(updated_cliente)

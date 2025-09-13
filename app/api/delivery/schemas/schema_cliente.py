@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from typing import Optional, List
+from typing import Optional, List, Literal
 from pydantic import BaseModel, EmailStr, constr, ConfigDict
 
 class ClienteOut(BaseModel):
@@ -32,7 +32,8 @@ class ClienteUpdate(BaseModel):
     ativo: Optional[bool] = None
 
 class EnderecoUpdateAdmin(BaseModel):
-    id: Optional[int] = None  # Para identificar endereço existente
+    acao: Literal["add", "update", "remove"]  # Ação a ser executada
+    id: Optional[int] = None  # Para identificar endereço existente (obrigatório para update/remove)
     cep: Optional[str] = None
     logradouro: Optional[str] = None
     numero: Optional[str] = None
