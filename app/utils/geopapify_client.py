@@ -29,17 +29,14 @@ class GeoapifyClient:
 
     async def geocode_raw(self, query: str) -> Optional[Dict[str, Any]]:
         """Retorna o JSON completo do Geoapify"""
-        logger.info(f"[Geoapify] Consultando (RAW) para: {query}")
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.get(
                     self.BASE_URL,
                     params={"text": query, "apiKey": self.api_key}
                 )
-            logger.info(f"[Geoapify] Status: {response.status_code}, Response: {response.text}")
             data = response.json()
             if not data.get("features"):
-                logger.warning(f"[Geoapify] Nenhuma coordenada encontrada para {query}")
                 return None
             return data
         except Exception as e:
@@ -48,7 +45,6 @@ class GeoapifyClient:
 
     async def get_coordinates(self, query: str) -> Tuple[Optional[float], Optional[float]]:
         """Retorna latitude/longitude (primeira feature)"""
-        logger.info(f"[Geoapify] Consultando coordenadas para: {query}")
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.get(
@@ -118,8 +114,6 @@ class GeoapifyClient:
         Se a query contém um CEP, primeiro consulta o ViaCEP.
         Depois complementa com busca no Geoapify para obter coordenadas.
         """
-        logger.info(f"[Geoapify] Buscando endereço com validação de CEP: {query}")
-        
         viacep_client = ViaCepClient()
         resultados = []
         
@@ -127,8 +121,6 @@ class GeoapifyClient:
         cep_encontrado = viacep_client.extrair_cep_da_query(query)
         
         if cep_encontrado:
-            logger.info(f"[Geoapify] CEP detectado na query: {cep_encontrado}")
-            
             # Busca no ViaCEP primeiro
             viacep_data = await viacep_client.buscar_cep(cep_encontrado)
             
@@ -145,12 +137,8 @@ class GeoapifyClient:
                     # Atualiza o resultado com coordenadas do Geoapify
                     resultado_viacep.latitude = geoapify_resultados[0].latitude
                     resultado_viacep.longitude = geoapify_resultados[0].longitude
-                    logger.info(f"[Geoapify] Coordenadas obtidas do Geoapify: {resultado_viacep.latitude}, {resultado_viacep.longitude}")
                 
                 return resultados
-            else:
-                logger.warning(f"[Geoapify] CEP não encontrado no ViaCEP: {cep_encontrado}")
         
         # Se não há CEP ou CEP não foi encontrado, usa busca normal do Geoapify
-        logger.info(f"[Geoapify] Usando busca normal do Geoapify para: {query}")
         return await self.geocode_mini(query)

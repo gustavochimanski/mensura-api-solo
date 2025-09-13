@@ -40,11 +40,8 @@ class ViaCepClient:
         """
         Busca informações do endereço pelo CEP usando a API do ViaCEP
         """
-        logger.info(f"[ViaCEP] Consultando CEP: {cep}")
-        
         # Valida o formato do CEP
         if not self._validar_cep(cep):
-            logger.warning(f"[ViaCEP] CEP inválido: {cep}")
             return None
         
         # Limpa o CEP
@@ -54,19 +51,15 @@ class ViaCepClient:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.get(f"{self.BASE_URL}/{cep_limpo}/json/")
                 
-            logger.info(f"[ViaCEP] Status: {response.status_code}")
-            
             if response.status_code == 200:
                 data = response.json()
                 
                 # Verifica se retornou erro
                 if data.get("erro"):
-                    logger.warning(f"[ViaCEP] CEP não encontrado: {cep_limpo}")
                     return None
                 
                 # Cria o objeto de resposta
                 viacep_response = ViaCepResponse(**data)
-                logger.info(f"[ViaCEP] CEP encontrado: {viacep_response.localidade}/{viacep_response.uf}")
                 return viacep_response
             else:
                 logger.error(f"[ViaCEP] Erro na API: {response.status_code}")
@@ -86,8 +79,6 @@ class ViaCepClient:
         matches = re.findall(cep_pattern, query)
         
         if matches:
-            cep_encontrado = matches[0]
-            logger.info(f"[ViaCEP] CEP extraído da query: {cep_encontrado}")
-            return cep_encontrado
+            return matches[0]
         
         return None
