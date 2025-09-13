@@ -16,10 +16,11 @@ from app.api.delivery.services.meio_pagamento_service import MeioPagamentoServic
 from app.api.mensura.repositories.empresa_repo import EmpresaRepository
 from app.api.delivery.schemas.schema_pedido import (
     FinalizarPedidoRequest, ItemPedidoRequest,
-    PedidoResponse, ItemPedidoResponse, PedidoKanbanResponse, PedidoResponseCompleto,
+    PedidoResponse, ItemPedidoResponse, PedidoKanbanResponse, PedidoResponseCompleto, PedidoResponseCompletoComEndereco,
     EditarPedidoRequest, ItemPedidoEditar
 )
 from app.api.delivery.schemas.schema_cliente import ClienteOut
+from app.api.delivery.schemas.schema_endereco import EnderecoOut
 from app.api.delivery.schemas.schema_shared_enums import (
     PedidoStatusEnum, TipoEntregaEnum, OrigemPedidoEnum,
     PagamentoMetodoEnum, PagamentoGatewayEnum, PagamentoStatusEnum
@@ -570,6 +571,53 @@ class PedidoService:
         if not pedido:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado")
         return self._pedido_to_response_completo(pedido)
+
+    def _pedido_to_response_completo_com_endereco(self, pedido: PedidoDeliveryModel) -> PedidoResponseCompletoComEndereco:
+        return PedidoResponseCompletoComEndereco(
+            id=pedido.id,
+            status=PedidoStatusEnum(pedido.status),
+            cliente=ClienteOut.model_validate(pedido.cliente) if pedido.cliente else None,
+            endereco=EnderecoOut.model_validate(pedido.endereco) if pedido.endereco else None,
+            empresa_id=pedido.empresa_id,
+            entregador_id=getattr(pedido, "entregador_id", None),
+            meio_pagamento_id=pedido.meio_pagamento_id,
+            tipo_entrega=pedido.tipo_entrega if isinstance(pedido.tipo_entrega, TipoEntregaEnum)
+                        else TipoEntregaEnum(pedido.tipo_entrega),
+            origem=pedido.origem if isinstance(pedido.origem, OrigemPedidoEnum)
+                        else OrigemPedidoEnum(pedido.origem),
+            subtotal=float(pedido.subtotal or 0),
+            desconto=float(pedido.desconto or 0),
+            taxa_entrega=float(pedido.taxa_entrega or 0),
+            taxa_servico=float(pedido.taxa_servico or 0),
+            valor_total=float(pedido.valor_total or 0),
+            previsao_entrega=getattr(pedido, "previsao_entrega", None),
+            distancia_km=(float(pedido.distancia_km) if getattr(pedido, "distancia_km", None) is not None else None),
+            observacao_geral=getattr(pedido, "observacao_geral", None),
+            troco_para=(float(pedido.troco_para) if getattr(pedido, "troco_para", None) is not None else None),
+            cupom_id=getattr(pedido, "cupom_id", None),
+            endereco_snapshot=getattr(pedido, "endereco_snapshot", None),
+            endereco_geography=str(getattr(pedido, "endereco_geo", None)) if getattr(pedido, "endereco_geo", None) is not None else None,
+            data_criacao=getattr(pedido, "data_criacao", getattr(pedido, "created_at", None)),
+            data_atualizacao=getattr(pedido, "data_atualizacao", getattr(pedido, "updated_at", None)),
+            itens=[
+                ItemPedidoResponse(
+                    id=it.id,
+                    produto_cod_barras=it.produto_cod_barras,
+                    quantidade=it.quantidade,
+                    preco_unitario=float(it.preco_unitario or 0),
+                    observacao=it.observacao,
+                    produto_descricao_snapshot=getattr(it, "produto_descricao_snapshot", None),
+                    produto_imagem_snapshot=getattr(it, "produto_imagem_snapshot", None),
+                )
+                for it in pedido.itens
+            ]
+        )
+
+    def get_pedido_by_id_completo_com_endereco(self, pedido_id: int) -> PedidoResponseCompletoComEndereco:
+        pedido = self.repo.get_pedido(pedido_id)
+        if not pedido:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado")
+        return self._pedido_to_response_completo_com_endereco(pedido)
 
     # ---------------- Admin / Kanban ----------------
     def list_all_kanban(self, limit: int = 500, date_filter: date | None = None, empresa_id: int = 1):
