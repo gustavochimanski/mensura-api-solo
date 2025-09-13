@@ -4,7 +4,7 @@ from fastapi import APIRouter, status, Path, Query, Depends, Body, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.delivery.models.model_cliente_dv import ClienteDeliveryModel
-from app.api.delivery.schemas.schema_pedido import FinalizarPedidoRequest, PedidoResponse, EditarPedidoRequest, ItemPedidoEditar
+from app.api.delivery.schemas.schema_pedido import FinalizarPedidoRequest, PedidoResponse, PedidoResponseCompleto, EditarPedidoRequest, ItemPedidoEditar
 from app.api.delivery.schemas.schema_shared_enums import PagamentoMetodoEnum, PagamentoGatewayEnum
 from app.api.delivery.services.pedidos.service_pedido import PedidoService
 from app.core.client_dependecies import get_cliente_by_super_token
@@ -52,10 +52,14 @@ def listar_pedidos(
 
 # ======================================================================
 # ===================== GET PEDIDO BY ID ===============================
-@router.get("/{pedido_id}", response_model=PedidoResponse, status_code=status.HTTP_200_OK)
-def get_pedido(pedido_id: int = Path(..., description="ID do pedido"), db: Session = Depends(get_db)):
+@router.get("/{pedido_id}", response_model=PedidoResponseCompleto, status_code=status.HTTP_200_OK)
+def get_pedido(
+    pedido_id: int = Path(..., description="ID do pedido"), 
+    cliente: ClienteDeliveryModel = Depends(get_cliente_by_super_token),
+    db: Session = Depends(get_db)
+):
     svc = PedidoService(db)
-    return svc.get_pedido_by_id(pedido_id)
+    return svc.get_pedido_by_id_completo(pedido_id)
 
 # ======================================================================
 # ===================  ATUALIZA ITENS PEDIDO ===========================

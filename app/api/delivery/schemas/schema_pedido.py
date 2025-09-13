@@ -4,6 +4,7 @@ from pydantic import BaseModel, ConfigDict, condecimal
 
 from .schema_meio_pagamento import MeioPagamentoResponse
 from .schema_shared_enums import PedidoStatusEnum, TipoEntregaEnum, OrigemPedidoEnum
+from .schema_cliente import ClienteOut
 
 
 # ======================================================================
@@ -74,6 +75,33 @@ class PedidoResponse(BaseModel):
     status: PedidoStatusEnum
     cliente_id: Optional[int] = None
     telefone_cliente: Optional[str] = None
+    empresa_id: int
+    entregador_id: Optional[int]
+    endereco_id: Optional[int]
+    meio_pagamento_id: Optional[int] = None
+    tipo_entrega: TipoEntregaEnum
+    origem: OrigemPedidoEnum
+    subtotal: float
+    desconto: float
+    taxa_entrega: float
+    taxa_servico: float
+    valor_total: float
+    previsao_entrega: Optional[datetime] = None
+    distancia_km: Optional[float] = None
+    observacao_geral: Optional[str] = None
+    troco_para: Optional[float] = None
+    cupom_id: Optional[int] = None
+    endereco_snapshot: Optional[dict] = None  # Snapshot do endereço no momento do pedido
+    endereco_geography: Optional[str] = None  # Ponto geográfico para consultas avançadas
+    data_criacao: datetime
+    data_atualizacao: datetime
+    itens: List[ItemPedidoResponse]
+    model_config = ConfigDict(from_attributes=True)
+
+class PedidoResponseCompleto(BaseModel):
+    id: int
+    status: PedidoStatusEnum
+    cliente: Optional[ClienteOut] = None
     empresa_id: int
     entregador_id: Optional[int]
     endereco_id: Optional[int]
