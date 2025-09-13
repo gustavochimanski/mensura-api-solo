@@ -8,9 +8,10 @@ from sqlalchemy.orm import Session
 from app.api.delivery.models.model_cliente_codigo_validacao import ClienteOtpModel
 from app.api.delivery.models.model_cliente_dv import ClienteDeliveryModel
 from app.api.delivery.repositories.repo_cliente import ClienteRepository
-from app.api.delivery.schemas.schema_cliente import ClienteOut, ClienteUpdate, ClienteCreate
+from app.api.delivery.schemas.schema_cliente import ClienteOut, ClienteUpdate, ClienteCreate, ClienteAdminUpdate
 from app.api.delivery.services.service_cliente import ClienteService
 from app.core.client_dependecies import get_cliente_by_super_token
+from app.core.admin_dependencies import get_current_user
 from app.database.db_connection import get_db
 from app.utils.logger import logger
 
@@ -110,10 +111,11 @@ def update_current_cliente(
 @router.put("/admin-update/{cliente_id}", response_model=ClienteOut, status_code=status.HTTP_200_OK)
 def update_cliente_admin(
     cliente_id: int,
-    data: ClienteUpdate,
+    data: ClienteAdminUpdate,
+    current_user = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    logger.info(f"[Cliente Admin] Update ID {cliente_id}")
+    logger.info(f"[Cliente Admin] Update ID {cliente_id} by user {current_user.id}")
 
     repo = ClienteRepository(db)
     cliente = repo.get_by_id(cliente_id)
@@ -121,6 +123,34 @@ def update_cliente_admin(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Cliente não encontrado")
 
     service = ClienteService(db)
-    updated_cliente = service.update(cliente.super_token, data)
+    
+    # Separar dados do cliente dos endereços
+    cliente_data = data.model_dump(exclude={'enderecos'})
+    enderecos_data = data.enderecos or []
+    
+    # Atualizar dados do cliente
+    updated_cliente = service.update(cliente.super_token, ClienteUpdate(**cliente_data))
+    
+    # Atualizar endereços se fornecidos
+    if enderecos_data:
+        from app.api.delivery.repositories.repo_endereco import EnderecoRepository
+        from app.api.delivery.schemas.schema_endereco import EnderecoUpdate
+        
+        endereco_repo = EnderecoRepository(db)
+        
+        for endereco_data in enderecos_data:
+            endereco_dict = endereco_data.model_dump(exclude={'id'})
+            endereco_id = endereco_data.id
+            
+            if endereco_id:
+                # Atualizar endereço existente
+                try:
+                    endereco_repo.update(cliente_id, endereco_id, EnderecoUpdate(**endereco_dict))
+                except HTTPException:
+                    # Se endereço não existir, criar novo
+                    endereco_repo.create(cliente_id, EnderecoUpdate(**endereco_dict))
+            else:
+                # Criar novo endereço
+                endereco_repo.create(cliente_id, EnderecoUpdate(**endereco_dict))
 
     return ClienteOut.model_validate(updated_cliente)
