@@ -5,6 +5,7 @@ from typing import Dict, Any, List, Optional
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 from app.api.delivery.repositories.repo_printer import PrinterRepository
+from app.api.mensura.repositories.empresa_repo import EmpresaRepository
 from app.api.delivery.schemas.schema_printer import (
     PedidoPrinterRequest, 
     RespostaImpressaoPrinter, 
@@ -12,7 +13,8 @@ from app.api.delivery.schemas.schema_printer import (
     StatusPrinterResponse,
     ConfigImpressaoPrinter,
     ImpressaoMultiplaRequest,
-    PedidoPendenteImpressaoResponse
+    PedidoPendenteImpressaoResponse,
+    DadosEmpresaPrinter
 )
 from app.api.delivery.schemas.schema_shared_enums import PedidoStatusEnum
 from app.utils.printer_client import PrinterClient
@@ -26,9 +28,68 @@ class PrinterService:
     def __init__(self, db: Session, printer_api_url: Optional[str] = None):
         self.db = db
         self.repo = PrinterRepository(db)
+        self.empresa_repo = EmpresaRepository(db)
         self.printer_client = PrinterClient(
             printer_api_url or PrinterConfig.get_printer_url()
         )
+    
+    def _buscar_dados_empresa(self, empresa_id: int) -> DadosEmpresaPrinter:
+        """
+        Busca dados da empresa para impressão
+        
+        Args:
+            empresa_id: ID da empresa
+            
+        Returns:
+            Dados da empresa formatados para impressão
+        """
+        try:
+            logger.info(f"[PrinterService] Buscando dados da empresa {empresa_id}")
+            empresa = self.empresa_repo.get_empresa_by_id(empresa_id)
+            
+            if not empresa:
+                logger.warning(f"[PrinterService] Empresa {empresa_id} não encontrada")
+                return DadosEmpresaPrinter()
+            
+            logger.info(f"[PrinterService] Empresa encontrada: {empresa.nome}")
+            logger.info(f"[PrinterService] CNPJ: {empresa.cnpj}")
+            logger.info(f"[PrinterService] Telefone: {empresa.telefone}")
+            logger.info(f"[PrinterService] Endereço: {empresa.endereco}")
+            
+            # Monta endereço completo
+            endereco_completo = None
+            if empresa.endereco:
+                endereco_parts = []
+                if empresa.endereco.logradouro:
+                    endereco_parts.append(empresa.endereco.logradouro)
+                if empresa.endereco.numero:
+                    endereco_parts.append(empresa.endereco.numero)
+                if empresa.endereco.complemento:
+                    endereco_parts.append(empresa.endereco.complemento)
+                if empresa.endereco.bairro:
+                    endereco_parts.append(empresa.endereco.bairro)
+                if empresa.endereco.cidade:
+                    endereco_parts.append(empresa.endereco.cidade)
+                if empresa.endereco.estado:
+                    endereco_parts.append(empresa.endereco.estado)
+                if empresa.endereco.cep:
+                    endereco_parts.append(f"CEP: {empresa.endereco.cep}")
+                
+                endereco_completo = ", ".join(endereco_parts) if endereco_parts else None
+                logger.info(f"[PrinterService] Endereço completo: {endereco_completo}")
+            
+            dados_empresa = DadosEmpresaPrinter(
+                cnpj=empresa.cnpj,
+                endereco=endereco_completo,
+                telefone=empresa.telefone
+            )
+            
+            logger.info(f"[PrinterService] Dados da empresa criados: {dados_empresa}")
+            return dados_empresa
+            
+        except Exception as e:
+            logger.error(f"[PrinterService] Erro ao buscar dados da empresa {empresa_id}: {str(e)}")
+            return DadosEmpresaPrinter()
     
     def _converter_pedido_para_printer_request(self, pedido_impressao) -> PedidoPrinterRequest:
         """
@@ -290,6 +351,9 @@ class PrinterService:
             Lista de pedidos formatados para impressão
         """
         try:
+            # Busca dados da empresa uma única vez
+            dados_empresa = self._buscar_dados_empresa(empresa_id)
+            
             # Busca pedidos pendentes
             pedidos = self.repo.get_pedidos_pendentes_impressao(empresa_id, limite)
             
@@ -325,7 +389,8 @@ class PrinterService:
                     troco=troco,
                     observacao_geral=pedido_impressao.observacao_geral,
                     endereco=pedido_impressao.endereco_cliente,
-                    data_criacao=pedido_impressao.data_criacao
+                    data_criacao=pedido_impressao.data_criacao,
+                    empresa=dados_empresa
                 )
                 
                 resultados.append(resultado)

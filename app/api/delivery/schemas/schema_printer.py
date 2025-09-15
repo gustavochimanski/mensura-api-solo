@@ -103,6 +103,13 @@ class PedidoParaImpressao(BaseModel):
     itens: List[ItemPedidoPrinter] = Field(..., description="Itens do pedido")
 
 
+class DadosEmpresaPrinter(BaseModel):
+    """Dados da empresa para impressão"""
+    cnpj: Optional[str] = Field(None, description="CNPJ da empresa")
+    endereco: Optional[str] = Field(None, description="Endereço completo da empresa")
+    telefone: Optional[str] = Field(None, description="Telefone da empresa")
+
+
 class PedidoPendenteImpressaoResponse(BaseModel):
     """Resposta formatada para pedidos pendentes de impressão"""
     numero: int = Field(..., description="Número do pedido")
@@ -119,3 +126,4 @@ class PedidoPendenteImpressaoResponse(BaseModel):
     observacao_geral: Optional[str] = Field(None, description="Observação geral do pedido")
     endereco: Optional[str] = Field(None, description="Endereço de entrega")
     data_criacao: datetime = Field(..., description="Data de criação do pedido")
+    empresa: DadosEmpresaPrinter = Field(..., description="Dados da empresa")

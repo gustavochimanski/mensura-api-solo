@@ -2,7 +2,7 @@
 Repository para operações relacionadas à Printer API
 """
 from typing import List, Optional
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import and_, desc
 from app.api.delivery.models.model_pedido_dv import PedidoDeliveryModel
 from app.api.delivery.schemas.schema_shared_enums import PedidoStatusEnum
@@ -29,6 +29,12 @@ class PrinterRepository:
         """
         query = (
             self.db.query(PedidoDeliveryModel)
+            .options(
+                joinedload(PedidoDeliveryModel.empresa).joinedload("endereco"),
+                joinedload(PedidoDeliveryModel.cliente),
+                joinedload(PedidoDeliveryModel.itens),
+                joinedload(PedidoDeliveryModel.meio_pagamento)
+            )
             .filter(
                 and_(
                     PedidoDeliveryModel.empresa_id == empresa_id,
