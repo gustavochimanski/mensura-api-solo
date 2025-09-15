@@ -67,3 +67,30 @@ class EnderecoRepository:
         self.db.commit()
         self.db.refresh(obj)
         return obj
+
+    # Verificar se endereço já existe
+    def endereco_existe(self, cliente_id: int, payload: EnderecoCreate, exclude_id: int = None) -> bool:
+        """
+        Verifica se um endereço já existe para um cliente específico.
+        Compara logradouro, número, bairro, cidade, UF e CEP.
+        Se exclude_id for fornecido, exclui esse ID da verificação (útil para updates).
+        """
+        query = (
+            self.db.query(EnderecoDeliveryModel)
+            .filter(
+                EnderecoDeliveryModel.cliente_id == cliente_id,
+                EnderecoDeliveryModel.logradouro == payload.logradouro,
+                EnderecoDeliveryModel.numero == payload.numero,
+                EnderecoDeliveryModel.bairro == payload.bairro,
+                EnderecoDeliveryModel.cidade == payload.cidade,
+                EnderecoDeliveryModel.uf == payload.uf,
+                EnderecoDeliveryModel.cep == payload.cep
+            )
+        )
+        
+        # Se exclude_id foi fornecido, exclui esse ID da verificação
+        if exclude_id is not None:
+            query = query.filter(EnderecoDeliveryModel.id != exclude_id)
+        
+        endereco_existente = query.first()
+        return endereco_existente is not None
