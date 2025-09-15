@@ -204,7 +204,6 @@ async def imprimir_pedido_via_printer(
 @router.post(
     "/impressao/imprimir-todos",
     status_code=status.HTTP_200_OK,
-    dependencies=[Depends(get_current_user)]
 )
 async def imprimir_todos_pendentes(
     empresa_id: int = Query(..., description="ID da empresa"),
@@ -226,7 +225,6 @@ async def imprimir_todos_pendentes(
 @router.get(
     "/impressao/status-printer",
     status_code=status.HTTP_200_OK,
-    dependencies=[Depends(get_current_user)]
 )
 async def verificar_status_printer(
     db: Session = Depends(get_db),
