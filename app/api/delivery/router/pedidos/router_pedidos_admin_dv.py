@@ -69,7 +69,7 @@ def atualizar_status_pedido(
 # ======================================================================
 # ================= ATUALIZAR INFO GERAL PEDIDO ========================
 @router.put(
-    "/{pedido_id}/editar",
+    "/{pedido_id}",
     response_model=PedidoResponse,
     status_code=status.HTTP_200_OK,
     dependencies=[Depends(get_current_user)]
