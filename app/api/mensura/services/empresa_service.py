@@ -8,7 +8,7 @@ from app.api.delivery.models.model_regiao_entrega import RegiaoEntregaModel
 from app.api.mensura.models.empresa_model import EmpresaModel
 from app.api.mensura.repositories.empresa_repo import EmpresaRepository
 from app.api.mensura.schemas.schema_empresa import EmpresaCreate, EmpresaUpdate
-from app.api.mensura.schemas.schema_endereco import EnderecoUpdate
+from app.api.mensura.schemas.schema_endereco import EnderecoCreate, EnderecoUpdate
 from app.api.mensura.services.endereco_service import EnderecoService
 from app.utils.minio_client import upload_file_to_minio, remover_arquivo_minio
 
@@ -92,10 +92,21 @@ class EmpresaService:
         for key, value in update_data.items():
             setattr(empresa, key, value)
 
-        # Atualiza endereço
-        if payload.get("endereco") and payload.get("endereco_id"):
-            endereco_data = EnderecoUpdate(**payload["endereco"])  # <-- conversão
-            self.endereco_service.update_endereco(payload["endereco_id"], endereco_data)
+        # Atualiza endereço_id se fornecido (vincula empresa a endereço existente)
+        if payload.get("endereco_id"):
+            empresa.endereco_id = payload["endereco_id"]
+
+        # Atualiza dados do endereço se fornecido
+        if payload.get("endereco"):
+            if payload.get("endereco_id"):
+                # Atualiza endereço existente
+                endereco_data = EnderecoUpdate(**payload["endereco"])
+                self.endereco_service.update_endereco(payload["endereco_id"], endereco_data)
+            else:
+                # Cria novo endereço e vincula à empresa
+                endereco_data = EnderecoCreate(**payload["endereco"])
+                novo_endereco = self.endereco_service.create_endereco(endereco_data)
+                empresa.endereco_id = novo_endereco.id
 
         # Atualiza logo
         if logo:
