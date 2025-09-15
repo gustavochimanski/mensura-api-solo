@@ -6,7 +6,7 @@ from app.utils.database_utils import now_trimmed
 MeioPagamentoTipo = SAEnum(
     "CARTAO_ENTREGA", "PIX_ENTREGA", "DINHEIRO", "CARTAO_ONLINE", "PIX_ONLINE",
     name="meio_pagamento_tipo_enum",
-    create_type=False
+    create_type=True
 )
 
 class MeioPagamentoModel(Base):
