@@ -2,7 +2,7 @@
 Router para operações relacionadas à Printer API
 """
 from typing import List, Optional
-from fastapi import APIRouter, status, Path, Query, Depends, HTTPException
+from fastapi import APIRouter, status, Path, Query, Depends, HTTPException, Body
 from sqlalchemy.orm import Session
 
 from app.api.delivery.services.printer_service import PrinterService
@@ -34,7 +34,7 @@ router = APIRouter(prefix="/api/delivery/printer", tags=["Printer"])
 async def imprimir_pedidos_pendentes(
     empresa_id: int = Query(..., description="ID da empresa"),
     limite: int = Query(10, ge=1, le=50, description="Número máximo de pedidos para imprimir"),
-    config: Optional[ConfigImpressaoPrinter] = Query(None, description="Configurações de impressão"),
+    config: Optional[ConfigImpressaoPrinter] = Body(None, description="Configurações de impressão"),
     db: Session = Depends(get_db),
 ):
     """
