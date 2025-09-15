@@ -341,10 +341,8 @@ class PedidoService:
             }
 
         try:
-            status_inicial = (
-                PedidoStatusEnum.R.value if getattr(empresa, "aceita_pedido_automatico", False)
-                else PedidoStatusEnum.I.value
-            )
+            # Todos os pedidos sempre começam com status "I" (Pendente de Impressão)
+            status_inicial = PedidoStatusEnum.I.value
 
             # CRIA PEDIDO — garante cliente_id persistido de cara
             pedido = self.repo.criar_pedido(
