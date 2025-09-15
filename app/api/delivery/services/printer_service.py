@@ -107,13 +107,34 @@ class PrinterService:
             falhas = 0
             
             for pedido in pedidos:
-                resultado = await self.imprimir_pedido(pedido.id, config)
-                resultados.append(resultado)
+                # Converte para formato de impressão
+                pedido_impressao = self.repo.converter_pedido_para_impressao(pedido)
                 
-                if resultado.sucesso:
+                # Converte para request da Printer API
+                printer_request = self._converter_pedido_para_printer_request(pedido_impressao)
+                
+                # Envia para impressão
+                resultado_api = await self.printer_client.imprimir_pedido(printer_request.dict())
+                
+                if resultado_api.get("sucesso", False):
+                    # Marca como impresso
+                    self.repo.marcar_pedido_impresso(pedido.id)
+                    
+                    resultado = RespostaImpressaoPrinter(
+                        sucesso=True,
+                        mensagem=f"Pedido {pedido.id} impresso com sucesso",
+                        numero_pedido=pedido.id
+                    )
                     sucessos += 1
                 else:
+                    resultado = RespostaImpressaoPrinter(
+                        sucesso=False,
+                        mensagem=resultado_api.get("mensagem", "Erro desconhecido na impressão"),
+                        numero_pedido=pedido.id
+                    )
                     falhas += 1
+                
+                resultados.append(resultado)
             
             return RespostaImpressaoMultipla(
                 sucesso=falhas == 0,  # Sucesso total apenas se todos foram impressos
@@ -130,60 +151,6 @@ class PrinterService:
                 mensagem=f"Erro interno: {str(e)}",
                 pedidos_impressos=0,
                 pedidos_falharam=0
-            )
-    
-    async def imprimir_pedido(self, pedido_id: int, config: Optional[ConfigImpressaoPrinter] = None) -> RespostaImpressaoPrinter:
-        """
-        Imprime um pedido específico via Printer API
-        
-        Args:
-            pedido_id: ID do pedido
-            config: Configurações de impressão opcionais
-            
-        Returns:
-            Resposta da operação de impressão
-        """
-        try:
-            # Busca o pedido
-            pedido = self.repo.get_pedido_para_impressao(pedido_id)
-            if not pedido:
-                return RespostaImpressaoPrinter(
-                    sucesso=False,
-                    mensagem=f"Pedido {pedido_id} não encontrado ou não está pendente de impressão",
-                    numero_pedido=pedido_id
-                )
-            
-            # Converte para formato de impressão
-            pedido_impressao = self.repo.converter_pedido_para_impressao(pedido)
-            
-            # Converte para request da Printer API
-            printer_request = self._converter_pedido_para_printer_request(pedido_impressao)
-            
-            # Envia para impressão
-            resultado = await self.printer_client.imprimir_pedido(printer_request.dict())
-            
-            if resultado.get("sucesso", False):
-                # Marca como impresso
-                self.repo.marcar_pedido_impresso(pedido_id)
-                
-                return RespostaImpressaoPrinter(
-                    sucesso=True,
-                    mensagem=f"Pedido {pedido_id} impresso com sucesso",
-                    numero_pedido=pedido_id
-                )
-            else:
-                return RespostaImpressaoPrinter(
-                    sucesso=False,
-                    mensagem=resultado.get("mensagem", "Erro desconhecido na impressão"),
-                    numero_pedido=pedido_id
-                )
-                
-        except Exception as e:
-            logger.error(f"[PrinterService] Erro ao imprimir pedido {pedido_id}: {str(e)}")
-            return RespostaImpressaoPrinter(
-                sucesso=False,
-                mensagem=f"Erro interno: {str(e)}",
-                numero_pedido=pedido_id
             )
     
     async def verificar_status_printer(self) -> StatusPrinterResponse:
@@ -247,11 +214,7 @@ class PrinterService:
                     "meio_pagamento_descricao": pedido_impressao.meio_pagamento_descricao,
                     "observacao_geral": pedido_impressao.observacao_geral,
                     "quantidade_itens": len(pedido_impressao.itens),
-                    "itens": itens_formatados,
-                    "desconto": pedido_impressao.desconto,
-                    "taxa_entrega": pedido_impressao.taxa_entrega,
-                    "taxa_servico": pedido_impressao.taxa_servico,
-                    "troco_para": pedido_impressao.troco_para
+                    "itens": itens_formatados
                 })
             
             return resultados
@@ -353,12 +316,12 @@ class PrinterService:
                     cliente=pedido_impressao.cliente_nome,
                     telefone_cliente=pedido_impressao.cliente_telefone,
                     itens=pedido_impressao.itens,
-                    desconto=pedido_impressao.desconto,
-                    taxa_entrega=pedido_impressao.taxa_entrega,
-                    taxa_servico=pedido_impressao.taxa_servico,
+                    desconto=float(pedido.desconto or 0),
+                    taxa_entrega=float(pedido.taxa_entrega or 0),
+                    taxa_servico=float(pedido.taxa_servico or 0),
                     total=pedido_impressao.valor_total,
                     tipo_pagamento=tipo_pagamento,
-                    troco=pedido_impressao.troco_para,
+                    troco=troco,
                     observacao_geral=pedido_impressao.observacao_geral,
                     endereco=pedido_impressao.endereco_cliente,
                     data_criacao=pedido_impressao.data_criacao

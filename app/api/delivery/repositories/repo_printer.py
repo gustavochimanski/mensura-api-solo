@@ -212,11 +212,7 @@ class PrinterRepository:
             endereco_cliente=endereco_str,
             meio_pagamento_descricao=pedido.meio_pagamento.display() if pedido.meio_pagamento else None,
             observacao_geral=pedido.observacao_geral,
-            itens=itens,
-            desconto=float(pedido.desconto or 0),
-            taxa_entrega=float(pedido.taxa_entrega or 0),
-            taxa_servico=float(pedido.taxa_servico or 0),
-            troco_para=float(pedido.troco_para or 0) if pedido.troco_para else None
+            itens=itens
         )
     
     def get_estatisticas_impressao(self, empresa_id: int) -> dict:

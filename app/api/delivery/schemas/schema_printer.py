@@ -101,10 +101,6 @@ class PedidoParaImpressao(BaseModel):
     meio_pagamento_descricao: Optional[str] = Field(None, description="Descrição do meio de pagamento")
     observacao_geral: Optional[str] = Field(None, description="Observação geral")
     itens: List[ItemPedidoPrinter] = Field(..., description="Itens do pedido")
-    desconto: float = Field(0, description="Valor do desconto")
-    taxa_entrega: float = Field(0, description="Taxa de entrega")
-    taxa_servico: float = Field(0, description="Taxa de serviço")
-    troco_para: Optional[float] = Field(None, description="Valor do troco para")
 
 
 class PedidoPendenteImpressaoResponse(BaseModel):
