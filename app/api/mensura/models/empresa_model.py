@@ -63,5 +63,10 @@ class EmpresaModel(Base):
         "RegiaoEntregaModel",
         back_populates="empresa"
     )
+    impressoras = relationship(
+        "ImpressoraModel",
+        back_populates="empresa",
+        cascade="all, delete-orphan"
+    )
 
     model_config = ConfigDict(from_attributes=True)
