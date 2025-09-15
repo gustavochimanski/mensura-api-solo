@@ -8,7 +8,6 @@ from app.api.mensura.schemas.schema_impressora import (
     ImpressoraResponse,
     ImpressoraConfigData,
     EmpresaConfigData,
-    MeioPagamentoConfigData,
     ConfigResponse
 )
 from app.api.mensura.repositories.empresa_repo import EmpresaRepository
@@ -38,12 +37,9 @@ class ImpressoraService:
             telefone=empresa.telefone if empresa else None
         )
         
-        meio_pagamento_config = MeioPagamentoConfigData()
-        
         return ConfigResponse(
             impressora=impressora_config,
-            empresa=empresa_config,
-            meio_pagamento=meio_pagamento_config
+            empresa=empresa_config
         )
 
     def create_impressora(self, impressora_data: ImpressoraCreate) -> ImpressoraResponse:

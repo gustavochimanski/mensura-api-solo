@@ -17,15 +17,9 @@ class EmpresaConfigData(BaseModel):
     cnpj: Optional[str] = None
     telefone: Optional[str] = None
 
-class MeioPagamentoConfigData(BaseModel):
-    # Aqui você pode adicionar campos específicos de meio de pagamento
-    # Por enquanto deixando vazio, mas pode ser expandido
-    pass
-
 class ConfigResponse(BaseModel):
     impressora: ImpressoraConfigData
     empresa: EmpresaConfigData
-    meio_pagamento: MeioPagamentoConfigData
 
 class ImpressoraBase(BaseModel):
     nome: str
