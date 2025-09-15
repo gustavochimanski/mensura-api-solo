@@ -86,7 +86,7 @@ class PedidoRepository:
         empresa_id: int,
         endereco_id: int | None,
         meio_pagamento_id: int,
-        status: str = "P",
+        status: str = "I",
         tipo_entrega: str,
         origem: str,
         endereco_snapshot: dict | None = None,

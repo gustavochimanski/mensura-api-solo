@@ -2,6 +2,7 @@ from enum import Enum
 
 class PedidoStatusEnum(str, Enum):
     P = "P"  # PENDENTE
+    I = "I"  # PENDENTE_IMPRESSAO
     R = "R"  # EM_PREPARO
     S = "S"  # SAIU_PARA_ENTREGA
     E = "E"  # ENTREGUE

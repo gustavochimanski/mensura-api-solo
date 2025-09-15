@@ -11,12 +11,13 @@ from app.database.db_connection import Base
 from app.utils.database_utils import now_trimmed
 
 PedidoStatus = SAEnum(
-    "P", "R", "S", "E", "C",
+    "P", "I", "R", "S", "E", "C",
     name="pedido_status_enum",
     create_type=False
 )
 
 # PENDENTE: P
+# PENDENTE_IMPRESSAO: I
 # EM_PREPARO: R
 # SAIU_PARA_ENTREGA: S
 # ENTREGUE: E
@@ -55,7 +56,7 @@ class PedidoDeliveryModel(Base):
         foreign_keys=[cliente_id]
     )
 
-    status = Column(PedidoStatus, nullable=False, default="P")
+    status = Column(PedidoStatus, nullable=False, default="I")
     tipo_entrega = Column(TipoEntrega, nullable=False, default="DELIVERY")
     origem = Column(OrigemPedido, nullable=False, default="WEB")
 
