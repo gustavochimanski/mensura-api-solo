@@ -27,7 +27,6 @@ router = APIRouter(prefix="/api/delivery/printer", tags=["Printer"])
     "/status",
     response_model=StatusPrinterResponse,
     status_code=status.HTTP_200_OK,
-    dependencies=[Depends(get_current_user)]
 )
 async def verificar_status_printer(
     db: Session = Depends(get_db),
@@ -46,7 +45,6 @@ async def verificar_status_printer(
     "/imprimir/{pedido_id}",
     response_model=RespostaImpressaoPrinter,
     status_code=status.HTTP_200_OK,
-    dependencies=[Depends(get_current_user)]
 )
 async def imprimir_pedido(
     pedido_id: int = Path(..., description="ID do pedido a ser impresso"),
