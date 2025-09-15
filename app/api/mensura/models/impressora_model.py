@@ -12,7 +12,6 @@ class ImpressoraModel(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     nome = Column(String(100), nullable=False)
-    nome_impressora = Column(String(100), nullable=True)
     
     # Configurações da impressora
     config = Column(JSON, nullable=False, default={

@@ -14,7 +14,6 @@ def create_impressoras_table():
     CREATE TABLE IF NOT EXISTS mensura.impressoras (
         id SERIAL PRIMARY KEY,
         nome VARCHAR(100) NOT NULL,
-        nome_impressora VARCHAR(100),
         config JSONB NOT NULL DEFAULT '{
             "nome_impressora": null,
             "fonte_nome": "Courier New",

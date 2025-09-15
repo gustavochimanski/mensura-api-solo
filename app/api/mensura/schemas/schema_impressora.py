@@ -15,7 +15,6 @@ class ImpressoraConfig(BaseModel):
 
 class ImpressoraBase(BaseModel):
     nome: str
-    nome_impressora: Optional[str] = None
     config: ImpressoraConfig = Field(default_factory=ImpressoraConfig)
 
 class ImpressoraCreate(ImpressoraBase):
@@ -23,7 +22,6 @@ class ImpressoraCreate(ImpressoraBase):
 
 class ImpressoraUpdate(BaseModel):
     nome: Optional[str] = None
-    nome_impressora: Optional[str] = None
     config: Optional[ImpressoraConfig] = None
 
 class ImpressoraResponse(ImpressoraBase):

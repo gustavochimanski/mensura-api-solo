@@ -12,7 +12,6 @@ class ImpressoraRepository:
     def create_impressora(self, impressora_data: ImpressoraCreate) -> ImpressoraModel:
         db_impressora = ImpressoraModel(
             nome=impressora_data.nome,
-            nome_impressora=impressora_data.nome_impressora,
             config=impressora_data.config.model_dump(),
             empresa_id=impressora_data.empresa_id
         )

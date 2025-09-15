@@ -24,7 +24,6 @@ class ImpressoraService:
         return ImpressoraResponse(
             id=db_impressora.id,
             nome=db_impressora.nome,
-            nome_impressora=db_impressora.nome_impressora,
             config=db_impressora.config,
             empresa_id=db_impressora.empresa_id,
             empresa_nome=empresa.nome
@@ -39,7 +38,6 @@ class ImpressoraService:
         return ImpressoraResponse(
             id=db_impressora.id,
             nome=db_impressora.nome,
-            nome_impressora=db_impressora.nome_impressora,
             config=db_impressora.config,
             empresa_id=db_impressora.empresa_id,
             empresa_nome=empresa.nome if empresa else None
@@ -53,7 +51,6 @@ class ImpressoraService:
             ImpressoraResponse(
                 id=impressora.id,
                 nome=impressora.nome,
-                nome_impressora=impressora.nome_impressora,
                 config=impressora.config,
                 empresa_id=impressora.empresa_id,
                 empresa_nome=empresa.nome if empresa else None
@@ -70,7 +67,6 @@ class ImpressoraService:
         return ImpressoraResponse(
             id=db_impressora.id,
             nome=db_impressora.nome,
-            nome_impressora=db_impressora.nome_impressora,
             config=db_impressora.config,
             empresa_id=db_impressora.empresa_id,
             empresa_nome=empresa.nome if empresa else None
@@ -90,7 +86,6 @@ class ImpressoraService:
             ImpressoraResponse(
                 id=impressora.id,
                 nome=impressora.nome,
-                nome_impressora=impressora.nome_impressora,
                 config=impressora.config,
                 empresa_id=impressora.empresa_id,
                 empresa_nome=empresas.get(impressora.empresa_id).nome if empresas.get(impressora.empresa_id) else None
