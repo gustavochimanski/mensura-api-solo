@@ -101,3 +101,21 @@ class PedidoParaImpressao(BaseModel):
     meio_pagamento_descricao: Optional[str] = Field(None, description="Descrição do meio de pagamento")
     observacao_geral: Optional[str] = Field(None, description="Observação geral")
     itens: List[ItemPedidoPrinter] = Field(..., description="Itens do pedido")
+
+
+class PedidoPendenteImpressaoResponse(BaseModel):
+    """Resposta formatada para pedidos pendentes de impressão"""
+    numero: int = Field(..., description="Número do pedido")
+    cliente: str = Field(..., description="Nome do cliente")
+    telefone_cliente: Optional[str] = Field(None, description="Telefone do cliente")
+    itens: List[ItemPedidoPrinter] = Field(..., description="Lista de itens do pedido")
+    subtotal: float = Field(..., description="Subtotal do pedido")
+    desconto: float = Field(0, description="Valor do desconto")
+    taxa_entrega: float = Field(0, description="Taxa de entrega")
+    taxa_servico: float = Field(0, description="Taxa de serviço")
+    total: float = Field(..., description="Valor total do pedido")
+    tipo_pagamento: str = Field(..., description="Tipo de pagamento")
+    troco: Optional[float] = Field(None, description="Valor do troco")
+    observacao_geral: Optional[str] = Field(None, description="Observação geral do pedido")
+    endereco: Optional[str] = Field(None, description="Endereço de entrega")
+    data_criacao: datetime = Field(..., description="Data de criação do pedido")

@@ -11,7 +11,8 @@ from app.api.delivery.schemas.schema_printer import (
     RespostaImpressaoMultipla,
     StatusPrinterResponse,
     ConfigImpressaoPrinter,
-    ImpressaoMultiplaRequest
+    ImpressaoMultiplaRequest,
+    PedidoPendenteImpressaoResponse
 )
 from app.core.admin_dependencies import get_current_user
 from app.api.mensura.models.user_model import UserModel
@@ -37,6 +38,27 @@ async def verificar_status_printer(
     logger.info("[Printer] Verificar status da Printer API")
     printer_service = PrinterService(db)
     return await printer_service.verificar_status_printer()
+
+
+# ======================================================================
+# ==================== BUSCAR PEDIDOS PENDENTES =======================
+@router.get(
+    "/imprimir-pendentes",
+    response_model=List[PedidoPendenteImpressaoResponse],
+    status_code=status.HTTP_200_OK,
+)
+async def buscar_pedidos_pendentes_impressao(
+    empresa_id: int = Query(..., description="ID da empresa"),
+    limite: int = Query(10, ge=1, le=50, description="Número máximo de pedidos para buscar"),
+    db: Session = Depends(get_db),
+):
+    """
+    Busca pedidos pendentes de impressão formatados para o endpoint GET.
+    Retorna os dados no formato específico solicitado.
+    """
+    logger.info(f"[Printer] Buscar pedidos pendentes - empresa_id={empresa_id}, limite={limite}")
+    printer_service = PrinterService(db)
+    return printer_service.get_pedidos_pendentes_para_impressao(empresa_id, limite)
 
 
 

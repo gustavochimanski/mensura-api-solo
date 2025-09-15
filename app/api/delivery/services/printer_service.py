@@ -11,7 +11,8 @@ from app.api.delivery.schemas.schema_printer import (
     RespostaImpressaoMultipla,
     StatusPrinterResponse,
     ConfigImpressaoPrinter,
-    ImpressaoMultiplaRequest
+    ImpressaoMultiplaRequest,
+    PedidoPendenteImpressaoResponse
 )
 from app.api.delivery.schemas.schema_shared_enums import PedidoStatusEnum
 from app.utils.printer_client import PrinterClient
@@ -254,4 +255,65 @@ class PrinterService:
                 sucesso=False,
                 mensagem=f"Erro interno: {str(e)}",
                 numero_pedido=pedido_id
+            )
+    
+    def get_pedidos_pendentes_para_impressao(self, empresa_id: int, limite: Optional[int] = None) -> List[PedidoPendenteImpressaoResponse]:
+        """
+        Busca pedidos pendentes de impressão formatados para o endpoint GET
+        
+        Args:
+            empresa_id: ID da empresa
+            limite: Número máximo de pedidos
+            
+        Returns:
+            Lista de pedidos formatados para impressão
+        """
+        try:
+            # Busca pedidos pendentes
+            pedidos = self.repo.get_pedidos_pendentes_impressao(empresa_id, limite)
+            
+            resultados = []
+            for pedido in pedidos:
+                # Converte pedido para formato de impressão
+                pedido_impressao = self.repo.converter_pedido_para_impressao(pedido)
+                
+                # Determina tipo de pagamento
+                tipo_pagamento = "DINHEIRO"  # Padrão
+                if pedido_impressao.meio_pagamento_descricao:
+                    tipo_pagamento = pedido_impressao.meio_pagamento_descricao.upper()
+                
+                # Calcula troco se necessário (simplificado)
+                troco = None
+                if tipo_pagamento == "DINHEIRO":
+                    # Aqui você pode implementar lógica para calcular troco baseado no valor pago
+                    # Por enquanto, vamos usar o valor do pedido como referência
+                    troco = pedido_impressao.valor_total
+                
+                # Cria resposta formatada
+                resultado = PedidoPendenteImpressaoResponse(
+                    numero=pedido_impressao.id,
+                    cliente=pedido_impressao.cliente_nome,
+                    telefone_cliente=pedido_impressao.cliente_telefone,
+                    itens=pedido_impressao.itens,
+                    subtotal=pedido_impressao.valor_total,  # Simplificado - pode ser calculado dos itens
+                    desconto=0.0,  # Pode ser implementado posteriormente
+                    taxa_entrega=0.0,  # Pode ser implementado posteriormente
+                    taxa_servico=0.0,  # Pode ser implementado posteriormente
+                    total=pedido_impressao.valor_total,
+                    tipo_pagamento=tipo_pagamento,
+                    troco=troco,
+                    observacao_geral=pedido_impressao.observacao_geral,
+                    endereco=pedido_impressao.endereco_cliente,
+                    data_criacao=pedido_impressao.data_criacao
+                )
+                
+                resultados.append(resultado)
+            
+            return resultados
+            
+        except Exception as e:
+            logger.error(f"[PrinterService] Erro ao buscar pedidos pendentes da empresa {empresa_id}: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Erro ao buscar pedidos pendentes: {str(e)}"
             )
