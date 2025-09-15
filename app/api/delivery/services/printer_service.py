@@ -68,67 +68,6 @@ class PrinterService:
             data_criacao=pedido_impressao.data_criacao
         )
     
-    async def imprimir_pedido(self, pedido_id: int, config: Optional[ConfigImpressaoPrinter] = None) -> RespostaImpressaoPrinter:
-        """
-        Imprime um pedido específico
-        
-        Args:
-            pedido_id: ID do pedido a ser impresso
-            config: Configurações de impressão opcionais
-            
-        Returns:
-            Resposta da operação de impressão
-        """
-        try:
-            # Busca o pedido
-            pedido = self.repo.get_pedido_para_impressao(pedido_id)
-            if not pedido:
-                return RespostaImpressaoPrinter(
-                    sucesso=False,
-                    mensagem=f"Pedido {pedido_id} não encontrado ou não está pendente de impressão",
-                    numero_pedido=pedido_id
-                )
-            
-            # Converte para formato de impressão
-            pedido_impressao = self.repo.converter_pedido_para_impressao(pedido)
-            
-            # Converte para request da Printer API
-            printer_request = self._converter_pedido_para_printer_request(pedido_impressao)
-            
-            # Envia para impressão
-            resultado = await self.printer_client.imprimir_pedido(printer_request.model_dump())
-            
-            if resultado.get("sucesso"):
-                # Marca como impresso
-                if self.repo.marcar_pedido_impresso(pedido_id):
-                    logger.info(f"[PrinterService] Pedido {pedido_id} impresso com sucesso")
-                    return RespostaImpressaoPrinter(
-                        sucesso=True,
-                        mensagem=f"Pedido {pedido_id} impresso com sucesso",
-                        numero_pedido=pedido_id
-                    )
-                else:
-                    logger.error(f"[PrinterService] Falha ao marcar pedido {pedido_id} como impresso")
-                    return RespostaImpressaoPrinter(
-                        sucesso=False,
-                        mensagem=f"Pedido {pedido_id} impresso mas falha ao atualizar status",
-                        numero_pedido=pedido_id
-                    )
-            else:
-                logger.error(f"[PrinterService] Falha ao imprimir pedido {pedido_id}: {resultado.get('mensagem')}")
-                return RespostaImpressaoPrinter(
-                    sucesso=False,
-                    mensagem=resultado.get('mensagem', 'Erro desconhecido na impressão'),
-                    numero_pedido=pedido_id
-                )
-                
-        except Exception as e:
-            logger.error(f"[PrinterService] Erro ao imprimir pedido {pedido_id}: {str(e)}")
-            return RespostaImpressaoPrinter(
-                sucesso=False,
-                mensagem=f"Erro interno: {str(e)}",
-                numero_pedido=pedido_id
-            )
     
     async def imprimir_pedidos_pendentes(
         self, 
@@ -192,27 +131,6 @@ class PrinterService:
                 pedidos_falharam=0
             )
     
-    async def verificar_status_printer(self) -> StatusPrinterResponse:
-        """
-        Verifica se a Printer API está funcionando
-        
-        Returns:
-            Status da Printer API
-        """
-        try:
-            conectado = await self.printer_client.verificar_saude()
-            
-            return StatusPrinterResponse(
-                conectado=conectado,
-                mensagem="Printer API funcionando" if conectado else "Printer API não acessível"
-            )
-            
-        except Exception as e:
-            logger.error(f"[PrinterService] Erro ao verificar status da Printer API: {str(e)}")
-            return StatusPrinterResponse(
-                conectado=False,
-                mensagem=f"Erro ao verificar status: {str(e)}"
-            )
     
     def listar_pedidos_pendentes_impressao(self, empresa_id: int, limite: Optional[int] = None) -> List[Dict[str, Any]]:
         """
@@ -223,7 +141,7 @@ class PrinterService:
             limite: Número máximo de pedidos
             
         Returns:
-            Lista de pedidos formatados
+            Lista de pedidos formatados com itens incluídos
         """
         try:
             pedidos = self.repo.get_pedidos_pendentes_impressao(empresa_id, limite)
@@ -231,6 +149,16 @@ class PrinterService:
             resultados = []
             for pedido in pedidos:
                 pedido_impressao = self.repo.converter_pedido_para_impressao(pedido)
+                
+                # Converte itens para formato de dicionário
+                itens_formatados = []
+                for item in pedido_impressao.itens:
+                    itens_formatados.append({
+                        "descricao": item.descricao,
+                        "quantidade": item.quantidade,
+                        "preco": item.preco,
+                        "observacao": item.observacao
+                    })
                 
                 resultados.append({
                     "id": pedido_impressao.id,
@@ -242,7 +170,8 @@ class PrinterService:
                     "endereco_cliente": pedido_impressao.endereco_cliente,
                     "meio_pagamento_descricao": pedido_impressao.meio_pagamento_descricao,
                     "observacao_geral": pedido_impressao.observacao_geral,
-                    "quantidade_itens": len(pedido_impressao.itens)
+                    "quantidade_itens": len(pedido_impressao.itens),
+                    "itens": itens_formatados
                 })
             
             return resultados
