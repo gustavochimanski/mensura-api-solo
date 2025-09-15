@@ -88,6 +88,7 @@ async def imprimir_pedidos_pendentes(
 # ==================== LISTAR PEDIDOS PENDENTES =======================
 @router.get(
     "/pedidos-pendentes",
+    response_model=List[PedidoPendenteImpressaoResponse],
     status_code=status.HTTP_200_OK,
 )
 async def listar_pedidos_pendentes_impressao(
@@ -100,7 +101,7 @@ async def listar_pedidos_pendentes_impressao(
     """
     logger.info(f"[Printer] Listar pendentes - empresa_id={empresa_id}, limite={limite}")
     printer_service = PrinterService(db)
-    return printer_service.listar_pedidos_pendentes_impressao(empresa_id, limite)
+    return printer_service.get_pedidos_pendentes_para_impressao(empresa_id, limite)
 
 
 # ======================================================================
