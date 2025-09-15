@@ -45,6 +45,9 @@ class ItemPedidoEditar(BaseModel):
     observacao: Optional[str] = None
     acao: str  # "novo-item", "atualizar", "remover"
 
+class VincularEntregadorRequest(BaseModel):
+    entregador_id: Optional[int] = None  # None para desvincular, ID para vincular
+
 
 # ======================================================================
 # ============================ CLIENTE =================================

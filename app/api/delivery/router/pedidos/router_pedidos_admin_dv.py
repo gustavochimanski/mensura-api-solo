@@ -6,7 +6,7 @@ from fastapi import APIRouter, status, Path, Query, Depends, Body, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.delivery.schemas.schema_pedido import PedidoResponse, PedidoKanbanResponse, \
-    EditarPedidoRequest, ItemPedidoEditar, PedidoResponseCompletoTotal
+    EditarPedidoRequest, ItemPedidoEditar, PedidoResponseCompletoTotal, VincularEntregadorRequest
 from app.api.delivery.schemas.schema_shared_enums import PedidoStatusEnum
 from app.api.delivery.services.pedidos.service_pedido import PedidoService
 from app.core.admin_dependencies import get_current_user
@@ -112,4 +112,27 @@ def atualizar_itens(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
 
     return svc.atualizar_itens_pedido(pedido_id, itens)
+
+
+# ======================================================================
+# ================= VINCULAR/DESVINCULAR ENTREGADOR ====================
+@router.put(
+    "/{pedido_id}/entregador",
+    response_model=PedidoResponse,
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(get_current_user)]
+)
+def vincular_entregador(
+    pedido_id: int = Path(..., description="ID do pedido"),
+    payload: VincularEntregadorRequest = Body(...),
+    db: Session = Depends(get_db),
+):
+    """
+    Vincula ou desvincula um entregador a um pedido.
+    - Para vincular: envie entregador_id com o ID do entregador
+    - Para desvincular: envie entregador_id como null
+    """
+    logger.info(f"[Pedidos] Vincular entregador - pedido_id={pedido_id} -> entregador_id={payload.entregador_id}")
+    svc = PedidoService(db)
+    return svc.vincular_entregador(pedido_id, payload.entregador_id)
 

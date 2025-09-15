@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.api.delivery.models.model_pedido_dv import PedidoDeliveryModel
 from app.api.delivery.models.model_pedido_item_dv import PedidoItemModel
 from app.api.delivery.repositories.repo_pedidos import PedidoRepository
+from app.api.delivery.repositories.repo_entregadores import EntregadorRepository
 from app.api.delivery.services.meio_pagamento_service import MeioPagamentoService
 from app.api.mensura.repositories.empresa_repo import EmpresaRepository
 from app.api.delivery.schemas.schema_pedido import (
@@ -48,6 +49,7 @@ class PedidoService:
         self.db = db
         self.repo = PedidoRepository(db)
         self.repo_empresa = EmpresaRepository(db)
+        self.repo_entregador = EntregadorRepository(db)
         self.gateway = PaymentGatewayClient()  # MOCK
 
     # ---------------- Helpers ----------------
@@ -835,4 +837,42 @@ class PedidoService:
             self.repo.commit()
             pedido = self.repo.get_pedido(pedido.id)
 
+        return self._pedido_to_response(pedido)
+
+    def vincular_entregador(self, pedido_id: int, entregador_id: Optional[int]) -> PedidoResponse:
+        """
+        Vincula ou desvincula um entregador a um pedido.
+        Se entregador_id for None, desvincula o entregador atual.
+        """
+        pedido = self.repo.get_pedido(pedido_id)
+        if not pedido:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
+
+        # Se entregador_id for fornecido, verifica se existe
+        if entregador_id is not None:
+            entregador = self.repo_entregador.get(entregador_id)
+            if not entregador:
+                raise HTTPException(status.HTTP_404_NOT_FOUND, "Entregador não encontrado")
+            
+            # Verifica se o entregador está vinculado à empresa do pedido
+            # Como entregador pode estar vinculado a múltiplas empresas, verificamos a tabela de associação
+            from app.mensura.models.association_tables import entregador_empresa
+            vinculacao = self.db.query(entregador_empresa).filter(
+                entregador_empresa.c.entregador_id == entregador_id,
+                entregador_empresa.c.empresa_id == pedido.empresa_id
+            ).first()
+            
+            if not vinculacao:
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST, 
+                    "Entregador não está vinculado à empresa do pedido"
+                )
+
+        # Atualiza o entregador do pedido
+        pedido.entregador_id = entregador_id
+        self.db.commit()
+        self.db.refresh(pedido)
+
+        logger.info(f"[vincular_entregador] pedido_id={pedido_id} entregador_id={entregador_id}")
+        
         return self._pedido_to_response(pedido)
