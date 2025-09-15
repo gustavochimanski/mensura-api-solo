@@ -2,31 +2,47 @@
 from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional, Dict, Any
 
-class ImpressoraConfig(BaseModel):
+class ImpressoraConfigData(BaseModel):
     nome_impressora: Optional[str] = None
     fonte_nome: str = "Courier New"
     fonte_tamanho: int = 24
     espacamento_linha: int = 40
     espacamento_item: int = 50
-    nome_estabelecimento: str = ""
     mensagem_rodape: str = "Obrigado pela preferencia!"
     formato_preco: str = "R$ {:.2f}"
     formato_total: str = "TOTAL: R$ {:.2f}"
 
+class EmpresaConfigData(BaseModel):
+    nome: str
+    cnpj: Optional[str] = None
+    telefone: Optional[str] = None
+
+class MeioPagamentoConfigData(BaseModel):
+    # Aqui você pode adicionar campos específicos de meio de pagamento
+    # Por enquanto deixando vazio, mas pode ser expandido
+    pass
+
+class ConfigResponse(BaseModel):
+    impressora: ImpressoraConfigData
+    empresa: EmpresaConfigData
+    meio_pagamento: MeioPagamentoConfigData
+
 class ImpressoraBase(BaseModel):
     nome: str
-    config: ImpressoraConfig = Field(default_factory=ImpressoraConfig)
+    config: ImpressoraConfigData = Field(default_factory=ImpressoraConfigData)
 
 class ImpressoraCreate(ImpressoraBase):
     empresa_id: int
 
 class ImpressoraUpdate(BaseModel):
     nome: Optional[str] = None
-    config: Optional[ImpressoraConfig] = None
+    config: Optional[ImpressoraConfigData] = None
 
-class ImpressoraResponse(ImpressoraBase):
+class ImpressoraResponse(BaseModel):
     id: int
+    nome: str
     empresa_id: int
     empresa_nome: Optional[str] = None
+    config: ConfigResponse
 
     model_config = ConfigDict(from_attributes=True)

@@ -2,7 +2,15 @@
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from app.api.mensura.repositories.impressora_repo import ImpressoraRepository
-from app.api.mensura.schemas.schema_impressora import ImpressoraCreate, ImpressoraUpdate, ImpressoraResponse
+from app.api.mensura.schemas.schema_impressora import (
+    ImpressoraCreate, 
+    ImpressoraUpdate, 
+    ImpressoraResponse,
+    ImpressoraConfigData,
+    EmpresaConfigData,
+    MeioPagamentoConfigData,
+    ConfigResponse
+)
 from app.api.mensura.repositories.empresa_repo import EmpresaRepository
 
 class ImpressoraService:
@@ -11,19 +19,32 @@ class ImpressoraService:
         self.impressora_repo = ImpressoraRepository(db)
         self.empresa_repo = EmpresaRepository(db)
 
-    def _build_config_from_model(self, db_impressora) -> dict:
+    def _build_config_from_model(self, db_impressora, empresa) -> ConfigResponse:
         """Constrói o objeto config a partir das colunas separadas do modelo"""
-        return {
-            "nome_impressora": db_impressora.nome_impressora,
-            "fonte_nome": db_impressora.fonte_nome,
-            "fonte_tamanho": db_impressora.fonte_tamanho,
-            "espacamento_linha": db_impressora.espacamento_linha,
-            "espacamento_item": db_impressora.espacamento_item,
-            "nome_estabelecimento": db_impressora.nome_estabelecimento,
-            "mensagem_rodape": db_impressora.mensagem_rodape,
-            "formato_preco": db_impressora.formato_preco,
-            "formato_total": db_impressora.formato_total
-        }
+        impressora_config = ImpressoraConfigData(
+            nome_impressora=db_impressora.nome_impressora,
+            fonte_nome=db_impressora.fonte_nome,
+            fonte_tamanho=db_impressora.fonte_tamanho,
+            espacamento_linha=db_impressora.espacamento_linha,
+            espacamento_item=db_impressora.espacamento_item,
+            mensagem_rodape=db_impressora.mensagem_rodape,
+            formato_preco=db_impressora.formato_preco,
+            formato_total=db_impressora.formato_total
+        )
+        
+        empresa_config = EmpresaConfigData(
+            nome=empresa.nome if empresa else "",
+            cnpj=empresa.cnpj if empresa else None,
+            telefone=empresa.telefone if empresa else None
+        )
+        
+        meio_pagamento_config = MeioPagamentoConfigData()
+        
+        return ConfigResponse(
+            impressora=impressora_config,
+            empresa=empresa_config,
+            meio_pagamento=meio_pagamento_config
+        )
 
     def create_impressora(self, impressora_data: ImpressoraCreate) -> ImpressoraResponse:
         # Verificar se a empresa existe
@@ -31,17 +52,14 @@ class ImpressoraService:
         if not empresa:
             raise ValueError("Empresa não encontrada")
 
-        # Atualizar o nome_estabelecimento na config com o nome da empresa
-        impressora_data.config.nome_estabelecimento = empresa.nome
-
         db_impressora = self.impressora_repo.create_impressora(impressora_data)
         
         return ImpressoraResponse(
             id=db_impressora.id,
             nome=db_impressora.nome,
-            config=self._build_config_from_model(db_impressora),
             empresa_id=db_impressora.empresa_id,
-            empresa_nome=empresa.nome
+            empresa_nome=empresa.nome,
+            config=self._build_config_from_model(db_impressora, empresa)
         )
 
     def get_impressora(self, impressora_id: int) -> Optional[ImpressoraResponse]:
@@ -53,9 +71,9 @@ class ImpressoraService:
         return ImpressoraResponse(
             id=db_impressora.id,
             nome=db_impressora.nome,
-            config=self._build_config_from_model(db_impressora),
             empresa_id=db_impressora.empresa_id,
-            empresa_nome=empresa.nome if empresa else None
+            empresa_nome=empresa.nome if empresa else None,
+            config=self._build_config_from_model(db_impressora, empresa)
         )
 
     def get_impressoras_by_empresa(self, empresa_id: int) -> List[ImpressoraResponse]:
@@ -66,9 +84,9 @@ class ImpressoraService:
             ImpressoraResponse(
                 id=impressora.id,
                 nome=impressora.nome,
-                config=self._build_config_from_model(impressora),
                 empresa_id=impressora.empresa_id,
-                empresa_nome=empresa.nome if empresa else None
+                empresa_nome=empresa.nome if empresa else None,
+                config=self._build_config_from_model(impressora, empresa)
             )
             for impressora in db_impressoras
         ]
@@ -82,9 +100,9 @@ class ImpressoraService:
         return ImpressoraResponse(
             id=db_impressora.id,
             nome=db_impressora.nome,
-            config=self._build_config_from_model(db_impressora),
             empresa_id=db_impressora.empresa_id,
-            empresa_nome=empresa.nome if empresa else None
+            empresa_nome=empresa.nome if empresa else None,
+            config=self._build_config_from_model(db_impressora, empresa)
         )
 
     def delete_impressora(self, impressora_id: int) -> bool:
@@ -101,9 +119,9 @@ class ImpressoraService:
             ImpressoraResponse(
                 id=impressora.id,
                 nome=impressora.nome,
-                config=self._build_config_from_model(impressora),
                 empresa_id=impressora.empresa_id,
-                empresa_nome=empresas.get(impressora.empresa_id).nome if empresas.get(impressora.empresa_id) else None
+                empresa_nome=empresas.get(impressora.empresa_id).nome if empresas.get(impressora.empresa_id) else None,
+                config=self._build_config_from_model(impressora, empresas.get(impressora.empresa_id))
             )
             for impressora in db_impressoras
         ]

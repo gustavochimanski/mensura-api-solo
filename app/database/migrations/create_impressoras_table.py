@@ -19,7 +19,6 @@ def create_impressoras_table():
         fonte_tamanho INTEGER NOT NULL DEFAULT 24,
         espacamento_linha INTEGER NOT NULL DEFAULT 40,
         espacamento_item INTEGER NOT NULL DEFAULT 50,
-        nome_estabelecimento VARCHAR(100) NOT NULL DEFAULT '',
         mensagem_rodape TEXT NOT NULL DEFAULT 'Obrigado pela preferencia!',
         formato_preco VARCHAR(50) NOT NULL DEFAULT 'R$ {:.2f}',
         formato_total VARCHAR(50) NOT NULL DEFAULT 'TOTAL: R$ {:.2f}',

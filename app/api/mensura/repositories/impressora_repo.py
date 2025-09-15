@@ -17,7 +17,6 @@ class ImpressoraRepository:
             fonte_tamanho=impressora_data.config.fonte_tamanho,
             espacamento_linha=impressora_data.config.espacamento_linha,
             espacamento_item=impressora_data.config.espacamento_item,
-            nome_estabelecimento=impressora_data.config.nome_estabelecimento,
             mensagem_rodape=impressora_data.config.mensagem_rodape,
             formato_preco=impressora_data.config.formato_preco,
             formato_total=impressora_data.config.formato_total,
@@ -58,8 +57,6 @@ class ImpressoraRepository:
                 db_impressora.espacamento_linha = config.espacamento_linha
             if hasattr(config, 'espacamento_item') and config.espacamento_item is not None:
                 db_impressora.espacamento_item = config.espacamento_item
-            if hasattr(config, 'nome_estabelecimento') and config.nome_estabelecimento is not None:
-                db_impressora.nome_estabelecimento = config.nome_estabelecimento
             if hasattr(config, 'mensagem_rodape') and config.mensagem_rodape is not None:
                 db_impressora.mensagem_rodape = config.mensagem_rodape
             if hasattr(config, 'formato_preco') and config.formato_preco is not None:

@@ -19,7 +19,6 @@ class ImpressoraModel(Base):
     fonte_tamanho = Column(Integer, nullable=False, default=24)
     espacamento_linha = Column(Integer, nullable=False, default=40)
     espacamento_item = Column(Integer, nullable=False, default=50)
-    nome_estabelecimento = Column(String(100), nullable=False, default="")
     mensagem_rodape = Column(Text, nullable=False, default="Obrigado pela preferencia!")
     formato_preco = Column(String(50), nullable=False, default="R$ {:.2f}")
     formato_total = Column(String(50), nullable=False, default="TOTAL: R$ {:.2f}")
