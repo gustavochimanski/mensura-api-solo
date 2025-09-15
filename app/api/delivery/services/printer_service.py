@@ -131,6 +131,27 @@ class PrinterService:
                 pedidos_falharam=0
             )
     
+    async def verificar_status_printer(self) -> StatusPrinterResponse:
+        """
+        Verifica se a Printer API está funcionando
+        
+        Returns:
+            Status da Printer API
+        """
+        try:
+            conectado = await self.printer_client.verificar_saude()
+            
+            return StatusPrinterResponse(
+                conectado=conectado,
+                mensagem="Printer API funcionando" if conectado else "Printer API não acessível"
+            )
+            
+        except Exception as e:
+            logger.error(f"[PrinterService] Erro ao verificar status da Printer API: {str(e)}")
+            return StatusPrinterResponse(
+                conectado=False,
+                mensagem=f"Erro ao verificar status: {str(e)}"
+            )
     
     def listar_pedidos_pendentes_impressao(self, empresa_id: int, limite: Optional[int] = None) -> List[Dict[str, Any]]:
         """

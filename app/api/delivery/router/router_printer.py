@@ -9,6 +9,7 @@ from app.api.delivery.services.printer_service import PrinterService
 from app.api.delivery.schemas.schema_printer import (
     RespostaImpressaoPrinter,
     RespostaImpressaoMultipla,
+    StatusPrinterResponse,
     ConfigImpressaoPrinter,
     ImpressaoMultiplaRequest
 )
@@ -20,6 +21,22 @@ from app.utils.logger import logger
 router = APIRouter(prefix="/api/delivery/printer", tags=["Printer"])
 
 
+# ======================================================================
+# ==================== VERIFICAR STATUS PRINTER =======================
+@router.get(
+    "/status",
+    response_model=StatusPrinterResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def verificar_status_printer(
+    db: Session = Depends(get_db),
+):
+    """
+    Verifica se a Printer API está funcionando.
+    """
+    logger.info("[Printer] Verificar status da Printer API")
+    printer_service = PrinterService(db)
+    return await printer_service.verificar_status_printer()
 
 
 
