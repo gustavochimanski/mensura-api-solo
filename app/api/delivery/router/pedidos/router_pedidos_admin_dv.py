@@ -219,7 +219,7 @@ async def imprimir_todos_pendentes(
     printer_service = PrinterIntegrationService(db)
     return await printer_service.imprimir_pedidos_pendentes(empresa_id, limite)
 
-
+#
 # ======================================================================
 # ==================== VERIFICAR CONECTIVIDADE PRINTER ================
 @router.get(
