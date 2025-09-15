@@ -2,7 +2,7 @@
 from sqlalchemy import Table, Column, Integer, ForeignKey, UniqueConstraint, Index, DateTime, func, \
     PrimaryKeyConstraint, String, Boolean, ForeignKeyConstraint
 from app.database.db_connection import Base
-
+#
 entregador_empresa = Table(
     "entregador_empresa",
     Base.metadata,
