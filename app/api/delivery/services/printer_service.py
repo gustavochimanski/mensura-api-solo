@@ -193,7 +193,11 @@ class PrinterService:
                     "meio_pagamento_descricao": pedido_impressao.meio_pagamento_descricao,
                     "observacao_geral": pedido_impressao.observacao_geral,
                     "quantidade_itens": len(pedido_impressao.itens),
-                    "itens": itens_formatados
+                    "itens": itens_formatados,
+                    "desconto": pedido_impressao.desconto,
+                    "taxa_entrega": pedido_impressao.taxa_entrega,
+                    "taxa_servico": pedido_impressao.taxa_servico,
+                    "troco_para": pedido_impressao.troco_para
                 })
             
             return resultados
@@ -295,18 +299,19 @@ class PrinterService:
                     cliente=pedido_impressao.cliente_nome,
                     telefone_cliente=pedido_impressao.cliente_telefone,
                     itens=pedido_impressao.itens,
-                    desconto=float(pedido.desconto or 0),
-                    taxa_entrega=float(pedido.taxa_entrega or 0),
-                    taxa_servico=float(pedido.taxa_servico or 0),
+                    desconto=pedido_impressao.desconto,
+                    taxa_entrega=pedido_impressao.taxa_entrega,
+                    taxa_servico=pedido_impressao.taxa_servico,
                     total=pedido_impressao.valor_total,
                     tipo_pagamento=tipo_pagamento,
-                    troco=troco,
+                    troco=pedido_impressao.troco_para,
                     observacao_geral=pedido_impressao.observacao_geral,
                     endereco=pedido_impressao.endereco_cliente,
                     data_criacao=pedido_impressao.data_criacao
                 )
                 
                 resultados.append(resultado)
+            
             
             return resultados
             
