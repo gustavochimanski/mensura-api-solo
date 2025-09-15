@@ -91,6 +91,54 @@ class PrinterService:
             logger.error(f"[PrinterService] Erro ao buscar dados da empresa {empresa_id}: {str(e)}")
             return DadosEmpresaPrinter()
     
+    def _formatar_dados_empresa_do_pedido(self, empresa) -> DadosEmpresaPrinter:
+        """
+        Formata dados da empresa a partir do objeto empresa do pedido
+        
+        Args:
+            empresa: Objeto empresa do pedido
+            
+        Returns:
+            Dados da empresa formatados para impressão
+        """
+        try:
+            logger.info(f"[PrinterService] Formatando dados da empresa: {empresa.nome}")
+            
+            # Monta endereço completo
+            endereco_completo = None
+            if empresa.endereco:
+                endereco_parts = []
+                if empresa.endereco.logradouro:
+                    endereco_parts.append(empresa.endereco.logradouro)
+                if empresa.endereco.numero:
+                    endereco_parts.append(empresa.endereco.numero)
+                if empresa.endereco.complemento:
+                    endereco_parts.append(empresa.endereco.complemento)
+                if empresa.endereco.bairro:
+                    endereco_parts.append(empresa.endereco.bairro)
+                if empresa.endereco.cidade:
+                    endereco_parts.append(empresa.endereco.cidade)
+                if empresa.endereco.estado:
+                    endereco_parts.append(empresa.endereco.estado)
+                if empresa.endereco.cep:
+                    endereco_parts.append(f"CEP: {empresa.endereco.cep}")
+                
+                endereco_completo = ", ".join(endereco_parts) if endereco_parts else None
+                logger.info(f"[PrinterService] Endereço completo: {endereco_completo}")
+            
+            dados_empresa = DadosEmpresaPrinter(
+                cnpj=empresa.cnpj,
+                endereco=endereco_completo,
+                telefone=empresa.telefone
+            )
+            
+            logger.info(f"[PrinterService] Dados da empresa formatados: {dados_empresa}")
+            return dados_empresa
+            
+        except Exception as e:
+            logger.error(f"[PrinterService] Erro ao formatar dados da empresa: {str(e)}")
+            return DadosEmpresaPrinter()
+    
     def _converter_pedido_para_printer_request(self, pedido_impressao) -> PedidoPrinterRequest:
         """
         Converte pedido formatado para impressão em request da Printer API
@@ -353,12 +401,23 @@ class PrinterService:
         try:
             logger.info(f"[PrinterService] Buscando pedidos pendentes para empresa {empresa_id}")
             
-            # Busca dados da empresa uma única vez
-            dados_empresa = self._buscar_dados_empresa(empresa_id)
-            
-            # Busca pedidos pendentes
+            # Busca pedidos pendentes (já com relacionamento empresa carregado)
             pedidos = self.repo.get_pedidos_pendentes_impressao(empresa_id, limite)
             logger.info(f"[PrinterService] Encontrados {len(pedidos)} pedidos pendentes")
+            
+            # Busca dados da empresa uma única vez (usando o primeiro pedido se disponível)
+            dados_empresa = None
+            if pedidos:
+                primeiro_pedido = pedidos[0]
+                if hasattr(primeiro_pedido, 'empresa') and primeiro_pedido.empresa:
+                    logger.info(f"[PrinterService] Usando dados da empresa do pedido: {primeiro_pedido.empresa.nome}")
+                    dados_empresa = self._formatar_dados_empresa_do_pedido(primeiro_pedido.empresa)
+                else:
+                    logger.warning(f"[PrinterService] Pedido {primeiro_pedido.id} não tem empresa carregada, buscando separadamente")
+                    dados_empresa = self._buscar_dados_empresa(empresa_id)
+            else:
+                logger.info(f"[PrinterService] Nenhum pedido encontrado, buscando dados da empresa separadamente")
+                dados_empresa = self._buscar_dados_empresa(empresa_id)
             
             resultados = []
             for pedido in pedidos:
@@ -395,7 +454,7 @@ class PrinterService:
                     observacao_geral=pedido_impressao.observacao_geral,
                     endereco=pedido_impressao.endereco_cliente,
                     data_criacao=pedido_impressao.data_criacao,
-                    empresa=dados_empresa
+                    empresa=dados_empresa or DadosEmpresaPrinter()
                 )
                 
                 logger.info(f"[PrinterService] Pedido {pedido.id} formatado com empresa: {resultado.empresa}")
