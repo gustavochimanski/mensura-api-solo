@@ -2,7 +2,7 @@
 Router para operações relacionadas à Printer API
 """
 from typing import List, Optional
-from fastapi import APIRouter, status, Path, Query, Depends, HTTPException
+from fastapi import APIRouter, status, Path, Query, Depends, HTTPException, Body
 from sqlalchemy.orm import Session
 
 from app.api.delivery.services.printer_service import PrinterService
@@ -48,7 +48,7 @@ async def verificar_status_printer(
 )
 async def imprimir_pedido(
     pedido_id: int = Path(..., description="ID do pedido a ser impresso"),
-    config: Optional[ConfigImpressaoPrinter] = Query(None, description="Configurações de impressão"),
+    config: Optional[ConfigImpressaoPrinter] = Body(None, description="Configurações de impressão"),
     db: Session = Depends(get_db),
 ):
     """
@@ -69,7 +69,7 @@ async def imprimir_pedido(
 async def imprimir_pedidos_pendentes(
     empresa_id: int = Query(..., description="ID da empresa"),
     limite: int = Query(10, ge=1, le=50, description="Número máximo de pedidos para imprimir"),
-    config: Optional[ConfigImpressaoPrinter] = Query(None, description="Configurações de impressão"),
+    config: Optional[ConfigImpressaoPrinter] = Body(None, description="Configurações de impressão"),
     db: Session = Depends(get_db),
 ):
     """
@@ -167,7 +167,7 @@ async def imprimir_multiplos_pedidos(
     status_code=status.HTTP_200_OK,
 )
 async def validar_configuracao_printer(
-    config: ConfigImpressaoPrinter,
+    config: ConfigImpressaoPrinter = Body(..., description="Configurações de impressão para validação"),
     db: Session = Depends(get_db),
 ):
     """
@@ -193,7 +193,7 @@ async def validar_configuracao_printer(
     status_code=status.HTTP_200_OK,
 )
 async def teste_impressao(
-    config: Optional[ConfigImpressaoPrinter] = Query(None, description="Configurações de impressão"),
+    config: Optional[ConfigImpressaoPrinter] = Body(None, description="Configurações de impressão"),
     db: Session = Depends(get_db),
 ):
     """
