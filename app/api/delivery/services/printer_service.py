@@ -289,16 +289,15 @@ class PrinterService:
                     # Por enquanto, vamos usar o valor do pedido como referência
                     troco = pedido_impressao.valor_total
                 
-                # Cria resposta formatada
+                # Cria resposta formatada usando os dados do pedido original
                 resultado = PedidoPendenteImpressaoResponse(
                     numero=pedido_impressao.id,
                     cliente=pedido_impressao.cliente_nome,
                     telefone_cliente=pedido_impressao.cliente_telefone,
                     itens=pedido_impressao.itens,
-                    subtotal=pedido_impressao.valor_total,  # Simplificado - pode ser calculado dos itens
-                    desconto=0.0,  # Pode ser implementado posteriormente
-                    taxa_entrega=0.0,  # Pode ser implementado posteriormente
-                    taxa_servico=0.0,  # Pode ser implementado posteriormente
+                    desconto=float(pedido.desconto or 0),
+                    taxa_entrega=float(pedido.taxa_entrega or 0),
+                    taxa_servico=float(pedido.taxa_servico or 0),
                     total=pedido_impressao.valor_total,
                     tipo_pagamento=tipo_pagamento,
                     troco=troco,

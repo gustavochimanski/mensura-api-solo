@@ -109,7 +109,6 @@ class PedidoPendenteImpressaoResponse(BaseModel):
     cliente: str = Field(..., description="Nome do cliente")
     telefone_cliente: Optional[str] = Field(None, description="Telefone do cliente")
     itens: List[ItemPedidoPrinter] = Field(..., description="Lista de itens do pedido")
-    subtotal: float = Field(..., description="Subtotal do pedido")
     desconto: float = Field(0, description="Valor do desconto")
     taxa_entrega: float = Field(0, description="Taxa de entrega")
     taxa_servico: float = Field(0, description="Taxa de serviço")
