@@ -15,6 +15,13 @@ class EnderecosService:
         cliente_id = self._token_para_cliente_id(super_token)
         return [EnderecoOut.model_validate(x) for x in self.repo.list_by_cliente(cliente_id)]
 
+    def list_by_cliente_id(self, cliente_id: int):
+        """
+        Lista endereços de um cliente específico por ID.
+        Usado por admins para consultar endereços de qualquer cliente.
+        """
+        return [EnderecoOut.model_validate(x) for x in self.repo.list_by_cliente(cliente_id)]
+
     def get(self, super_token: str, end_id: int):
         cliente_id = self._token_para_cliente_id(super_token)
         return EnderecoOut.model_validate(self.repo.get_by_cliente(cliente_id, end_id))
