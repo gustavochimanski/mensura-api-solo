@@ -55,7 +55,7 @@ class PedidoDeliveryModel(Base):
         back_populates="pedidos",
         foreign_keys=[cliente_id]
     )
-
+#
     status = Column(PedidoStatus, nullable=False, default="I")
     tipo_entrega = Column(TipoEntrega, nullable=False, default="DELIVERY")
     origem = Column(OrigemPedido, nullable=False, default="WEB")
