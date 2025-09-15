@@ -132,6 +132,60 @@ class PrinterService:
                 pedidos_falharam=0
             )
     
+    async def imprimir_pedido(self, pedido_id: int, config: Optional[ConfigImpressaoPrinter] = None) -> RespostaImpressaoPrinter:
+        """
+        Imprime um pedido específico via Printer API
+        
+        Args:
+            pedido_id: ID do pedido
+            config: Configurações de impressão opcionais
+            
+        Returns:
+            Resposta da operação de impressão
+        """
+        try:
+            # Busca o pedido
+            pedido = self.repo.get_pedido_para_impressao(pedido_id)
+            if not pedido:
+                return RespostaImpressaoPrinter(
+                    sucesso=False,
+                    mensagem=f"Pedido {pedido_id} não encontrado ou não está pendente de impressão",
+                    numero_pedido=pedido_id
+                )
+            
+            # Converte para formato de impressão
+            pedido_impressao = self.repo.converter_pedido_para_impressao(pedido)
+            
+            # Converte para request da Printer API
+            printer_request = self._converter_pedido_para_printer_request(pedido_impressao)
+            
+            # Envia para impressão
+            resultado = await self.printer_client.imprimir_pedido(printer_request.dict())
+            
+            if resultado.get("sucesso", False):
+                # Marca como impresso
+                self.repo.marcar_pedido_impresso(pedido_id)
+                
+                return RespostaImpressaoPrinter(
+                    sucesso=True,
+                    mensagem=f"Pedido {pedido_id} impresso com sucesso",
+                    numero_pedido=pedido_id
+                )
+            else:
+                return RespostaImpressaoPrinter(
+                    sucesso=False,
+                    mensagem=resultado.get("mensagem", "Erro desconhecido na impressão"),
+                    numero_pedido=pedido_id
+                )
+                
+        except Exception as e:
+            logger.error(f"[PrinterService] Erro ao imprimir pedido {pedido_id}: {str(e)}")
+            return RespostaImpressaoPrinter(
+                sucesso=False,
+                mensagem=f"Erro interno: {str(e)}",
+                numero_pedido=pedido_id
+            )
+    
     async def verificar_status_printer(self) -> StatusPrinterResponse:
         """
         Verifica se a Printer API está funcionando
