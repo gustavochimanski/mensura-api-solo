@@ -1,5 +1,5 @@
 # app/api/mensura/models/impressora_model.py
-from sqlalchemy import Column, Integer, String, ForeignKey, JSON
+from sqlalchemy import Column, Integer, String, ForeignKey, Text
 from sqlalchemy.orm import relationship
 from pydantic import ConfigDict
 
@@ -13,18 +13,16 @@ class ImpressoraModel(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     nome = Column(String(100), nullable=False)
     
-    # Configurações da impressora
-    config = Column(JSON, nullable=False, default={
-        "nome_impressora": None,
-        "fonte_nome": "Courier New",
-        "fonte_tamanho": 24,
-        "espacamento_linha": 40,
-        "espacamento_item": 50,
-        "nome_estabelecimento": "",
-        "mensagem_rodape": "Obrigado pela preferencia!",
-        "formato_preco": "R$ {:.2f}",
-        "formato_total": "TOTAL: R$ {:.2f}"
-    })
+    # Configurações da impressora - cada campo em sua própria coluna
+    nome_impressora = Column(String(100), nullable=True)
+    fonte_nome = Column(String(50), nullable=False, default="Courier New")
+    fonte_tamanho = Column(Integer, nullable=False, default=24)
+    espacamento_linha = Column(Integer, nullable=False, default=40)
+    espacamento_item = Column(Integer, nullable=False, default=50)
+    nome_estabelecimento = Column(String(100), nullable=False, default="")
+    mensagem_rodape = Column(Text, nullable=False, default="Obrigado pela preferencia!")
+    formato_preco = Column(String(50), nullable=False, default="R$ {:.2f}")
+    formato_total = Column(String(50), nullable=False, default="TOTAL: R$ {:.2f}")
     
     empresa_id = Column(
         Integer,

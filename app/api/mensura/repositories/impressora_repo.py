@@ -12,7 +12,15 @@ class ImpressoraRepository:
     def create_impressora(self, impressora_data: ImpressoraCreate) -> ImpressoraModel:
         db_impressora = ImpressoraModel(
             nome=impressora_data.nome,
-            config=impressora_data.config.model_dump(),
+            nome_impressora=impressora_data.config.nome_impressora,
+            fonte_nome=impressora_data.config.fonte_nome,
+            fonte_tamanho=impressora_data.config.fonte_tamanho,
+            espacamento_linha=impressora_data.config.espacamento_linha,
+            espacamento_item=impressora_data.config.espacamento_item,
+            nome_estabelecimento=impressora_data.config.nome_estabelecimento,
+            mensagem_rodape=impressora_data.config.mensagem_rodape,
+            formato_preco=impressora_data.config.formato_preco,
+            formato_total=impressora_data.config.formato_total,
             empresa_id=impressora_data.empresa_id
         )
         self.db.add(db_impressora)
@@ -32,11 +40,32 @@ class ImpressoraRepository:
             return None
 
         update_data = impressora_data.model_dump(exclude_unset=True)
-        for field, value in update_data.items():
-            if field == "config" and value is not None:
-                setattr(db_impressora, field, value.model_dump())
-            else:
-                setattr(db_impressora, field, value)
+        
+        # Atualizar campos básicos
+        if "nome" in update_data:
+            db_impressora.nome = update_data["nome"]
+        
+        # Atualizar campos de configuração
+        if "config" in update_data and update_data["config"] is not None:
+            config = update_data["config"]
+            if hasattr(config, 'nome_impressora') and config.nome_impressora is not None:
+                db_impressora.nome_impressora = config.nome_impressora
+            if hasattr(config, 'fonte_nome') and config.fonte_nome is not None:
+                db_impressora.fonte_nome = config.fonte_nome
+            if hasattr(config, 'fonte_tamanho') and config.fonte_tamanho is not None:
+                db_impressora.fonte_tamanho = config.fonte_tamanho
+            if hasattr(config, 'espacamento_linha') and config.espacamento_linha is not None:
+                db_impressora.espacamento_linha = config.espacamento_linha
+            if hasattr(config, 'espacamento_item') and config.espacamento_item is not None:
+                db_impressora.espacamento_item = config.espacamento_item
+            if hasattr(config, 'nome_estabelecimento') and config.nome_estabelecimento is not None:
+                db_impressora.nome_estabelecimento = config.nome_estabelecimento
+            if hasattr(config, 'mensagem_rodape') and config.mensagem_rodape is not None:
+                db_impressora.mensagem_rodape = config.mensagem_rodape
+            if hasattr(config, 'formato_preco') and config.formato_preco is not None:
+                db_impressora.formato_preco = config.formato_preco
+            if hasattr(config, 'formato_total') and config.formato_total is not None:
+                db_impressora.formato_total = config.formato_total
 
         self.db.commit()
         self.db.refresh(db_impressora)

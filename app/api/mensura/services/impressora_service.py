@@ -11,6 +11,20 @@ class ImpressoraService:
         self.impressora_repo = ImpressoraRepository(db)
         self.empresa_repo = EmpresaRepository(db)
 
+    def _build_config_from_model(self, db_impressora) -> dict:
+        """Constrói o objeto config a partir das colunas separadas do modelo"""
+        return {
+            "nome_impressora": db_impressora.nome_impressora,
+            "fonte_nome": db_impressora.fonte_nome,
+            "fonte_tamanho": db_impressora.fonte_tamanho,
+            "espacamento_linha": db_impressora.espacamento_linha,
+            "espacamento_item": db_impressora.espacamento_item,
+            "nome_estabelecimento": db_impressora.nome_estabelecimento,
+            "mensagem_rodape": db_impressora.mensagem_rodape,
+            "formato_preco": db_impressora.formato_preco,
+            "formato_total": db_impressora.formato_total
+        }
+
     def create_impressora(self, impressora_data: ImpressoraCreate) -> ImpressoraResponse:
         # Verificar se a empresa existe
         empresa = self.empresa_repo.get_empresa_by_id(impressora_data.empresa_id)
@@ -21,10 +35,11 @@ class ImpressoraService:
         impressora_data.config.nome_estabelecimento = empresa.nome
 
         db_impressora = self.impressora_repo.create_impressora(impressora_data)
+        
         return ImpressoraResponse(
             id=db_impressora.id,
             nome=db_impressora.nome,
-            config=db_impressora.config,
+            config=self._build_config_from_model(db_impressora),
             empresa_id=db_impressora.empresa_id,
             empresa_nome=empresa.nome
         )
@@ -38,7 +53,7 @@ class ImpressoraService:
         return ImpressoraResponse(
             id=db_impressora.id,
             nome=db_impressora.nome,
-            config=db_impressora.config,
+            config=self._build_config_from_model(db_impressora),
             empresa_id=db_impressora.empresa_id,
             empresa_nome=empresa.nome if empresa else None
         )
@@ -51,7 +66,7 @@ class ImpressoraService:
             ImpressoraResponse(
                 id=impressora.id,
                 nome=impressora.nome,
-                config=impressora.config,
+                config=self._build_config_from_model(impressora),
                 empresa_id=impressora.empresa_id,
                 empresa_nome=empresa.nome if empresa else None
             )
@@ -67,7 +82,7 @@ class ImpressoraService:
         return ImpressoraResponse(
             id=db_impressora.id,
             nome=db_impressora.nome,
-            config=db_impressora.config,
+            config=self._build_config_from_model(db_impressora),
             empresa_id=db_impressora.empresa_id,
             empresa_nome=empresa.nome if empresa else None
         )
@@ -86,7 +101,7 @@ class ImpressoraService:
             ImpressoraResponse(
                 id=impressora.id,
                 nome=impressora.nome,
-                config=impressora.config,
+                config=self._build_config_from_model(impressora),
                 empresa_id=impressora.empresa_id,
                 empresa_nome=empresas.get(impressora.empresa_id).nome if empresas.get(impressora.empresa_id) else None
             )

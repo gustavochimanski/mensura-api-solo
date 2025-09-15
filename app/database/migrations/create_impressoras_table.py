@@ -14,17 +14,15 @@ def create_impressoras_table():
     CREATE TABLE IF NOT EXISTS mensura.impressoras (
         id SERIAL PRIMARY KEY,
         nome VARCHAR(100) NOT NULL,
-        config JSONB NOT NULL DEFAULT '{
-            "nome_impressora": null,
-            "fonte_nome": "Courier New",
-            "fonte_tamanho": 24,
-            "espacamento_linha": 40,
-            "espacamento_item": 50,
-            "nome_estabelecimento": "",
-            "mensagem_rodape": "Obrigado pela preferencia!",
-            "formato_preco": "R$ {:.2f}",
-            "formato_total": "TOTAL: R$ {:.2f}"
-        }'::jsonb,
+        nome_impressora VARCHAR(100),
+        fonte_nome VARCHAR(50) NOT NULL DEFAULT 'Courier New',
+        fonte_tamanho INTEGER NOT NULL DEFAULT 24,
+        espacamento_linha INTEGER NOT NULL DEFAULT 40,
+        espacamento_item INTEGER NOT NULL DEFAULT 50,
+        nome_estabelecimento VARCHAR(100) NOT NULL DEFAULT '',
+        mensagem_rodape TEXT NOT NULL DEFAULT 'Obrigado pela preferencia!',
+        formato_preco VARCHAR(50) NOT NULL DEFAULT 'R$ {:.2f}',
+        formato_total VARCHAR(50) NOT NULL DEFAULT 'TOTAL: R$ {:.2f}',
         empresa_id INTEGER NOT NULL REFERENCES mensura.empresas(id) ON DELETE CASCADE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
