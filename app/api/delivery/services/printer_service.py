@@ -316,6 +316,7 @@ class PrinterService:
                     cliente=pedido_impressao.cliente_nome,
                     telefone_cliente=pedido_impressao.cliente_telefone,
                     itens=pedido_impressao.itens,
+                    subtotal=float(pedido.subtotal or 0),
                     desconto=float(pedido.desconto or 0),
                     taxa_entrega=float(pedido.taxa_entrega or 0),
                     taxa_servico=float(pedido.taxa_servico or 0),
