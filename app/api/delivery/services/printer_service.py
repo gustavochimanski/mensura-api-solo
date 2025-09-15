@@ -351,14 +351,19 @@ class PrinterService:
             Lista de pedidos formatados para impressão
         """
         try:
+            logger.info(f"[PrinterService] Buscando pedidos pendentes para empresa {empresa_id}")
+            
             # Busca dados da empresa uma única vez
             dados_empresa = self._buscar_dados_empresa(empresa_id)
             
             # Busca pedidos pendentes
             pedidos = self.repo.get_pedidos_pendentes_impressao(empresa_id, limite)
+            logger.info(f"[PrinterService] Encontrados {len(pedidos)} pedidos pendentes")
             
             resultados = []
             for pedido in pedidos:
+                logger.info(f"[PrinterService] Processando pedido {pedido.id}")
+                
                 # Converte pedido para formato de impressão
                 pedido_impressao = self.repo.converter_pedido_para_impressao(pedido)
                 
@@ -393,9 +398,10 @@ class PrinterService:
                     empresa=dados_empresa
                 )
                 
+                logger.info(f"[PrinterService] Pedido {pedido.id} formatado com empresa: {resultado.empresa}")
                 resultados.append(resultado)
             
-            
+            logger.info(f"[PrinterService] Retornando {len(resultados)} pedidos formatados")
             return resultados
             
         except Exception as e:
