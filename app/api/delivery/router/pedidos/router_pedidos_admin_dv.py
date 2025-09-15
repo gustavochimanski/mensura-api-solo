@@ -143,7 +143,6 @@ def vincular_entregador(
     "/impressao/pendentes",
     response_model=list[PedidoKanbanResponse],
     status_code=status.HTTP_200_OK,
-    dependencies=[Depends(get_current_user)]
 )
 def listar_pedidos_pendentes_impressao(
     empresa_id: int = Query(..., description="ID da empresa"),
@@ -182,7 +181,6 @@ def marcar_pedido_impresso(
 @router.post(
     "/{pedido_id}/imprimir",
     status_code=status.HTTP_200_OK,
-    dependencies=[Depends(get_current_user)]
 )
 async def imprimir_pedido_via_printer(
     pedido_id: int = Path(..., description="ID do pedido"),
