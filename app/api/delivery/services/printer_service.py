@@ -387,30 +387,23 @@ class PrinterService:
             Lista de pedidos formatados para impressão
         """
         try:
-            logger.info(f"[PrinterService] Buscando pedidos pendentes para empresa {empresa_id}")
-            
             # Busca pedidos pendentes (já com relacionamento empresa carregado)
             pedidos = self.repo.get_pedidos_pendentes_impressao(empresa_id, limite)
-            logger.info(f"[PrinterService] Encontrados {len(pedidos)} pedidos pendentes")
             
             # Busca dados da empresa uma única vez (usando o primeiro pedido se disponível)
             dados_empresa = None
             if pedidos:
                 primeiro_pedido = pedidos[0]
                 if hasattr(primeiro_pedido, 'empresa') and primeiro_pedido.empresa:
-                    logger.info(f"[PrinterService] Usando dados da empresa do pedido: {primeiro_pedido.empresa.nome}")
                     dados_empresa = self._formatar_dados_empresa_do_pedido(primeiro_pedido.empresa)
                 else:
                     logger.warning(f"[PrinterService] Pedido {primeiro_pedido.id} não tem empresa carregada, buscando separadamente")
                     dados_empresa = self._buscar_dados_empresa(empresa_id)
             else:
-                logger.info(f"[PrinterService] Nenhum pedido encontrado, buscando dados da empresa separadamente")
                 dados_empresa = self._buscar_dados_empresa(empresa_id)
             
             resultados = []
             for pedido in pedidos:
-                logger.info(f"[PrinterService] Processando pedido {pedido.id}")
-                
                 # Converte pedido para formato de impressão
                 pedido_impressao = self.repo.converter_pedido_para_impressao(pedido)
                 
@@ -445,10 +438,8 @@ class PrinterService:
                     empresa=dados_empresa or DadosEmpresaPrinter()
                 )
                 
-                logger.info(f"[PrinterService] Pedido {pedido.id} formatado com empresa: {resultado.empresa}")
                 resultados.append(resultado)
             
-            logger.info(f"[PrinterService] Retornando {len(resultados)} pedidos formatados")
             return resultados
             
         except Exception as e:
