@@ -43,14 +43,6 @@ class EnderecosService:
         Usado por admins para atualizar endereços de qualquer cliente.
         Verifica se o endereço já existe antes de atualizar.
         """
-        # Verifica se o endereço está sendo usado em pedidos ativos
-        pedido_service = PedidoService(self.db)
-        if pedido_service.verificar_endereco_em_uso(endereco_id):
-            raise HTTPException(
-                status_code=400, 
-                detail="Não é possível alterar este endereço pois ele está sendo usado em pedidos ativos"
-            )
-        
         # Se está atualizando dados que podem causar duplicata, verifica
         if self._dados_podem_causar_duplicata(payload):
             # Cria um payload temporário com os dados atualizados para verificar duplicata
@@ -77,7 +69,13 @@ class EnderecosService:
                     detail="Este endereço já existe para este cliente"
                 )
         
-        return EnderecoOut.model_validate(self.repo.update(cliente_id, endereco_id, payload))
+        # Atualiza o endereço
+        endereco_atualizado = self.repo.update(cliente_id, endereco_id, payload)
+        
+        # Atualiza o snapshot do endereço em pedidos não entregues
+        self._atualizar_snapshot_pedidos_ativos(endereco_id, endereco_atualizado)
+        
+        return EnderecoOut.model_validate(endereco_atualizado)
 
     def _dados_podem_causar_duplicata(self, payload: EnderecoUpdate) -> bool:
         """
@@ -99,15 +97,13 @@ class EnderecosService:
     def update(self, super_token: str, end_id: int, payload: EnderecoUpdate):
         cliente_id = self._token_para_cliente_id(super_token)
         
-        # Verifica se o endereço está sendo usado em pedidos ativos
-        pedido_service = PedidoService(self.db)
-        if pedido_service.verificar_endereco_em_uso(end_id):
-            raise HTTPException(
-                status_code=400, 
-                detail="Não é possível alterar este endereço pois ele está sendo usado em pedidos ativos"
-            )
+        # Atualiza o endereço
+        endereco_atualizado = self.repo.update(cliente_id, end_id, payload)
         
-        return EnderecoOut.model_validate(self.repo.update(cliente_id, end_id, payload))
+        # Atualiza o snapshot do endereço em pedidos não entregues
+        self._atualizar_snapshot_pedidos_ativos(end_id, endereco_atualizado)
+        
+        return EnderecoOut.model_validate(endereco_atualizado)
 
     def delete(self, super_token: str, end_id: int):
         cliente_id = self._token_para_cliente_id(super_token)
@@ -125,6 +121,54 @@ class EnderecosService:
     def set_padrao(self, super_token: str, end_id: int):
         cliente_id = self._token_para_cliente_id(super_token)
         return EnderecoOut.model_validate(self.repo.set_padrao(cliente_id, end_id))
+
+    def _atualizar_snapshot_pedidos_ativos(self, endereco_id: int, endereco_atualizado):
+        """
+        Atualiza o snapshot do endereço em pedidos que ainda não foram entregues.
+        """
+        from app.api.delivery.models.model_pedido_dv import PedidoDeliveryModel
+        from geoalchemy2 import WKTElement
+        
+        # Busca pedidos ativos que usam este endereço
+        pedidos_ativos = (
+            self.db.query(PedidoDeliveryModel)
+            .filter(
+                PedidoDeliveryModel.endereco_id == endereco_id,
+                PedidoDeliveryModel.status.in_(["P", "I", "R", "S"])  # Pendente, Pendente Impressão, Em preparo, Saiu para entrega
+            )
+            .all()
+        )
+        
+        # Atualiza o snapshot para cada pedido ativo
+        for pedido in pedidos_ativos:
+            # Cria novo snapshot com dados atualizados
+            novo_snapshot = {
+                "id": endereco_atualizado.id,
+                "logradouro": endereco_atualizado.logradouro,
+                "numero": endereco_atualizado.numero,
+                "complemento": endereco_atualizado.complemento,
+                "bairro": endereco_atualizado.bairro,
+                "cidade": endereco_atualizado.cidade,
+                "estado": endereco_atualizado.estado,
+                "cep": endereco_atualizado.cep,
+                "ponto_referencia": endereco_atualizado.ponto_referencia,
+                "latitude": float(endereco_atualizado.latitude) if endereco_atualizado.latitude else None,
+                "longitude": float(endereco_atualizado.longitude) if endereco_atualizado.longitude else None
+            }
+            
+            # Atualiza o snapshot no pedido
+            pedido.endereco_snapshot = novo_snapshot
+            
+            # Atualiza as coordenadas geográficas se disponíveis
+            if endereco_atualizado.latitude and endereco_atualizado.longitude:
+                endereco_geo = WKTElement(
+                    f'POINT({endereco_atualizado.longitude} {endereco_atualizado.latitude})', 
+                    srid=4326
+                )
+                pedido.endereco_geo = endereco_geo
+        
+        # Salva as alterações
+        self.db.commit()
 
     # --- função ajustada para retornar cliente_id ---
     def _token_para_cliente_id(self, super_token: str) -> int:
