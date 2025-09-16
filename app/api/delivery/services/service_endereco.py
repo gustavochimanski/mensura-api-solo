@@ -92,6 +92,14 @@ class EnderecosService:
 
     def create(self, super_token: str, payload: EnderecoCreate):
         cliente_id = self._token_para_cliente_id(super_token)
+        
+        # Verifica se o endereço já existe
+        if self.repo.endereco_existe(cliente_id, payload):
+            raise HTTPException(
+                status_code=400,
+                detail="Este endereço já existe para este cliente"
+            )
+        
         return EnderecoOut.model_validate(self.repo.create(cliente_id, payload))
 
     def update(self, super_token: str, end_id: int, payload: EnderecoUpdate):
