@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends
 
 from app.utils.geopapify_client import GeoapifyClient
-from clientes.mensura_api.app.core.admin_dependencies import get_current_user
-from clientes.mensura_api.app.core.client_dependecies import get_cliente_by_super_token
+from app.core.admin_dependencies import get_current_user
+from app.core.client_dependecies import get_cliente_by_super_token
 
 router = APIRouter(prefix="/api/mensura/geoapify", tags=["GEOAPIFY"])
 
