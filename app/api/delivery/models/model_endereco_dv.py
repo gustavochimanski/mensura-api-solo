@@ -20,6 +20,7 @@ class EnderecoDeliveryModel(Base):
     complemento = Column(String(50),  nullable=True)
     bairro      = Column(String(50),  nullable=True)
     cidade      = Column(String(50),  nullable=True)
+    uf          = Column(String(2),   nullable=True)
     estado      = Column(String(2),   nullable=True)
 
     # apoio ao delivery

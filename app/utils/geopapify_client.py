@@ -12,7 +12,7 @@ class GeoapifyMini(BaseModel):
     cidade: str
     bairro: Optional[str] = None
     distrito: Optional[str] = None
-    rua: Optional[str] = None
+    logradouro: Optional[str] = None
     numero: Optional[str] = None
     cep: Optional[str] = None
     pais: Optional[str] = None
@@ -74,7 +74,7 @@ class GeoapifyClient:
             cidade=props.get("city", "") or props.get("town", "") or props.get("village", ""),
             bairro=props.get("suburb") or props.get("neighbourhood"),
             distrito=props.get("district"),
-            rua=props.get("street"),
+            logradouro=props.get("street"),
             numero=props.get("housenumber"),
             cep=props.get("postcode"),
             pais=props.get("country"),
@@ -92,7 +92,7 @@ class GeoapifyClient:
             cidade=viacep_data.localidade or "",
             bairro=viacep_data.bairro,
             distrito=None,
-            rua=viacep_data.logradouro,
+            logradouro=viacep_data.logradouro,
             numero=None,
             cep=viacep_data.cep,
             pais="Brasil",
