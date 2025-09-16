@@ -44,17 +44,11 @@ class PrinterService:
             Dados da empresa formatados para impressão
         """
         try:
-            logger.info(f"[PrinterService] Buscando dados da empresa {empresa_id}")
             empresa = self.empresa_repo.get_empresa_by_id(empresa_id)
             
             if not empresa:
                 logger.warning(f"[PrinterService] Empresa {empresa_id} não encontrada")
                 return DadosEmpresaPrinter()
-            
-            logger.info(f"[PrinterService] Empresa encontrada: {empresa.nome}")
-            logger.info(f"[PrinterService] CNPJ: {empresa.cnpj}")
-            logger.info(f"[PrinterService] Telefone: {empresa.telefone}")
-            logger.info(f"[PrinterService] Endereço: {empresa.endereco}")
             
             # Monta endereço completo
             endereco_completo = None
@@ -76,7 +70,6 @@ class PrinterService:
                     endereco_parts.append(f"CEP: {empresa.endereco.cep}")
                 
                 endereco_completo = ", ".join(endereco_parts) if endereco_parts else None
-                logger.info(f"[PrinterService] Endereço completo: {endereco_completo}")
             
             dados_empresa = DadosEmpresaPrinter(
                 cnpj=empresa.cnpj,
@@ -84,7 +77,6 @@ class PrinterService:
                 telefone=empresa.telefone
             )
             
-            logger.info(f"[PrinterService] Dados da empresa criados: {dados_empresa}")
             return dados_empresa
             
         except Exception as e:
@@ -102,8 +94,6 @@ class PrinterService:
             Dados da empresa formatados para impressão
         """
         try:
-            logger.info(f"[PrinterService] Formatando dados da empresa: {empresa.nome}")
-            
             # Monta endereço completo
             endereco_completo = None
             if empresa.endereco:
@@ -124,7 +114,6 @@ class PrinterService:
                     endereco_parts.append(f"CEP: {empresa.endereco.cep}")
                 
                 endereco_completo = ", ".join(endereco_parts) if endereco_parts else None
-                logger.info(f"[PrinterService] Endereço completo: {endereco_completo}")
             
             dados_empresa = DadosEmpresaPrinter(
                 cnpj=empresa.cnpj,
@@ -132,7 +121,6 @@ class PrinterService:
                 telefone=empresa.telefone
             )
             
-            logger.info(f"[PrinterService] Dados da empresa formatados: {dados_empresa}")
             return dados_empresa
             
         except Exception as e:
