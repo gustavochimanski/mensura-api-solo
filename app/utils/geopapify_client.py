@@ -75,9 +75,13 @@ class GeoapifyClient:
         geom = feature.get("geometry", {})
         coords = geom.get("coordinates", [None, None])
 
+        # Mapeia o estado para sigla de 2 caracteres
+        estado_raw = props.get("state", "")
+        estado_sigla = GeoapifyClient._mapear_estado_para_sigla(estado_raw)
+
         # Tentativa de mapeamento para campos traduzidos
         return GeoapifyMini(
-            estado=props.get("state", ""),
+            estado=estado_sigla,
             codigo_estado=props.get("state_code", ""),
             cidade=props.get("city", "") or props.get("town", "") or props.get("village", ""),
             bairro=props.get("suburb") or props.get("neighbourhood"),
@@ -90,6 +94,52 @@ class GeoapifyClient:
             longitude=coords[0] if len(coords) > 0 else None,
             endereco_formatado=props.get("formatted")
         )
+
+    @staticmethod
+    def _mapear_estado_para_sigla(estado_raw: str) -> str:
+        """Mapeia o nome do estado para sua sigla de 2 caracteres"""
+        if not estado_raw:
+            return ""
+        
+        # Mapeamento de estados brasileiros
+        mapeamento_estados = {
+            "acre": "AC",
+            "alagoas": "AL", 
+            "amapá": "AP",
+            "amazonas": "AM",
+            "bahia": "BA",
+            "ceará": "CE",
+            "distrito federal": "DF",
+            "espírito santo": "ES",
+            "goiás": "GO",
+            "maranhão": "MA",
+            "mato grosso": "MT",
+            "mato grosso do sul": "MS",
+            "minas gerais": "MG",
+            "pará": "PA",
+            "paraíba": "PB",
+            "paraná": "PR",
+            "pernambuco": "PE",
+            "piauí": "PI",
+            "rio de janeiro": "RJ",
+            "rio grande do norte": "RN",
+            "rio grande do sul": "RS",
+            "rondônia": "RO",
+            "roraima": "RR",
+            "santa catarina": "SC",
+            "são paulo": "SP",
+            "sergipe": "SE",
+            "tocantins": "TO",
+            # Variações em inglês que podem vir do Geoapify
+            "southeast": "SP",  # Região Sudeste geralmente retorna SP
+            "south": "RS",      # Região Sul geralmente retorna RS
+            "northeast": "BA",  # Região Nordeste geralmente retorna BA
+            "north": "AM",      # Região Norte geralmente retorna AM
+            "center-west": "GO" # Região Centro-Oeste geralmente retorna GO
+        }
+        
+        estado_lower = estado_raw.lower().strip()
+        return mapeamento_estados.get(estado_lower, estado_raw[:2].upper() if len(estado_raw) >= 2 else "")
 
     @staticmethod
     def viacep_to_mini(viacep_data: ViaCepResponse) -> GeoapifyMini:

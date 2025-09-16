@@ -60,6 +60,14 @@ class EnderecoUpdateAdmin(BaseModel):
     longitude: Optional[float] = None
     is_principal: Optional[bool] = None
 
+    @field_validator('estado', mode='before')
+    @classmethod
+    def validar_estado(cls, v):
+        if v is None or v == "":
+            return v
+        # Limita a 2 caracteres e converte para maiúsculo
+        return str(v)[:2].upper()
+
 class ClienteAdminUpdate(BaseModel):
     nome: Optional[constr(min_length=1, max_length=100)] = None
     cpf: Optional[constr(max_length=14)] = None
