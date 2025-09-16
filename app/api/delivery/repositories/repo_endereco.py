@@ -83,7 +83,7 @@ class EnderecoRepository:
                 EnderecoDeliveryModel.numero == payload.numero,
                 EnderecoDeliveryModel.bairro == payload.bairro,
                 EnderecoDeliveryModel.cidade == payload.cidade,
-                EnderecoDeliveryModel.uf == payload.uf,
+                EnderecoDeliveryModel.estado == payload.estado,
                 EnderecoDeliveryModel.cep == payload.cep
             )
         )

@@ -58,7 +58,7 @@ class EnderecosService:
                 numero=dados_atualizados.get('numero'),
                 bairro=dados_atualizados.get('bairro'),
                 cidade=dados_atualizados.get('cidade'),
-                uf=dados_atualizados.get('uf'),
+                estado=dados_atualizados.get('estado'),
                 cep=dados_atualizados.get('cep'),
                 complemento=dados_atualizados.get('complemento')
             )
@@ -83,7 +83,7 @@ class EnderecosService:
         Só verifica duplicata se campos críticos estão sendo alterados.
         """
         dados = payload.model_dump(exclude_unset=True)
-        campos_criticos = ['logradouro', 'numero', 'bairro', 'cidade', 'uf', 'cep']
+        campos_criticos = ['logradouro', 'numero', 'bairro', 'cidade', 'estado', 'cep']
         return any(campo in dados for campo in campos_criticos)
 
     def get(self, super_token: str, end_id: int):
