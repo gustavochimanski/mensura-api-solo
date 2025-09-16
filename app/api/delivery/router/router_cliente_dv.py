@@ -1,7 +1,8 @@
 import random
 from datetime import datetime, timedelta
+from typing import List
 
-from fastapi import APIRouter, Depends, status, HTTPException
+from fastapi import APIRouter, Depends, status, HTTPException, Path
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -9,6 +10,7 @@ from app.api.delivery.models.model_cliente_codigo_validacao import ClienteOtpMod
 from app.api.delivery.models.model_cliente_dv import ClienteDeliveryModel
 from app.api.delivery.repositories.repo_cliente import ClienteRepository
 from app.api.delivery.schemas.schema_cliente import ClienteOut, ClienteUpdate, ClienteCreate, ClienteAdminUpdate
+from app.api.delivery.schemas.schema_endereco import EnderecoOut
 from app.api.delivery.services.service_cliente import ClienteService
 from app.core.client_dependecies import get_cliente_by_super_token
 from app.core.admin_dependencies import get_current_user
@@ -177,3 +179,27 @@ def update_cliente_admin(
             logger.info(f"[Cliente Admin] Endereço {endereco_id} removido do cliente {cliente_id}")
 
     return ClienteOut.model_validate(updated_cliente)
+
+@router.get("/admin/{cliente_id}/enderecos", response_model=List[EnderecoOut])
+def get_enderecos_cliente(
+    cliente_id: int = Path(..., description="ID do cliente para consultar endereços"),
+    current_user = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Endpoint para consultar endereços de um cliente específico.
+    Requer autenticação de admin.
+    """
+    logger.info(f"[Cliente Admin] Consultar endereços - cliente_id={cliente_id} admin={current_user.id}")
+    
+    # Verifica se o cliente existe
+    repo = ClienteRepository(db)
+    cliente = repo.get_by_id(cliente_id)
+    if not cliente:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+    
+    # Busca os endereços do cliente
+    enderecos = repo.get_enderecos(cliente_id)
+    
+    # Converte para o schema de resposta
+    return [EnderecoOut.model_validate(endereco) for endereco in enderecos]

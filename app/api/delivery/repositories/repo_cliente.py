@@ -50,3 +50,13 @@ class ClienteRepository:
         self.db.commit()
         self.db.refresh(obj)
         return obj
+
+    def get_enderecos(self, cliente_id: int) -> List:
+        """Busca todos os endereços de um cliente específico por ID"""
+        from app.api.delivery.models.model_endereco_dv import EnderecoDeliveryModel
+        return (
+            self.db.query(EnderecoDeliveryModel)
+            .filter(EnderecoDeliveryModel.cliente_id == cliente_id)
+            .order_by(EnderecoDeliveryModel.created_at.desc())
+            .all()
+        )
