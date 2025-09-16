@@ -1,6 +1,6 @@
 from datetime import date, datetime
-from typing import Optional, List, Literal
-from pydantic import BaseModel, EmailStr, constr, ConfigDict
+from typing import Optional, List, Literal, Union
+from pydantic import BaseModel, EmailStr, constr, ConfigDict, field_validator
 
 class ClienteOut(BaseModel):
     id: int
@@ -31,6 +31,20 @@ class ClienteUpdate(BaseModel):
     data_nascimento: Optional[date] = None
     ativo: Optional[bool] = None
 
+    @field_validator('email', mode='before')
+    @classmethod
+    def validate_email(cls, v):
+        if v == "" or v is None:
+            return None
+        return v
+
+    @field_validator('data_nascimento', mode='before')
+    @classmethod
+    def validate_data_nascimento(cls, v):
+        if v == "" or v is None:
+            return None
+        return v
+
 class EnderecoUpdateAdmin(BaseModel):
     acao: Literal["add", "update", "remove"]  # Ação a ser executada
     id: Optional[int] = None  # Para identificar endereço existente (obrigatório para update/remove)
@@ -54,6 +68,20 @@ class ClienteAdminUpdate(BaseModel):
     data_nascimento: Optional[date] = None
     ativo: Optional[bool] = None
     endereco: Optional[EnderecoUpdateAdmin] = None
+
+    @field_validator('email', mode='before')
+    @classmethod
+    def validate_email(cls, v):
+        if v == "" or v is None:
+            return None
+        return v
+
+    @field_validator('data_nascimento', mode='before')
+    @classmethod
+    def validate_data_nascimento(cls, v):
+        if v == "" or v is None:
+            return None
+        return v
 
 
 from pydantic import BaseModel, constr
