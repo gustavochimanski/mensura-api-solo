@@ -119,53 +119,6 @@ class PrinterRepository:
             .count()
         )
     
-    def get_pedidos_impressao_por_periodo(
-        self, 
-        empresa_id: int, 
-        data_inicio: Optional[str] = None, 
-        data_fim: Optional[str] = None,
-        limite: Optional[int] = None
-    ) -> List[PedidoDeliveryModel]:
-        """
-        Busca pedidos para impressão em um período específico
-        
-        Args:
-            empresa_id: ID da empresa
-            data_inicio: Data de início (YYYY-MM-DD)
-            data_fim: Data de fim (YYYY-MM-DD)
-            limite: Número máximo de pedidos
-            
-        Returns:
-            Lista de pedidos do período
-        """
-        from datetime import datetime
-        
-        query = (
-            self.db.query(PedidoDeliveryModel)
-            .filter(PedidoDeliveryModel.empresa_id == empresa_id)
-        )
-        
-        if data_inicio:
-            try:
-                data_inicio_dt = datetime.strptime(data_inicio, "%Y-%m-%d")
-                query = query.filter(PedidoDeliveryModel.data_criacao >= data_inicio_dt)
-            except ValueError:
-                logger.warning(f"[PrinterRepository] Data início inválida: {data_inicio}")
-        
-        if data_fim:
-            try:
-                data_fim_dt = datetime.strptime(data_fim, "%Y-%m-%d")
-                query = query.filter(PedidoDeliveryModel.data_criacao <= data_fim_dt)
-            except ValueError:
-                logger.warning(f"[PrinterRepository] Data fim inválida: {data_fim}")
-        
-        query = query.order_by(desc(PedidoDeliveryModel.data_criacao))
-        
-        if limite:
-            query = query.limit(limite)
-            
-        return query.all()
-    
     def converter_pedido_para_impressao(self, pedido: PedidoDeliveryModel) -> PedidoParaImpressao:
         """
         Converte um pedido do banco para formato de impressão

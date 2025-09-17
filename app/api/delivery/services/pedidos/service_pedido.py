@@ -346,7 +346,7 @@ class PedidoService:
 
             # CRIA PEDIDO — garante cliente_id persistido de cara
             pedido = self.repo.criar_pedido(
-                cliente_id=cliente.id,  # ⚡ usar o ID obtido do banco
+                cliente_id=cliente.id,  # usar o ID obtido do banco
                 empresa_id=payload.empresa_id,
                 endereco_id=payload.endereco_id,
                 meio_pagamento_id=payload.meio_pagamento_id,
