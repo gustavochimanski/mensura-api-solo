@@ -17,29 +17,6 @@ router = APIRouter(prefix="/api/delivery/printer", tags=["Printer"])
 
 
 # ======================================================================
-# ==================== BUSCAR PEDIDOS PENDENTES =======================
-@router.get(
-    "/imprimir-pendentes",
-    response_model=List[PedidoPendenteImpressaoResponse],
-    status_code=status.HTTP_200_OK,
-)
-async def buscar_pedidos_pendentes_impressao(
-    empresa_id: int = Query(..., description="ID da empresa"),
-    limite: int = Query(10, ge=1, le=50, description="Número máximo de pedidos para buscar"),
-    db: Session = Depends(get_db),
-):
-    """
-    Busca pedidos pendentes de impressão formatados para o endpoint GET.
-    Retorna os dados no formato específico solicitado.
-    """
-    logger.info(f"[Printer] Buscar pedidos pendentes - empresa_id={empresa_id}, limite={limite}")
-    printer_service = PrinterService(db)
-    return printer_service.get_pedidos_pendentes_para_impressao(empresa_id, limite)
-
-
-
-
-# ======================================================================
 # ==================== LISTAR PEDIDOS PENDENTES =======================
 @router.get(
     "/pedidos-pendentes",
