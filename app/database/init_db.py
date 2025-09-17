@@ -71,8 +71,35 @@ def importar_models():
 
     logger.info("📦 Models importados com sucesso.")
 
+def criar_tabelas_criticas():
+    """Cria tabelas críticas que são dependências de outras tabelas"""
+    try:
+        # Cria mensura.cadprod primeiro (dependência crítica)
+        with engine.connect() as conn:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS mensura.cadprod (
+                    cod_barras VARCHAR PRIMARY KEY,
+                    descricao VARCHAR(255) NOT NULL,
+                    imagem VARCHAR(255),
+                    data_cadastro DATE,
+                    cod_categoria INTEGER,
+                    ativo BOOLEAN NOT NULL DEFAULT TRUE,
+                    unidade_medida VARCHAR(10),
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL
+                );
+            """))
+            conn.commit()
+            logger.info("✅ Tabela mensura.cadprod criada/verificada com sucesso")
+    except Exception as e:
+        logger.error(f"❌ Erro ao criar tabela mensura.cadprod: {e}")
+
 def criar_tabelas():
     try:
+        # Primeiro cria tabelas críticas
+        logger.info("🔧 Criando tabelas críticas...")
+        criar_tabelas_criticas()
+        
         importar_models()  # importa só os seus models de mensura e delivery
 
         # pega todas as Table objects que o Base conhece
@@ -94,6 +121,7 @@ def criar_tabelas():
         def get_table_dependencies(table):
             dependencies = set()
             for fk in table.foreign_keys:
+                # Verifica se a tabela referenciada está nos schemas gerenciados
                 if fk.column.table.schema in SCHEMAS:
                     dependencies.add(fk.column.table)
             return dependencies
@@ -102,8 +130,30 @@ def criar_tabelas():
         ordered_tables = []
         remaining_tables = set(tables_para_criar)
         
+        # Define ordem de prioridade para tabelas específicas
+        priority_order = [
+            "mensura.empresas",
+            "delivery.categoria_dv", 
+            "mensura.cadprod",
+            "mensura.cadprod_emp",
+            "delivery.vitrines_dv",
+            "delivery.parceiros",
+            "delivery.parceiros_banner",
+            "delivery.vitrine_prod_emp"
+        ]
+        
+        # Primeiro, adiciona tabelas na ordem de prioridade se existirem
+        for priority_table in priority_order:
+            schema_name, table_name = priority_table.split(".")
+            for table in list(remaining_tables):
+                if table.schema == schema_name and table.name == table_name:
+                    ordered_tables.append(table)
+                    remaining_tables.remove(table)
+                    break
+        
+        # Agora processa as tabelas restantes usando ordenação topológica
+
         while remaining_tables:
-            # Encontra tabelas sem dependências pendentes
             ready_tables = []
             for table in remaining_tables:
                 deps = get_table_dependencies(table)
