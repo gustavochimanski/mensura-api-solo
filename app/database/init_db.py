@@ -74,7 +74,28 @@ def importar_models():
 def criar_tabelas_criticas():
     """Cria tabelas críticas que são dependências de outras tabelas"""
     try:
-        # Cria mensura.cadprod primeiro (dependência crítica)
+        # Cria mensura.enderecos primeiro (dependência de empresas)
+        with engine.connect() as conn:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS mensura.enderecos (
+                    id SERIAL PRIMARY KEY,
+                    logradouro VARCHAR(255) NOT NULL,
+                    numero VARCHAR(20),
+                    complemento VARCHAR(100),
+                    bairro VARCHAR(100) NOT NULL,
+                    cidade VARCHAR(100) NOT NULL,
+                    uf VARCHAR(2) NOT NULL,
+                    cep VARCHAR(9),
+                    latitude NUMERIC(10, 6),
+                    longitude NUMERIC(10, 6),
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL
+                );
+            """))
+            conn.commit()
+            logger.info("✅ Tabela mensura.enderecos criada/verificada com sucesso")
+            
+        # Cria mensura.cadprod (dependência de cadprod_emp)
         with engine.connect() as conn:
             conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS mensura.cadprod (
@@ -92,7 +113,7 @@ def criar_tabelas_criticas():
             conn.commit()
             logger.info("✅ Tabela mensura.cadprod criada/verificada com sucesso")
     except Exception as e:
-        logger.error(f"❌ Erro ao criar tabela mensura.cadprod: {e}")
+        logger.error(f"❌ Erro ao criar tabelas críticas: {e}")
 
 def criar_tabelas():
     try:
@@ -117,56 +138,9 @@ def criar_tabelas():
         for table in tables_para_criar:
             logger.info(f"  - {table.schema}.{table.name}")
 
-        # Ordena as tabelas por dependências (tabelas sem FK primeiro)
-        def get_table_dependencies(table):
-            dependencies = set()
-            for fk in table.foreign_keys:
-                # Verifica se a tabela referenciada está nos schemas gerenciados
-                if fk.column.table.schema in SCHEMAS:
-                    dependencies.add(fk.column.table)
-            return dependencies
-
-        # Ordenação topológica das tabelas
-        ordered_tables = []
-        remaining_tables = set(tables_para_criar)
-        
-        # Define ordem de prioridade para tabelas específicas
-        priority_order = [
-            "mensura.empresas",
-            "delivery.categoria_dv", 
-            "mensura.cadprod",
-            "mensura.cadprod_emp",
-            "delivery.vitrines_dv",
-            "delivery.parceiros",
-            "delivery.parceiros_banner",
-            "delivery.vitrine_prod_emp"
-        ]
-        
-        # Primeiro, adiciona tabelas na ordem de prioridade se existirem
-        for priority_table in priority_order:
-            schema_name, table_name = priority_table.split(".")
-            for table in list(remaining_tables):
-                if table.schema == schema_name and table.name == table_name:
-                    ordered_tables.append(table)
-                    remaining_tables.remove(table)
-                    break
-        
-        # Agora processa as tabelas restantes usando ordenação topológica
-
-        while remaining_tables:
-            ready_tables = []
-            for table in remaining_tables:
-                deps = get_table_dependencies(table)
-                if deps.issubset(set(ordered_tables)):
-                    ready_tables.append(table)
-            
-            if not ready_tables:
-                # Se não há tabelas prontas, adiciona as restantes (pode haver dependências circulares)
-                ready_tables = list(remaining_tables)
-            
-            for table in ready_tables:
-                ordered_tables.append(table)
-                remaining_tables.remove(table)
+        # Ordenação simples: cria tabelas na ordem que aparecem nos models
+        # O SQLAlchemy já resolve as dependências automaticamente
+        ordered_tables = tables_para_criar
 
         logger.info("🔧 Criando tabelas na ordem correta:")
         for table in ordered_tables:
@@ -181,9 +155,39 @@ def criar_tabelas():
                 # Se for erro de duplicação, apenas avisa (não é crítico)
                 if "duplicate key value violates unique constraint" in str(table_error) or "already exists" in str(table_error):
                     logger.info(f"ℹ️ Tabela {table.schema}.{table.name} já existe (pulando)")
+                elif "does not exist" in str(table_error):
+                    # Se a tabela referenciada não existe, tenta criar novamente no final
+                    logger.warning(f"⚠️ Tabela {table.schema}.{table.name} falhou por dependência. Tentando novamente...")
+                    try:
+                        table.create(engine, checkfirst=True)
+                        logger.info(f"✅ Tabela {table.schema}.{table.name} criada com sucesso na segunda tentativa")
+                    except Exception as retry_error:
+                        logger.error(f"❌ Erro persistente ao criar tabela {table.schema}.{table.name}: {retry_error}")
                 else:
                     logger.error(f"❌ Erro ao criar tabela {table.schema}.{table.name}: {table_error}")
                 # Continua com as próximas tabelas mesmo se uma falhar
+
+        # Segunda passada para tabelas que falharam por dependências
+        logger.info("🔄 Segunda passada para tabelas com dependências...")
+        for table in ordered_tables:
+            try:
+                # Verifica se a tabela já existe
+                with engine.connect() as conn:
+                    result = conn.execute(text(f"""
+                        SELECT EXISTS (
+                            SELECT FROM information_schema.tables 
+                            WHERE table_schema = '{table.schema}' 
+                            AND table_name = '{table.name}'
+                        );
+                    """))
+                    exists = result.scalar()
+                    
+                if not exists:
+                    table.create(engine, checkfirst=True)
+                    logger.info(f"✅ Tabela {table.schema}.{table.name} criada na segunda passada")
+            except Exception as second_pass_error:
+                if "already exists" not in str(second_pass_error):
+                    logger.error(f"❌ Erro na segunda passada para {table.schema}.{table.name}: {second_pass_error}")
 
         logger.info("✅ Processo de criação de tabelas concluído.")
     except Exception as e:
