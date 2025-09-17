@@ -1,4 +1,5 @@
 import logging
+import threading
 from sqlalchemy import text, quoted_name
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
@@ -8,6 +9,10 @@ from app.api.mensura.models.user_model import UserModel
 
 logger = logging.getLogger(__name__)
 SCHEMAS = ["mensura", "bi", "delivery", "pdv"]
+
+# Lock para evitar inicialização simultânea
+_init_lock = threading.Lock()
+_init_completed = False
 
 def ensure_unaccent():
     with engine.connect() as conn:
@@ -41,7 +46,15 @@ def criar_schemas():
         with engine.begin() as conn:
             for schema in SCHEMAS:
                 logger.info(f"🛠️ Criando/verificando schema: {schema}")
-                conn.execute(text(f'CREATE SCHEMA IF NOT EXISTS {quoted_name(schema, quote=True)}'))
+                try:
+                    conn.execute(text(f'CREATE SCHEMA IF NOT EXISTS {quoted_name(schema, quote=True)}'))
+                except Exception as schema_error:
+                    # Se for erro de schema já existente, apenas avisa (não é crítico)
+                    if "already exists" in str(schema_error) or "duplicate key value violates unique constraint" in str(schema_error):
+                        logger.info(f"ℹ️ Schema {schema} já existe (pulando)")
+                    else:
+                        logger.error(f"❌ Erro ao criar schema {schema}: {schema_error}")
+                        raise schema_error
         logger.info("✅ Todos os schemas verificados/criados.")
     except Exception as e:
         logger.error(f"❌ Erro ao criar schemas: {e}")
@@ -195,14 +208,33 @@ def criar_usuario_admin_padrao():
         logger.error(f"❌ Erro ao criar usuário admin: {e}", exc_info=True)
 
 def inicializar_banco():
-    logger.info("🔹 Instalando extensões...")
-    ensure_unaccent()
-    ensure_postgis()
-    logger.info("🔹 Criando schemas...")
-    criar_schemas()
-    logger.info("🔹 Criando tabelas...")
-    criar_tabelas()
-    logger.info("🔹 Garantindo usuário admin padrão...")
-    criar_usuario_admin_padrao()
-    logger.info("✅ Banco inicializado com sucesso.")
+    global _init_completed
+    
+    # Verifica se já foi inicializado
+    if _init_completed:
+        logger.info("ℹ️ Banco já foi inicializado (pulando)")
+        return
+    
+    # Usa lock para evitar execuções simultâneas
+    with _init_lock:
+        # Verifica novamente após adquirir o lock
+        if _init_completed:
+            logger.info("ℹ️ Banco já foi inicializado por outro processo (pulando)")
+            return
+        
+        try:
+            logger.info("🔹 Instalando extensões...")
+            ensure_unaccent()
+            ensure_postgis()
+            logger.info("🔹 Criando schemas...")
+            criar_schemas()
+            logger.info("🔹 Criando tabelas...")
+            criar_tabelas()
+            logger.info("🔹 Garantindo usuário admin padrão...")
+            criar_usuario_admin_padrao()
+            logger.info("✅ Banco inicializado com sucesso.")
+            _init_completed = True
+        except Exception as e:
+            logger.error(f"❌ Erro durante inicialização do banco: {e}")
+            raise
 
