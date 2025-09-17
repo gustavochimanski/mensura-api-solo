@@ -39,54 +39,12 @@ class PedidoPrinterRequest(BaseModel):
         return v
 
 
-class ConfigImpressaoPrinter(BaseModel):
-    """Configurações de impressão para Printer API"""
-    nome_impressora: Optional[str] = Field(None, description="Nome da impressora")
-    fonte_nome: str = Field("Courier New", description="Nome da fonte")
-    fonte_tamanho: int = Field(24, ge=8, le=72, description="Tamanho da fonte")
-    espacamento_linha: int = Field(40, ge=10, le=80, description="Espaçamento entre linhas")
-    espacamento_item: int = Field(50, ge=20, le=120, description="Espaçamento entre itens")
-    nome_estabelecimento: str = Field("RESTAURANTE MENSURA", description="Nome do estabelecimento")
-    mensagem_rodape: str = Field("Obrigado pela preferência!", description="Mensagem do rodapé")
-    formato_preco: str = Field("R$ {:.2f}", description="Formato do preço")
-    formato_total: str = Field("TOTAL: R$ {:.2f}", description="Formato do total")
-
-
-class ImpressaoPedidoRequest(BaseModel):
-    """Request para impressão de pedido"""
-    pedido: PedidoPrinterRequest = Field(..., description="Dados do pedido")
-    config: Optional[ConfigImpressaoPrinter] = Field(None, description="Configurações de impressão")
-
-
 class RespostaImpressaoPrinter(BaseModel):
     """Resposta da operação de impressão da Printer API"""
     sucesso: bool = Field(..., description="Se a impressão foi bem-sucedida")
     mensagem: str = Field(..., description="Mensagem de resultado")
     numero_pedido: Optional[int] = Field(None, description="Número do pedido impresso")
     timestamp: Optional[datetime] = Field(None, description="Timestamp da impressão")
-
-
-class StatusPrinterResponse(BaseModel):
-    """Status da Printer API"""
-    conectado: bool = Field(..., description="Se a Printer API está conectada")
-    mensagem: str = Field(..., description="Mensagem de status")
-    timestamp: datetime = Field(default_factory=datetime.now, description="Timestamp da verificação")
-
-
-class ImpressaoMultiplaRequest(BaseModel):
-    """Request para impressão múltipla de pedidos"""
-    empresa_id: int = Field(..., ge=1, description="ID da empresa")
-    limite: int = Field(10, ge=1, le=50, description="Número máximo de pedidos para imprimir")
-    config: Optional[ConfigImpressaoPrinter] = Field(None, description="Configurações de impressão")
-
-
-class RespostaImpressaoMultipla(BaseModel):
-    """Resposta da operação de impressão múltipla"""
-    sucesso: bool = Field(..., description="Se todas as impressões foram bem-sucedidas")
-    mensagem: str = Field(..., description="Mensagem de resultado")
-    pedidos_impressos: int = Field(0, ge=0, description="Número de pedidos impressos com sucesso")
-    pedidos_falharam: int = Field(0, ge=0, description="Número de pedidos que falharam")
-    detalhes: List[RespostaImpressaoPrinter] = Field(default_factory=list, description="Detalhes de cada impressão")
 
 
 class PedidoParaImpressao(BaseModel):

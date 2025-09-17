@@ -98,27 +98,6 @@ class PrinterRepository:
             logger.error(f"[PrinterRepository] Erro ao marcar pedido {pedido_id} como impresso: {str(e)}")
             return False
     
-    def count_pedidos_pendentes_impressao(self, empresa_id: int) -> int:
-        """
-        Conta quantos pedidos estão pendentes de impressão para uma empresa
-        
-        Args:
-            empresa_id: ID da empresa
-            
-        Returns:
-            Número de pedidos pendentes de impressão
-        """
-        return (
-            self.db.query(PedidoDeliveryModel)
-            .filter(
-                and_(
-                    PedidoDeliveryModel.empresa_id == empresa_id,
-                    PedidoDeliveryModel.status == PedidoStatusEnum.I.value
-                )
-            )
-            .count()
-        )
-    
     def converter_pedido_para_impressao(self, pedido: PedidoDeliveryModel) -> PedidoParaImpressao:
         """
         Converte um pedido do banco para formato de impressão
@@ -186,15 +165,24 @@ class PrinterRepository:
             Dicionário com estatísticas
         """
         from sqlalchemy import func
+        from datetime import datetime
         
         stats = {}
+        hoje = datetime.now().date()
         
         # Total de pedidos pendentes de impressão
-        stats['pendentes_impressao'] = self.count_pedidos_pendentes_impressao(empresa_id)
+        stats['pendentes_impressao'] = (
+            self.db.query(PedidoDeliveryModel)
+            .filter(
+                and_(
+                    PedidoDeliveryModel.empresa_id == empresa_id,
+                    PedidoDeliveryModel.status == PedidoStatusEnum.I.value
+                )
+            )
+            .count()
+        )
         
         # Total de pedidos impressos hoje
-        from datetime import datetime, timedelta
-        hoje = datetime.now().date()
         stats['impressos_hoje'] = (
             self.db.query(PedidoDeliveryModel)
             .filter(
