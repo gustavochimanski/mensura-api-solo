@@ -4,8 +4,10 @@ import uuid
 import mimetypes
 import os
 from urllib.parse import urlparse
+from io import BytesIO
 
 from slugify import slugify
+from PIL import Image
 
 from fastapi import UploadFile
 from minio import Minio
@@ -42,6 +44,54 @@ def gerar_nome_bucket(cnpj: str) -> str:
     return slugify(cnpj)[:63]
 
 
+def redimensionar_imagem(file: UploadFile, slug: str) -> BytesIO:
+    """
+    Redimensiona imagem baseado no slug:
+    - categorias: max 512x512, reduz para 256x256
+    - produtos: max 1024x1024, reduz para 512x512
+    """
+    try:
+        # Lê a imagem
+        file.file.seek(0)
+        image = Image.open(file.file)
+        
+        # Converte para RGB se necessário (para JPEG)
+        if image.mode in ('RGBA', 'LA', 'P'):
+            image = image.convert('RGB')
+        
+        # Define limites baseado no slug
+        if slug == 'categorias':
+            max_size = (512, 512)
+            target_size = (256, 256)
+        elif slug == 'produtos':
+            max_size = (1024, 1024)
+            target_size = (512, 512)
+        else:
+            # Para outros slugs, mantém o tamanho original
+            return file.file
+        
+        # Verifica se precisa redimensionar
+        if image.size[0] > max_size[0] or image.size[1] > max_size[1]:
+            # Redimensiona mantendo proporção
+            image.thumbnail(max_size, Image.Resampling.LANCZOS)
+        
+        # Reduz para o tamanho alvo
+        image = image.resize(target_size, Image.Resampling.LANCZOS)
+        
+        # Salva em BytesIO
+        output = BytesIO()
+        image.save(output, format='JPEG', quality=85, optimize=True)
+        output.seek(0)
+        
+        logger.info(f"Imagem redimensionada: {file.size} bytes -> {len(output.getvalue())} bytes")
+        return output
+        
+    except Exception as e:
+        logger.warning(f"Erro ao redimensionar imagem: {e}. Usando arquivo original.")
+        file.file.seek(0)
+        return file.file
+
+
 def upload_file_to_minio(
     db: Session,
     cod_empresa: int,
@@ -61,22 +111,31 @@ def upload_file_to_minio(
     if not client.bucket_exists(bucket_name):
         client.make_bucket(bucket_name)
 
-    # 3️⃣ Nome do objeto
-    ext = mimetypes.guess_extension(file.content_type) or ".bin"
+    # 3️⃣ Processa imagem se for uma imagem
+    file_data = file.file
+    content_type = file.content_type
+    
+    # Verifica se é uma imagem e se precisa redimensionar
+    if file.content_type and file.content_type.startswith('image/'):
+        file_data = redimensionar_imagem(file, slug)
+        content_type = 'image/jpeg'  # Sempre salva como JPEG após redimensionamento
+
+    # 4️⃣ Nome do objeto
+    ext = mimetypes.guess_extension(content_type) or ".bin"
     filename = f"{uuid.uuid4()}{ext}"
     object_key = f"{slug}/{filename}"
 
-    # 4️⃣ Upload
+    # 5️⃣ Upload
     client.put_object(
         bucket_name=bucket_name,
         object_name=object_key,
-        data=file.file,
+        data=file_data,
         length=-1,
         part_size=10 * 1024 * 1024,
-        content_type=file.content_type,
+        content_type=content_type,
     )
 
-    # 5️⃣ URL pública
+    # 6️⃣ URL pública
     return f"{MINIO_PUBLIC_ENDPOINT}/{bucket_name}/{object_key}"
 
 

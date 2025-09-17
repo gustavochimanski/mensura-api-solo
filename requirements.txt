@@ -20,6 +20,7 @@ python-dateutil==2.9.0
 minio==7.2.5
 orjson==3.10.7                  # opcional, mas recomendado para performance JSON
 email-validator==2.2.0          # se usar pydantic EmailStr
+Pillow==10.4.0                  # processamento de imagens
 
 # Segurança / JWT
 bcrypt==4.0.1
