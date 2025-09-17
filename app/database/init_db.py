@@ -1,5 +1,5 @@
 import logging
-import threading
+import time
 from sqlalchemy import text, quoted_name
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import IntegrityError
@@ -9,10 +9,6 @@ from app.api.mensura.models.user_model import UserModel
 
 logger = logging.getLogger(__name__)
 SCHEMAS = ["mensura", "bi", "delivery", "pdv"]
-
-# Lock para evitar inicialização simultânea
-_init_lock = threading.Lock()
-_init_completed = False
 
 def ensure_unaccent():
     with engine.connect() as conn:
@@ -40,6 +36,61 @@ def ensure_postgis():
                 logger.warning("PostGIS não está disponível no servidor PostgreSQL. Pulando instalação.")
     except Exception as e:
         logger.warning(f"Erro ao instalar PostGIS: {e}. Continuando sem PostGIS.")
+
+def verificar_banco_inicializado():
+    """Verifica se o banco já foi inicializado consultando uma tabela de controle"""
+    try:
+        with engine.connect() as conn:
+            # Verifica se existe a tabela de controle
+            result = conn.execute(text("""
+                SELECT EXISTS (
+                    SELECT 1 FROM information_schema.tables 
+                    WHERE table_schema = 'public' 
+                    AND table_name = 'db_initialization_status'
+                );
+            """))
+            table_exists = result.scalar()
+            
+            if not table_exists:
+                return False
+                
+            # Verifica se está marcado como inicializado
+            result = conn.execute(text("""
+                SELECT initialized FROM public.db_initialization_status 
+                WHERE id = 1;
+            """))
+            status = result.scalar()
+            return status is True
+            
+    except Exception as e:
+        logger.warning(f"⚠️ Erro ao verificar status de inicialização: {e}")
+        return False
+
+def marcar_banco_inicializado():
+    """Marca o banco como inicializado"""
+    try:
+        with engine.begin() as conn:
+            # Cria a tabela de controle se não existir
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS public.db_initialization_status (
+                    id INTEGER PRIMARY KEY DEFAULT 1,
+                    initialized BOOLEAN NOT NULL DEFAULT FALSE,
+                    initialized_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                );
+            """))
+            
+            # Marca como inicializado
+            conn.execute(text("""
+                INSERT INTO public.db_initialization_status (id, initialized) 
+                VALUES (1, TRUE) 
+                ON CONFLICT (id) 
+                DO UPDATE SET 
+                    initialized = TRUE, 
+                    initialized_at = NOW();
+            """))
+            
+    except Exception as e:
+        logger.error(f"❌ Erro ao marcar banco como inicializado: {e}")
 
 def criar_schemas():
     try:
@@ -208,33 +259,80 @@ def criar_usuario_admin_padrao():
         logger.error(f"❌ Erro ao criar usuário admin: {e}", exc_info=True)
 
 def inicializar_banco():
-    global _init_completed
-    
     # Verifica se já foi inicializado
-    if _init_completed:
+    if verificar_banco_inicializado():
         logger.info("ℹ️ Banco já foi inicializado (pulando)")
         return
     
-    # Usa lock para evitar execuções simultâneas
-    with _init_lock:
-        # Verifica novamente após adquirir o lock
-        if _init_completed:
-            logger.info("ℹ️ Banco já foi inicializado por outro processo (pulando)")
+    # Tenta adquirir um lock usando uma tabela temporária
+    lock_acquired = False
+    max_retries = 10
+    retry_delay = 1
+    
+    for attempt in range(max_retries):
+        try:
+            with engine.begin() as conn:
+                # Tenta criar uma tabela de lock (será removida automaticamente)
+                conn.execute(text("""
+                    CREATE TEMPORARY TABLE IF NOT EXISTS db_init_lock (
+                        id INTEGER PRIMARY KEY DEFAULT 1,
+                        process_id TEXT NOT NULL,
+                        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                    );
+                """))
+                
+                # Tenta inserir o lock
+                conn.execute(text("""
+                    INSERT INTO db_init_lock (id, process_id) 
+                    VALUES (1, :process_id);
+                """), {"process_id": str(time.time())})
+                
+                lock_acquired = True
+                logger.info(f"🔒 Lock adquirido (tentativa {attempt + 1})")
+                break
+                
+        except Exception as e:
+            if "duplicate key value violates unique constraint" in str(e):
+                logger.info(f"⏳ Aguardando lock ser liberado (tentativa {attempt + 1}/{max_retries})")
+                time.sleep(retry_delay)
+                retry_delay *= 1.5  # Backoff exponencial
+            else:
+                logger.warning(f"⚠️ Erro ao adquirir lock: {e}")
+                time.sleep(retry_delay)
+    
+    if not lock_acquired:
+        logger.warning("⚠️ Não foi possível adquirir lock, tentando inicialização mesmo assim...")
+    
+    try:
+        # Verifica novamente se foi inicializado por outro processo
+        if verificar_banco_inicializado():
+            logger.info("ℹ️ Banco foi inicializado por outro processo (pulando)")
             return
         
-        try:
-            logger.info("🔹 Instalando extensões...")
-            ensure_unaccent()
-            ensure_postgis()
-            logger.info("🔹 Criando schemas...")
-            criar_schemas()
-            logger.info("🔹 Criando tabelas...")
-            criar_tabelas()
-            logger.info("🔹 Garantindo usuário admin padrão...")
-            criar_usuario_admin_padrao()
-            logger.info("✅ Banco inicializado com sucesso.")
-            _init_completed = True
-        except Exception as e:
-            logger.error(f"❌ Erro durante inicialização do banco: {e}")
-            raise
+        logger.info("🔹 Instalando extensões...")
+        ensure_unaccent()
+        ensure_postgis()
+        logger.info("🔹 Criando schemas...")
+        criar_schemas()
+        logger.info("🔹 Criando tabelas...")
+        criar_tabelas()
+        logger.info("🔹 Garantindo usuário admin padrão...")
+        criar_usuario_admin_padrao()
+        logger.info("🔹 Marcando banco como inicializado...")
+        marcar_banco_inicializado()
+        logger.info("✅ Banco inicializado com sucesso.")
+        
+    except Exception as e:
+        logger.error(f"❌ Erro durante inicialização do banco: {e}")
+        raise
+    finally:
+        # Remove o lock
+        if lock_acquired:
+            try:
+                with engine.connect() as conn:
+                    conn.execute(text("DROP TABLE IF EXISTS db_init_lock;"))
+                    conn.commit()
+                    logger.info("🔓 Lock liberado")
+            except Exception as e:
+                logger.warning(f"⚠️ Erro ao liberar lock: {e}")
 
