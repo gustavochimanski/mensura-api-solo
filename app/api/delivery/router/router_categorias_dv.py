@@ -72,8 +72,32 @@ def criar_categoria(
     body: CategoriaDeliveryIn,
     db: Session = Depends(get_db),
 ):
+    from app.utils.logger import logger
+    
+    logger.info(f"[Categorias] Criando categoria - descricao={body.descricao}, imagem={body.imagem}, parent_id={body.parent_id}")
+    
+    # Valida se parent_id existe (se fornecido)
+    if body.parent_id:
+        repos = CategoriaDeliveryRepository(db)
+        try:
+            parent = repos.get_by_id(body.parent_id)
+            logger.info(f"[Categorias] Categoria pai encontrada - id={parent.id}, descricao={parent.descricao}")
+        except HTTPException as e:
+            logger.error(f"[Categorias] Categoria pai não encontrada - id={body.parent_id}")
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Categoria pai não encontrada: {body.parent_id}")
+    
     repos = CategoriaDeliveryRepository(db)
-    c = repos.create(body)
+    try:
+        c = repos.create(body)
+    except HTTPException as e:
+        logger.error(f"[Categorias] Erro ao criar categoria: {e}")
+        raise e
+    except Exception as e:
+        logger.error(f"[Categorias] Erro inesperado ao criar categoria: {e}")
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Erro ao criar categoria: {str(e)}")
+    
+    logger.info(f"[Categorias] Categoria criada com sucesso - id={c.id}, imagem={c.imagem}")
+    
     return CategoriaDeliveryOut(
         id=c.id,
         label=c.descricao,
@@ -185,16 +209,49 @@ async def upload_imagem_categoria(
     imagem: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
+    from app.utils.logger import logger
+    from app.api.mensura.repositories.empresa_repo import EmpresaRepository
+    
+    logger.info(f"[Categorias] Upload imagem - categoria_id={cat_id}, empresa_id={cod_empresa}")
+    
+    # Valida se a empresa existe
+    empresa_repo = EmpresaRepository(db)
+    empresa = empresa_repo.get_empresa_by_id(cod_empresa)
+    if not empresa:
+        logger.error(f"[Categorias] Empresa não encontrada - id={cod_empresa}")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Empresa não encontrada")
+    
+    # Valida se a categoria existe
+    repos = CategoriaDeliveryRepository(db)
+    try:
+        categoria = repos.get_by_id(cat_id)
+        logger.info(f"[Categorias] Categoria encontrada - id={categoria.id}, descricao={categoria.descricao}")
+    except HTTPException as e:
+        logger.error(f"[Categorias] Categoria não encontrada - id={cat_id}")
+        raise e
+    
     permitidos = {"image/jpeg", "image/png", "image/webp"}
     if imagem.content_type not in permitidos:
+        logger.warning(f"[Categorias] Formato de imagem inválido: {imagem.content_type}")
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Formato de imagem inválido")
+    
     try:
         url = upload_file_to_minio(db, cod_empresa, imagem, "categorias")
-    except Exception:
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Erro ao enviar imagem")
+        logger.info(f"[Categorias] Imagem enviada com sucesso: {url}")
+    except ValueError as e:
+        logger.error(f"[Categorias] Erro de validação no upload: {e}")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e))
+    except Exception as e:
+        logger.error(f"[Categorias] Erro inesperado no upload: {e}")
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Erro ao enviar imagem: {str(e)}")
 
-    repos = CategoriaDeliveryRepository(db)
-    c = repos.update(cat_id, {"imagem": url})
+    try:
+        c = repos.update(cat_id, {"imagem": url})
+        logger.info(f"[Categorias] Categoria atualizada com imagem: {c.id}")
+    except Exception as e:
+        logger.error(f"[Categorias] Erro ao atualizar categoria com imagem: {e}")
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Erro ao atualizar categoria: {str(e)}")
+    
     return CategoriaDeliveryOut(
         id=c.id,
         label=c.descricao,

@@ -98,18 +98,30 @@ def upload_file_to_minio(
     file: UploadFile,
     slug: str
 ) -> str:
+    logger.info(f"[MinIO] Iniciando upload - empresa_id={cod_empresa}, slug={slug}, content_type={file.content_type}")
+    
     # 1️⃣ Busca CNPJ
     repo = EmpresaRepository(db)
     cnpj = repo.get_cnpj_by_id(cod_empresa)
     if not cnpj:
+        logger.error(f"[MinIO] Empresa {cod_empresa} não possui CNPJ cadastrado")
         raise ValueError(f"Empresa {cod_empresa} não possui CNPJ cadastrado.")
+
+    logger.info(f"[MinIO] CNPJ encontrado: {cnpj}")
 
     # 2️⃣ Bucket
     bucket_name = gerar_nome_bucket(cnpj)
     if not bucket_name:
+        logger.error(f"[MinIO] Falha ao gerar nome de bucket para CNPJ: {cnpj}")
         raise ValueError(f"Falha ao gerar nome de bucket para CNPJ: {cnpj}")
+    
+    logger.info(f"[MinIO] Nome do bucket: {bucket_name}")
+    
     if not client.bucket_exists(bucket_name):
+        logger.info(f"[MinIO] Criando bucket: {bucket_name}")
         client.make_bucket(bucket_name)
+    else:
+        logger.info(f"[MinIO] Bucket já existe: {bucket_name}")
 
     # 3️⃣ Processa imagem se for uma imagem
     file_data = file.file
@@ -117,26 +129,37 @@ def upload_file_to_minio(
     
     # Verifica se é uma imagem e se precisa redimensionar
     if file.content_type and file.content_type.startswith('image/'):
+        logger.info(f"[MinIO] Processando imagem - tamanho original: {file.size} bytes")
         file_data = redimensionar_imagem(file, slug)
         content_type = 'image/jpeg'  # Sempre salva como JPEG após redimensionamento
+        logger.info(f"[MinIO] Imagem processada - novo content_type: {content_type}")
 
     # 4️⃣ Nome do objeto
     ext = mimetypes.guess_extension(content_type) or ".bin"
     filename = f"{uuid.uuid4()}{ext}"
     object_key = f"{slug}/{filename}"
+    
+    logger.info(f"[MinIO] Nome do objeto: {object_key}")
 
     # 5️⃣ Upload
-    client.put_object(
-        bucket_name=bucket_name,
-        object_name=object_key,
-        data=file_data,
-        length=-1,
-        part_size=10 * 1024 * 1024,
-        content_type=content_type,
-    )
+    try:
+        client.put_object(
+            bucket_name=bucket_name,
+            object_name=object_key,
+            data=file_data,
+            length=-1,
+            part_size=10 * 1024 * 1024,
+            content_type=content_type,
+        )
+        logger.info(f"[MinIO] Upload concluído com sucesso")
+    except Exception as e:
+        logger.error(f"[MinIO] Erro no upload: {e}")
+        raise
 
     # 6️⃣ URL pública
-    return f"{MINIO_PUBLIC_ENDPOINT}/{bucket_name}/{object_key}"
+    url = f"{MINIO_PUBLIC_ENDPOINT}/{bucket_name}/{object_key}"
+    logger.info(f"[MinIO] URL gerada: {url}")
+    return url
 
 
 def remover_arquivo_minio(file_url: str) -> None:

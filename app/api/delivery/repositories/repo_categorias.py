@@ -17,11 +17,17 @@ class CategoriaDeliveryRepository:
 
     # -------- CRUD --------
     def create(self, data: CategoriaDeliveryIn) -> CategoriaDeliveryModel:
-        # sempre gera o slug a partir da descrição
+        from app.utils.logger import logger
+        
+        logger.info(f"[Categorias] Criando categoria no repositório - descricao={data.descricao}, imagem={data.imagem}, slug={data.slug}")
+        
+        # sempre gera o slug a partir da descrição (ignora o slug fornecido)
         slug_value = make_slug(data.descricao)
+        logger.info(f"[Categorias] Slug gerado: {slug_value}")
 
         existe = self.db.query(CategoriaDeliveryModel).filter_by(slug=slug_value).first()
         if existe:
+            logger.warning(f"[Categorias] Slug já existe: {slug_value}")
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
                 "Já existe uma categoria com esse slug (gerado automaticamente)."
@@ -43,12 +49,17 @@ class CategoriaDeliveryRepository:
             imagem=data.imagem,
             posicao=posicao
         )
+        
+        logger.info(f"[Categorias] Objeto categoria criado - imagem={nova.imagem}, slug={nova.slug}")
+        
         self.db.add(nova)
         try:
             self.db.commit()
             self.db.refresh(nova)
+            logger.info(f"[Categorias] Categoria salva no banco - id={nova.id}, imagem={nova.imagem}, slug={nova.slug}")
             return nova
-        except Exception:
+        except Exception as e:
+            logger.error(f"[Categorias] Erro ao salvar categoria no banco: {e}")
             self.db.rollback()
             raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Erro ao criar categoria")
 
@@ -67,8 +78,13 @@ class CategoriaDeliveryRepository:
         return cat
 
     def update(self, cat_id: int, update_data: dict) -> CategoriaDeliveryModel:
+        from app.utils.logger import logger
+        
+        logger.info(f"[Categorias] Atualizando categoria - id={cat_id}, update_data={update_data}")
+        
         cat = self.get_by_id(cat_id)
         if not cat:
+            logger.error(f"[Categorias] Categoria não encontrada - id={cat_id}")
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Categoria não encontrada")
 
         # 1) Slug NUNCA vem do payload: se vier, ignoramos
@@ -88,6 +104,7 @@ class CategoriaDeliveryRepository:
                 .first()
             )
             if existe:
+                logger.warning(f"[Categorias] Slug já existe: {novo_slug}")
                 raise HTTPException(
                     status.HTTP_400_BAD_REQUEST,
                     "Já existe uma categoria com esse slug (gerado a partir da descrição)."
@@ -98,17 +115,21 @@ class CategoriaDeliveryRepository:
         # 3) Atribui os demais campos permitidos
         for key in ("descricao", "parent_id", "imagem", "posicao"):
             if key in update_data and update_data[key] is not None:
+                logger.info(f"[Categorias] Atualizando campo {key}: {getattr(cat, key)} -> {update_data[key]}")
                 setattr(cat, key, update_data[key])
 
         try:
             self.db.commit()
-        except IntegrityError:
+            logger.info(f"[Categorias] Categoria atualizada com sucesso - id={cat_id}, imagem={cat.imagem}")
+        except IntegrityError as e:
+            logger.error(f"[Categorias] Erro de integridade ao atualizar categoria: {e}")
             self.db.rollback()
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
                 "Violação de unicidade/constraint ao atualizar categoria"
             )
-        except Exception:
+        except Exception as e:
+            logger.error(f"[Categorias] Erro ao atualizar categoria: {e}")
             self.db.rollback()
             raise HTTPException(
                 status.HTTP_500_INTERNAL_SERVER_ERROR,

@@ -3,12 +3,21 @@ from typing import Optional
 
 class CategoriaDeliveryIn(BaseModel):
     descricao: constr(min_length=1, max_length=100)
-    slug: constr(min_length=1, max_length=100)
+    slug: Optional[str] = None  # Slug será gerado automaticamente se não fornecido
     parent_id: Optional[int] = None
     imagem: Optional[str] = None
     posicao: Optional[int] = 0
 
     model_config = ConfigDict(from_attributes=True)
+    
+    def __init__(self, **data):
+        # Garante que imagem seja None se for string vazia
+        if 'imagem' in data and data['imagem'] == '':
+            data['imagem'] = None
+        # Garante que slug seja None se for string vazia
+        if 'slug' in data and data['slug'] == '':
+            data['slug'] = None
+        super().__init__(**data)
 
 class CategoriaDeliveryOut(BaseModel):
     id: int
