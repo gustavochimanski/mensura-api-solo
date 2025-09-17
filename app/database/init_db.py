@@ -94,33 +94,44 @@ def criar_tabelas():
         def get_table_dependencies(table):
             dependencies = set()
             for fk in table.foreign_keys:
+                # Verifica se a tabela referenciada está nos schemas gerenciados
                 if fk.column.table.schema in SCHEMAS:
                     dependencies.add(fk.column.table)
             return dependencies
 
-        # Ordenação topológica das tabelas
+        # Ordenação topológica das tabelas com retry para dependências circulares
         ordered_tables = []
         remaining_tables = set(tables_para_criar)
+        max_attempts = len(tables_para_criar) * 2  # Evita loop infinito
+        attempts = 0
         
-        while remaining_tables:
+        while remaining_tables and attempts < max_attempts:
+            attempts += 1
             # Encontra tabelas sem dependências pendentes
             ready_tables = []
             for table in remaining_tables:
                 deps = get_table_dependencies(table)
+                # Verifica se todas as dependências já foram criadas
                 if deps.issubset(set(ordered_tables)):
                     ready_tables.append(table)
             
             if not ready_tables:
-                # Se não há tabelas prontas, adiciona as restantes (pode haver dependências circulares)
+                # Se não há tabelas prontas, tenta criar as restantes (pode haver dependências circulares)
+                logger.warning(f"⚠️ Nenhuma tabela pronta na tentativa {attempts}. Tentando criar as restantes...")
                 ready_tables = list(remaining_tables)
             
             for table in ready_tables:
                 ordered_tables.append(table)
                 remaining_tables.remove(table)
 
+        if remaining_tables:
+            logger.warning(f"⚠️ Algumas tabelas não puderam ser ordenadas: {[f'{t.schema}.{t.name}' for t in remaining_tables]}")
+            # Adiciona as tabelas restantes no final
+            ordered_tables.extend(remaining_tables)
+
         logger.info("🔧 Criando tabelas na ordem correta:")
-        for table in ordered_tables:
-            logger.info(f"  - {table.schema}.{table.name}")
+        for i, table in enumerate(ordered_tables, 1):
+            logger.info(f"  {i:2d}. {table.schema}.{table.name}")
 
         # Cria as tabelas na ordem correta
         for table in ordered_tables:
@@ -133,7 +144,22 @@ def criar_tabelas():
                     logger.info(f"ℹ️ Tabela {table.schema}.{table.name} já existe (pulando)")
                 else:
                     logger.error(f"❌ Erro ao criar tabela {table.schema}.{table.name}: {table_error}")
+                    # Para tabelas com erro de dependência, tenta novamente no final
+                    if "does not exist" in str(table_error):
+                        logger.warning(f"🔄 Tabela {table.schema}.{table.name} será tentada novamente no final")
                 # Continua com as próximas tabelas mesmo se uma falhar
+
+        # Segunda tentativa para tabelas que falharam por dependência
+        logger.info("🔄 Segunda tentativa para tabelas com dependências...")
+        for table in ordered_tables:
+            try:
+                table.create(engine, checkfirst=True)
+                logger.info(f"✅ Tabela {table.schema}.{table.name} criada com sucesso (2ª tentativa)")
+            except Exception as table_error:
+                if "already exists" in str(table_error):
+                    logger.info(f"ℹ️ Tabela {table.schema}.{table.name} já existe (2ª tentativa)")
+                elif "does not exist" not in str(table_error):  # Só loga erros que não são de dependência
+                    logger.error(f"❌ Erro persistente na tabela {table.schema}.{table.name}: {table_error}")
 
         logger.info("✅ Processo de criação de tabelas concluído.")
     except Exception as e:
