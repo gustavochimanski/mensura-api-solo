@@ -18,10 +18,9 @@ class RegiaoEntregaModel(Base):
 
     latitude = Column(Numeric(10, 6), nullable=True)
     longitude = Column(Numeric(10, 6), nullable=True)
+    raio_km = Column(Numeric(5, 2), nullable=True, default=2.0)  # Raio de cobertura em km
 
     taxa_entrega = Column(Numeric(10, 2), nullable=False, default=0)
-    ativo = Column(Boolean, default=True)
-
     ativo = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=now_trimmed, nullable=False)
     updated_at = Column(DateTime, default=now_trimmed, onupdate=now_trimmed, nullable=False)

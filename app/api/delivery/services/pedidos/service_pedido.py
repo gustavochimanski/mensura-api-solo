@@ -125,11 +125,15 @@ class PedidoService:
             )
 
             regiao_encontrada = None
-            # Se seu modelo tiver raio_km, troque 2.0 por reg.raio_km (e trate None)
             for reg in regioes:
+                # Verifica se a região tem coordenadas válidas
+                if reg.latitude is None or reg.longitude is None:
+                    continue
+                    
                 distancia = haversine(endereco.latitude, endereco.longitude, reg.latitude, reg.longitude)
-                raio_km = getattr(reg, "raio_km", None)
-                limite = float(raio_km) if raio_km is not None else 2.0
+                raio_km = reg.raio_km if reg.raio_km is not None else 2.0
+                limite = float(raio_km)
+                
                 if distancia <= limite:
                     regiao_encontrada = reg
                     break

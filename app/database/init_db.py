@@ -147,7 +147,7 @@ def criar_usuario_admin_padrao():
                 insert(UserModel)
                 .values(
                     username="super",
-                    hashed_password=hash_password("123456"),
+                    hashed_password=hash_password("171717"),
                     type_user="admin",
                 )
                 .on_conflict_do_nothing(index_elements=[UserModel.username])

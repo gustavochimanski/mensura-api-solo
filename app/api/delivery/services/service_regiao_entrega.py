@@ -46,6 +46,7 @@ class RegiaoEntregaService:
             uf=uf,
             latitude=payload.latitude,
             longitude=payload.longitude,
+            raio_km=payload.raio_km,
             taxa_entrega=payload.taxa_entrega,
             ativo=payload.ativo,
         )
