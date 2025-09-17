@@ -264,7 +264,7 @@ def inicializar_banco():
         logger.info("ℹ️ Banco já foi inicializado (pulando)")
         return
     
-    # Tenta adquirir um lock usando uma tabela temporári
+    # Tenta adquirir um lock usando uma tabela temporária
     lock_acquired = False
     max_retries = 10
     retry_delay = 1
