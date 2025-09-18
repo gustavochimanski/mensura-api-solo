@@ -13,12 +13,12 @@ project_root = "/usr/src/app"
 sys.path.insert(0, project_root)
 
 try:
-    # Executar a migration diretamente
-    print("🔄 Executando migration de categorias/produtos...")
+    # Executar a migration específica para corrigir a foreign key
+    print("🔄 Executando correção da foreign key de categorias...")
     
     # Importar e executar a migration
-    from migrate_categorias_to_mensura import migrate_categorias_to_mensura
-    migrate_categorias_to_mensura()
+    from fix_categoria_fk import fix_categoria_foreign_key
+    fix_categoria_foreign_key()
     
 except Exception as e:
     print(f"❌ Erro ao executar migration: {e}")
