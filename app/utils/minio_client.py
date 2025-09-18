@@ -4,10 +4,8 @@ import uuid
 import mimetypes
 import os
 from urllib.parse import urlparse
-from io import BytesIO
 
 from slugify import slugify
-from PIL import Image
 
 from fastapi import UploadFile
 from minio import Minio
@@ -44,52 +42,6 @@ def gerar_nome_bucket(cnpj: str) -> str:
     return slugify(cnpj)[:63]
 
 
-def redimensionar_imagem(file: UploadFile, slug: str) -> BytesIO:
-    """
-    Redimensiona imagem baseado no slug:
-    - categorias: max 512x512, reduz para 256x256
-    - produtos: max 1024x1024, reduz para 512x512
-    """
-    try:
-        # Lê a imagem
-        file.file.seek(0)
-        image = Image.open(file.file)
-        
-        # Converte para RGB se necessário (para JPEG)
-        if image.mode in ('RGBA', 'LA', 'P'):
-            image = image.convert('RGB')
-        
-        # Define limites baseado no slug
-        if slug == 'categorias':
-            max_size = (512, 512)
-            target_size = (256, 256)
-        elif slug == 'produtos':
-            max_size = (1024, 1024)
-            target_size = (512, 512)
-        else:
-            # Para outros slugs, mantém o tamanho original
-            return file.file
-        
-        # Verifica se precisa redimensionar
-        if image.size[0] > max_size[0] or image.size[1] > max_size[1]:
-            # Redimensiona mantendo proporção
-            image.thumbnail(max_size, Image.Resampling.LANCZOS)
-        
-        # Reduz para o tamanho alvo
-        image = image.resize(target_size, Image.Resampling.LANCZOS)
-        
-        # Salva em BytesIO
-        output = BytesIO()
-        image.save(output, format='JPEG', quality=85, optimize=True)
-        output.seek(0)
-        
-        logger.info(f"Imagem redimensionada: {file.size} bytes -> {len(output.getvalue())} bytes")
-        return output
-        
-    except Exception as e:
-        logger.warning(f"Erro ao redimensionar imagem: {e}. Usando arquivo original.")
-        file.file.seek(0)
-        return file.file
 
 
 def upload_file_to_minio(
@@ -123,16 +75,9 @@ def upload_file_to_minio(
     else:
         logger.info(f"[MinIO] Bucket já existe: {bucket_name}")
 
-    # 3️⃣ Processa imagem se for uma imagem
+    # 3️⃣ Usa o arquivo original
     file_data = file.file
     content_type = file.content_type
-    
-    # Verifica se é uma imagem e se precisa redimensionar
-    if file.content_type and file.content_type.startswith('image/'):
-        logger.info(f"[MinIO] Processando imagem - tamanho original: {file.size} bytes")
-        file_data = redimensionar_imagem(file, slug)
-        content_type = 'image/jpeg'  # Sempre salva como JPEG após redimensionamento
-        logger.info(f"[MinIO] Imagem processada - novo content_type: {content_type}")
 
     # 4️⃣ Nome do objeto
     ext = mimetypes.guess_extension(content_type) or ".bin"
@@ -162,24 +107,42 @@ def upload_file_to_minio(
     return url
 
 
-def remover_arquivo_minio(file_url: str) -> None:
+def remover_arquivo_minio(file_url: str) -> bool:
+    """
+    Remove um arquivo do MinIO baseado na URL.
+    Retorna True se removido com sucesso, False caso contrário.
+    """
     if not file_url:
-        return
+        logger.warning("[MinIO] URL vazia fornecida para remoção")
+        return False
 
     try:
-        from urllib.parse import urlparse
+        logger.info(f"[MinIO] Iniciando remoção - URL: {file_url}")
+        
+        # Parse da URL
         u = urlparse(file_url)
         path_parts = [p for p in u.path.split("/") if p]  # remove vazios
 
         if len(path_parts) < 2:
-            print(f"⚠️ Caminho inválido para remover do MinIO: {file_url}")
-            return
+            logger.error(f"[MinIO] Caminho inválido para remover do MinIO: {file_url}")
+            return False
 
-        bucket_name = path_parts[0]  # teste2
-        object_key = "/".join(path_parts[1:])  # categorias/f22aac08-...
+        bucket_name = path_parts[0]
+        object_key = "/".join(path_parts[1:])
+        
+        logger.info(f"[MinIO] Tentando remover - bucket: {bucket_name}, key: {object_key}")
 
+        # Verifica se o bucket existe antes de tentar remover
+        if not client.bucket_exists(bucket_name):
+            logger.warning(f"[MinIO] Bucket não existe: {bucket_name}")
+            return False
+
+        # Remove o objeto
         client.remove_object(bucket_name, object_key)
-        print(f"✅ Removido do MinIO: bucket={bucket_name}, key={object_key}")
+        logger.info(f"[MinIO] Arquivo removido com sucesso - bucket: {bucket_name}, key: {object_key}")
+        return True
+        
     except Exception as e:
-        print(f"⚠️ Erro ao remover arquivo do MinIO: {e} | url={file_url}")
+        logger.error(f"[MinIO] Erro ao remover arquivo: {e} | URL: {file_url}")
+        return False
 
