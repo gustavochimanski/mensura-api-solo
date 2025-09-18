@@ -87,6 +87,7 @@ def importar_models():
     from app.api.mensura.models.empresa_model import EmpresaModel
     from app.api.mensura.models.user_model import UserModel
     from app.api.mensura.models.endereco_model import EnderecoModel
+    from app.api.mensura.models.categoria_model import CategoriaModel
     from app.api.mensura.models.cadprod_emp_model import ProdutoEmpModel
     from app.api.mensura.models.cadprod_model import ProdutoModel
     # ─── Models Delivery ───────────────────────────────────────────
