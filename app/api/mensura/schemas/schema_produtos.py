@@ -1,3 +1,4 @@
+
 from typing import Optional, List
 
 from pydantic import BaseModel, ConfigDict
@@ -15,7 +16,7 @@ class CriarNovoProdutoRequest(BaseModel):
     data_cadastro: Optional[date] = None
     ativo: bool = True
     unidade_medida: Optional[constr(max_length=10)] = None
-    cod_categoria: Optional[int] = None  # Agora opcional - categoria do ERP
+    # cod_categoria: Optional[int] = None  # Removido
 
     # ProdutoEmpDeliveryModel (já cria o vínculo com a empresa)
     empresa_id: int
@@ -31,7 +32,7 @@ class CriarNovoProdutoRequest(BaseModel):
 
 class AtualizarProdutoRequest(BaseModel):
     descricao: Optional[constr(max_length=255)] = None
-    cod_categoria: Optional[int] = None  # Categoria do ERP (opcional)
+    # cod_categoria: Optional[int] = None  # Removido
     imagem: Optional[str] = None
     ativo: Optional[bool] = None
     unidade_medida: Optional[constr(max_length=10)] = None
