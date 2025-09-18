@@ -24,7 +24,7 @@ class CategoriaModel(Base):
     updated_at = Column(DateTime, default=now_trimmed, onupdate=now_trimmed, nullable=False)
 
     # Relacionamento com produtos
-    produtos = relationship("ProdutoModel", back_populates="categoria")
+    # produtos = relationship("ProdutoModel", back_populates="categoria")  # Temporariamente removido para debug
 
     @hybrid_property
     def is_active(self) -> bool:
