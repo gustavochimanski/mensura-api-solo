@@ -2,6 +2,7 @@
 """
 Script para executar a migration de categorias/produtos
 Execute este script a partir da raiz do projeto: python app/database/migrations/run_migrations.py
+Ou execute diretamente: python migrate_categorias_to_mensura.py
 """
 import sys
 import os
@@ -11,9 +12,17 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
 sys.path.insert(0, project_root)
 
-from sqlalchemy import text
-from app.database.db_connection import engine
-from app.database.migrations.migrate_categorias_to_mensura import migrate_categorias_to_mensura
+try:
+    from sqlalchemy import text
+    from app.database.db_connection import engine
+    from app.database.migrations.migrate_categorias_to_mensura import migrate_categorias_to_mensura
+except ImportError as e:
+    print(f"❌ Erro de importação: {e}")
+    print("💡 Execute este script a partir da raiz do projeto:")
+    print("   python app/database/migrations/run_migrations.py")
+    print("Ou execute diretamente a migration:")
+    print("   python app/database/migrations/migrate_categorias_to_mensura.py")
+    sys.exit(1)
 
 def check_migration_status():
     """Verifica o status da migration de categorias/produtos"""
