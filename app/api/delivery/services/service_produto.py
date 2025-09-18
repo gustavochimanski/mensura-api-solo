@@ -13,6 +13,7 @@ from app.api.mensura.schemas.schema_produtos import (
 )
 from app.api.mensura.schemas.schema_produtos import ProdutoListItem
 from app.utils.logger import logger
+from app.utils.minio_client import update_file_to_minio, remover_arquivo_minio
 
 
 class ProdutosDeliveryService:
@@ -26,59 +27,6 @@ class ProdutosDeliveryService:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Empresa não encontrada")
 
 
-    def atualizar_produto(self, empresa_id: int, cod_barras: str, req: CriarNovoProdutoRequest) -> CriarNovoProdutoResponse:
-        self._empresa_or_404(empresa_id)
-
-        prod = self.repo.buscar_por_cod_barras(cod_barras)
-        if not prod:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Produto não encontrado")
-
-        # atualiza produto base (NÃO mexe em exibir_delivery aqui)
-        self.repo.atualizar_produto(
-            prod,
-            descricao=req.descricao,
-            cod_categoria=req.cod_categoria,
-            imagem=req.imagem,
-            ativo=req.ativo,
-            unidade_medida=req.unidade_medida,
-            data_cadastro=req.data_cadastro or prod.data_cadastro,
-        )
-
-        # upsert no vínculo
-        pe = self.repo.upsert_produto_emp(
-            empresa_id=empresa_id,
-            cod_barras=cod_barras,
-            preco_venda=Decimal(str(req.preco_venda)),
-            custo=(Decimal(str(req.custo)) if req.custo is not None else None),
-            vitrine_id=req.vitrine_id,  # 👈 cria/garante vínculo se vier
-            sku_empresa=req.sku_empresa,
-            disponivel=req.disponivel,
-            exibir_delivery=req.exibir_delivery
-        )
-
-        self.db.commit()
-        self.db.refresh(prod)
-        self.db.refresh(pe)
-
-        vitrine_id_resp = req.vitrine_id
-        if vitrine_id_resp is None and pe.vitrines:
-            vitrine_id_resp = pe.vitrines[0].id
-
-        return CriarNovoProdutoResponse(
-            produto=ProdutoBaseDTO.model_validate(prod, from_attributes=True),
-            produto_emp=ProdutoEmpDTO(
-                empresa_id=pe.empresa_id,
-                cod_barras=pe.cod_barras,
-                preco_venda=float(pe.preco_venda),
-                custo=(float(pe.custo) if pe.custo is not None else None),
-                vitrine_id=vitrine_id_resp,
-                sku_empresa=pe.sku_empresa,
-                disponivel=pe.disponivel,
-                exibir_delivery=pe.exibir_delivery,
-                created_at=pe.created_at,
-                updated_at=pe.updated_at,
-            ),
-        )
 
     def set_disponibilidade(self, empresa_id: int, cod_barras: str, on: bool):
         ok = self.repo.set_disponibilidade(empresa_id, cod_barras, on)
@@ -110,7 +58,6 @@ class ProdutosDeliveryService:
             # Remove a imagem do MinIO se existir
             if image_url:
                 try:
-                    from app.utils.minio_client import remover_arquivo_minio
                     remover_arquivo_minio(image_url)
                     logger.info(f"[Produtos] Imagem removida do MinIO: {image_url}")
                 except Exception as e:
@@ -118,6 +65,79 @@ class ProdutosDeliveryService:
 
         self.db.commit()
         return {"ok": True, "message": "Produto deletado com sucesso"}
+
+    def atualizar_produto(self, empresa_id: int, cod_barras: str, req: CriarNovoProdutoRequest, file=None) -> CriarNovoProdutoResponse:
+        """
+        Atualiza produto com ou sem upload de arquivo.
+        Se file for fornecido, faz upload e remove arquivo antigo automaticamente.
+        """
+        self._empresa_or_404(empresa_id)
+
+        prod = self.repo.buscar_por_cod_barras(cod_barras)
+        if not prod:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Produto não encontrado")
+
+        # Se há arquivo, faz upload e remove o antigo
+        if file:
+            url_antiga = getattr(prod, "imagem", None)
+            nova_url = update_file_to_minio(
+                db=self.db,
+                cod_empresa=empresa_id,
+                file=file,
+                slug="produtos",
+                url_antiga=url_antiga
+            )
+            imagem_final = nova_url
+        else:
+            # Usa a imagem do request ou mantém a atual
+            imagem_final = req.imagem or getattr(prod, "imagem", None)
+
+        # atualiza produto base
+        self.repo.atualizar_produto(
+            prod,
+            descricao=req.descricao,
+            cod_categoria=req.cod_categoria,
+            imagem=imagem_final,
+            ativo=req.ativo,
+            unidade_medida=req.unidade_medida,
+            data_cadastro=req.data_cadastro or prod.data_cadastro,
+        )
+
+        # upsert no vínculo
+        pe = self.repo.upsert_produto_emp(
+            empresa_id=empresa_id,
+            cod_barras=cod_barras,
+            preco_venda=Decimal(str(req.preco_venda)),
+            custo=(Decimal(str(req.custo)) if req.custo is not None else None),
+            vitrine_id=req.vitrine_id,
+            sku_empresa=req.sku_empresa,
+            disponivel=req.disponivel,
+            exibir_delivery=req.exibir_delivery
+        )
+
+        self.db.commit()
+        self.db.refresh(prod)
+        self.db.refresh(pe)
+
+        vitrine_id_resp = req.vitrine_id
+        if vitrine_id_resp is None and pe.vitrines:
+            vitrine_id_resp = pe.vitrines[0].id
+
+        return CriarNovoProdutoResponse(
+            produto=ProdutoBaseDTO.model_validate(prod, from_attributes=True),
+            produto_emp=ProdutoEmpDTO(
+                empresa_id=pe.empresa_id,
+                cod_barras=pe.cod_barras,
+                preco_venda=float(pe.preco_venda),
+                custo=(float(pe.custo) if pe.custo is not None else None),
+                vitrine_id=vitrine_id_resp,
+                sku_empresa=pe.sku_empresa,
+                disponivel=pe.disponivel,
+                exibir_delivery=pe.exibir_delivery,
+                created_at=pe.created_at,
+                updated_at=pe.updated_at,
+            ),
+        )
 
     def _to_list_items(self, produtos, empresa_id: int) -> list[ProdutoListItem]:
         data = []

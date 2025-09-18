@@ -107,6 +107,33 @@ def upload_file_to_minio(
     return url
 
 
+def update_file_to_minio(
+    db: Session,
+    cod_empresa: int,
+    file: UploadFile,
+    slug: str,
+    url_antiga: str = None
+) -> str:
+    """
+    Atualiza um arquivo no MinIO, removendo o arquivo antigo se fornecido.
+    Retorna a nova URL do arquivo.
+    """
+    logger.info(f"[MinIO] Iniciando update - empresa_id={cod_empresa}, slug={slug}, url_antiga={url_antiga}")
+    
+    # 1️⃣ Faz upload do novo arquivo
+    nova_url = upload_file_to_minio(db, cod_empresa, file, slug)
+    
+    # 2️⃣ Remove o arquivo antigo se fornecido e diferente do novo
+    if url_antiga and url_antiga != nova_url:
+        try:
+            remover_arquivo_minio(url_antiga)
+            logger.info(f"[MinIO] Arquivo antigo removido com sucesso: {url_antiga}")
+        except Exception as e:
+            logger.warning(f"[MinIO] Falha ao remover arquivo antigo: {e} | url={url_antiga}")
+    
+    return nova_url
+
+
 def remover_arquivo_minio(file_url: str) -> bool:
     """
     Remove um arquivo do MinIO baseado na URL.

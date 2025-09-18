@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.api.delivery.repositories.repo_categorias import CategoriaDeliveryRepository
 from app.api.delivery.schemas.schema_categoria import CategoriaDeliveryIn
-from app.utils.minio_client import remover_arquivo_minio
+from app.utils.minio_client import remover_arquivo_minio, update_file_to_minio
 from app.utils.logger import logger
 
 class CategoriasService:
@@ -18,23 +18,27 @@ class CategoriasService:
     def list_by_parent(self, parent_id: Optional[int]):
         return self.repo.list_by_parent(parent_id)
 
-    def update(self, cat_id: int, data: dict):
-        # pega a categoria atual para capturar a URL antiga
-        atual = self.repo.get_by_id(cat_id)
-        url_antiga = getattr(atual, "imagem", None)
+    def update(self, cat_id: int, data: dict, cod_empresa: int = None, file=None):
+        """
+        Atualiza categoria com ou sem upload de arquivo.
+        Se file for fornecido, faz upload e remove arquivo antigo automaticamente.
+        """
+        # Se há arquivo, faz upload e remove o antigo
+        if file and cod_empresa:
+            atual = self.repo.get_by_id(cat_id)
+            url_antiga = getattr(atual, "imagem", None)
+            
+            nova_url = update_file_to_minio(
+                db=self.repo.db,
+                cod_empresa=cod_empresa,
+                file=file,
+                slug="categorias",
+                url_antiga=url_antiga
+            )
+            data["imagem"] = nova_url
 
         # aplica update no banco
-        atualizado = self.repo.update(cat_id, data)
-
-        # se a imagem foi trocada, remove a antiga no MinIO (best-effort)
-        if "imagem" in data and data["imagem"] and data["imagem"] != url_antiga and url_antiga:
-            try:
-                remover_arquivo_minio(url_antiga)
-                logger.info(f"[Categorias] Imagem antiga removida do MinIO: {url_antiga}")
-            except Exception as e:
-                logger.warning(f"[Categorias] Falha ao remover imagem antiga do MinIO: {e} | url={url_antiga}")
-
-        return atualizado
+        return self.repo.update(cat_id, data)
 
     def delete(self, cat_id: int, cod_empresa: int):
         # pega a categoria pra obter a URL

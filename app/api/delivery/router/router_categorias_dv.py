@@ -121,8 +121,8 @@ def editar_categoria(
     body: CategoriaDeliveryIn,
     db: Session = Depends(get_db),
 ):
-    repos = CategoriaDeliveryRepository(db)
-    c = repos.update(cat_id, body.model_dump(exclude_unset=True))
+    service = CategoriasService(db)
+    c = service.update(cat_id, body.model_dump(exclude_unset=True))
     if not c:
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Falha ao atualizar categoria")
     return CategoriaDeliveryOut(
@@ -237,21 +237,15 @@ async def upload_imagem_categoria(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Formato de imagem inválido")
     
     try:
-        url = upload_file_to_minio(db, cod_empresa, imagem, "categorias")
-        logger.info(f"[Categorias] Imagem enviada com sucesso: {url}")
+        service = CategoriasService(db)
+        c = service.update(cat_id, {}, cod_empresa, imagem)
+        logger.info(f"[Categorias] Categoria atualizada com imagem: {c.id}")
     except ValueError as e:
         logger.error(f"[Categorias] Erro de validação no upload: {e}")
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e))
     except Exception as e:
         logger.error(f"[Categorias] Erro inesperado no upload: {e}")
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Erro ao enviar imagem: {str(e)}")
-
-    try:
-        c = repos.update(cat_id, {"imagem": url})
-        logger.info(f"[Categorias] Categoria atualizada com imagem: {c.id}")
-    except Exception as e:
-        logger.error(f"[Categorias] Erro ao atualizar categoria com imagem: {e}")
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Erro ao atualizar categoria: {str(e)}")
     
     return CategoriaDeliveryOut(
         id=c.id,
