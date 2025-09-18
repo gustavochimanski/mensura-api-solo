@@ -1,11 +1,14 @@
 # app/api/mensura/models/categoria_model.py
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, func
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.hybrid import hybrid_property
 
 from app.database.db_connection import Base
 from app.utils.database_utils import now_trimmed
+
+if TYPE_CHECKING:
+    from app.api.mensura.models.cadprod_model import ProdutoModel
 
 
 class CategoriaModel(Base):
@@ -24,7 +27,7 @@ class CategoriaModel(Base):
     updated_at = Column(DateTime, default=now_trimmed, onupdate=now_trimmed, nullable=False)
 
     # Relacionamento com produtos
-    produtos = relationship("app.api.mensura.models.cadprod_model.ProdutoModel", back_populates="categoria", lazy="select")
+    produtos = relationship("ProdutoModel", back_populates="categoria", lazy="select")
 
     @hybrid_property
     def is_active(self) -> bool:
