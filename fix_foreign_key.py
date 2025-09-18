@@ -45,10 +45,10 @@ try:
                     DROP CONSTRAINT IF EXISTS {current_fk.constraint_name};
                 """))
                 
-                # Adicionar nova foreign key
+                # Adicionar nova foreign key (se não existir)
                 conn.execute(text("""
                     ALTER TABLE mensura.cadprod 
-                    ADD CONSTRAINT cadprod_cod_categoria_fkey 
+                    ADD CONSTRAINT IF NOT EXISTS cadprod_cod_categoria_fkey 
                     FOREIGN KEY (cod_categoria) REFERENCES mensura.categorias(id) ON DELETE RESTRICT;
                 """))
                 
