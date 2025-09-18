@@ -45,12 +45,18 @@ try:
                     DROP CONSTRAINT IF EXISTS {current_fk.constraint_name};
                 """))
                 
-                # Adicionar nova foreign key (se não existir)
-                conn.execute(text("""
-                    ALTER TABLE mensura.cadprod 
-                    ADD CONSTRAINT IF NOT EXISTS cadprod_cod_categoria_fkey 
-                    FOREIGN KEY (cod_categoria) REFERENCES mensura.categorias(id) ON DELETE RESTRICT;
-                """))
+                # Adicionar nova foreign key
+                try:
+                    conn.execute(text("""
+                        ALTER TABLE mensura.cadprod 
+                        ADD CONSTRAINT cadprod_cod_categoria_fkey 
+                        FOREIGN KEY (cod_categoria) REFERENCES mensura.categorias(id) ON DELETE RESTRICT;
+                    """))
+                except Exception as e:
+                    if "already exists" in str(e):
+                        print("ℹ️ Constraint já existe, pulando criação")
+                    else:
+                        raise e
                 
                 conn.commit()
                 print("✅ Foreign key corrigida!")
@@ -75,11 +81,17 @@ try:
                 print("✅ Tabela mensura.categorias existe")
                 print("🔄 Criando foreign key...")
                 
-                conn.execute(text("""
-                    ALTER TABLE mensura.cadprod 
-                    ADD CONSTRAINT cadprod_cod_categoria_fkey 
-                    FOREIGN KEY (cod_categoria) REFERENCES mensura.categorias(id) ON DELETE RESTRICT;
-                """))
+                try:
+                    conn.execute(text("""
+                        ALTER TABLE mensura.cadprod 
+                        ADD CONSTRAINT cadprod_cod_categoria_fkey 
+                        FOREIGN KEY (cod_categoria) REFERENCES mensura.categorias(id) ON DELETE RESTRICT;
+                    """))
+                except Exception as e:
+                    if "already exists" in str(e):
+                        print("ℹ️ Constraint já existe, pulando criação")
+                    else:
+                        raise e
                 
                 conn.commit()
                 print("✅ Foreign key criada!")
