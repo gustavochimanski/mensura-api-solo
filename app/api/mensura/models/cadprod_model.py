@@ -11,7 +11,6 @@ class ProdutoModel(Base):
     descricao = Column(String(255), nullable=False)
     imagem = Column(String(255), nullable=True)
     data_cadastro = Column(Date, nullable=True)
-    cod_categoria = Column(Integer, ForeignKey("mensura.categorias.id", ondelete="RESTRICT"), nullable=True)
 
     # extras úteis para cardápio
     ativo = Column(Boolean, nullable=False, default=True)
@@ -20,7 +19,6 @@ class ProdutoModel(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     # Relacionamentos
-    categoria = relationship("CategoriaModel", back_populates="produtos")
     produtos_empresa = relationship("ProdutoEmpModel", back_populates="produto", cascade="all, delete-orphan")
 
     model_config = ConfigDict(from_attributes=True)
