@@ -27,7 +27,6 @@ class CategoriaDeliveryModel(Base):
     created_at = Column(DateTime, default=now_trimmed, nullable=False)
     updated_at = Column(DateTime, default=now_trimmed, onupdate=now_trimmed, nullable=False)
 
-    produtos = relationship("ProdutoModel", back_populates="categoria")
 
     # --- N:N com vitrines ---
     vitrines = relationship(
