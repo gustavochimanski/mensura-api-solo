@@ -12,6 +12,7 @@ from app.api.mensura.schemas.schema_produtos import (
    CriarNovoProdutoResponse, CriarNovoProdutoRequest, ProdutoBaseDTO, ProdutoEmpDTO
 )
 from app.api.mensura.schemas.schema_produtos import ProdutoListItem
+from app.utils.logger import logger
 
 
 class ProdutosDeliveryService:
@@ -93,6 +94,9 @@ class ProdutosDeliveryService:
         if not prod:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Produto não encontrado")
 
+        # Captura a URL da imagem antes de deletar
+        image_url = getattr(prod, "imagem", None)
+
         # Remove o vínculo produto x empresa
         if not self.repo.deletar_vinculo_produto_emp(empresa_id, cod_barras):
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Vínculo produto x empresa não encontrado")
@@ -102,6 +106,15 @@ class ProdutosDeliveryService:
         remaining = self.repo.count_vinculos(cod_barras)
         if remaining == 0:
             self.repo.deletar_produto(cod_barras)  # só flush aqui
+            
+            # Remove a imagem do MinIO se existir
+            if image_url:
+                try:
+                    from app.utils.minio_client import remover_arquivo_minio
+                    remover_arquivo_minio(image_url)
+                    logger.info(f"[Produtos] Imagem removida do MinIO: {image_url}")
+                except Exception as e:
+                    logger.warning(f"[Produtos] Falha ao remover imagem do MinIO: {e} | url={image_url}")
 
         self.db.commit()
         return {"ok": True, "message": "Produto deletado com sucesso"}

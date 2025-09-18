@@ -8,6 +8,7 @@ from typing import Optional, List
 from app.core.admin_dependencies import get_current_user
 from app.database.db_connection import get_db
 from app.api.delivery.repositories.repo_categorias import CategoriaDeliveryRepository
+from app.api.delivery.services.service_categoria import CategoriasService
 from app.api.delivery.schemas.schema_categoria import (
     CategoriaDeliveryIn,
     CategoriaDeliveryOut, CategoriaSearchOut
@@ -144,8 +145,8 @@ def deletar_categoria(
     cat_id: int = Path(..., title="ID da categoria"),
     db: Session = Depends(get_db),
 ):
-    repos = CategoriaDeliveryRepository(db)
-    repos.delete(cat_id)
+    service = CategoriasService(db)
+    service.delete(cat_id, cod_empresa=1)  # TODO: pegar cod_empresa do usuário logado
     logger.info(f"[Categorias] Deletada ID={cat_id}")
     return None
 
