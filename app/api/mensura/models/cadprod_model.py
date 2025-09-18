@@ -20,7 +20,7 @@ class ProdutoModel(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     # Relacionamentos
-    # categoria = relationship("CategoriaModel", back_populates="produtos")  # Temporariamente removido para debug
+    categoria = relationship("CategoriaModel", back_populates="produtos")
     produtos_empresa = relationship("ProdutoEmpModel", back_populates="produto", cascade="all, delete-orphan")
 
     model_config = ConfigDict(from_attributes=True)
