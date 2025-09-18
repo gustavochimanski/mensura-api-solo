@@ -24,7 +24,7 @@ class CategoriaModel(Base):
     updated_at = Column(DateTime, default=now_trimmed, onupdate=now_trimmed, nullable=False)
 
     # Relacionamento com produtos
-    produtos = relationship("ProdutoModel", back_populates="categoria")
+    produtos = relationship("app.api.mensura.models.cadprod_model.ProdutoModel", back_populates="categoria", lazy="select")
 
     @hybrid_property
     def is_active(self) -> bool:

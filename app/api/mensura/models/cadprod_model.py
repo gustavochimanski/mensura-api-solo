@@ -20,7 +20,7 @@ class ProdutoModel(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     # Relacionamentos
-    categoria = relationship("CategoriaModel", back_populates="produtos")
-    produtos_empresa = relationship("ProdutoEmpModel", back_populates="produto", cascade="all, delete-orphan")
+    categoria = relationship("app.api.mensura.models.categoria_model.CategoriaModel", back_populates="produtos", lazy="select")
+    produtos_empresa = relationship("app.api.mensura.models.cadprod_emp_model.ProdutoEmpModel", back_populates="produto", cascade="all, delete-orphan", lazy="select")
 
     model_config = ConfigDict(from_attributes=True)
