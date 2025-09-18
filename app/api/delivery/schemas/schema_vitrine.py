@@ -2,7 +2,7 @@ from pydantic import BaseModel, ConfigDict, constr
 from typing import Optional
 
 class CriarVitrineRequest(BaseModel):
-    cod_categoria: int
+    cod_categoria: Optional[int] = None  # Agora opcional
     titulo: constr(min_length=1, max_length=100)
     ordem: int = 1
     is_home: bool = False  # mapeia para tipo_exibica
@@ -16,7 +16,7 @@ class AtualizarVitrineRequest(BaseModel):
 
 class VitrineOut(BaseModel):
     id: int
-    cod_categoria: int
+    cod_categoria: Optional[int] = None  # Agora opcional
     titulo: str
     slug: str
     ordem: int

@@ -51,7 +51,7 @@ async def atualizar_produto(
   cod_empresa: int = Form(...),
   cod_barras: str = Path(...),
   descricao: str = Form(...),
-  cod_categoria: int = Form(...),
+  cod_categoria: Optional[int] = Form(None),  # Agora opcional
   vitrine_id: Optional[int] = Form(None),
   preco_venda: Decimal = Form(...),
   custo: Optional[Decimal] = Form(None),

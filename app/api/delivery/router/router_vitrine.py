@@ -25,10 +25,10 @@ class ToggleHomeRequest(BaseModel):
 
 
 def _to_out(v) -> VitrineOut:
-    cat0_id = v.categorias[0].id if getattr(v, "categorias", None) else None
+    cat0_id = v.categorias[0].id if getattr(v, "categorias", None) and len(v.categorias) > 0 else None
     return VitrineOut(
         id=v.id,
-        cod_categoria=cat0_id,
+        cod_categoria=cat0_id,  # Pode ser None
         titulo=v.titulo,
         slug=v.slug,
         ordem=v.ordem,

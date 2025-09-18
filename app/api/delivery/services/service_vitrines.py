@@ -39,9 +39,11 @@ class VitrinesService:
 
     # -------- Create --------
     def create(self, req: CriarVitrineRequest) -> VitrinesModel:
-        cat = self.repo.get_categoria_by_id(req.cod_categoria)
-        if not cat:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Categoria inválida")
+        cat = None
+        if req.cod_categoria is not None:
+            cat = self.repo.get_categoria_by_id(req.cod_categoria)
+            if not cat:
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Categoria inválida")
 
         try:
             return self.repo.create(

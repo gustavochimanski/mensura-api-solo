@@ -96,7 +96,7 @@ class ProdutosDeliveryService:
         self.repo.atualizar_produto(
             prod,
             descricao=req.descricao,
-            cod_categoria=req.cod_categoria,
+            cod_categoria=req.cod_categoria,  # Pode ser None
             imagem=imagem_final,
             ativo=req.ativo,
             unidade_medida=req.unidade_medida,
@@ -151,8 +151,8 @@ class ProdutosDeliveryService:
                 imagem=p.imagem,
                 preco_venda=float(pe.preco_venda),
                 custo=(float(pe.custo) if pe.custo is not None else None),
-                cod_categoria=p.cod_categoria,
-                label_categoria=p.categoria.descricao if p.categoria else "",
+                cod_categoria=p.cod_categoria,  # Pode ser None
+                label_categoria=p.categoria.descricao if p.categoria else None,
                 disponivel=pe.disponivel and p.ativo,
                 exibir_delivery=pe.exibir_delivery,
             ))

@@ -15,6 +15,7 @@ class CriarNovoProdutoRequest(BaseModel):
     data_cadastro: Optional[date] = None
     ativo: bool = True
     unidade_medida: Optional[constr(max_length=10)] = None
+    cod_categoria: Optional[int] = None  # Agora opcional - categoria do ERP
 
     # ProdutoEmpDeliveryModel (já cria o vínculo com a empresa)
     empresa_id: int
@@ -30,7 +31,7 @@ class CriarNovoProdutoRequest(BaseModel):
 
 class AtualizarProdutoRequest(BaseModel):
     descricao: Optional[constr(max_length=255)] = None
-    cod_categoria: Optional[int] = None
+    cod_categoria: Optional[int] = None  # Categoria do ERP (opcional)
     imagem: Optional[str] = None
     ativo: Optional[bool] = None
     unidade_medida: Optional[constr(max_length=10)] = None
@@ -48,7 +49,7 @@ class ProdutoBaseDTO(BaseModel):
     cod_barras: str
     descricao: str
     imagem: Optional[str] = None
-    cod_categoria: Optional[int] = None   # <- agora opcional
+    cod_categoria: Optional[int] = None   # Categoria do ERP (opcional)
     ativo: bool
     unidade_medida: Optional[str] = None
     exibir_delivery: bool = True
@@ -85,8 +86,8 @@ class ProdutoListItem(BaseModel):
     imagem: Optional[str] = None
     preco_venda: float
     custo: Optional[float] = None
-    cod_categoria: Optional[int] = None    # <- agora opcional
-    label_categoria: Optional[str] = None  # <- agora opcional
+    cod_categoria: Optional[int] = None    # Categoria do ERP (opcional)
+    label_categoria: Optional[str] = None  # Nome da categoria (opcional)
     disponivel: bool
     exibir_delivery: bool = True
     model_config = ConfigDict(from_attributes=True)

@@ -33,7 +33,7 @@ class ProdutoEmpMiniDTO(BaseModel):
 
 class VitrineConfigSchema(BaseModel):
     id: int
-    cod_categoria: int  # FK -> categoria.id
+    cod_categoria: Optional[int] = None  # FK -> categoria.id (opcional)
     titulo: str
     slug: str
     ordem: int
