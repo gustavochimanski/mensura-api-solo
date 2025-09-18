@@ -47,7 +47,7 @@ def verificar_banco_inicializado():
                 WHERE table_schema IN ('mensura', 'delivery', 'bi', 'pdv')
                 AND table_name IN (
                     'usuarios', 'empresas', 'cadprod', 'cadprod_emp',
-                    'clientes_dv', 'pedidos_dv', 'categoria_dv'
+                    'clientes_dv', 'pedidos_dv', 'categorias'
                 );
             """))
             table_count = result.scalar()
