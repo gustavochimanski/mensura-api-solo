@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends
 
 from app.api.delivery.router.router_home_dv import router as home_router
-from app.api.delivery.router.router_categorias_dv import router as categorias_router
-from app.api.delivery.router.router_categorias_admin_dv import router as categorias_admin_router
+from app.api.delivery.router.categorias.router_categorias_dv import router as categorias_router
+from app.api.delivery.router.categorias.router_categorias_admin_dv import router as categorias_admin_router
 from app.api.delivery.router.client.router_client_dv import router as cliente_router
 from app.api.delivery.router.client.router_client_admin_dv import router as cliente_admin_router
 from app.api.delivery.router.pedidos.router_pedidos_dv import router as pedidos_router
