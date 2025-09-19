@@ -13,7 +13,7 @@ from app.database.db_connection import get_db
 from app.core.admin_dependencies import get_current_user
 from app.utils.minio_client import upload_file_to_minio
 
-router = APIRouter(prefix="/api/delivery", tags=["Delivery - Parceiros"])
+router = APIRouter(prefix="/api/delivery", tags=["Parceiros - Público"])
 
 # CRUD Parceiros
 @router.post("/parceiros", response_model=ParceiroOut, status_code=status.HTTP_201_CREATED, dependencies=[Depends(get_current_user)])

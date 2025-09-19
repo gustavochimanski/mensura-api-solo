@@ -5,7 +5,7 @@ from app.api.delivery.services.service_regiao_entrega import RegiaoEntregaServic
 from app.database.db_connection import get_db
 from app.utils.geopapify_client import GeoapifyClient
 
-router = APIRouter(prefix="/api/delivery/regioes-entrega", tags=["Regiões de Entrega"])
+router = APIRouter(prefix="/api/delivery/regioes-entrega", tags=["Regiões de Entrega - Admin"])
 
 @router.get("/{empresa_id}", response_model=list[RegiaoEntregaOut])
 def list_regioes(empresa_id: int, db: Session = Depends(get_db)):

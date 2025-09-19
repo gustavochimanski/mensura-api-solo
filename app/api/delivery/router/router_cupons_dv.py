@@ -8,7 +8,7 @@ from app.api.delivery.schemas.schema_cupom import (
     CupomOut, CupomCreate, CupomUpdate, CupomLinkCreate, CupomLinkOut
 )
 
-router = APIRouter(prefix="/api/delivery/cupons", tags=["Delivery - Cupons"])
+router = APIRouter(prefix="/api/delivery/cupons", tags=["Cupons - Admin"])
 
 def map_link_out(link_model) -> CupomLinkOut:
     return CupomLinkOut(

@@ -7,7 +7,7 @@ from app.api.delivery.services.service_home import HomeService
 from app.database.db_connection import get_db
 from app.utils.logger import logger
 
-router = APIRouter(prefix="/api/delivery", tags=["Home"])
+router = APIRouter(prefix="/api/delivery", tags=["Home - Público"])
 
 @router.get("/home", response_model=HomeResponse)
 def listar_home(

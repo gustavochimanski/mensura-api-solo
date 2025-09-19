@@ -12,7 +12,7 @@ from app.api.delivery.schemas.schema_vitrine import (
 from app.database.db_connection import get_db
 from app.utils.logger import logger
 
-router = APIRouter(prefix="/api/delivery/vitrines", tags=["Delivery - Vitrines"])
+router = APIRouter(prefix="/api/delivery/vitrines", tags=["Vitrines - Admin"])
 
 
 class VinculoRequest(BaseModel):
