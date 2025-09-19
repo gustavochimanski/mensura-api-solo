@@ -14,8 +14,8 @@ from app.api.delivery.router.enderecos.router_enderecos import router as enderec
 from app.api.delivery.router.enderecos.router_enderecos_admin_dv import router as enderecos_admin_router
 from app.api.delivery.router.meio_pagamento.router_meio_pagamento import router as meio_pagamento_router
 from app.api.delivery.router.meio_pagamento.router_meio_pagamento_admin_dv import router as meio_pagamento_admin_router
-from app.api.delivery.router.router_parceiros_publico import router as parceiros_publico_router
-from app.api.delivery.router.router_parceiros_admin import router as parceiros_admin_router
+from app.api.delivery.router.parceiros.router_parceiros_publico import router as parceiros_publico_router
+from app.api.delivery.router.parceiros.router_parceiros_admin import router as parceiros_admin_router
 from app.api.delivery.router.router_regiao_entrega import router as regiao_entrega_router
 from app.api.delivery.router.pedidos.router_pedidos_admin_dv import router as router_pedidos_admin
 from app.api.delivery.router.router_printer import router as printer_router
