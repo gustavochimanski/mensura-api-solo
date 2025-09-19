@@ -13,7 +13,7 @@ from app.core.admin_dependencies import get_current_user
 from app.database.db_connection import get_db
 from app.utils.logger import logger
 
-router = APIRouter(prefix="/api/delivery/pedidos/admin", tags=["Pedidos"])
+router = APIRouter(prefix="/api/delivery/pedidos/admin", tags=["Pedidos - Admin"])
 
 # ======================================================================
 # ===================== GET PEDIDO BY ID ===============================
