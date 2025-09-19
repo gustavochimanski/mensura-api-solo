@@ -16,17 +16,6 @@ from app.utils.logger import logger
 router = APIRouter(prefix="/api/delivery/pedidos/admin", tags=["Pedidos - Admin"])
 
 # ======================================================================
-# ===================== GET PEDIDO BY ID ===============================
-@router.get("/{pedido_id}", response_model=PedidoResponseCompletoTotal, status_code=status.HTTP_200_OK)
-def get_pedido(
-    pedido_id: int = Path(..., description="ID do pedido"), 
-    user: UserModel = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    svc = PedidoService(db)
-    return svc.get_pedido_by_id_completo_total(pedido_id)
-
-# ======================================================================
 # ============================ KANBAN ==================================
 @router.get(
     "/kanban",
@@ -43,6 +32,17 @@ def listar_pedidos_admin_kanban(
     Lista pedidos do sistema (para admin, versão resumida pro Kanban)
     """
     return PedidoService(db).list_all_kanban(date_filter=date_filter, empresa_id=empresa_id)
+
+# ======================================================================
+# ===================== GET PEDIDO BY ID ===============================
+@router.get("/{pedido_id}", response_model=PedidoResponseCompletoTotal, status_code=status.HTTP_200_OK)
+def get_pedido(
+    pedido_id: int = Path(..., description="ID do pedido"), 
+    user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    svc = PedidoService(db)
+    return svc.get_pedido_by_id_completo_total(pedido_id)
 
 
 # ======================================================================
