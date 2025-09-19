@@ -13,7 +13,7 @@ from app.api.delivery.schemas.schema_printer import (
 from app.database.db_connection import get_db
 from app.utils.logger import logger
 
-router = APIRouter(prefix="/api/delivery/printer", tags=["Printer"])
+router = APIRouter(prefix="/api/delivery/printer", tags=["Printer - Delivery"])
 
 
 # ======================================================================

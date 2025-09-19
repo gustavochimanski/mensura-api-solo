@@ -12,7 +12,7 @@ from app.core.admin_dependencies import get_current_user
 from app.database.db_connection import get_db
 from app.utils.logger import logger
 
-router = APIRouter(prefix="/api/delivery/cliente/admin", tags=["Cliente - Admin"])
+router = APIRouter(prefix="/api/delivery/cliente/admin", tags=["Cliente - Admin - Delivery"])
 
 # ======================================================================
 # ============================= ADMIN ==================================

@@ -17,7 +17,7 @@ from app.utils.minio_client import upload_file_to_minio
 from app.utils.logger import logger
 from sqlalchemy.exc import IntegrityError
 
-router = APIRouter(prefix="/api/delivery/produtos", tags=["Produtos - Admin"])
+router = APIRouter(prefix="/api/delivery/produtos", tags=["Produtos - Admin - Delivery"])
 
 class SetDisponibilidadeRequest(BaseModel):
   empresa_id: int

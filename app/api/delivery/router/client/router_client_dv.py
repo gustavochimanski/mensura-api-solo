@@ -16,7 +16,7 @@ from app.core.client_dependecies import get_cliente_by_super_token
 from app.database.db_connection import get_db
 from app.utils.logger import logger
 
-router = APIRouter(prefix="/api/delivery/cliente", tags=["Cliente - Cliente"])
+router = APIRouter(prefix="/api/delivery/cliente", tags=["Cliente - Cliente - Delivery"])
 
 class NovoDispositivoRequest(BaseModel):
     telefone: str

@@ -9,7 +9,7 @@ from app.api.delivery.schemas.schema_entregador import (
 )
 from app.utils.logger import logger
 
-router = APIRouter(prefix="/api/delivery/entregadores", tags=["Entregadores - Admin"])
+router = APIRouter(prefix="/api/delivery/entregadores", tags=["Entregadores - Admin - Delivery"])
 
 @router.get("", response_model=List[EntregadorOut])
 def listar_entregadores(

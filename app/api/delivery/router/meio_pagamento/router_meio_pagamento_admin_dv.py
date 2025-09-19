@@ -9,7 +9,7 @@ from app.api.delivery.services.meio_pagamento_service import MeioPagamentoServic
 from app.core.admin_dependencies import get_current_user
 from app.database.db_connection import get_db
 
-router = APIRouter(prefix="/api/delivery/meios-pagamento/admin", tags=["Meios de Pagamento - Admin"])
+router = APIRouter(prefix="/api/delivery/meios-pagamento/admin", tags=["Meios de Pagamento - Admin - Delivery"])
 
 @router.get("/", response_model=List[MeioPagamentoResponse], dependencies=[Depends(get_current_user)])
 def listar_meios_pagamento_admin(db: Session = Depends(get_db)):

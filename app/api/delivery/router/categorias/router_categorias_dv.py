@@ -14,7 +14,7 @@ from app.api.delivery.schemas.schema_categoria import (
 )
 from app.utils.logger import logger
 
-router = APIRouter(prefix="/api/delivery/cliente/categorias", tags=["Categorias - Cliente"])
+router = APIRouter(prefix="/api/delivery/cliente/categorias", tags=["Categorias - Cliente - Delivery"])
 
 # -------- SEARCH --------
 @router.get("/search", response_model=List[CategoriaSearchOut])

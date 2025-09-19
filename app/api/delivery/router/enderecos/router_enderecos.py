@@ -7,7 +7,8 @@ from app.database.db_connection import get_db
 from app.api.delivery.schemas.schema_endereco import EnderecoOut, EnderecoCreate, EnderecoUpdate
 from app.utils.logger import logger
 
-router = APIRouter(prefix="/api/delivery/cliente/enderecos", tags=["Endereços - Cliente"])
+
+router = APIRouter(prefix="/api/delivery/cliente/enderecos", tags=["Endereços - Cliente - Delivery"])
 
 # SEGURANÇA: Este router implementa verificações para garantir que clientes
 # só possam acessar e modificar seus próprios endereços. As verificações são

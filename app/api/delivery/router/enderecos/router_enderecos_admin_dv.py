@@ -9,7 +9,7 @@ from app.database.db_connection import get_db
 from app.api.delivery.schemas.schema_endereco import EnderecoOut, EnderecoCreate, EnderecoUpdate
 from app.utils.logger import logger
 
-router = APIRouter(prefix="/api/delivery/enderecos/admin", tags=["Endereços - Admin"])
+router = APIRouter(prefix="/api/delivery/enderecos/admin", tags=["Endereços - Admin - Delivery"])
 
 # ======================================================================
 # ============================= ADMIN ==================================
