@@ -11,7 +11,7 @@ from app.core.client_dependecies import get_cliente_by_super_token
 from app.database.db_connection import get_db
 from app.utils.logger import logger
 
-router = APIRouter(prefix="/api/delivery/pedidos", tags=["Pedidos"])
+router = APIRouter(prefix="/api/delivery/pedidos/cliente", tags=["Pedidos"])
 
 # ======================================================================
 # =========================== CHECKOUT =================================
@@ -55,7 +55,7 @@ def listar_pedidos(
 # ======================================================================
 # ===================  ATUALIZA ITENS PEDIDO ===========================
 @router.put(
-    "/cliente/{pedido_id}/itens",
+    "/{pedido_id}/itens",
     response_model=PedidoResponse
 )
 def atualizar_itens_cliente(
@@ -80,7 +80,7 @@ def atualizar_itens_cliente(
 # ======================================================================
 # =============== EDITA INFORMAÇÕES GERAIS PEDIDO ======================
 @router.put(
-    "/cliente/{pedido_id}/editar",
+    "/{pedido_id}/editar",
     response_model=PedidoResponse,
     status_code=status.HTTP_200_OK
 )
