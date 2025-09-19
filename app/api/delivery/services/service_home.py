@@ -71,7 +71,7 @@ class HomeService:
                         cod_barras=p.produto.cod_barras,
                         descricao=p.produto.descricao,
                         imagem=p.produto.imagem,
-                        cod_categoria=p.produto.cod_categoria,
+                        cod_categoria=None,  # ProdutoModel não possui cod_categoria
                         ativo=p.produto.ativo,
                         unidade_medida=p.produto.unidade_medida,
                     ),
@@ -121,7 +121,7 @@ class HomeService:
                         cod_barras=p.produto.cod_barras,
                         descricao=p.produto.descricao,
                         imagem=p.produto.imagem,
-                        cod_categoria=p.produto.cod_categoria,
+                        cod_categoria=None,  # ProdutoModel não possui cod_categoria
                         ativo=p.produto.ativo,
                         unidade_medida=p.produto.unidade_medida,
                     ),
@@ -183,7 +183,7 @@ class HomeService:
                         cod_barras=p.produto.cod_barras,
                         descricao=p.produto.descricao,
                         imagem=p.produto.imagem,
-                        cod_categoria=p.produto.cod_categoria,
+                        cod_categoria=None,  # ProdutoModel não possui cod_categoria
                         ativo=p.produto.ativo,
                         unidade_medida=p.produto.unidade_medida,
                     ),
