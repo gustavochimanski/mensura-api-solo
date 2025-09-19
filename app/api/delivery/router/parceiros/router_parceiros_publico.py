@@ -22,6 +22,7 @@ def list_parceiros(db: Session = Depends(get_db)):
     """
     return ParceirosService(db).list_parceiros()
 
+
 @router.get("/banners", response_model=list[BannerParceiroOut])
 def list_banners(parceiro_id: Optional[int] = Query(None), db: Session = Depends(get_db)):
     """
