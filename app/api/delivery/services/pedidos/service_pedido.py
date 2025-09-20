@@ -115,6 +115,24 @@ class PedidoService:
 
         taxa_entrega = _dec(0)
         if tipo_entrega == TipoEntregaEnum.DELIVERY and endereco and empresa_id:
+            # Verifica se o endereço tem coordenadas válidas
+            if not endereco.latitude or not endereco.longitude:
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    "Endereço sem coordenadas válidas. Entrega não disponível."
+                )
+            
+            # Converte para float para garantir compatibilidade
+            endereco_lat = float(endereco.latitude)
+            endereco_lon = float(endereco.longitude)
+            
+            # Verifica se as coordenadas são válidas (não são 0,0)
+            if endereco_lat == 0.0 and endereco_lon == 0.0:
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    "Coordenadas do endereço inválidas (0,0). Entrega não disponível."
+                )
+
             regioes = (
                 self.db.query(RegiaoEntregaModel)
                 .filter(
@@ -124,25 +142,57 @@ class PedidoService:
                 .all()
             )
 
+            if not regioes:
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    "Nenhuma região de entrega cadastrada para esta empresa."
+                )
+
             regiao_encontrada = None
+            menor_distancia = float('inf')
+            
             for reg in regioes:
                 # Verifica se a região tem coordenadas válidas
                 if reg.latitude is None or reg.longitude is None:
+                    # Se não tem coordenadas, tenta verificar por bairro/cidade/UF
+                    if (endereco.bairro and endereco.cidade and endereco.estado and
+                        reg.bairro and reg.cidade and reg.uf):
+                        if (reg.bairro.lower().strip() == endereco.bairro.lower().strip() and
+                            reg.cidade.lower().strip() == endereco.cidade.lower().strip() and
+                            reg.uf.upper().strip() == endereco.estado.upper().strip()):
+                            regiao_encontrada = reg
+                            break
+                    continue
+                
+                # Calcula distância usando coordenadas
+                reg_lat = float(reg.latitude)
+                reg_lon = float(reg.longitude)
+                
+                # Verifica se as coordenadas da região são válidas
+                if reg_lat == 0.0 and reg_lon == 0.0:
                     continue
                     
-                distancia = haversine(endereco.latitude, endereco.longitude, reg.latitude, reg.longitude)
-                raio_km = reg.raio_km if reg.raio_km is not None else 2.0
-                limite = float(raio_km)
+                distancia = haversine(endereco_lat, endereco_lon, reg_lat, reg_lon)
+                raio_km = float(reg.raio_km) if reg.raio_km is not None else 2.0
                 
-                if distancia <= limite:
+                if distancia <= raio_km and distancia < menor_distancia:
                     regiao_encontrada = reg
-                    break
+                    menor_distancia = distancia
 
             if not regiao_encontrada:
-                raise HTTPException(
-                    status.HTTP_400_BAD_REQUEST,
-                    f"Não entregamos neste endereço (lat: {endereco.latitude}, lon: {endereco.longitude})"
-                )
+                # Tenta encontrar por CEP se disponível
+                if endereco.cep:
+                    cep_limpo = endereco.cep.replace('-', '').replace(' ', '')
+                    for reg in regioes:
+                        if reg.cep and reg.cep.replace('-', '').replace(' ', '') == cep_limpo:
+                            regiao_encontrada = reg
+                            break
+                
+                if not regiao_encontrada:
+                    raise HTTPException(
+                        status.HTTP_400_BAD_REQUEST,
+                        f"Não entregamos neste endereço. Coordenadas: ({endereco_lat:.6f}, {endereco_lon:.6f})"
+                    )
 
             taxa_entrega = _dec(regiao_encontrada.taxa_entrega)
 
