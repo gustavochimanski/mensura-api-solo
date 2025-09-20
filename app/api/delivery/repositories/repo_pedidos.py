@@ -70,6 +70,7 @@ class PedidoRepository:
                 joinedload(PedidoDeliveryModel.meio_pagamento),
             )
             .filter(PedidoDeliveryModel.empresa_id == empresa_id)
+            .filter(PedidoDeliveryModel.status != "I")  # Exclui pedidos com status PENDENTE_IMPRESSAO
             .order_by(PedidoDeliveryModel.data_criacao.desc())
         )
 
