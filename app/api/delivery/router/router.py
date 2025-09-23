@@ -6,7 +6,6 @@ from app.api.delivery.router.categorias.router_categorias_admin_dv import router
 from app.api.delivery.router.client.router_client_dv import router as cliente_router
 from app.api.delivery.router.client.router_client_admin_dv import router as cliente_admin_router
 from app.api.delivery.router.pedidos.router_pedidos_dv import router as pedidos_router
-from app.api.delivery.router.pedidos.router_pedidos_internal_dv import router as pedidos_internal_router
 from app.api.delivery.router.router_produtos_dv import router as produtos_router
 from app.api.delivery.router.router_vitrine import router as vitrines_router
 from app.api.delivery.router.router_cupons_dv import router as cupons_router
@@ -32,7 +31,6 @@ api_delivery.include_router(categorias_router)
 
 # Routers para clientes (usam super_token)
 api_delivery.include_router(pedidos_router)
-api_delivery.include_router(pedidos_internal_router)  # Router interno - não incluído na geração do cliente
 api_delivery.include_router(printer_router)
 api_delivery.include_router(cliente_router)
 api_delivery.include_router(enderecos_router)
