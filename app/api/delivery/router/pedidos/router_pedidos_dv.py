@@ -27,7 +27,7 @@ async def checkout(
 
 # ======================================================================
 # ==================== CONFIRMAR PAGAMENTO =============================
-@router.post("/{pedido_id}/confirmar-pagamento", response_model=PedidoResponse, status_code=status.HTTP_200_OK, tags=["exclude-from-client"])
+@router.post("/{pedido_id}/confirmar-pagamento", response_model=PedidoResponse, status_code=status.HTTP_200_OK)
 async def confirmar_pagamento(
     pedido_id: int = Path(..., description="ID do pedido"),
     metodo: PagamentoMetodoEnum = Query(default="PIX", description="Método de pagamento"),
