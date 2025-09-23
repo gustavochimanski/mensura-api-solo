@@ -143,8 +143,8 @@ class ProdutosDeliveryService:
                 imagem=p.imagem,
                 preco_venda=float(pe.preco_venda),
                 custo=(float(pe.custo) if pe.custo is not None else None),
-                cod_categoria=p.cod_categoria,  # Pode ser None
-                label_categoria=p.categoria.descricao if p.categoria else None,
+                cod_categoria=None,  # ProdutoModel não tem cod_categoria
+                label_categoria=None,  # ProdutoModel não tem categoria
                 disponivel=pe.disponivel and p.ativo,
                 exibir_delivery=pe.exibir_delivery,
             ))
