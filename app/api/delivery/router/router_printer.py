@@ -5,7 +5,7 @@ from typing import List
 from fastapi import APIRouter, status, Path, Query, Depends
 from sqlalchemy.orm import Session
 
-from app.api.delivery.services.printer_service import PrinterService
+from app.api.delivery.services.service_printer import PrinterService
 from app.api.delivery.schemas.schema_printer import (
     RespostaImpressaoPrinter,
     PedidoPendenteImpressaoResponse
