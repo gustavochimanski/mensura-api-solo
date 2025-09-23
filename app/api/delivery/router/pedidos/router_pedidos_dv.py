@@ -4,7 +4,7 @@ from fastapi import APIRouter, status, Path, Query, Depends, Body, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.delivery.models.model_cliente_dv import ClienteDeliveryModel
-from app.api.delivery.schemas.schema_pedido import FinalizarPedidoRequest, PedidoResponse, PedidoResponseCompleto, EditarPedidoRequest, ItemPedidoEditar
+from app.api.delivery.schemas.schema_pedido import FinalizarPedidoRequest, PedidoResponse, PedidoResponseCompleto, EditarPedidoRequest, ItemPedidoEditar, PedidoResponseSimplificado
 from app.api.delivery.schemas.schema_shared_enums import PagamentoMetodoEnum, PagamentoGatewayEnum
 from app.api.delivery.services.pedidos.service_pedido import PedidoService
 from app.core.client_dependecies import get_cliente_by_super_token
@@ -40,7 +40,7 @@ async def confirmar_pagamento(
 
 # ======================================================================
 # ====================== LISTAR PEDIDOS  ===============================
-@router.get("/", response_model=list[PedidoResponseCompleto], status_code=status.HTTP_200_OK)
+@router.get("/", response_model=list[PedidoResponseSimplificado], status_code=status.HTTP_200_OK)
 def listar_pedidos(
     cliente: ClienteDeliveryModel = Depends(get_cliente_by_super_token),
     skip: int = Query(0, ge=0),
@@ -48,7 +48,7 @@ def listar_pedidos(
     db: Session = Depends(get_db),
 ):
     """
-    Lista pedidos do cliente com dados completos incluindo nome, id e telefone do cliente
+    Lista pedidos do cliente com dados simplificados incluindo nome do meio de pagamento
     """
     svc = PedidoService(db)
     return svc.listar_pedidos_completo(cliente_id=cliente.id, skip=skip, limit=limit)

@@ -189,3 +189,25 @@ class PedidoResponseCompletoTotal(BaseModel):
     data_atualizacao: datetime
     itens: List[ItemPedidoResponse]
     model_config = ConfigDict(from_attributes=True)
+
+
+class PedidoResponseSimplificado(BaseModel):
+    """Schema simplificado para listagem de pedidos do cliente"""
+    id: int
+    status: PedidoStatusEnum
+    cliente_nome: str
+    cliente_telefone: Optional[str] = None
+    subtotal: float
+    desconto: float
+    taxa_entrega: float
+    taxa_servico: float
+    valor_total: float
+    previsao_entrega: Optional[datetime] = None
+    observacao_geral: Optional[str] = None
+    troco_para: Optional[float] = None
+    endereco_snapshot: Optional[dict] = None
+    data_criacao: datetime
+    data_atualizacao: datetime
+    itens: List[ItemPedidoResponse]
+    meio_pagamento_nome: Optional[str] = None
+    model_config = ConfigDict(from_attributes=True)

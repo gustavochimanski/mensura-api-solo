@@ -18,7 +18,7 @@ from app.api.mensura.repositories.empresa_repo import EmpresaRepository
 from app.api.delivery.schemas.schema_pedido import (
     FinalizarPedidoRequest, ItemPedidoRequest,
     PedidoResponse, ItemPedidoResponse, PedidoKanbanResponse, PedidoResponseCompleto, PedidoResponseCompletoComEndereco, PedidoResponseCompletoTotal,
-    EditarPedidoRequest, ItemPedidoEditar
+    EditarPedidoRequest, ItemPedidoEditar, PedidoResponseSimplificado
 )
 from app.api.delivery.schemas.schema_cliente import ClienteOut
 from app.api.delivery.schemas.schema_endereco import EnderecoOut
@@ -615,22 +615,26 @@ class PedidoService:
         )
         return [self._pedido_to_response(p) for p in pedidos]
 
-    def listar_pedidos_completo(self, cliente_id: int, skip: int = 0, limit: int = 50) -> list[PedidoResponseCompleto]:
+
+    def listar_pedidos_completo(self, cliente_id: int, skip: int = 0, limit: int = 50) -> list[PedidoResponseSimplificado]:
         """
-        Lista pedidos com dados completos do cliente incluídos
+        Lista pedidos com dados simplificados incluindo nome do meio de pagamento
         """
         from sqlalchemy.orm import joinedload
         
         pedidos = (
             self.repo.db.query(PedidoDeliveryModel)
-            .options(joinedload(PedidoDeliveryModel.cliente))
+            .options(
+                joinedload(PedidoDeliveryModel.cliente),
+                joinedload(PedidoDeliveryModel.meio_pagamento)
+            )
             .filter(PedidoDeliveryModel.cliente_id == cliente_id)
             .order_by(PedidoDeliveryModel.data_criacao.desc())
             .offset(skip)
             .limit(limit)
             .all()
         )
-        return [self._pedido_to_response_completo(p) for p in pedidos]
+        return [self._pedido_to_response_simplificado(p) for p in pedidos]
 
     def get_pedido_by_id(self, pedido_id: int) -> PedidoResponse:
         pedido = self.repo.get_pedido(pedido_id)
@@ -780,6 +784,43 @@ class PedidoService:
         if not pedido:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado")
         return self._pedido_to_response_completo_total(pedido)
+
+    def _pedido_to_response_simplificado(self, pedido: PedidoDeliveryModel) -> PedidoResponseSimplificado:
+        """Converte pedido para formato simplificado com apenas campos essenciais"""
+        # Obtém nome do meio de pagamento
+        meio_pagamento_nome = None
+        if pedido.meio_pagamento:
+            meio_pagamento_nome = pedido.meio_pagamento.display()
+        
+        return PedidoResponseSimplificado(
+            id=pedido.id,
+            status=PedidoStatusEnum(pedido.status),
+            cliente_nome=pedido.cliente.nome if pedido.cliente else "Cliente não informado",
+            cliente_telefone=pedido.cliente.telefone if pedido.cliente else None,
+            subtotal=float(pedido.subtotal or 0),
+            desconto=float(pedido.desconto or 0),
+            taxa_entrega=float(pedido.taxa_entrega or 0),
+            taxa_servico=float(pedido.taxa_servico or 0),
+            valor_total=float(pedido.valor_total or 0),
+            previsao_entrega=getattr(pedido, "previsao_entrega", None),
+            observacao_geral=getattr(pedido, "observacao_geral", None),
+            troco_para=(float(pedido.troco_para) if getattr(pedido, "troco_para", None) is not None else None),
+            endereco_snapshot=getattr(pedido, "endereco_snapshot", None),
+            data_criacao=getattr(pedido, "data_criacao", getattr(pedido, "created_at", None)),
+            data_atualizacao=getattr(pedido, "data_atualizacao", getattr(pedido, "updated_at", None)),
+            itens=[
+                ItemPedidoResponse(
+                    id=it.id,
+                    produto_cod_barras=it.produto_cod_barras,
+                    quantidade=it.quantidade,
+                    preco_unitario=float(it.preco_unitario or 0),
+                    observacao=it.observacao,
+                    produto_descricao_snapshot=it.produto_descricao_snapshot,
+                    produto_imagem_snapshot=it.produto_imagem_snapshot
+                ) for it in pedido.itens
+            ],
+            meio_pagamento_nome=meio_pagamento_nome
+        )
 
     # ---------------- Admin / Kanban ----------------
     def list_all_kanban(self, limit: int = 500, date_filter: date | None = None, empresa_id: int = 1):
