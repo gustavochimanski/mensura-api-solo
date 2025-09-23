@@ -27,16 +27,7 @@ async def checkout(
 
 # ======================================================================
 # ==================== CONFIRMAR PAGAMENTO =============================
-@router.post("/{pedido_id}/confirmar-pagamento", response_model=PedidoResponse, status_code=status.HTTP_200_OK)
-async def confirmar_pagamento(
-    pedido_id: int = Path(..., description="ID do pedido"),
-    metodo: PagamentoMetodoEnum = Query(default="PIX", description="Método de pagamento"),
-    gateway: PagamentoGatewayEnum = Query(default="PIX_INTERNO", description="Gateway de pagamento"),
-    db: Session = Depends(get_db),
-):
-    logger.info(f"[Pedidos] Confirmar pagamento - pedido_id={pedido_id} metodo={metodo} gateway={gateway}")
-    svc = PedidoService(db)
-    return await svc.confirmar_pagamento(pedido_id=pedido_id, metodo=metodo, gateway=gateway)
+# Movido para router_pedidos_internal_dv.py para não ser incluído na geração do cliente
 
 # ======================================================================
 # ====================== LISTAR PEDIDOS  ===============================
