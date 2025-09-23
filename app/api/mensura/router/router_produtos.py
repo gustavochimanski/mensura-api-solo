@@ -9,13 +9,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.mensura.schemas.schema_produtos import ProdutosPaginadosResponse, CriarNovoProdutoResponse, \
-    CriarNovoProdutoRequest
+    CriarNovoProdutoRequest, AtualizarProdutoRequest
 from app.api.mensura.services.service_produto import ProdutosMensuraService
 from app.database.db_connection import get_db
 from app.utils.logger import logger
 from app.utils.minio_client import upload_file_to_minio
 
-router = APIRouter(prefix="/api/mensura", tags=["Produtos - Mensura"])
+router = APIRouter(prefix="/api/mensura", tags=["Produtos - Mensura "])
 @router.get(path="/produtos", response_model=ProdutosPaginadosResponse, summary="Lista produtos ERP", description="Retorna produtos com todas as colunas inclusas para exibição")
 def listar_delivery(
   db: Session = Depends(get_db),
@@ -75,3 +75,71 @@ async def criar_produto(
   except IntegrityError:
     db.rollback()
     raise HTTPException(400, detail="Erro de integridade nos dados")
+
+
+@router.put("/produtos/{cod_barras}", response_model=CriarNovoProdutoResponse)
+async def atualizar_produto(
+  cod_barras: str,
+  cod_empresa: int = Form(...),
+  descricao: Optional[str] = Form(None),
+  preco_venda: Optional[Decimal] = Form(None),
+  custo: Optional[Decimal] = Form(None),
+  sku_empresa: Optional[str] = Form(None),
+  disponivel: Optional[bool] = Form(None),
+  exibir_delivery: Optional[bool] = Form(None),
+  ativo: Optional[bool] = Form(None),
+  unidade_medida: Optional[str] = Form(None),
+  imagem: Optional[UploadFile] = File(None),
+  db: Session = Depends(get_db),
+):
+  logger.info(f"[Produtos] Atualizar - {cod_barras} / empresa {cod_empresa}")
+  
+  # processa upload de imagem se fornecido
+  imagem_url = None
+  if imagem:
+    if imagem.content_type not in {"image/jpeg","image/png","image/webp"}:
+      raise HTTPException(status_code=400, detail="Formato de imagem inválido")
+    try:
+      imagem_url = upload_file_to_minio(db, cod_empresa, imagem, "produtos")
+    except RuntimeError as e:
+      raise HTTPException(status_code=500, detail=str(e))
+
+  # valida se pelo menos um campo foi fornecido para atualização
+  campos_fornecidos = any([
+    descricao is not None,
+    preco_venda is not None,
+    custo is not None,
+    sku_empresa is not None,
+    disponivel is not None,
+    exibir_delivery is not None,
+    ativo is not None,
+    unidade_medida is not None,
+    imagem_url is not None
+  ])
+  
+  if not campos_fornecidos:
+    raise HTTPException(status_code=400, detail="Pelo menos um campo deve ser fornecido para atualização")
+
+  dto = AtualizarProdutoRequest(
+    descricao=descricao,
+    preco_venda=preco_venda,
+    custo=custo,
+    sku_empresa=sku_empresa,
+    disponivel=disponivel,
+    exibir_delivery=exibir_delivery,
+    ativo=ativo,
+    unidade_medida=unidade_medida,
+    imagem=imagem_url,
+  )
+
+  service = ProdutosMensuraService(db)
+  try:
+    return service.atualizar_produto(cod_empresa, cod_barras, dto)
+  except ValueError as e:
+    raise HTTPException(status_code=400, detail=str(e))
+  except HTTPException:
+    raise
+  except Exception as e:
+    db.rollback()
+    logger.error(f"Erro ao atualizar produto {cod_barras}: {str(e)}")
+    raise HTTPException(status_code=500, detail="Erro interno do servidor")

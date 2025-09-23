@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.api.mensura.repositories.empresa_repo import EmpresaRepository
 from app.api.mensura.repositories.repo_produto import ProdutoMensuraRepository
 from app.api.mensura.schemas.schema_produtos import ProdutoListItem, CriarNovoProdutoResponse, ProdutoEmpDTO, \
-    ProdutoBaseDTO, CriarNovoProdutoRequest
+    ProdutoBaseDTO, CriarNovoProdutoRequest, AtualizarProdutoRequest
 
 
 class ProdutosMensuraService:
@@ -104,3 +104,75 @@ class ProdutosMensuraService:
             ))
 
         return {"data": data, "total": total, "page": page, "limit": limit, "has_more": offset + limit < total}
+
+    def atualizar_produto(self, empresa_id: int, cod_barras: str, req: AtualizarProdutoRequest) -> CriarNovoProdutoResponse:
+        """Atualiza um produto existente"""
+        # garante que a empresa existe antes de prosseguir
+        self._empresa_or_404(empresa_id)
+
+        # verifica se o produto existe
+        produto = self.repo.buscar_por_cod_barras(cod_barras)
+        if not produto:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Produto não encontrado.")
+
+        # verifica se o produto está vinculado à empresa
+        produto_emp = self.repo.get_produto_emp(empresa_id, cod_barras)
+        if not produto_emp:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Produto não está vinculado a esta empresa.")
+
+        # prepara dados para atualização do produto base
+        dados_produto = {}
+        if req.descricao is not None:
+            dados_produto['descricao'] = req.descricao
+        if req.imagem is not None:
+            dados_produto['imagem'] = req.imagem
+        if req.ativo is not None:
+            dados_produto['ativo'] = req.ativo
+        if req.unidade_medida is not None:
+            dados_produto['unidade_medida'] = req.unidade_medida
+
+        # atualiza produto base se houver dados
+        if dados_produto:
+            produto_atualizado = self.repo.atualizar_produto(cod_barras, **dados_produto)
+            if not produto_atualizado:
+                raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Erro ao atualizar produto.")
+
+        # prepara dados para atualização do produto na empresa
+        dados_produto_emp = {}
+        if req.preco_venda is not None:
+            dados_produto_emp['preco_venda'] = Decimal(str(req.preco_venda))
+        if req.custo is not None:
+            dados_produto_emp['custo'] = Decimal(str(req.custo))
+        if req.sku_empresa is not None:
+            dados_produto_emp['sku_empresa'] = req.sku_empresa
+        if req.disponivel is not None:
+            dados_produto_emp['disponivel'] = req.disponivel
+        if req.exibir_delivery is not None:
+            dados_produto_emp['exibir_delivery'] = req.exibir_delivery
+
+        # atualiza produto na empresa se houver dados
+        if dados_produto_emp:
+            produto_emp_atualizado = self.repo.atualizar_produto_emp(empresa_id, cod_barras, **dados_produto_emp)
+            if not produto_emp_atualizado:
+                raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Erro ao atualizar produto na empresa.")
+
+        # commit das alterações
+        self.db.commit()
+        self.db.refresh(produto)
+        self.db.refresh(produto_emp)
+
+        return CriarNovoProdutoResponse(
+            produto=ProdutoBaseDTO.model_validate(produto, from_attributes=True),
+            produto_emp=ProdutoEmpDTO(
+                empresa_id=produto_emp.empresa_id,
+                cod_barras=produto_emp.cod_barras,
+                preco_venda=float(produto_emp.preco_venda),
+                custo=(float(produto_emp.custo) if produto_emp.custo is not None else None),
+                vitrine_id=produto_emp.vitrine_id,
+                sku_empresa=produto_emp.sku_empresa,
+                disponivel=produto_emp.disponivel,
+                exibir_delivery=produto_emp.exibir_delivery,
+                created_at=produto_emp.created_at,
+                updated_at=produto_emp.updated_at,
+            ),
+        )

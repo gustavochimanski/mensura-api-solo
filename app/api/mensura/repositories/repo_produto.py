@@ -98,3 +98,29 @@ class ProdutoMensuraRepository:
 
         self.db.flush()
         return pe
+
+    def atualizar_produto(self, cod_barras: str, **data) -> Optional[ProdutoModel]:
+        """Atualiza um produto existente"""
+        produto = self.buscar_por_cod_barras(cod_barras)
+        if not produto:
+            return None
+        
+        for key, value in data.items():
+            if hasattr(produto, key) and value is not None:
+                setattr(produto, key, value)
+        
+        self.db.flush()
+        return produto
+
+    def atualizar_produto_emp(self, empresa_id: int, cod_barras: str, **data) -> Optional[ProdutoEmpModel]:
+        """Atualiza dados do produto na empresa"""
+        produto_emp = self.get_produto_emp(empresa_id, cod_barras)
+        if not produto_emp:
+            return None
+        
+        for key, value in data.items():
+            if hasattr(produto_emp, key) and value is not None:
+                setattr(produto_emp, key, value)
+        
+        self.db.flush()
+        return produto_emp
