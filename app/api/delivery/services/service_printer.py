@@ -14,7 +14,7 @@ from app.api.delivery.schemas.schema_printer import (
 )
 from app.api.delivery.schemas.schema_shared_enums import PedidoStatusEnum
 from app.utils.printer_client import PrinterClient
-from app.config.printer_config import PrinterConfig
+# Configuração da impressora removida - será gerenciada pelo gestor
 from app.utils.logger import logger
 
 
@@ -26,7 +26,7 @@ class PrinterService:
         self.repo = PrinterRepository(db)
         self.empresa_repo = EmpresaRepository(db)
         self.printer_client = PrinterClient(
-            printer_api_url or PrinterConfig.get_printer_url()
+            printer_api_url or "http://localhost:3001"
         )
     
     def _buscar_dados_empresa(self, empresa_id: int) -> DadosEmpresaPrinter:
@@ -122,6 +122,7 @@ class PrinterService:
         except Exception as e:
             logger.error(f"[PrinterService] Erro ao formatar dados da empresa: {str(e)}")
             return DadosEmpresaPrinter()
+    
     
     def _converter_pedido_para_printer_request(self, pedido_impressao) -> PedidoPrinterRequest:
         """
