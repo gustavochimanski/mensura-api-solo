@@ -17,6 +17,7 @@ class ItemPedidoPrinter(BaseModel):
 class PedidoPrinterRequest(BaseModel):
     """Pedido formatado para envio à Printer API"""
     numero: int = Field(..., ge=1, description="Número do pedido")
+    status: str = Field(..., description="Status do pedido")
     cliente: str = Field(..., min_length=1, description="Nome do cliente")
     telefone_cliente: Optional[str] = Field(None, description="Telefone do cliente")
     itens: List[ItemPedidoPrinter] = Field(..., min_items=1, description="Lista de itens do pedido")
@@ -71,6 +72,7 @@ class DadosEmpresaPrinter(BaseModel):
 class PedidoPendenteImpressaoResponse(BaseModel):
     """Resposta formatada para pedidos pendentes de impressão"""
     numero: int = Field(..., description="Número do pedido")
+    status: str = Field(..., description="Status do pedido")
     cliente: str = Field(..., description="Nome do cliente")
     telefone_cliente: Optional[str] = Field(None, description="Telefone do cliente")
     itens: List[ItemPedidoPrinter] = Field(..., description="Lista de itens do pedido")

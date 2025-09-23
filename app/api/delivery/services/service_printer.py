@@ -147,6 +147,7 @@ class PrinterService:
         
         return PedidoPrinterRequest(
             numero=pedido_impressao.id,
+            status=pedido_impressao.status,
             cliente=pedido_impressao.cliente_nome,
             telefone_cliente=pedido_impressao.cliente_telefone,
             itens=pedido_impressao.itens,
@@ -218,13 +219,14 @@ class PrinterService:
     def get_pedidos_pendentes_para_impressao(self, empresa_id: int, limite: Optional[int] = None) -> List[PedidoPendenteImpressaoResponse]:
         """
         Busca pedidos pendentes de impressão formatados para o endpoint GET
+        Inclui pedidos com status 'I' (PENDENTE_IMPRESSAO) e 'D' (EM_EDICAO)
         
         Args:
             empresa_id: ID da empresa
             limite: Número máximo de pedidos
             
         Returns:
-            Lista de pedidos formatados para impressão
+            Lista de pedidos formatados para impressão com status incluído
         """
         try:
             # Busca pedidos pendentes (já com relacionamento empresa carregado)
@@ -262,6 +264,7 @@ class PrinterService:
                 # Cria resposta formatada usando os dados do pedido original
                 resultado = PedidoPendenteImpressaoResponse(
                     numero=pedido_impressao.id,
+                    status=pedido_impressao.status,
                     cliente=pedido_impressao.cliente_nome,
                     telefone_cliente=pedido_impressao.cliente_telefone,
                     itens=pedido_impressao.itens,

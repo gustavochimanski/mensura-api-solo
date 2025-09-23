@@ -19,7 +19,7 @@ class PrinterRepository:
     
     def get_pedidos_pendentes_impressao(self, empresa_id: int, limite: Optional[int] = None) -> List[PedidoDeliveryModel]:
         """
-        Busca pedidos pendentes de impressão (status 'I') de uma empresa
+        Busca pedidos pendentes de impressão (status 'I' e 'D') de uma empresa
         
         Args:
             empresa_id: ID da empresa
@@ -28,6 +28,8 @@ class PrinterRepository:
         Returns:
             Lista de pedidos pendentes de impressão
         """
+        from sqlalchemy import or_
+        
         query = (
             self.db.query(PedidoDeliveryModel)
             .options(
@@ -39,7 +41,10 @@ class PrinterRepository:
             .filter(
                 and_(
                     PedidoDeliveryModel.empresa_id == empresa_id,
-                    PedidoDeliveryModel.status == PedidoStatusEnum.I.value
+                    or_(
+                        PedidoDeliveryModel.status == PedidoStatusEnum.I.value,
+                        PedidoDeliveryModel.status == PedidoStatusEnum.D.value
+                    )
                 )
             )
             .order_by(PedidoDeliveryModel.data_criacao.asc())
@@ -60,12 +65,17 @@ class PrinterRepository:
         Returns:
             Pedido se encontrado e pendente de impressão, None caso contrário
         """
+        from sqlalchemy import or_
+        
         return (
             self.db.query(PedidoDeliveryModel)
             .filter(
                 and_(
                     PedidoDeliveryModel.id == pedido_id,
-                    PedidoDeliveryModel.status == PedidoStatusEnum.I.value
+                    or_(
+                        PedidoDeliveryModel.status == PedidoStatusEnum.I.value,
+                        PedidoDeliveryModel.status == PedidoStatusEnum.D.value
+                    )
                 )
             )
             .first()
@@ -73,7 +83,7 @@ class PrinterRepository:
     
     def marcar_pedido_impresso(self, pedido_id: int) -> bool:
         """
-        Marca um pedido como impresso (muda status de 'I' para 'R')
+        Marca um pedido como impresso (muda status de 'I' ou 'D' para 'R')
         
         Args:
             pedido_id: ID do pedido
@@ -171,12 +181,17 @@ class PrinterRepository:
         hoje = datetime.now().date()
         
         # Total de pedidos pendentes de impressão
+        from sqlalchemy import or_
+        
         stats['pendentes_impressao'] = (
             self.db.query(PedidoDeliveryModel)
             .filter(
                 and_(
                     PedidoDeliveryModel.empresa_id == empresa_id,
-                    PedidoDeliveryModel.status == PedidoStatusEnum.I.value
+                    or_(
+                        PedidoDeliveryModel.status == PedidoStatusEnum.I.value,
+                        PedidoDeliveryModel.status == PedidoStatusEnum.D.value
+                    )
                 )
             )
             .count()
