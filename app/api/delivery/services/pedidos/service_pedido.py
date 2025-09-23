@@ -51,6 +51,7 @@ class PedidoService:
         self.repo_empresa = EmpresaRepository(db)
         self.repo_entregador = EntregadorRepository(db)
         self.gateway = PaymentGatewayClient()  # MOCK
+        self._cache_regioes = {}  # Cache simples para regiões
 
     # ---------------- Helpers ----------------
     def _pedido_to_response(self, pedido: PedidoDeliveryModel) -> PedidoResponse:
@@ -105,99 +106,134 @@ class PedidoService:
     ) -> tuple[Decimal, Decimal]:
         from app.api.delivery.models.model_regiao_entrega import RegiaoEntregaModel
 
-        def haversine(lat1, lon1, lat2, lon2):
-            lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
-            dlat = lat2 - lat1
-            dlon = lon2 - lon1
-            a = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2
-            c = 2 * asin(sqrt(a))
-            return 6371 * c  # km
-
         taxa_entrega = _dec(0)
         if tipo_entrega == TipoEntregaEnum.DELIVERY and endereco and empresa_id:
-            # Verifica se o endereço tem coordenadas válidas
-            if not endereco.latitude or not endereco.longitude:
-                raise HTTPException(
-                    status.HTTP_400_BAD_REQUEST,
-                    "Endereço sem coordenadas válidas. Entrega não disponível."
-                )
-            
-            # Converte para float para garantir compatibilidade
-            endereco_lat = float(endereco.latitude)
-            endereco_lon = float(endereco.longitude)
-            
-            # Verifica se as coordenadas são válidas (não são 0,0)
-            if endereco_lat == 0.0 and endereco_lon == 0.0:
-                raise HTTPException(
-                    status.HTTP_400_BAD_REQUEST,
-                    "Coordenadas do endereço inválidas (0,0). Entrega não disponível."
-                )
-
-            regioes = (
-                self.db.query(RegiaoEntregaModel)
-                .filter(
-                    RegiaoEntregaModel.empresa_id == empresa_id,
-                    RegiaoEntregaModel.ativo == True,
-                )
-                .all()
-            )
-
-            if not regioes:
+            # Verifica se existem regiões cadastradas para a empresa
+            if not self._verificar_regioes_cadastradas(empresa_id):
                 raise HTTPException(
                     status.HTTP_400_BAD_REQUEST,
                     "Nenhuma região de entrega cadastrada para esta empresa."
                 )
-
-            regiao_encontrada = None
-            menor_distancia = float('inf')
             
-            for reg in regioes:
-                # Verifica se a região tem coordenadas válidas
-                if reg.latitude is None or reg.longitude is None:
-                    # Se não tem coordenadas, tenta verificar por bairro/cidade/UF
-                    if (endereco.bairro and endereco.cidade and endereco.estado and
-                        reg.bairro and reg.cidade and reg.uf):
-                        if (reg.bairro.lower().strip() == endereco.bairro.lower().strip() and
-                            reg.cidade.lower().strip() == endereco.cidade.lower().strip() and
-                            reg.uf.upper().strip() == endereco.estado.upper().strip()):
-                            regiao_encontrada = reg
-                            break
-                    continue
-                
-                # Calcula distância usando coordenadas
-                reg_lat = float(reg.latitude)
-                reg_lon = float(reg.longitude)
-                
-                # Verifica se as coordenadas da região são válidas
-                if reg_lat == 0.0 and reg_lon == 0.0:
-                    continue
-                    
-                distancia = haversine(endereco_lat, endereco_lon, reg_lat, reg_lon)
-                raio_km = float(reg.raio_km) if reg.raio_km is not None else 2.0
-                
-                if distancia <= raio_km and distancia < menor_distancia:
-                    regiao_encontrada = reg
-                    menor_distancia = distancia
+            # Validações básicas do endereço
+            if not endereco.bairro or not endereco.cidade or not endereco.estado:
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    "Endereço incompleto. Bairro, cidade e estado são obrigatórios para delivery."
+                )
+
+            # Busca região por bairro, cidade e estado
+            regiao_encontrada = self._buscar_regiao_por_bairro(
+                endereco.bairro, endereco.cidade, endereco.estado, empresa_id
+            )
+            
+            # Se não encontrou por bairro, tenta busca por CEP
+            if not regiao_encontrada and endereco.cep:
+                regiao_encontrada = self._buscar_regiao_por_cep(
+                    endereco.cep, empresa_id
+                )
 
             if not regiao_encontrada:
-                # Tenta encontrar por CEP se disponível
-                if endereco.cep:
-                    cep_limpo = endereco.cep.replace('-', '').replace(' ', '')
-                    for reg in regioes:
-                        if reg.cep and reg.cep.replace('-', '').replace(' ', '') == cep_limpo:
-                            regiao_encontrada = reg
-                            break
-                
-                if not regiao_encontrada:
-                    raise HTTPException(
-                        status.HTTP_400_BAD_REQUEST,
-                        f"Não entregamos neste endereço. Coordenadas: ({endereco_lat:.6f}, {endereco_lon:.6f})"
-                    )
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    f"Não entregamos no bairro {endereco.bairro}, {endereco.cidade}-{endereco.estado}"
+                )
 
             taxa_entrega = _dec(regiao_encontrada.taxa_entrega)
 
         taxa_servico = (subtotal * Decimal("0.01")).quantize(Decimal("0.01"))
         return taxa_entrega, taxa_servico
+
+    def _buscar_regiao_por_bairro(self, bairro: str, cidade: str, estado: str, empresa_id: int):
+        """Busca região por bairro, cidade e estado - método principal simplificado"""
+        from app.api.delivery.models.model_regiao_entrega import RegiaoEntregaModel
+        
+        if not (bairro and cidade and estado):
+            return None
+        
+        # Limpa e normaliza os dados
+        bairro_limpo = bairro.strip().upper()
+        cidade_limpa = cidade.strip().upper()
+        estado_limpo = estado.strip().upper()
+        
+        # Busca exata primeiro
+        regiao = (
+                self.db.query(RegiaoEntregaModel)
+                .filter(
+                    RegiaoEntregaModel.empresa_id == empresa_id,
+                    RegiaoEntregaModel.ativo == True,
+                RegiaoEntregaModel.bairro == bairro_limpo,
+                RegiaoEntregaModel.cidade == cidade_limpa,
+                RegiaoEntregaModel.uf == estado_limpo
+            )
+            .first()
+        )
+        
+        # Se não encontrou exato, tenta busca com LIKE (mais flexível)
+        if not regiao:
+            regiao = (
+                self.db.query(RegiaoEntregaModel)
+                .filter(
+                    RegiaoEntregaModel.empresa_id == empresa_id,
+                    RegiaoEntregaModel.ativo == True,
+                    RegiaoEntregaModel.bairro.ilike(f"%{bairro_limpo}%"),
+                    RegiaoEntregaModel.cidade.ilike(f"%{cidade_limpa}%"),
+                    RegiaoEntregaModel.uf == estado_limpo
+                )
+                .first()
+            )
+        
+        return regiao
+
+    def _buscar_regiao_por_cep(self, cep: str, empresa_id: int):
+        """Busca região por CEP exato - método de fallback"""
+        from app.api.delivery.models.model_regiao_entrega import RegiaoEntregaModel
+        
+        if not cep:
+            return None
+            
+        cep_limpo = cep.replace('-', '').replace(' ', '')
+        
+        regiao = (
+            self.db.query(RegiaoEntregaModel)
+            .filter(
+                RegiaoEntregaModel.empresa_id == empresa_id,
+                RegiaoEntregaModel.ativo == True,
+                RegiaoEntregaModel.cep == cep_limpo
+            )
+            .first()
+        )
+        
+        return regiao
+
+    def _verificar_regioes_cadastradas(self, empresa_id: int) -> bool:
+        """Verifica se existem regiões de entrega cadastradas para a empresa"""
+        from app.api.delivery.models.model_regiao_entrega import RegiaoEntregaModel
+        
+        cache_key = f"regioes_empresa_{empresa_id}"
+        if cache_key in self._cache_regioes:
+            return self._cache_regioes[cache_key]
+        
+        count = (
+            self.db.query(RegiaoEntregaModel)
+            .filter(
+                RegiaoEntregaModel.empresa_id == empresa_id,
+                RegiaoEntregaModel.ativo == True
+            )
+            .count()
+        )
+        
+        has_regions = count > 0
+        self._cache_regioes[cache_key] = has_regions
+        return has_regions
+
+    def limpar_cache_regioes(self, empresa_id: int = None):
+        """Limpa o cache de regiões para uma empresa específica ou todas"""
+        if empresa_id:
+            cache_key = f"regioes_empresa_{empresa_id}"
+            self._cache_regioes.pop(cache_key, None)
+        else:
+            self._cache_regioes.clear()
 
     def _aplicar_cupom(self, *, cupom_id: Optional[int], subtotal: Decimal) -> Decimal:
         if not cupom_id:
@@ -928,3 +964,43 @@ class PedidoService:
         logger.info(f"[vincular_entregador] pedido_id={pedido_id} entregador_id={entregador_id}")
         
         return self._pedido_to_response(pedido)
+
+    def testar_busca_regiao(self, bairro: str, cidade: str, estado: str, empresa_id: int) -> dict:
+        """
+        Método para testar a busca de região por bairro.
+        Útil para debugging e validação.
+        """
+        import time
+        from app.api.delivery.models.model_regiao_entrega import RegiaoEntregaModel
+        
+        resultados = {
+            "endereco": {"bairro": bairro, "cidade": cidade, "estado": estado},
+            "empresa_id": empresa_id,
+            "tempos": {},
+            "resultados": {}
+        }
+        
+        # Teste 1: Busca por bairro
+        inicio = time.time()
+        try:
+            regiao_bairro = self._buscar_regiao_por_bairro(bairro, cidade, estado, empresa_id)
+            resultados["tempos"]["bairro"] = time.time() - inicio
+            resultados["resultados"]["bairro"] = regiao_bairro.id if regiao_bairro else None
+        except Exception as e:
+            resultados["tempos"]["bairro"] = time.time() - inicio
+            resultados["resultados"]["bairro"] = f"Erro: {e}"
+        
+        # Teste 2: Contagem de regiões
+        inicio = time.time()
+        count = (
+            self.db.query(RegiaoEntregaModel)
+            .filter(
+                RegiaoEntregaModel.empresa_id == empresa_id,
+                RegiaoEntregaModel.ativo == True
+            )
+            .count()
+        )
+        resultados["tempos"]["count"] = time.time() - inicio
+        resultados["resultados"]["total_regioes"] = count
+        
+        return resultados
