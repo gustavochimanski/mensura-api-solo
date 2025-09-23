@@ -46,7 +46,6 @@ class ProdutoDeliveryRepository:
             .join(ProdutoEmpModel, ProdutoModel.cod_barras == ProdutoEmpModel.cod_barras)
             .filter(ProdutoEmpModel.empresa_id == empresa_id)
             .options(
-                joinedload(ProdutoModel.categoria),
                 joinedload(ProdutoModel.produtos_empresa),
             )
             .order_by(ProdutoModel.descricao.asc())

@@ -27,14 +27,6 @@ class ProdutosDeliveryService:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Empresa não encontrada")
 
 
-
-    def set_disponibilidade(self, empresa_id: int, cod_barras: str, on: bool):
-        ok = self.repo.set_disponibilidade(empresa_id, cod_barras, on)
-        if not ok:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Vínculo produto x empresa não encontrado")
-        self.db.commit()
-        return {"ok": True}
-
     def deletar_produto(self, empresa_id: int, cod_barras: str):
         self._empresa_or_404(empresa_id)
 
