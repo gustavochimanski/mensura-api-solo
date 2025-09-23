@@ -30,8 +30,8 @@ async def checkout(
 @router.post("/{pedido_id}/confirmar-pagamento", response_model=PedidoResponse, status_code=status.HTTP_200_OK)
 async def confirmar_pagamento(
     pedido_id: int = Path(..., description="ID do pedido"),
-    metodo: PagamentoMetodoEnum = "PIX",
-    gateway: PagamentoGatewayEnum = "PIX_INTERNO",
+    metodo: PagamentoMetodoEnum = Query(PagamentoMetodoEnum.PIX, description="Método de pagamento"),
+    gateway: PagamentoGatewayEnum = Query(PagamentoGatewayEnum.PIX_INTERNO, description="Gateway de pagamento"),
     db: Session = Depends(get_db),
 ):
     logger.info(f"[Pedidos] Confirmar pagamento - pedido_id={pedido_id} metodo={metodo} gateway={gateway}")
