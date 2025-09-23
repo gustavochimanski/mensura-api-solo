@@ -49,14 +49,15 @@ def verificar_banco_inicializado():
                     'usuarios', 'empresas', 'cadprod', 'cadprod_emp', 'categorias',
                     'clientes_dv', 'pedidos_dv', 'enderecos_dv', 'regioes_entrega',
                     'categorias_dv', 'vitrines', 'entregadores_dv', 'meio_pagamento_dv',
+                    
                     'cupons_dv', 'transacoes_pagamento_dv', 'pedido_itens_dv',
                     'pedido_status_historico_dv', 'parceiros_dv', 'banner_parceiros_dv'
                 );
             """))
             table_count = result.scalar()
             
-            # Se tem pelo menos 10 tabelas principais, considera inicializado
-            return table_count >= 10
+            # Se tem pelo menos 15 tabelas principais, considera inicializado
+            return table_count >= 15
             
     except Exception as e:
         logger.warning(f"⚠️ Erro ao verificar status de inicialização: {e}")
@@ -289,6 +290,8 @@ def inicializar_banco():
             return
         else:
             logger.info("⚠️ Banco inicializado mas com estrutura desatualizada. Recriando tabelas...")
+    else:
+        logger.info("🔹 Banco não inicializado. Criando tabelas...")
     
     logger.info("🔹 Instalando extensões...")
     ensure_unaccent()
