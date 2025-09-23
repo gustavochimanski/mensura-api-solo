@@ -46,14 +46,17 @@ def verificar_banco_inicializado():
                 SELECT COUNT(*) FROM information_schema.tables 
                 WHERE table_schema IN ('mensura', 'delivery', 'bi', 'pdv')
                 AND table_name IN (
-                    'usuarios', 'empresas', 'cadprod', 'cadprod_emp',
-                    'clientes_dv', 'pedidos_dv', 'categorias'
+                    'usuarios', 'empresas', 'cadprod', 'cadprod_emp', 'categorias',
+                    'clientes_dv', 'pedidos_dv', 'enderecos_dv', 'regioes_entrega',
+                    'categorias_dv', 'vitrines', 'entregadores_dv', 'meio_pagamento_dv',
+                    'cupons_dv', 'transacoes_pagamento_dv', 'pedido_itens_dv',
+                    'pedido_status_historico_dv', 'parceiros_dv', 'banner_parceiros_dv'
                 );
             """))
             table_count = result.scalar()
             
-            # Se tem pelo menos 5 tabelas principais, considera inicializado
-            return table_count >= 5
+            # Se tem pelo menos 10 tabelas principais, considera inicializado
+            return table_count >= 10
             
     except Exception as e:
         logger.warning(f"⚠️ Erro ao verificar status de inicialização: {e}")
@@ -63,6 +66,51 @@ def marcar_banco_inicializado():
     """Marca o banco como inicializado (agora baseado na existência das tabelas)"""
     # A verificação agora é baseada na existência das tabelas, não precisa marcar
     logger.info("ℹ️ Status de inicialização baseado na existência das tabelas")
+
+def verificar_estrutura_tabelas():
+    """Verifica se as tabelas têm a estrutura correta (colunas necessárias)"""
+    try:
+        with engine.connect() as conn:
+            # Verifica se a tabela regioes_entrega tem as colunas corretas
+            result_regioes = conn.execute(text("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_schema = 'delivery' 
+                AND table_name = 'regioes_entrega'
+                AND column_name IN ('bairro', 'cidade', 'uf', 'taxa_entrega')
+            """))
+            regioes_columns = [row[0] for row in result_regioes]
+            
+            # Verifica se a tabela enderecos_dv tem as colunas corretas
+            result_enderecos = conn.execute(text("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_schema = 'delivery' 
+                AND table_name = 'enderecos_dv'
+                AND column_name IN ('logradouro', 'numero', 'bairro', 'cidade', 'estado', 'cep')
+            """))
+            enderecos_columns = [row[0] for row in result_enderecos]
+            
+            # Verifica se tem as colunas essenciais
+            has_regioes_essential = all(col in regioes_columns for col in ['bairro', 'cidade', 'uf', 'taxa_entrega'])
+            has_enderecos_essential = all(col in enderecos_columns for col in ['logradouro', 'numero', 'bairro', 'cidade', 'estado', 'cep'])
+            
+            # Verifica se não tem as colunas removidas da regioes_entrega
+            result_removed = conn.execute(text("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_schema = 'delivery' 
+                AND table_name = 'regioes_entrega'
+                AND column_name IN ('latitude', 'longitude', 'raio_km')
+            """))
+            removed_columns = [row[0] for row in result_removed]
+            has_removed = len(removed_columns) > 0
+            
+            return has_regioes_essential and has_enderecos_essential and not has_removed
+            
+    except Exception as e:
+        logger.warning(f"⚠️ Erro ao verificar estrutura das tabelas: {e}")
+        return False
 
 def criar_schemas():
     try:
@@ -235,8 +283,12 @@ def criar_usuario_admin_padrao():
 def inicializar_banco():
     # Verifica se já foi inicializado
     if verificar_banco_inicializado():
-        logger.info("ℹ️ Banco já foi inicializado (pulando)")
-        return
+        # Verifica se a estrutura das tabelas está correta
+        if verificar_estrutura_tabelas():
+            logger.info("ℹ️ Banco já foi inicializado com estrutura correta (pulando)")
+            return
+        else:
+            logger.info("⚠️ Banco inicializado mas com estrutura desatualizada. Recriando tabelas...")
     
     logger.info("🔹 Instalando extensões...")
     ensure_unaccent()
