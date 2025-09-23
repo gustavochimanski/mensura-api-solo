@@ -6,7 +6,7 @@ from typing import Optional
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.delivery.repositories.repo_produtos import ProdutoDeliveryRepository
+from app.api.delivery.repositories.repo_produtos_dv import ProdutoDeliveryRepository
 from app.api.mensura.repositories.empresa_repo import EmpresaRepository
 from app.api.mensura.schemas.schema_produtos import (
    CriarNovoProdutoResponse, CriarNovoProdutoRequest, ProdutoBaseDTO, ProdutoEmpDTO
