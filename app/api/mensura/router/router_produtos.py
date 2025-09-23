@@ -15,7 +15,7 @@ from app.database.db_connection import get_db
 from app.utils.logger import logger
 from app.utils.minio_client import upload_file_to_minio
 
-router = APIRouter(prefix="/api/mensura", tags=["Produtos - Delivery"])
+router = APIRouter(prefix="/api/mensura", tags=["Produtos - Mensura"])
 @router.get(path="/produtos", response_model=ProdutosPaginadosResponse, summary="Lista produtos ERP", description="Retorna produtos com todas as colunas inclusas para exibição")
 def listar_delivery(
   db: Session = Depends(get_db),
