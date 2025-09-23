@@ -37,6 +37,28 @@ def ensure_postgis():
     except Exception as e:
         logger.warning(f"Erro ao instalar PostGIS: {e}. Continuando sem PostGIS.")
 
+def ensure_pedido_status_enum():
+    """Garante que o enum pedido_status_enum tem o status 'D'"""
+    try:
+        with engine.connect() as conn:
+            # Verifica se o status 'D' já existe
+            result = conn.execute(text("""
+                SELECT 1 FROM pg_enum 
+                WHERE enumlabel = 'D' 
+                AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'pedido_status_enum')
+            """))
+            
+            if result.fetchone():
+                logger.info("Status 'D' já existe no enum pedido_status_enum.")
+            else:
+                # Adiciona o status 'D' ao enum
+                conn.execute(text("ALTER TYPE pedido_status_enum ADD VALUE 'D'"))
+                conn.commit()
+                logger.info("Status 'D' adicionado ao enum pedido_status_enum com sucesso.")
+                
+    except Exception as e:
+        logger.warning(f"Erro ao adicionar status 'D' ao enum: {e}")
+
 def verificar_banco_inicializado():
     """Verifica se o banco já foi inicializado consultando se as tabelas principais existem"""
     try:
@@ -296,6 +318,8 @@ def inicializar_banco():
     logger.info("🔹 Instalando extensões...")
     ensure_unaccent()
     ensure_postgis()
+    logger.info("🔹 Atualizando enums...")
+    ensure_pedido_status_enum()
     logger.info("🔹 Criando schemas...")
     criar_schemas()
     logger.info("🔹 Criando tabelas...")
