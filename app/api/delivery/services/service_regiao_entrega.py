@@ -28,15 +28,6 @@ class RegiaoEntregaService:
                 "Essa região já está cadastrada (bairro/cidade/uf)"
             )
 
-        # Verifica duplicidade por coordenadas
-        if payload.latitude and payload.longitude:
-            existing_coords = self.repo.get_by_coordinates(payload.empresa_id, payload.latitude, payload.longitude)
-            if existing_coords:
-                raise HTTPException(
-                    status.HTTP_400_BAD_REQUEST,
-                    "Essa região já está cadastrada (coordenadas próximas)"
-                )
-
         # Cria a região
         regiao = RegiaoEntregaModel(
             empresa_id=payload.empresa_id,
@@ -44,9 +35,6 @@ class RegiaoEntregaService:
             bairro=bairro,
             cidade=cidade,
             uf=uf,
-            latitude=payload.latitude,
-            longitude=payload.longitude,
-            raio_km=payload.raio_km,
             taxa_entrega=payload.taxa_entrega,
             ativo=payload.ativo,
         )

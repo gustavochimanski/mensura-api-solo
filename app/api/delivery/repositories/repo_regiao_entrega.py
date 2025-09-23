@@ -1,5 +1,3 @@
-from math import isclose
-
 from sqlalchemy.orm import Session
 from app.api.delivery.models.model_regiao_entrega import RegiaoEntregaModel
 
@@ -25,18 +23,18 @@ class RegiaoEntregaRepository:
             .first()
         )
 
-    def get_by_coordinates(self, empresa_id: int, lat: float, lon: float, tolerance: float = 0.001):
-        """Retorna se já existe região com coordenadas próximas (~100m de raio)"""
-        results = (
+    def get_by_cep(self, empresa_id: int, cep: str):
+        """Retorna região por CEP exato"""
+        cep_limpo = cep.replace('-', '').replace(' ', '')
+        return (
             self.db.query(RegiaoEntregaModel)
-            .filter(RegiaoEntregaModel.empresa_id == empresa_id)
-            .all()
+            .filter(
+                RegiaoEntregaModel.empresa_id == empresa_id,
+                RegiaoEntregaModel.cep == cep_limpo,
+                RegiaoEntregaModel.ativo == True
+            )
+            .first()
         )
-        for r in results:
-            if r.latitude and r.longitude:
-                if isclose(r.latitude, lat, abs_tol=tolerance) and isclose(r.longitude, lon, abs_tol=tolerance):
-                    return r
-        return None
 
     def create(self, regiao: RegiaoEntregaModel):
         self.db.add(regiao)
