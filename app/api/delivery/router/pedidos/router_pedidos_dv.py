@@ -4,7 +4,7 @@ from fastapi import APIRouter, status, Path, Query, Depends, Body, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.delivery.models.model_cliente_dv import ClienteDeliveryModel
-from app.api.delivery.schemas.schema_pedido import FinalizarPedidoRequest, PedidoResponse, PedidoResponseCompleto, EditarPedidoRequest, ItemPedidoEditar, PedidoResponseSimplificado
+from app.api.delivery.schemas.schema_pedido import FinalizarPedidoRequest, PedidoResponse, PedidoResponseCompleto, EditarPedidoRequest, ItemPedidoEditar, PedidoResponseSimplificado, ModoEdicaoRequest
 from app.api.delivery.schemas.schema_shared_enums import PagamentoMetodoEnum, PagamentoGatewayEnum
 from app.api.delivery.services.pedidos.service_pedido import PedidoService
 from app.core.client_dependecies import get_cliente_by_super_token
@@ -105,5 +105,33 @@ def atualizar_pedido_cliente(
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Pedido não pertence ao cliente")
 
     return svc.editar_pedido_parcial(pedido_id, payload)
+
+# ======================================================================
+# =================== ALTERAR MODO EDIÇÃO =============================
+@router.put(
+    "/{pedido_id}/modo-edicao",
+    response_model=PedidoResponse,
+    status_code=status.HTTP_200_OK
+)
+def alterar_modo_edicao(
+    pedido_id: int = Path(..., description="ID do pedido"),
+    payload: ModoEdicaoRequest = Body(...),
+    cliente: ClienteDeliveryModel = Depends(get_cliente_by_super_token),
+    db: Session = Depends(get_db),
+):
+    """
+    Altera o modo de edição do pedido.
+    True = ativa modo edição (status X), False = finaliza edição (status D)
+    """
+    svc = PedidoService(db)
+    pedido = svc.repo.get_pedido(pedido_id)
+    if not pedido:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
+
+    if pedido.cliente_telefone != cliente.telefone:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Pedido não pertence ao cliente")
+
+    logger.info(f"[Pedidos] Alterar modo edição - pedido_id={pedido_id} modo_edicao={payload.modo_edicao}")
+    return svc.alterar_modo_edicao(pedido_id, payload.modo_edicao)
 
 

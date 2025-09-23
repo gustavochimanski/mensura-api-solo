@@ -48,6 +48,9 @@ class ItemPedidoEditar(BaseModel):
 class VincularEntregadorRequest(BaseModel):
     entregador_id: Optional[int] = None  # None para desvincular, ID para vincular
 
+class ModoEdicaoRequest(BaseModel):
+    modo_edicao: bool  # True = modo edição (X), False = editado (D)
+
 
 # ======================================================================
 # ============================ CLIENTE =================================

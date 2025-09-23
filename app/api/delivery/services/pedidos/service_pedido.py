@@ -1062,3 +1062,28 @@ class PedidoService:
         resultados["resultados"]["total_regioes"] = count
         
         return resultados
+
+    def alterar_modo_edicao(self, pedido_id: int, modo_edicao: bool) -> PedidoResponse:
+        """
+        Altera o modo de edição do pedido.
+        True = modo edição (status X), False = editado (status D)
+        """
+        pedido = self.repo.get_pedido(pedido_id)
+        if not pedido:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
+
+        # Define o novo status baseado no modo_edicao
+        if modo_edicao:
+            novo_status = PedidoStatusEnum.X.value  # EM_EDICAO
+            motivo = "Modo de edição ativado"
+        else:
+            novo_status = PedidoStatusEnum.D.value  # EDITADO
+            motivo = "Modo de edição finalizado"
+
+        # Atualiza o status do pedido
+        self.repo.atualizar_status_pedido(pedido, novo_status, motivo)
+        self.repo.commit()
+
+        # Recarrega o pedido para retornar os dados atualizados
+        pedido = self.repo.get_pedido(pedido_id)
+        return self._pedido_to_response(pedido)
