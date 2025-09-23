@@ -1,0 +1,37 @@
+{
+  "printer_service": {
+    "enabled": false,
+    "status": "stopped",
+    "last_started": null,
+    "last_stopped": null,
+    "auto_start": false
+  },
+  "printer_config": {
+    "api_url": "http://localhost:3001",
+    "timeout": 30,
+    "retry_attempts": 3,
+    "retry_delay": 5,
+    "print_queue_size": 100,
+    "max_concurrent_prints": 5
+  },
+  "printer_settings": {
+    "default_printer": "Impressora Principal",
+    "paper_size": "A4",
+    "orientation": "portrait",
+    "margins": {
+      "top": 10,
+      "bottom": 10,
+      "left": 10,
+      "right": 10
+    },
+    "font_size": 12,
+    "font_family": "Arial"
+  },
+  "notification_settings": {
+    "email_notifications": false,
+    "email_address": "",
+    "webhook_url": "",
+    "notify_on_error": true,
+    "notify_on_success": false
+  }
+}
