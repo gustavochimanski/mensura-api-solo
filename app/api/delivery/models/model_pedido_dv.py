@@ -11,7 +11,7 @@ from app.database.db_connection import Base
 from app.utils.database_utils import now_trimmed
 
 PedidoStatus = SAEnum(
-    "P", "I", "R", "S", "E", "C",
+    "P", "I", "R", "S", "E", "C", "D",
     name="pedido_status_enum",
     create_type=True
 )
@@ -22,6 +22,7 @@ PedidoStatus = SAEnum(
 # SAIU_PARA_ENTREGA: S
 # ENTREGUE: E
 # CANCELADO: C
+# EM_EDICAO: D
 
 TipoEntrega = SAEnum("DELIVERY", "RETIRADA", name="tipo_entrega_enum", create_type=True)
 OrigemPedido = SAEnum("WEB", "APP", "BALCAO", name="origem_pedido_enum", create_type=True)

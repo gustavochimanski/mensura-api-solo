@@ -7,6 +7,7 @@ class PedidoStatusEnum(str, Enum):
     S = "S"  # SAIU_PARA_ENTREGA
     E = "E"  # ENTREGUE
     C = "C"  # CANCELADO
+    D = "D"  # EM_EDICAO
 
 class TipoEntregaEnum(str, Enum):
     DELIVERY = "DELIVERY"

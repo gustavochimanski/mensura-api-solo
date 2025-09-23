@@ -142,7 +142,7 @@ class EnderecosService:
             self.db.query(PedidoDeliveryModel)
             .filter(
                 PedidoDeliveryModel.endereco_id == endereco_id,
-                PedidoDeliveryModel.status.in_(["P", "I", "R", "S"])  # Pendente, Pendente Impressão, Em preparo, Saiu para entrega
+                PedidoDeliveryModel.status.in_(["P", "I", "R", "S", "D"])  # Pendente, Pendente Impressão, Em preparo, Saiu para entrega, Em edição
             )
             .all()
         )
