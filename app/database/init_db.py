@@ -327,5 +327,3 @@ def inicializar_banco():
     logger.info("🔹 Garantindo usuário admin padrão...")
     criar_usuario_admin_padrao()
     logger.info("✅ Banco inicializado com sucesso.")
-
-#
