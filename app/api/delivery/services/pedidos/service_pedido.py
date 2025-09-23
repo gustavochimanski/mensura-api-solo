@@ -1004,3 +1004,4 @@ class PedidoService:
         resultados["resultados"]["total_regioes"] = count
         
         return resultados
+#
