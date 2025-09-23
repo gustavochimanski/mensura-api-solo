@@ -124,3 +124,47 @@ class ProdutoMensuraRepository:
         
         self.db.flush()
         return produto_emp
+
+    def buscar_produtos_por_termo(
+            self, empresa_id: int, termo: str, offset: int, limit: int,
+            apenas_disponiveis: bool = False,
+            apenas_delivery: bool = True
+    ) -> List[ProdutoModel]:
+        """Busca produtos por termo (código de barras, descrição ou SKU)"""
+        q = (
+            self.db.query(ProdutoModel)
+            .join(ProdutoEmpModel, ProdutoModel.cod_barras == ProdutoEmpModel.cod_barras)
+            .filter(ProdutoEmpModel.empresa_id == empresa_id)
+            .options(
+                joinedload(ProdutoModel.produtos_empresa),
+            )
+            .filter(
+                (ProdutoModel.cod_barras.ilike(f"%{termo}%")) |
+                (ProdutoModel.descricao.ilike(f"%{termo}%")) |
+                (ProdutoEmpModel.sku_empresa.ilike(f"%{termo}%"))
+            )
+            .order_by(ProdutoModel.created_at.desc())
+        )
+        if apenas_disponiveis:
+            q = q.filter(ProdutoModel.ativo.is_(True), ProdutoEmpModel.disponivel.is_(True))
+        if apenas_delivery:
+            q = q.filter(ProdutoEmpModel.exibir_delivery.is_(True))
+        return q.offset(offset).limit(limit).all()
+
+    def contar_busca_total(self, empresa_id: int, termo: str, apenas_disponiveis: bool = False, apenas_delivery: bool = True) -> int:
+        """Conta total de produtos encontrados na busca"""
+        q = (
+            self.db.query(func.count(ProdutoModel.cod_barras))
+            .join(ProdutoEmpModel, ProdutoModel.cod_barras == ProdutoEmpModel.cod_barras)
+            .filter(ProdutoEmpModel.empresa_id == empresa_id)
+            .filter(
+                (ProdutoModel.cod_barras.ilike(f"%{termo}%")) |
+                (ProdutoModel.descricao.ilike(f"%{termo}%")) |
+                (ProdutoEmpModel.sku_empresa.ilike(f"%{termo}%"))
+            )
+        )
+        if apenas_disponiveis:
+            q = q.filter(ProdutoModel.ativo.is_(True), ProdutoEmpModel.disponivel.is_(True))
+        if apenas_delivery:
+            q = q.filter(ProdutoEmpModel.exibir_delivery.is_(True))
+        return int(q.scalar() or 0)

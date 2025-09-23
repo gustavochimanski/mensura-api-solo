@@ -176,3 +176,37 @@ class ProdutosMensuraService:
                 updated_at=produto_emp.updated_at,
             ),
         )
+
+    def buscar_produtos(self, empresa_id: int, termo: str, page: int, limit: int, apenas_disponiveis: bool = False):
+        """Busca produtos por termo de pesquisa"""
+        # garante que a empresa existe antes de prosseguir
+        self._empresa_or_404(empresa_id)
+
+        offset = (page - 1) * limit
+        produtos = self.repo.buscar_produtos_por_termo(
+            empresa_id, termo, offset, limit,
+            apenas_disponiveis=apenas_disponiveis,
+            apenas_delivery=True,
+        )
+        total = self.repo.contar_busca_total(
+            empresa_id, termo,
+            apenas_disponiveis=apenas_disponiveis,
+            apenas_delivery=True,
+        )
+
+        data = []
+        for p in produtos:
+            pe = next((x for x in p.produtos_empresa if x.empresa_id == empresa_id), None)
+            if not pe:
+                continue
+            data.append(ProdutoListItem(
+                cod_barras=p.cod_barras,
+                descricao=p.descricao,
+                imagem=p.imagem,
+                preco_venda=float(pe.preco_venda),
+                custo=(float(pe.custo) if pe.custo is not None else None),
+                disponivel=pe.disponivel and p.ativo,
+                exibir_delivery=pe.exibir_delivery,
+            ))
+
+        return {"data": data, "total": total, "page": page, "limit": limit, "has_more": offset + limit < total}
