@@ -328,3 +328,4 @@ def inicializar_banco():
     criar_usuario_admin_padrao()
     logger.info("✅ Banco inicializado com sucesso.")
 
+#
