@@ -40,15 +40,18 @@ async def confirmar_pagamento(
 
 # ======================================================================
 # ====================== LISTAR PEDIDOS  ===============================
-@router.get("/", response_model=list[PedidoResponse], status_code=status.HTTP_200_OK)
+@router.get("/", response_model=list[PedidoResponseCompleto], status_code=status.HTTP_200_OK)
 def listar_pedidos(
     cliente: ClienteDeliveryModel = Depends(get_cliente_by_super_token),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
 ):
+    """
+    Lista pedidos do cliente com dados completos incluindo nome, id e telefone do cliente
+    """
     svc = PedidoService(db)
-    return svc.listar_pedidos(cliente_id=cliente.id, skip=skip, limit=limit)
+    return svc.listar_pedidos_completo(cliente_id=cliente.id, skip=skip, limit=limit)
 
 
 

@@ -615,6 +615,23 @@ class PedidoService:
         )
         return [self._pedido_to_response(p) for p in pedidos]
 
+    def listar_pedidos_completo(self, cliente_id: int, skip: int = 0, limit: int = 50) -> list[PedidoResponseCompleto]:
+        """
+        Lista pedidos com dados completos do cliente incluídos
+        """
+        from sqlalchemy.orm import joinedload
+        
+        pedidos = (
+            self.repo.db.query(PedidoDeliveryModel)
+            .options(joinedload(PedidoDeliveryModel.cliente))
+            .filter(PedidoDeliveryModel.cliente_id == cliente_id)
+            .order_by(PedidoDeliveryModel.data_criacao.desc())
+            .offset(skip)
+            .limit(limit)
+            .all()
+        )
+        return [self._pedido_to_response_completo(p) for p in pedidos]
+
     def get_pedido_by_id(self, pedido_id: int) -> PedidoResponse:
         pedido = self.repo.get_pedido(pedido_id)
         if not pedido:
