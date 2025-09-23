@@ -96,23 +96,8 @@ async def atualizar_produto(
     db.rollback()
     raise HTTPException(400, detail="Erro de integridade nos dados")
 
-@router.patch("/{cod_barras}/disponibilidade", status_code=status.HTTP_204_NO_CONTENT)
-def set_disponibilidade(
-  cod_barras: str,
-  payload: SetDisponibilidadeRequest = Body(...),
-  db: Session = Depends(get_db)
-):
-  logger.info(f"[Produtos] Disponibilidade - {cod_barras} / empresa {payload.empresa_id} -> {payload.disponivel}")
-  service = ProdutosDeliveryService(db)
-  service.set_disponibilidade(
-    empresa_id=payload.empresa_id,
-    cod_barras=cod_barras,
-    on=payload.disponivel
-  )
-  return None
-
 @router.delete("/{cod_barras}", status_code=status.HTTP_204_NO_CONTENT)
-def deletar_produto(
+def desvincular_produto(
   cod_barras: str,
   empresa_id: int = Query(..., description="Empresa dona do vínculo a ser removido"),
   db: Session = Depends(get_db)
