@@ -61,6 +61,14 @@ class PedidoRepository:
             .first()
         )
 
+    def get_by_cliente_id(self, cliente_id: int) -> list[PedidoDeliveryModel]:
+        """Busca todos os pedidos de um cliente específico"""
+        return (
+            self.db.query(PedidoDeliveryModel)
+            .filter(PedidoDeliveryModel.cliente_id == cliente_id)
+            .all()
+        )
+
     def list_all_kanban(self, limit: int = 500, date_filter: date | None = None, empresa_id: int = 1):
         query = (
             self.db.query(PedidoDeliveryModel)
