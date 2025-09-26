@@ -120,11 +120,7 @@ def deletar_cliente(
     if pedidos:
         raise HTTPException(
             status_code=400,
-            detail={
-                "message": "Não é possível deletar cliente com pedidos associados",
-                "blocked_field": "cliente_id",
-                "pedido_count": len(pedidos)
-            }
+            detail="Não é possível deletar cliente com pedidos associados"
         )
     
     # Deletar endereços do cliente primeiro
