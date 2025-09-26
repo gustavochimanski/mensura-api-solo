@@ -989,11 +989,6 @@ class PedidoService:
     def vincular_entregador(self, pedido_id: int, entregador_id: Optional[int]) -> PedidoResponse:
         """Atualiza `pedidos_dv.entregador_id` diretamente usando SQL UPDATE simples."""
         try:
-            if entregador_id is not None:
-                entregador = self.repo_entregador.get(entregador_id)
-                if not entregador:
-                    raise HTTPException(status.HTTP_404_NOT_FOUND, "Entregador não encontrado")
-
             stmt = (
                 update(PedidoDeliveryModel)
                 .where(PedidoDeliveryModel.id == pedido_id)
@@ -1005,6 +1000,7 @@ class PedidoService:
                 raise HTTPException(status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
 
             self.db.commit()
+
             pedido = self.repo.get_pedido(pedido_id)
             return self._pedido_to_response(pedido)
 

@@ -45,9 +45,6 @@ class ItemPedidoEditar(BaseModel):
     observacao: Optional[str] = None
     acao: str  # "novo-item", "atualizar", "remover"
 
-class VincularEntregadorRequest(BaseModel):
-    entregador_id: Optional[int] = None  # None para desvincular, ID para vincular
-
 class ModoEdicaoRequest(BaseModel):
     modo_edicao: bool  # True = modo edição (X), False = editado (D)
 

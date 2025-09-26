@@ -6,7 +6,7 @@ from fastapi import APIRouter, status, Path, Query, Depends, Body, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.delivery.schemas.schema_pedido import PedidoResponse, PedidoKanbanResponse, \
-    EditarPedidoRequest, ItemPedidoEditar, PedidoResponseCompletoTotal, VincularEntregadorRequest
+    EditarPedidoRequest, ItemPedidoEditar, PedidoResponseCompletoTotal
 from app.api.delivery.schemas.schema_shared_enums import PedidoStatusEnum
 from app.api.delivery.services.pedidos.service_pedido import PedidoService
 from app.core.admin_dependencies import get_current_user
@@ -197,7 +197,7 @@ def atualizar_itens(
 )
 def vincular_entregador(
     pedido_id: int = Path(..., description="ID do pedido", gt=0),
-    payload: VincularEntregadorRequest = Body(...),
+    entregador_id: int | None = Query(None, description="ID do entregador (omita para desvincular)", gt=0),
     db: Session = Depends(get_db),
 ):
     """
@@ -209,7 +209,7 @@ def vincular_entregador(
     Para vincular: envie entregador_id com o ID do entregador
     Para desvincular: envie entregador_id como null
     """
-    logger.info(f"[Pedidos] Vincular entregador - pedido_id={pedido_id} -> entregador_id={payload.entregador_id}")
+    logger.info(f"[Pedidos] Vincular entregador - pedido_id={pedido_id} -> entregador_id={entregador_id}")
     svc = PedidoService(db)
     
     # Verifica se o pedido existe
@@ -220,7 +220,7 @@ def vincular_entregador(
             detail=f"Pedido com ID {pedido_id} não encontrado"
         )
     
-    return svc.vincular_entregador(pedido_id, payload.entregador_id)
+    return svc.vincular_entregador(pedido_id, entregador_id)
 
 
 # ======================================================================
