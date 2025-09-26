@@ -8,6 +8,7 @@ from math import radians, cos, sin, asin, sqrt
 from fastapi import HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
+from sqlalchemy import update
 
 from app.api.delivery.models.model_pedido_dv import PedidoDeliveryModel
 from app.api.delivery.models.model_pedido_item_dv import PedidoItemModel
@@ -986,71 +987,34 @@ class PedidoService:
         return self._pedido_to_response(pedido)
 
     def vincular_entregador(self, pedido_id: int, entregador_id: Optional[int]) -> PedidoResponse:
-        """
-        Vincula ou desvincula um entregador a um pedido.
-        Se entregador_id for None, desvincula o entregador atual.
-        """
+        """Atualiza `pedidos_dv.entregador_id` diretamente usando SQL UPDATE simples."""
         try:
-            pedido = self.repo.get_pedido(pedido_id)
-            if not pedido:
-                raise HTTPException(status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
-
-            logger.info(f"[vincular_entregador] Iniciando vinculação - pedido_id={pedido_id}, entregador_id={entregador_id}")
-
             if entregador_id is not None:
-                logger.info(f"[vincular_entregador] Verificando entregador_id={entregador_id}")
                 entregador = self.repo_entregador.get(entregador_id)
                 if not entregador:
-                    logger.error(f"[vincular_entregador] Entregador {entregador_id} não encontrado")
                     raise HTTPException(status.HTTP_404_NOT_FOUND, "Entregador não encontrado")
 
-                logger.info(f"[vincular_entregador] Entregador encontrado: {entregador.nome}")
-
-                from app.api.mensura.models.association_tables import entregador_empresa
-                vinculacao = (
-                    self.db.query(entregador_empresa)
-                    .filter(
-                        entregador_empresa.c.entregador_id == entregador_id,
-                        entregador_empresa.c.empresa_id == pedido.empresa_id,
-                    )
-                    .first()
-                )
-
-                if not vinculacao:
-                    logger.error(
-                        f"[vincular_entregador] Entregador {entregador_id} não está vinculado à empresa {pedido.empresa_id}"
-                    )
-                    raise HTTPException(
-                        status.HTTP_400_BAD_REQUEST,
-                        "Entregador não está vinculado à empresa do pedido",
-                    )
-
-            atualizados = (
-                self.db.query(PedidoDeliveryModel)
-                .filter(PedidoDeliveryModel.id == pedido_id)
-                .update({PedidoDeliveryModel.entregador_id: entregador_id}, synchronize_session="fetch")
+            stmt = (
+                update(PedidoDeliveryModel)
+                .where(PedidoDeliveryModel.id == pedido_id)
+                .values(entregador_id=entregador_id, data_atualizacao=now_trimmed())
             )
+            resultado = self.db.execute(stmt)
 
-            if not atualizados:
-                logger.error(f"[vincular_entregador] Falha ao atualizar entregador_id do pedido {pedido_id}")
-                raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Não foi possível atualizar o pedido")
+            if resultado.rowcount == 0:
+                raise HTTPException(status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
 
             self.db.commit()
-
-            pedido_atualizado = self.repo.get_pedido(pedido_id)
-            logger.info(
-                f"[vincular_entregador] Vinculação concluída com sucesso - pedido_id={pedido_id} entregador_id={entregador_id}"
-            )
-
-            return self._pedido_to_response(pedido_atualizado)
+            pedido = self.repo.get_pedido(pedido_id)
+            return self._pedido_to_response(pedido)
 
         except HTTPException:
             self.db.rollback()
             raise
-        except Exception as e:
-            logger.error(f"[vincular_entregador] Erro inesperado: {str(e)}")
+        except Exception as exc:
             self.db.rollback()
-            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Erro ao vincular entregador: {str(e)}")
+            logger.error(f"[vincular_entregador] Falha inesperada: {exc}")
+            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Erro ao vincular entregador")
 
     def desvincular_entregador(self, pedido_id: int) -> PedidoResponse:
         """
