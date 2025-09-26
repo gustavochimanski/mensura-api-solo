@@ -222,3 +222,35 @@ def vincular_entregador(
     
     return svc.vincular_entregador(pedido_id, payload.entregador_id)
 
+
+# ======================================================================
+# ================= DESVINCULAR ENTREGADOR ============================
+@router.delete(
+    "/{pedido_id}/entregador",
+    response_model=PedidoResponse,
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(get_current_user)]
+)
+def desvincular_entregador(
+    pedido_id: int = Path(..., description="ID do pedido", gt=0),
+    db: Session = Depends(get_db),
+):
+    """
+    Desvincula o entregador atual de um pedido.
+    
+    - **pedido_id**: ID do pedido (obrigatório, deve ser maior que 0)
+    
+    Remove a vinculação do entregador com o pedido.
+    """
+    logger.info(f"[Pedidos] Desvincular entregador - pedido_id={pedido_id}")
+    svc = PedidoService(db)
+    
+    # Verifica se o pedido existe
+    pedido = svc.repo.get_pedido(pedido_id)
+    if not pedido:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Pedido com ID {pedido_id} não encontrado"
+        )
+    
+    return svc.desvincular_entregador(pedido_id)

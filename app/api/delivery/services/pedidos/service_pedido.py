@@ -863,7 +863,7 @@ class PedidoService:
         return resultados
 
     # ---------------- Atualizações ----------------
-    def atualizar_status(self, pedido_id: int, novo_status: str):
+    def atualizar_status(self, pedido_id: int, novo_status: PedidoStatusEnum) -> PedidoResponse:
         pedido = self.db.query(PedidoDeliveryModel).filter_by(id=pedido_id).first()
         if not pedido:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado")
@@ -871,7 +871,7 @@ class PedidoService:
         pedido.status = novo_status
         self.db.commit()
         self.db.refresh(pedido)
-        return pedido
+        return self._pedido_to_response(pedido)
 
     def editar_pedido_parcial(self, pedido_id: int, payload: EditarPedidoRequest) -> PedidoResponse:
         pedido = self.repo.get_pedido(pedido_id)
@@ -1002,7 +1002,7 @@ class PedidoService:
             
             # Verifica se o entregador está vinculado à empresa do pedido
             # Como entregador pode estar vinculado a múltiplas empresas, verificamos a tabela de associação
-            from app.mensura.models.association_tables import entregador_empresa
+            from app.api.mensura.models.association_tables import entregador_empresa
             vinculacao = self.db.query(entregador_empresa).filter(
                 entregador_empresa.c.entregador_id == entregador_id,
                 entregador_empresa.c.empresa_id == pedido.empresa_id
@@ -1020,6 +1020,30 @@ class PedidoService:
         self.db.refresh(pedido)
 
         logger.info(f"[vincular_entregador] pedido_id={pedido_id} entregador_id={entregador_id}")
+        
+        return self._pedido_to_response(pedido)
+
+    def desvincular_entregador(self, pedido_id: int) -> PedidoResponse:
+        """
+        Desvincula o entregador atual de um pedido.
+        """
+        pedido = self.repo.get_pedido(pedido_id)
+        if not pedido:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
+
+        # Verifica se o pedido tem entregador vinculado
+        if not pedido.entregador_id:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST, 
+                "Pedido não possui entregador vinculado"
+            )
+
+        # Remove a vinculação
+        pedido.entregador_id = None
+        self.db.commit()
+        self.db.refresh(pedido)
+
+        logger.info(f"[desvincular_entregador] pedido_id={pedido_id}")
         
         return self._pedido_to_response(pedido)
 
