@@ -75,7 +75,7 @@ def atualizar_itens_cliente(
     if not pedido:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
 
-    if pedido.cliente_telefone != cliente.telefone:
+    if pedido.cliente_id != cliente.id:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Pedido não pertence ao cliente")
 
     return svc.atualizar_itens_pedido(pedido_id, itens)
@@ -101,7 +101,7 @@ def atualizar_pedido_cliente(
     if not pedido:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
 
-    if pedido.cliente_telefone != cliente.telefone:
+    if pedido.cliente_id != cliente.id:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Pedido não pertence ao cliente")
 
     return svc.editar_pedido_parcial(pedido_id, payload)
@@ -128,7 +128,7 @@ def alterar_modo_edicao(
     if not pedido:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
 
-    if pedido.cliente_telefone != cliente.telefone:
+    if pedido.cliente_id != cliente.id:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Pedido não pertence ao cliente")
 
     logger.info(f"[Pedidos] Alterar modo edição - pedido_id={pedido_id} modo_edicao={payload.modo_edicao}")
