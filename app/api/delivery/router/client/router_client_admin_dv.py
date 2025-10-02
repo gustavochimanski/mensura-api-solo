@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.api.mensura.models.user_model import UserModel
 from app.api.delivery.repositories.repo_cliente import ClienteRepository
 from app.api.delivery.schemas.schema_cliente import ClienteOut, ClienteAdminUpdate, ClienteUpdate, ClienteCreate
-from app.api.delivery.schemas.schema_endereco import EnderecoOut
+from app.api.delivery.schemas.schema_endereco import EnderecoOut, EnderecoCreate
 from app.api.delivery.services.service_cliente import ClienteService
 from app.core.admin_dependencies import get_current_user
 from app.database.db_connection import get_db
@@ -237,9 +237,10 @@ def criar_endereco_cliente(
     
     # Se este endereço for marcado como principal, remove a marcação dos outros
     if data.is_principal:
-        endereco_repo.db.query(endereco_repo.db.query(EnderecoDeliveryModel).filter(
+        from app.api.delivery.models.model_endereco_dv import EnderecoDeliveryModel
+        endereco_repo.db.query(EnderecoDeliveryModel).filter(
             EnderecoDeliveryModel.cliente_id == cliente_id
-        ).update({"is_principal": False}))
+        ).update({"is_principal": False})
     
     # Cria o novo endereço
     novo_endereco = endereco_repo.create(cliente_id, data)
