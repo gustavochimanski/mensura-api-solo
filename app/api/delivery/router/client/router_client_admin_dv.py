@@ -206,6 +206,47 @@ def update_cliente_admin(
 
     return ClienteOut.model_validate(updated_cliente)
 
+@router.post("/{cliente_id}/enderecos", response_model=EnderecoOut, status_code=status.HTTP_201_CREATED)
+def criar_endereco_cliente(
+    cliente_id: int = Path(..., description="ID do cliente para adicionar endereço"),
+    data: EnderecoCreate = ...,
+    current_user = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Endpoint para criar um novo endereço para um cliente específico.
+    Requer autenticação de admin.
+    """
+    logger.info(f"[Cliente Admin] Criar endereço - cliente_id={cliente_id} admin={current_user.id}")
+    
+    # Verifica se o cliente existe
+    repo = ClienteRepository(db)
+    cliente = repo.get_by_id(cliente_id)
+    if not cliente:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+    
+    # Verifica se o endereço já existe para este cliente
+    from app.api.delivery.repositories.repo_endereco import EnderecoRepository
+    endereco_repo = EnderecoRepository(db)
+    
+    if endereco_repo.endereco_existe(cliente_id, data):
+        raise HTTPException(
+            status_code=400,
+            detail="Endereço já cadastrado para este cliente"
+        )
+    
+    # Se este endereço for marcado como principal, remove a marcação dos outros
+    if data.is_principal:
+        endereco_repo.db.query(endereco_repo.db.query(EnderecoDeliveryModel).filter(
+            EnderecoDeliveryModel.cliente_id == cliente_id
+        ).update({"is_principal": False}))
+    
+    # Cria o novo endereço
+    novo_endereco = endereco_repo.create(cliente_id, data)
+    logger.info(f"[Cliente Admin] Endereço criado com ID {novo_endereco.id} para cliente {cliente_id}")
+    
+    return EnderecoOut.model_validate(novo_endereco)
+
 @router.get("/{cliente_id}/enderecos", response_model=List[EnderecoOut])
 def get_enderecos_cliente(
     cliente_id: int = Path(..., description="ID do cliente para consultar endereços"),
