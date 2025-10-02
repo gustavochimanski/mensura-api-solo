@@ -206,7 +206,7 @@ def update_cliente_admin(
 
     return ClienteOut.model_validate(updated_cliente)
 
-@router.post("/{cliente_id}/enderecos", response_model=EnderecoOut, status_code=status.HTTP_201_CREATED)
+@router.post("/{cliente_id}/criar-endereco", response_model=EnderecoOut, status_code=status.HTTP_201_CREATED)
 def criar_endereco_cliente(
     cliente_id: int = Path(..., description="ID do cliente para adicionar endereço"),
     data: EnderecoCreate = ...,
