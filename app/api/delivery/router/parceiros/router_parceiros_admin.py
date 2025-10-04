@@ -17,6 +17,22 @@ router = APIRouter(prefix="/api/delivery/parceiros/admin", tags=["Parceiros - Ad
 # ======================================================================
 
 # CRUD Parceiros
+@router.get("/", response_model=list[ParceiroOut], dependencies=[Depends(get_current_user)])
+def list_parceiros(db: Session = Depends(get_db)):
+    """
+    Lista parceiros cadastrados (endpoint admin)
+    """
+    return ParceirosService(db).list_parceiros()
+
+
+@router.get("/{parceiro_id}", response_model=ParceiroOut, dependencies=[Depends(get_current_user)])
+def get_parceiro(parceiro_id: int, db: Session = Depends(get_db)):
+    """
+    Retorna dados de um parceiro específico (endpoint admin)
+    """
+    return ParceirosService(db).get_parceiro(parceiro_id)
+
+
 @router.post("/", response_model=ParceiroOut, status_code=status.HTTP_201_CREATED, dependencies=[Depends(get_current_user)])
 def create_parceiro(body: ParceiroIn, db: Session = Depends(get_db)):
     """
