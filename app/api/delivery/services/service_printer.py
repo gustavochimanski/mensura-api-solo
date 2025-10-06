@@ -124,12 +124,13 @@ class PrinterService:
             return DadosEmpresaPrinter()
     
     
-    def _converter_pedido_para_printer_request(self, pedido_impressao) -> PedidoPrinterRequest:
+    def _converter_pedido_para_printer_request(self, pedido_impressao, pedido_original) -> PedidoPrinterRequest:
         """
         Converte pedido formatado para impressão em request da Printer API
         
         Args:
             pedido_impressao: Pedido formatado para impressão
+            pedido_original: Pedido original do banco de dados
             
         Returns:
             Request formatado para Printer API
@@ -139,12 +140,16 @@ class PrinterService:
         if pedido_impressao.meio_pagamento_descricao:
             tipo_pagamento = pedido_impressao.meio_pagamento_descricao.upper()
         
-        # Calcula troco se necessário
+        # Calcula troco corretamente
         troco = None
-        if tipo_pagamento == "DINHEIRO":
-            # Aqui você pode implementar lógica para calcular troco baseado no valor pago
-            # Por enquanto, vamos usar o valor do pedido como referência
-            troco = pedido_impressao.valor_total
+        if tipo_pagamento == "DINHEIRO" and pedido_original.troco_para:
+            # Troco = valor pago - valor total do pedido
+            valor_pago = float(pedido_original.troco_para)
+            valor_total = pedido_impressao.valor_total
+            troco = valor_pago - valor_total
+            # Garante que o troco não seja negativo
+            troco = max(0.0, troco)
+            logger.info(f"[PrinterService] Cálculo do troco - Pedido {pedido_impressao.id}: Valor pago: {valor_pago}, Valor total: {valor_total}, Troco: {troco}")
         
         return PedidoPrinterRequest(
             numero=pedido_impressao.id,
@@ -255,12 +260,16 @@ class PrinterService:
                 if pedido_impressao.meio_pagamento_descricao:
                     tipo_pagamento = pedido_impressao.meio_pagamento_descricao.upper()
                 
-                # Calcula troco se necessário (simplificado)
+                # Calcula troco corretamente
                 troco = None
-                if tipo_pagamento == "DINHEIRO":
-                    # Aqui você pode implementar lógica para calcular troco baseado no valor pago
-                    # Por enquanto, vamos usar o valor do pedido como referência
-                    troco = pedido_impressao.valor_total
+                if tipo_pagamento == "DINHEIRO" and pedido.troco_para:
+                    # Troco = valor pago - valor total do pedido
+                    valor_pago = float(pedido.troco_para)
+                    valor_total = pedido_impressao.valor_total
+                    troco = valor_pago - valor_total
+                    # Garante que o troco não seja negativo
+                    troco = max(0.0, troco)
+                    logger.info(f"[PrinterService] Cálculo do troco - Pedido {pedido.id}: Valor pago: {valor_pago}, Valor total: {valor_total}, Troco: {troco}")
                 
                 # Cria resposta formatada usando os dados do pedido original
                 resultado = PedidoPendenteImpressaoResponse(

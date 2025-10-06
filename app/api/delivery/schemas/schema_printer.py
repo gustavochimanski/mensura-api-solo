@@ -27,7 +27,7 @@ class PedidoPrinterRequest(BaseModel):
     taxa_servico: float = Field(0, ge=0, description="Taxa de serviço")
     total: float = Field(..., ge=0, description="Total do pedido")
     tipo_pagamento: str = Field(..., min_length=1, description="Tipo de pagamento")
-    troco: Optional[float] = Field(None, ge=0, description="Valor do troco")
+    troco: Optional[float] = Field(None, ge=0, description="Valor do troco (valor pago - valor total do pedido)")
     observacao_geral: Optional[str] = Field(None, description="Observação geral do pedido")
     endereco: Optional[str] = Field(None, description="Endereço de entrega")
     data_criacao: datetime = Field(..., description="Data de criação do pedido")
@@ -36,7 +36,11 @@ class PedidoPrinterRequest(BaseModel):
     def validar_troco_dinheiro(cls, v, values):
         tipo_pagamento = values.get('tipo_pagamento', '').upper()
         if tipo_pagamento == 'DINHEIRO' and v is None:
-            raise ValueError('Troco é obrigatório quando o tipo de pagamento é DINHEIRO')
+            # Para pagamento em dinheiro, o troco pode ser None se não foi informado o valor pago
+            # Isso será tratado no service
+            pass
+        if v is not None and v < 0:
+            raise ValueError('Troco não pode ser negativo')
         return v
 
 
@@ -82,7 +86,7 @@ class PedidoPendenteImpressaoResponse(BaseModel):
     taxa_servico: float = Field(0, description="Taxa de serviço")
     total: float = Field(..., description="Valor total do pedido")
     tipo_pagamento: str = Field(..., description="Tipo de pagamento")
-    troco: Optional[float] = Field(None, description="Valor do troco")
+    troco: Optional[float] = Field(None, description="Valor do troco (valor pago - valor total do pedido)")
     observacao_geral: Optional[str] = Field(None, description="Observação geral do pedido")
     endereco: Optional[str] = Field(None, description="Endereço de entrega")
     data_criacao: datetime = Field(..., description="Data de criação do pedido")
