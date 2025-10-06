@@ -19,7 +19,7 @@ from app.api.mensura.repositories.empresa_repo import EmpresaRepository
 from app.api.delivery.schemas.schema_pedido import (
     FinalizarPedidoRequest, ItemPedidoRequest,
     PedidoResponse, ItemPedidoResponse, PedidoKanbanResponse, PedidoResponseCompleto, PedidoResponseCompletoComEndereco, PedidoResponseCompletoTotal,
-    EditarPedidoRequest, ItemPedidoEditar, PedidoResponseSimplificado
+    EditarPedidoRequest, ItemPedidoEditar, PedidoResponseSimplificado, EnderecoPedidoDetalhe
 )
 from app.api.delivery.schemas.schema_cliente import ClienteOut
 from app.api.delivery.schemas.schema_endereco import EnderecoOut
@@ -742,7 +742,10 @@ class PedidoService:
             id=pedido.id,
             status=PedidoStatusEnum(pedido.status),
             cliente=ClienteOut.model_validate(pedido.cliente) if pedido.cliente else None,
-            endereco=EnderecoOut.model_validate(pedido.endereco) if pedido.endereco else None,
+            endereco=EnderecoPedidoDetalhe(
+                endereco_selecionado=self._build_endereco_selecionado(pedido),
+            outros_enderecos=self._build_outros_enderecos(pedido),
+            ),
             empresa=EmpresaResponse.model_validate(pedido.empresa) if pedido.empresa else None,
             entregador=EntregadorOut.model_validate(pedido.entregador) if pedido.entregador else None,
             meio_pagamento=MeioPagamentoResponse.model_validate(pedido.meio_pagamento) if pedido.meio_pagamento else None,

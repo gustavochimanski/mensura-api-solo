@@ -1,12 +1,19 @@
 from typing import List, Optional
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, condecimal
+from pydantic import BaseModel, ConfigDict, condecimal, Field
 
 from .schema_meio_pagamento import MeioPagamentoResponse
 from .schema_shared_enums import PedidoStatusEnum, TipoEntregaEnum, OrigemPedidoEnum
 from .schema_cliente import ClienteOut
 from .schema_endereco import EnderecoOut
 from .schema_entregador import EntregadorOut
+
+
+class EnderecoPedidoDetalhe(BaseModel):
+    endereco_selecionado: EnderecoOut | dict | None = None
+    outros_enderecos: list[EnderecoOut | dict] = Field(default_factory=list)
+
+
 from .schema_cupom import CupomOut
 from .schema_transacao_pagamento import TransacaoOut
 from .schema_pedido_status_historico import PedidoStatusHistoricoOut
@@ -165,7 +172,7 @@ class PedidoResponseCompletoTotal(BaseModel):
     id: int
     status: PedidoStatusEnum
     cliente: Optional[ClienteOut] = None
-    endereco: Optional[EnderecoOut] = None
+    endereco: Optional[EnderecoPedidoDetalhe] = None
     empresa: Optional[EmpresaResponse] = None
     entregador: Optional[EntregadorOut] = None
     meio_pagamento: Optional[MeioPagamentoResponse] = None

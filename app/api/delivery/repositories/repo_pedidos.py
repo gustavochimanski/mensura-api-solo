@@ -52,7 +52,7 @@ class PedidoRepository:
             self.db.query(PedidoDeliveryModel)
             .options(
                 joinedload(PedidoDeliveryModel.itens),
-                joinedload(PedidoDeliveryModel.cliente),
+                joinedload(PedidoDeliveryModel.cliente).joinedload(ClienteDeliveryModel.enderecos),
                 joinedload(PedidoDeliveryModel.endereco),
                 joinedload(PedidoDeliveryModel.meio_pagamento),
                 # joinedload(PedidoDeliveryModel.transacao),
