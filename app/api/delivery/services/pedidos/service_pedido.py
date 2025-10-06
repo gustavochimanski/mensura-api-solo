@@ -731,6 +731,33 @@ class PedidoService:
             ]
         )
 
+    def _build_endereco_selecionado(self, pedido: PedidoDeliveryModel) -> EnderecoOut | dict | None:
+        if pedido.endereco_snapshot:
+            return pedido.endereco_snapshot
+
+        if pedido.endereco:
+            return EnderecoOut.model_validate(pedido.endereco)
+
+        return None
+
+    def _build_outros_enderecos(self, pedido: PedidoDeliveryModel) -> list[EnderecoOut | dict]:
+        if not pedido.cliente or not getattr(pedido.cliente, "enderecos", None):
+            return []
+
+        endereco_id_selecionado = None
+        if pedido.endereco_snapshot and isinstance(pedido.endereco_snapshot, dict):
+            endereco_id_selecionado = pedido.endereco_snapshot.get("id")
+        elif pedido.endereco_id:
+            endereco_id_selecionado = pedido.endereco_id
+
+        outros = []
+        for endereco in pedido.cliente.enderecos:
+            if endereco_id_selecionado and getattr(endereco, "id", None) == endereco_id_selecionado:
+                continue
+            outros.append(EnderecoOut.model_validate(endereco))
+
+        return outros
+
     def get_pedido_by_id_completo_com_endereco(self, pedido_id: int) -> PedidoResponseCompletoComEndereco:
         pedido = self.repo.get_pedido(pedido_id)
         if not pedido:
