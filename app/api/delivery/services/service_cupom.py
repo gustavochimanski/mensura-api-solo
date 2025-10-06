@@ -58,6 +58,18 @@ class CuponsService:
             .all()
         )
 
+    def list_by_parceiro(self, parceiro_id: int) -> List[CupomDescontoModel]:
+        parceiro = self.db.get(ParceiroModel, parceiro_id)
+        if not parceiro:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Parceiro não encontrado")
+
+        return (
+            self.db.query(CupomDescontoModel)
+            .options(joinedload(CupomDescontoModel.links))
+            .filter(CupomDescontoModel.parceiro_id == parceiro_id)
+            .all()
+        )
+
     def get(self, cupom_id: int) -> CupomDescontoModel:
         cupom = (
             self.db.query(CupomDescontoModel)

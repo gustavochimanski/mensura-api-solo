@@ -19,8 +19,13 @@ def map_link_out(link_model) -> CupomLinkOut:
     )
 
 @router.get("", response_model=List[CupomOut])
-def listar_cupons(db: Session = Depends(get_db)):
+def listar_cupons(
+    parceiro_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
     svc = CuponsService(db)
+    if parceiro_id is not None:
+        return svc.list_by_parceiro(parceiro_id)
     return svc.list()
 
 @router.get("/{cupom_id}", response_model=CupomOut)
