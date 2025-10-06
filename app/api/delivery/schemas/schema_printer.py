@@ -56,7 +56,7 @@ class PedidoParaImpressao(BaseModel):
     cliente_telefone: Optional[str] = Field(None, description="Telefone do cliente")
     valor_total: float = Field(..., description="Valor total do pedido")
     data_criacao: datetime = Field(..., description="Data de criação")
-    endereco_cliente: Optional[str] = Field(None, description="Endereço do cliente")
+    endereco: Optional[str] = Field(None, description="Endereço do pedido")
     meio_pagamento_descricao: Optional[str] = Field(None, description="Descrição do meio de pagamento")
     observacao_geral: Optional[str] = Field(None, description="Observação geral")
     itens: List[ItemPedidoPrinter] = Field(..., description="Itens do pedido")

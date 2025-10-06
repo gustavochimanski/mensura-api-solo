@@ -160,7 +160,7 @@ class PrinterService:
             tipo_pagamento=tipo_pagamento,
             troco=troco,
             observacao_geral=pedido_impressao.observacao_geral,
-            endereco=pedido_impressao.endereco_cliente,
+            endereco=pedido_impressao.endereco,
             data_criacao=pedido_impressao.data_criacao
         )
     
@@ -277,7 +277,7 @@ class PrinterService:
                     tipo_pagamento=tipo_pagamento,
                     troco=troco,
                     observacao_geral=pedido_impressao.observacao_geral,
-                    endereco=pedido_impressao.endereco_cliente,
+                    endereco=pedido_impressao.endereco,
                     data_criacao=pedido_impressao.data_criacao,
                     empresa=dados_empresa or DadosEmpresaPrinter()
                 )

@@ -158,7 +158,7 @@ class PrinterRepository:
             cliente_telefone=pedido.cliente.telefone if pedido.cliente else None,
             valor_total=float(pedido.valor_total or 0),
             data_criacao=pedido.data_criacao,
-            endereco_cliente=endereco_str,
+            endereco=endereco_str,
             meio_pagamento_descricao=pedido.meio_pagamento.display() if pedido.meio_pagamento else None,
             observacao_geral=pedido.observacao_geral,
             itens=itens

@@ -830,18 +830,42 @@ class PedidoService:
 
         for p in pedidos:
             cliente = p.cliente
-            endereco = cliente.enderecos[0] if cliente and cliente.enderecos else None
 
             endereco_str = None
-            if endereco:
+            if p.endereco_snapshot:
+                snapshot = p.endereco_snapshot
                 endereco_str = ", ".join(
                     filter(None, [
-                        endereco.logradouro,
-                        endereco.numero,
-                        endereco.bairro,
-                        endereco.cidade,
-                        endereco.cep,
-                        endereco.complemento
+                        snapshot.get("logradouro"),
+                        snapshot.get("numero"),
+                        snapshot.get("bairro"),
+                        snapshot.get("cidade"),
+                        snapshot.get("cep"),
+                        snapshot.get("complemento"),
+                    ])
+                )
+            elif p.endereco:
+                endereco_model = p.endereco
+                endereco_str = ", ".join(
+                    filter(None, [
+                        endereco_model.logradouro,
+                        endereco_model.numero,
+                        endereco_model.bairro,
+                        endereco_model.cidade,
+                        endereco_model.cep,
+                        endereco_model.complemento,
+                    ])
+                )
+            elif cliente and cliente.enderecos:
+                endereco_model = cliente.enderecos[0]
+                endereco_str = ", ".join(
+                    filter(None, [
+                        endereco_model.logradouro,
+                        endereco_model.numero,
+                        endereco_model.bairro,
+                        endereco_model.cidade,
+                        endereco_model.cep,
+                        endereco_model.complemento,
                     ])
                 )
 
@@ -854,7 +878,7 @@ class PedidoService:
                     data_criacao=p.data_criacao,
                     telefone_cliente=cliente.telefone if cliente else None,
                     nome_cliente=cliente.nome if cliente else None,
-                    endereco_cliente=endereco_str,
+                    endereco=endereco_str,
                     meio_pagamento_descricao=p.meio_pagamento.display() if p.meio_pagamento else None,
                     observacao_geral=p.observacao_geral,
                     meio_pagamento_id=p.meio_pagamento.id if p.meio_pagamento else None,
