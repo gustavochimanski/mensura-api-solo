@@ -124,7 +124,7 @@ class PrinterService:
             return DadosEmpresaPrinter()
     
     
-    def _converter_pedido_para_printer_request(self, pedido_impressao, pedido_original) -> PedidoPrinterRequest:
+    def _converter_pedido_para_printer_request(self, pedido_impressao, pedido_original=None) -> PedidoPrinterRequest:
         """
         Converte pedido formatado para impressão em request da Printer API
         
@@ -142,7 +142,7 @@ class PrinterService:
         
         # Calcula troco corretamente
         troco = None
-        if tipo_pagamento == "DINHEIRO" and pedido_original.troco_para:
+        if tipo_pagamento == "DINHEIRO" and pedido_original and pedido_original.troco_para and pedido_original.troco_para > 0:
             # Troco = valor pago - valor total do pedido
             valor_pago = float(pedido_original.troco_para)
             valor_total = pedido_impressao.valor_total
@@ -264,7 +264,7 @@ class PrinterService:
                 troco = None
                 logger.info(f"[PrinterService] Debug - Pedido {pedido.id}: tipo_pagamento='{tipo_pagamento}', troco_para={pedido.troco_para}")
                 
-                if tipo_pagamento == "DINHEIRO" and pedido.troco_para:
+                if tipo_pagamento == "DINHEIRO" and pedido.troco_para and pedido.troco_para > 0:
                     # Troco = valor pago - valor total do pedido
                     valor_pago = float(pedido.troco_para)
                     valor_total = pedido_impressao.valor_total
