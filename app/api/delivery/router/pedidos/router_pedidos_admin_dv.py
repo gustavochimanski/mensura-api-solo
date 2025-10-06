@@ -150,33 +150,25 @@ def atualizar_pedido(
 # ======================================================================
 # ==================== ATUALIZAR ITENS PEDIDO ==========================
 @router.put(
-    "/{pedido_id}/itens", 
+    "/{pedido_id}/itens",
     response_model=PedidoResponse,
     status_code=status.HTTP_200_OK,
     dependencies=[Depends(get_current_user)]
 )
-def atualizar_itens(
+def atualizar_item(
     pedido_id: int = Path(..., description="ID do pedido", gt=0),
-    itens: List[ItemPedidoEditar] = Body(..., description="Lista de itens para atualizar"),
+    item: ItemPedidoEditar = Body(..., description="Ação a ser executada no item"),
     db: Session = Depends(get_db),
 ):
     """
-    Atualiza os itens de um pedido: adicionar, atualizar quantidade/observação ou remover.
+    Executa uma única ação sobre os itens do pedido (adicionar, atualizar ou remover).
     
     - **pedido_id**: ID do pedido (obrigatório, deve ser maior que 0)
-    - **itens**: Lista de itens para atualizar (obrigatório)
-    
-    Para cada item:
-    - **item_id**: ID do item (para atualizar/remover) ou null (para adicionar)
-    - **produto_id**: ID do produto (obrigatório para novos itens)
-    - **quantidade**: Quantidade do item (obrigatório)
-    - **observacao**: Observação específica do item (opcional)
-    - **remover**: true para remover o item (opcional)
+    - **item**: Objeto descrevendo a ação a ser executada
     """
-    logger.info(f"[Pedidos] Atualizar itens - pedido_id={pedido_id}, itens_count={len(itens)}")
+    logger.info(f"[Pedidos] Atualizar item - pedido_id={pedido_id}, acao={item.acao}")
     svc = PedidoService(db)
-    
-    # Verifica se o pedido existe
+
     pedido = svc.repo.get_pedido(pedido_id)
     if not pedido:
         raise HTTPException(
@@ -184,7 +176,7 @@ def atualizar_itens(
             detail=f"Pedido com ID {pedido_id} não encontrado"
         )
 
-    return svc.atualizar_itens_pedido(pedido_id, itens)
+    return svc.atualizar_item_pedido(pedido_id, item)
 
 
 # ======================================================================

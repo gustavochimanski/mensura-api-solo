@@ -971,72 +971,69 @@ class PedidoService:
             taxa_servico=taxa_servico,
         )
 
+        self.db.flush()
+        self._recalcular_pedido(pedido)
         self.repo.commit()
         pedido = self.repo.get_pedido(pedido.id)
+
         return self._pedido_to_response(pedido)
 
-    def atualizar_itens_pedido(self, pedido_id: int, itens: list[ItemPedidoEditar]) -> PedidoResponse:
+    def atualizar_item_pedido(self, pedido_id: int, item: ItemPedidoEditar) -> PedidoResponse:
         pedido = self.repo.get_pedido(pedido_id)
         if not pedido:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
 
-        total_alterado = False
+        acao = item.acao
+        if acao == "atualizar":
+            if not item.id:
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, "ID do item obrigatório para atualizar")
+            it_db = self.repo.get_item_by_id(item.id)
+            if not it_db:
+                raise HTTPException(status.HTTP_404_NOT_FOUND, f"Item {item.id} não encontrado")
 
-        for item in itens:
-            if item.acao == "atualizar":
-                if not item.id:
-                    raise HTTPException(status.HTTP_400_BAD_REQUEST, "ID do item obrigatório para atualizar")
-                it_db = self.repo.get_item_by_id(item.id)
-                if not it_db:
-                    raise HTTPException(status.HTTP_404_NOT_FOUND, f"Item {item.id} não encontrado")
+            if item.quantidade is not None and item.quantidade != it_db.quantidade:
+                it_db.quantidade = item.quantidade
+            if item.observacao is not None:
+                it_db.observacao = item.observacao
 
-                if item.quantidade is not None and item.quantidade != it_db.quantidade:
-                    it_db.quantidade = item.quantidade
-                    total_alterado = True
-                if item.observacao is not None:
-                    it_db.observacao = item.observacao
+        elif acao == "remover":
+            if not item.id:
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, "ID do item obrigatório para remover")
+            it_db = self.repo.get_item_by_id(item.id)
+            if not it_db:
+                raise HTTPException(status.HTTP_404_NOT_FOUND, f"Item {item.id} não encontrado")
+            self.db.delete(it_db)
 
-            elif item.acao == "remover":
-                if not item.id:
-                    raise HTTPException(status.HTTP_400_BAD_REQUEST, "ID do item obrigatório para remover")
-                it_db = self.repo.get_item_by_id(item.id)
-                if not it_db:
-                    raise HTTPException(status.HTTP_404_NOT_FOUND, f"Item {item.id} não encontrado")
-                self.db.delete(it_db)
-                total_alterado = True
+        elif acao == "novo-item":
+            if not item.produto_cod_barras:
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, "Código de barras obrigatório para adicionar")
+            if not item.quantidade or item.quantidade <= 0:
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, "Quantidade deve ser maior que zero")
 
-            elif item.acao == "novo-item":
-                if not item.produto_cod_barras:
-                    raise HTTPException(status.HTTP_400_BAD_REQUEST, "Código de barras obrigatório para adicionar")
-                if not item.quantidade or item.quantidade <= 0:
-                    raise HTTPException(status.HTTP_400_BAD_REQUEST, "Quantidade deve ser maior que zero")
+            pe = self.repo.get_produto_emp(pedido.empresa_id, item.produto_cod_barras)
+            if not pe:
+                raise HTTPException(status.HTTP_404_NOT_FOUND, f"Produto {item.produto_cod_barras} não encontrado")
+            if not pe.disponivel or not (pe.produto and pe.produto.ativo):
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Produto indisponível: {item.produto_cod_barras}")
 
-                pe = self.repo.get_produto_emp(pedido.empresa_id, item.produto_cod_barras)
-                if not pe:
-                    raise HTTPException(status.HTTP_404_NOT_FOUND, f"Produto {item.produto_cod_barras} não encontrado")
-                if not pe.disponivel or not (pe.produto and pe.produto.ativo):
-                    raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Produto indisponível: {item.produto_cod_barras}")
+            preco = _dec(pe.preco_venda)
+            self.repo.adicionar_item(
+                pedido_id=pedido.id,
+                cod_barras=item.produto_cod_barras,
+                quantidade=item.quantidade,
+                preco_unitario=preco,
+                observacao=item.observacao,
+                produto_descricao_snapshot=pe.produto.descricao if pe.produto else None,
+                produto_imagem_snapshot=pe.produto.imagem if pe.produto else None,
+            )
 
-                preco = _dec(pe.preco_venda)
-                self.repo.adicionar_item(
-                    pedido_id=pedido.id,
-                    cod_barras=item.produto_cod_barras,
-                    quantidade=item.quantidade,
-                    preco_unitario=preco,
-                    observacao=item.observacao,
-                    produto_descricao_snapshot=pe.produto.descricao if pe.produto else None,
-                    produto_imagem_snapshot=pe.produto.imagem if pe.produto else None,
-                )
-                total_alterado = True
+        else:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Ação inválida: {acao}")
 
-            else:
-                raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Ação inválida: {item.acao}")
-
-        if total_alterado:
-            self.db.flush()
-            self._recalcular_pedido(pedido)
-            self.repo.commit()
-            pedido = self.repo.get_pedido(pedido.id)
+        self.db.flush()
+        self._recalcular_pedido(pedido)
+        self.repo.commit()
+        pedido = self.repo.get_pedido(pedido.id)
 
         return self._pedido_to_response(pedido)
 

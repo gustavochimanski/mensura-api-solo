@@ -61,14 +61,14 @@ def listar_pedidos(
     "/{pedido_id}/itens",
     response_model=PedidoResponse
 )
-def atualizar_itens_cliente(
+def atualizar_item_cliente(
     pedido_id: int = Path(..., description="ID do pedido"),
-    itens: List[ItemPedidoEditar] = Body(...),
+    item: ItemPedidoEditar = Body(...),
     cliente: ClienteDeliveryModel = Depends(get_cliente_by_super_token),
     db: Session = Depends(get_db),
 ):
     """
-    Atualiza os itens de um pedido do cliente: adicionar, atualizar ou remover.
+    Executa uma única ação sobre os itens do pedido do cliente: adicionar, atualizar ou remover.
     """
     svc = PedidoService(db)
     pedido = svc.repo.get_pedido(pedido_id)
@@ -78,7 +78,7 @@ def atualizar_itens_cliente(
     if pedido.cliente_id != cliente.id:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Pedido não pertence ao cliente")
 
-    return svc.atualizar_itens_pedido(pedido_id, itens)
+    return svc.atualizar_item_pedido(pedido_id, item)
 
 # ======================================================================
 # =============== EDITA INFORMAÇÕES GERAIS PEDIDO ======================
