@@ -262,6 +262,8 @@ class PrinterService:
                 
                 # Calcula troco corretamente
                 troco = None
+                logger.info(f"[PrinterService] Debug - Pedido {pedido.id}: tipo_pagamento='{tipo_pagamento}', troco_para={pedido.troco_para}")
+                
                 if tipo_pagamento == "DINHEIRO" and pedido.troco_para:
                     # Troco = valor pago - valor total do pedido
                     valor_pago = float(pedido.troco_para)
@@ -270,6 +272,8 @@ class PrinterService:
                     # Garante que o troco não seja negativo
                     troco = max(0.0, troco)
                     logger.info(f"[PrinterService] Cálculo do troco - Pedido {pedido.id}: Valor pago: {valor_pago}, Valor total: {valor_total}, Troco: {troco}")
+                else:
+                    logger.info(f"[PrinterService] Não calculou troco - Pedido {pedido.id}: tipo_pagamento='{tipo_pagamento}', troco_para={pedido.troco_para}")
                 
                 # Cria resposta formatada usando os dados do pedido original
                 resultado = PedidoPendenteImpressaoResponse(
