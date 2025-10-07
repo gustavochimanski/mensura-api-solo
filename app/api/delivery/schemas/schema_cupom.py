@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional, List
-from pydantic import BaseModel, constr, ConfigDict
+from pydantic import BaseModel, constr, ConfigDict, Field
 from app.api.mensura.schemas.schema_empresa import EmpresaResponse
 
 # ------------------- CUPOM -------------------
@@ -17,7 +17,7 @@ class CupomCreate(BaseModel):
     valor_por_lead: Optional[float] = None
     parceiro_id: Optional[int] = None
     link_redirecionamento: Optional[constr(max_length=500)] = None
-    empresa_id: int
+    empresa_ids: List[int] = Field(..., min_length=1)
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -34,7 +34,7 @@ class CupomUpdate(BaseModel):
     valor_por_lead: Optional[float] = None
     parceiro_id: Optional[int] = None
     link_redirecionamento: Optional[constr(max_length=500)] = None
-    empresa_id: Optional[int] = None
+    empresa_ids: Optional[List[int]] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -56,8 +56,7 @@ class CupomOut(BaseModel):
     valor_por_lead: Optional[float]
     link_redirecionamento: Optional[str]
 
-    empresa_id: int
-    empresa: EmpresaResponse
+    empresas: List[EmpresaResponse]
 
     model_config = ConfigDict(from_attributes=True)
 

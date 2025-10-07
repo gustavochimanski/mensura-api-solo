@@ -1,20 +1,26 @@
-from sqlalchemy import Column, Integer, String, DateTime, Numeric, Boolean, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, Integer, String, DateTime, Numeric, Boolean, ForeignKey, Table
 from sqlalchemy.orm import relationship
 from app.database.db_connection import Base
 from app.utils.database_utils import now_trimmed
+
+# Associação cupom-empresa
+cupom_empresa_association = Table(
+    "cupons_empresas",
+    Base.metadata,
+    Column("cupom_id", Integer, ForeignKey("delivery.cupons_dv.id", ondelete="CASCADE"), primary_key=True),
+    Column("empresa_id", Integer, ForeignKey("mensura.empresas.id", ondelete="CASCADE"), primary_key=True),
+    schema="delivery",
+)
 
 # ----------------------
 # CUPOM
 # ----------------------
 class CupomDescontoModel(Base):
     __tablename__ = "cupons_dv"
-    __table_args__ = (
-        UniqueConstraint("codigo", "empresa_id", name="uq_cupons_codigo_empresa"),
-        {"schema": "delivery"},
-    )
+    __table_args__ = {"schema": "delivery"}
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    codigo = Column(String(30), nullable=False)
+    codigo = Column(String(30), unique=True, nullable=False)
     descricao = Column(String(120), nullable=True)
 
     desconto_valor = Column(Numeric(18, 2), nullable=True)
@@ -30,8 +36,11 @@ class CupomDescontoModel(Base):
     parceiro_id = Column(Integer, ForeignKey("delivery.parceiros.id", ondelete="CASCADE"), nullable=True)
     parceiro = relationship("ParceiroModel", back_populates="cupons")
 
-    empresa_id = Column(Integer, ForeignKey("mensura.empresas.id", ondelete="CASCADE"), nullable=False)
-    empresa = relationship("EmpresaModel", back_populates="cupons")
+    empresas = relationship(
+        "EmpresaModel",
+        secondary=cupom_empresa_association,
+        back_populates="cupons",
+    )
 
     created_at = Column(DateTime, default=now_trimmed, nullable=False)
     updated_at = Column(DateTime, default=now_trimmed, onupdate=now_trimmed, nullable=False)
