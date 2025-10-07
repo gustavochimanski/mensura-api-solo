@@ -33,3 +33,12 @@ class EmpresaResponse(EmpresaBase):
     endereco: Optional[EnderecoResponse] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class EmpresaCardapioLinkResponse(BaseModel):
+    id: int
+    nome: str
+    cardapio_link: Optional[str] = None
+    cardapio_tema: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)

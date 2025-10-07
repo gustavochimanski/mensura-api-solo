@@ -42,6 +42,11 @@ class EmpresaModel(Base):
         back_populates="empresa",
         cascade="all, delete-orphan"
     )
+    cupons = relationship(
+        "CupomDescontoModel",
+        back_populates="empresa",
+        cascade="all, delete-orphan"
+    )
     entregadores = relationship(
         "EntregadorDeliveryModel",
         secondary=entregador_empresa,

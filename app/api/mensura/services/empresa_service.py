@@ -7,7 +7,11 @@ from fastapi import HTTPException, UploadFile
 from app.api.delivery.models.model_regiao_entrega import RegiaoEntregaModel
 from app.api.mensura.models.empresa_model import EmpresaModel
 from app.api.mensura.repositories.empresa_repo import EmpresaRepository
-from app.api.mensura.schemas.schema_empresa import EmpresaCreate, EmpresaUpdate
+from app.api.mensura.schemas.schema_empresa import (
+    EmpresaCreate,
+    EmpresaUpdate,
+    EmpresaCardapioLinkResponse,
+)
 from app.api.mensura.schemas.schema_endereco import EnderecoCreate, EnderecoUpdate
 from app.api.mensura.services.endereco_service import EnderecoService
 from app.utils.minio_client import upload_file_to_minio, remover_arquivo_minio
@@ -33,6 +37,18 @@ class EmpresaService:
     # Lista empresas
     def list_empresas(self, skip: int = 0, limit: int = 100) -> list[EmpresaModel]:
         return self.repo_emp.list(skip, limit)
+
+    def list_cardapio_links(self) -> list[EmpresaCardapioLinkResponse]:
+        resultados = self.repo_emp.list_cardapio_links()
+        return [
+            EmpresaCardapioLinkResponse(
+                id=row.id,
+                nome=row.nome,
+                cardapio_link=row.cardapio_link,
+                cardapio_tema=row.cardapio_tema,
+            )
+            for row in resultados
+        ]
 
     # Cria empresa
     def create_empresa(self, data: EmpresaCreate, logo: UploadFile | None = None):

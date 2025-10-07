@@ -236,12 +236,20 @@ class PedidoService:
         else:
             self._cache_regioes.clear()
 
-    def _aplicar_cupom(self, *, cupom_id: Optional[int], subtotal: Decimal) -> Decimal:
+    def _aplicar_cupom(
+        self,
+        *,
+        cupom_id: Optional[int],
+        subtotal: Decimal,
+        empresa_id: int,
+    ) -> Decimal:
         if not cupom_id:
             return _dec(0)
         cupom = self.repo.get_cupom(cupom_id)
         if not cupom or not cupom.ativo:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Cupom inválido ou inativo")
+        if cupom.empresa_id != empresa_id:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Cupom não pertence a esta empresa")
 
         # validade e mínimo
         if cupom.validade_inicio and cupom.validade_fim:
@@ -347,7 +355,11 @@ class PedidoService:
         ).filter(PedidoItemModel.pedido_id == pedido.id).scalar() or Decimal("0")
 
         subtotal = Decimal(subtotal)  # força Decimal
-        desconto = self._aplicar_cupom(cupom_id=pedido.cupom_id, subtotal=subtotal)
+        desconto = self._aplicar_cupom(
+            cupom_id=pedido.cupom_id,
+            subtotal=subtotal,
+            empresa_id=pedido.empresa_id,
+        )
 
         endereco = pedido.endereco  # relacionamento
         taxa_entrega, taxa_servico = self._calcular_taxas(
@@ -472,7 +484,11 @@ class PedidoService:
                 )
 
             # TOTAIS
-            desconto = self._aplicar_cupom(cupom_id=payload.cupom_id, subtotal=subtotal)
+            desconto = self._aplicar_cupom(
+                cupom_id=payload.cupom_id,
+                subtotal=subtotal,
+                empresa_id=payload.empresa_id,
+            )
             taxa_entrega, taxa_servico = self._calcular_taxas(
                 tipo_entrega=payload.tipo_entrega if isinstance(payload.tipo_entrega, TipoEntregaEnum)
                             else TipoEntregaEnum(payload.tipo_entrega),
@@ -993,7 +1009,11 @@ class PedidoService:
             pedido.troco_para = _dec(payload.troco_para)
 
         subtotal = pedido.subtotal or Decimal("0")
-        desconto = self._aplicar_cupom(cupom_id=pedido.cupom_id, subtotal=subtotal)
+        desconto = self._aplicar_cupom(
+            cupom_id=pedido.cupom_id,
+            subtotal=subtotal,
+            empresa_id=pedido.empresa_id,
+        )
         taxa_entrega, taxa_servico = self._calcular_taxas(
             tipo_entrega=pedido.tipo_entrega if isinstance(pedido.tipo_entrega, TipoEntregaEnum)
                         else TipoEntregaEnum(pedido.tipo_entrega),

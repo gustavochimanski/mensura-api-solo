@@ -26,9 +26,13 @@ def obter_cupom(cupom_id: int = Path(...), db: Session = Depends(get_db)):
     return svc.get(cupom_id)
 
 @router.get("/by-code/{codigo}", response_model=CupomOut)
-def obter_por_codigo(codigo: str, db: Session = Depends(get_db)):
+def obter_por_codigo(
+    codigo: str,
+    empresa_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+):
     svc = CuponsService(db)
-    cupom = svc.repo.get_by_code(codigo)
+    cupom = svc.repo.get_by_code(codigo, empresa_id=empresa_id)
     if not cupom:
         raise HTTPException(status_code=404, detail="Cupom não encontrado")
     return cupom

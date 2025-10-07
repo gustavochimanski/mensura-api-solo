@@ -16,6 +16,7 @@ class CupomCreate(BaseModel):
     valor_por_lead: Optional[float] = None
     parceiro_id: Optional[int] = None
     link_redirecionamento: Optional[constr(max_length=500)] = None
+    empresa_id: int
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -32,6 +33,7 @@ class CupomUpdate(BaseModel):
     valor_por_lead: Optional[float] = None
     parceiro_id: Optional[int] = None
     link_redirecionamento: Optional[constr(max_length=500)] = None
+    empresa_id: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True)
 

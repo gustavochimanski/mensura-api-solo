@@ -5,7 +5,12 @@ from typing import List
 import json
 
 from app.database.db_connection import get_db
-from app.api.mensura.schemas.schema_empresa import EmpresaCreate, EmpresaUpdate, EmpresaResponse
+from app.api.mensura.schemas.schema_empresa import (
+    EmpresaCreate,
+    EmpresaUpdate,
+    EmpresaResponse,
+    EmpresaCardapioLinkResponse,
+)
 from app.api.mensura.schemas.schema_endereco import EnderecoCreate
 from app.api.mensura.services.empresa_service import EmpresaService
 from app.utils.slug_utils import make_slug
@@ -80,6 +85,11 @@ def get_empresa(id: int, db: Session = Depends(get_db)):
 @router.get("/", response_model=List[EmpresaResponse])
 def list_empresas(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     return EmpresaService(db).list_empresas(skip, limit)
+
+
+@router.get("/cardapios", response_model=List[EmpresaCardapioLinkResponse])
+def list_cardapio_links(db: Session = Depends(get_db)):
+    return EmpresaService(db).list_cardapio_links()
 
 
 # Deletar empresa

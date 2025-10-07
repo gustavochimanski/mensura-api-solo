@@ -80,3 +80,15 @@ class EmpresaRepository:
 
     def get_first(self):
         return self.db.query(EmpresaModel).first()
+
+    def list_cardapio_links(self) -> List[tuple[int, str, str, str]]:
+        return (
+            self.db.query(
+                EmpresaModel.id,
+                EmpresaModel.nome,
+                EmpresaModel.cardapio_link,
+                EmpresaModel.cardapio_tema,
+            )
+            .order_by(EmpresaModel.nome.asc())
+            .all()
+        )

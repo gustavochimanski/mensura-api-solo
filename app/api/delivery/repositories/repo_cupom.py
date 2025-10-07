@@ -7,10 +7,17 @@ class CupomRepository:
 
     # ---------------- CUPOM ----------------
     def get(self, id_: int):
-        return self.db.get(CupomDescontoModel, id_)
+        return (
+            self.db.query(CupomDescontoModel)
+            .filter(CupomDescontoModel.id == id_)
+            .first()
+        )
 
-    def get_by_code(self, codigo: str):
-        return self.db.query(CupomDescontoModel).filter(CupomDescontoModel.codigo == codigo).first()
+    def get_by_code(self, codigo: str, empresa_id: int | None = None):
+        query = self.db.query(CupomDescontoModel).filter(CupomDescontoModel.codigo == codigo)
+        if empresa_id is not None:
+            query = query.filter(CupomDescontoModel.empresa_id == empresa_id)
+        return query.first()
 
     def create(self, obj: CupomDescontoModel):
         self.db.add(obj)
