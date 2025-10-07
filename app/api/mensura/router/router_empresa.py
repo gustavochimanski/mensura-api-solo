@@ -17,6 +17,11 @@ from app.utils.slug_utils import make_slug
 
 router = APIRouter(prefix="/api/mensura/empresas", tags=["Empresas"])
 
+@router.get("/cardapios", response_model=List[EmpresaCardapioLinkResponse])
+def list_cardapio_links(db: Session = Depends(get_db)):
+    return EmpresaService(db).list_cardapio_links()
+
+
 # Criar empresa
 @router.post("/", response_model=EmpresaResponse)
 async def create_empresa(
@@ -85,11 +90,6 @@ def get_empresa(id: int, db: Session = Depends(get_db)):
 @router.get("/", response_model=List[EmpresaResponse])
 def list_empresas(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     return EmpresaService(db).list_empresas(skip, limit)
-
-
-@router.get("/cardapios", response_model=List[EmpresaCardapioLinkResponse])
-def list_cardapio_links(db: Session = Depends(get_db)):
-    return EmpresaService(db).list_cardapio_links()
 
 
 # Deletar empresa
