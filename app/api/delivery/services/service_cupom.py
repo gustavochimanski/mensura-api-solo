@@ -52,7 +52,11 @@ class CuponsService:
 
     # ---------------- LIST COM LINKS ----------------
     def list(self) -> List[CupomDescontoModel]:
-        return self.db.query(CupomDescontoModel).all()
+        return (
+            self.db.query(CupomDescontoModel)
+            .options(joinedload(CupomDescontoModel.empresa))
+            .all()
+        )
 
     def list_by_parceiro(self, parceiro_id: int) -> List[CupomDescontoModel]:
         parceiro = self.db.get(ParceiroModel, parceiro_id)
@@ -61,16 +65,16 @@ class CuponsService:
 
         return (
             self.db.query(CupomDescontoModel)
+            .options(joinedload(CupomDescontoModel.empresa))
             .filter(CupomDescontoModel.parceiro_id == parceiro_id)
             .all()
         )
 
     def get(self, cupom_id: int) -> CupomDescontoModel:
-        cupom = (
-            self.db.query(CupomDescontoModel)
-            .filter(CupomDescontoModel.id == cupom_id)
-            .first()
-        )
+        cupom = self.db.query(CupomDescontoModel)
+        if True:
+            cupom = cupom.options(joinedload(CupomDescontoModel.empresa))
+        cupom = cupom.filter(CupomDescontoModel.id == cupom_id).first()
         if not cupom:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Cupom não encontrado")
         return cupom

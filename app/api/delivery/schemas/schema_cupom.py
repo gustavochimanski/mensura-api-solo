@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import Optional, List
 from pydantic import BaseModel, constr, ConfigDict
+from app.api.mensura.schemas.schema_empresa import EmpresaResponse
 
 # ------------------- CUPOM -------------------
 class CupomCreate(BaseModel):
@@ -54,6 +55,9 @@ class CupomOut(BaseModel):
     monetizado: bool
     valor_por_lead: Optional[float]
     link_redirecionamento: Optional[str]
+
+    empresa_id: int
+    empresa: EmpresaResponse
 
     model_config = ConfigDict(from_attributes=True)
 
