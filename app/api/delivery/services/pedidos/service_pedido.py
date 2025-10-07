@@ -944,7 +944,7 @@ class PedidoService:
             endereco = self.repo.get_endereco(payload.endereco_id)
             if not endereco:
                 raise HTTPException(status.HTTP_404_NOT_FOUND, "Endereço não encontrado")
-
+#
             if (
                 endereco.cliente_id is not None
                 and pedido.cliente_id is not None
