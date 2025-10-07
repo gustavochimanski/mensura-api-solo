@@ -1,7 +1,7 @@
 # app/api/delivery/schemas/schema_parceiros.py
 from pydantic import BaseModel, ConfigDict, constr
 from typing import List, Optional
-from app.api.delivery.schemas.schema_cupom import CupomLinkOut, CupomParceiroOut
+from app.api.delivery.schemas.schema_cupom import CupomParceiroOut
 
 # Parceiro DTOs
 class ParceiroIn(BaseModel):

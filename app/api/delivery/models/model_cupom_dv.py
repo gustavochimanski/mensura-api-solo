@@ -36,26 +36,4 @@ class CupomDescontoModel(Base):
         cascade="all, delete-orphan",
     )
 
-    # Relação para os links
-    links = relationship(
-        "CupomLinkModel",
-        back_populates="cupom",
-        cascade="all, delete-orphan"
-    )
-
-
-# ----------------------
-# LINKS DO CUPOM
-# ----------------------
-class CupomLinkModel(Base):
-    __tablename__ = "cupons_links_dv"
-    __table_args__ = {"schema": "delivery"}
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    cupom_id = Column(Integer, ForeignKey("delivery.cupons_dv.id", ondelete="CASCADE"), nullable=False)
-    titulo = Column(String(100), nullable=False)
-    url = Column(String(500), nullable=False)
-
-    cupom = relationship("CupomDescontoModel", back_populates="links")
-    created_at = Column(DateTime, default=now_trimmed, nullable=False)
-    updated_at = Column(DateTime, default=now_trimmed, onupdate=now_trimmed, nullable=False)
+    link_redirecionamento = Column(String(500), nullable=True)

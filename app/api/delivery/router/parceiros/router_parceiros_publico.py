@@ -5,7 +5,7 @@ from typing import Optional
 from app.api.delivery.schemas.schema_parceiros import (
     ParceiroOut, BannerParceiroOut, ParceiroCompletoOut
 )
-from app.api.delivery.schemas.schema_cupom import CupomLinkOut, CupomParceiroOut
+from app.api.delivery.schemas.schema_cupom import CupomParceiroOut
 from app.api.delivery.services.service_parceiros import ParceirosService
 from app.database.db_connection import get_db
 
@@ -51,7 +51,7 @@ def get_parceiro_completo(parceiro_id: int, db: Session = Depends(get_db)):
                 ativo=c.ativo,
                 monetizado=c.monetizado,
                 valor_por_lead=float(c.valor_por_lead) if c.valor_por_lead is not None else None,
-                links=[CupomLinkOut.from_orm(l) for l in c.links]
+                link_redirecionamento=c.link_redirecionamento
             ) for c in parceiro.cupons
         ],
         banners=[

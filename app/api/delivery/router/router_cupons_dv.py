@@ -5,18 +5,10 @@ from typing import List, Optional
 from app.database.db_connection import get_db
 from app.api.delivery.services.service_cupom import CuponsService
 from app.api.delivery.schemas.schema_cupom import (
-    CupomOut, CupomCreate, CupomUpdate, CupomLinkCreate, CupomLinkOut
+    CupomOut, CupomCreate, CupomUpdate
 )
 
 router = APIRouter(prefix="/api/delivery/cupons", tags=["Cupons - Admin - Delivery"])
-
-def map_link_out(link_model) -> CupomLinkOut:
-    return CupomLinkOut(
-        id=link_model.id,
-        cupom_id=link_model.cupom_id,
-        titulo=link_model.titulo,
-        url=link_model.url
-    )
 
 @router.get("", response_model=List[CupomOut])
 def listar_cupons(
@@ -55,30 +47,4 @@ def atualizar_cupom(cupom_id: int, payload: CupomUpdate, db: Session = Depends(g
 def deletar_cupom(cupom_id: int, db: Session = Depends(get_db)):
     svc = CuponsService(db)
     svc.delete(cupom_id)
-    return None
-
-# ---------------- LINKS ----------------
-
-@router.get("/links/{cupom_id}", response_model=List[CupomLinkOut])
-def listar_links(cupom_id: int, db: Session = Depends(get_db)):
-    svc = CuponsService(db)
-    links = svc.list_links(cupom_id)
-    return [map_link_out(l) for l in links]
-
-@router.post("/links/{cupom_id}", response_model=CupomLinkOut, status_code=status.HTTP_201_CREATED)
-def criar_link(cupom_id: int, payload: CupomLinkCreate, db: Session = Depends(get_db)):
-    svc = CuponsService(db)
-    link = svc.add_link(cupom_id, payload.titulo, payload.url)
-    return map_link_out(link)
-
-@router.put("/links/{link_id}", response_model=CupomLinkOut)
-def atualizar_link(link_id: int, payload: CupomLinkCreate, db: Session = Depends(get_db)):
-    svc = CuponsService(db)
-    link = svc.update_link(link_id, titulo=payload.titulo, url=payload.url)
-    return map_link_out(link)
-
-@router.delete("/links/{link_id}", status_code=status.HTTP_204_NO_CONTENT)
-def deletar_link(link_id: int, db: Session = Depends(get_db)):
-    svc = CuponsService(db)
-    svc.delete_link(link_id)
     return None

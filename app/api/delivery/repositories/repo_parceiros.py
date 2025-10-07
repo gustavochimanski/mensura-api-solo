@@ -33,8 +33,7 @@ class ParceirosRepository:
         parceiro = (
             self.db.query(ParceiroModel)
             .options(
-                joinedload(ParceiroModel.cupons).joinedload(CupomDescontoModel.links),
-                # se CupomDescontoModel tiver 'links'
+                joinedload(ParceiroModel.cupons),
                 joinedload(ParceiroModel.banners).joinedload(BannerParceiroModel.categoria)
             )
             .filter(ParceiroModel.id == parceiro_id)

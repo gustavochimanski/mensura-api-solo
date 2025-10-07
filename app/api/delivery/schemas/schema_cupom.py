@@ -15,6 +15,7 @@ class CupomCreate(BaseModel):
     monetizado: bool = False
     valor_por_lead: Optional[float] = None
     parceiro_id: Optional[int] = None
+    link_redirecionamento: Optional[constr(max_length=500)] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -30,23 +31,7 @@ class CupomUpdate(BaseModel):
     monetizado: Optional[bool] = None
     valor_por_lead: Optional[float] = None
     parceiro_id: Optional[int] = None
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-# ------------------- LINK -------------------
-class CupomLinkCreate(BaseModel):
-    titulo: constr(min_length=1, max_length=100)
-    url: constr(min_length=1, max_length=500)
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class CupomLinkOut(BaseModel):
-    id: int
-    cupom_id: int
-    titulo: str
-    url: str
+    link_redirecionamento: Optional[constr(max_length=500)] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -66,9 +51,7 @@ class CupomOut(BaseModel):
 
     monetizado: bool
     valor_por_lead: Optional[float]
-
-    # ✅ Lista de links do cupom
-    links: List[CupomLinkOut] = []
+    link_redirecionamento: Optional[str]
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -81,6 +64,6 @@ class CupomParceiroOut(BaseModel):
     ativo: bool
     monetizado: bool
     valor_por_lead: Optional[float]
-    links: List[CupomLinkOut] = []
+    link_redirecionamento: Optional[str]
 
     model_config = ConfigDict(from_attributes=True)

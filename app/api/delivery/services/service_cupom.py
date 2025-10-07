@@ -1,7 +1,7 @@
-from typing import Optional, List
+from typing import List
 from sqlalchemy.orm import Session, joinedload
 from fastapi import HTTPException, status
-from app.api.delivery.models.model_cupom_dv import CupomDescontoModel, CupomLinkModel
+from app.api.delivery.models.model_cupom_dv import CupomDescontoModel
 from app.api.delivery.models.model_parceiros_dv import ParceiroModel
 from app.api.delivery.repositories.repo_cupom import CupomRepository
 from app.api.delivery.schemas.schema_cupom import CupomCreate, CupomUpdate
@@ -13,7 +13,7 @@ class CuponsService:
 
     # ---------------- CUPOM ----------------
     def create(self, data: CupomCreate) -> CupomDescontoModel:
-        cupom_data = data.model_dump(exclude={"link_redirecionamento"})
+        cupom_data = data.model_dump()
 
         # Se monetizado=True, valida parceiro
         if cupom_data.get("monetizado"):
@@ -32,7 +32,7 @@ class CuponsService:
         if not cupom:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Cupom não encontrado")
 
-        payload = data.model_dump(exclude_none=True, exclude={"link_redirecionamento"})
+        payload = data.model_dump(exclude_none=True)
 
         # Só atualiza parceiro se monetizado=True
         if payload.get("monetizado") or (payload.get("parceiro_id") and cupom.monetizado):
@@ -52,11 +52,7 @@ class CuponsService:
 
     # ---------------- LIST COM LINKS ----------------
     def list(self) -> List[CupomDescontoModel]:
-        return (
-            self.db.query(CupomDescontoModel)
-            .options(joinedload(CupomDescontoModel.links))
-            .all()
-        )
+        return self.db.query(CupomDescontoModel).all()
 
     def list_by_parceiro(self, parceiro_id: int) -> List[CupomDescontoModel]:
         parceiro = self.db.get(ParceiroModel, parceiro_id)
@@ -65,7 +61,6 @@ class CuponsService:
 
         return (
             self.db.query(CupomDescontoModel)
-            .options(joinedload(CupomDescontoModel.links))
             .filter(CupomDescontoModel.parceiro_id == parceiro_id)
             .all()
         )
@@ -73,7 +68,6 @@ class CuponsService:
     def get(self, cupom_id: int) -> CupomDescontoModel:
         cupom = (
             self.db.query(CupomDescontoModel)
-            .options(joinedload(CupomDescontoModel.links))
             .filter(CupomDescontoModel.id == cupom_id)
             .first()
         )
@@ -87,22 +81,3 @@ class CuponsService:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Cupom não encontrado")
         self.repo.delete(cupom)
 
-    # ---------------- LINKS ----------------
-    def list_links(self, cupom_id: int) -> List[CupomLinkModel]:
-        return self.repo.list_links(cupom_id)
-
-    def add_link(self, cupom_id: int, titulo: str, url: str) -> CupomLinkModel:
-        cupom = self.get(cupom_id)
-        return self.repo.add_link(cupom, titulo, url)
-
-    def update_link(self, link_id: int, titulo: Optional[str] = None, url: Optional[str] = None) -> CupomLinkModel:
-        link = self.db.get(CupomLinkModel, link_id)
-        if not link:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Link não encontrado")
-        return self.repo.update_link(link, titulo, url)
-
-    def delete_link(self, link_id: int):
-        link = self.db.get(CupomLinkModel, link_id)
-        if not link:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Link não encontrado")
-        self.repo.delete_link(link)
