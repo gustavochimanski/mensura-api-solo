@@ -4,6 +4,7 @@ from fastapi import HTTPException, status
 from app.api.delivery.models.model_cupom_dv import CupomDescontoModel
 from app.api.delivery.models.model_parceiros_dv import ParceiroModel
 from app.api.delivery.repositories.repo_cupom import CupomRepository
+
 from app.api.delivery.schemas.schema_cupom import CupomCreate, CupomUpdate
 from app.api.mensura.models.empresa_model import EmpresaModel
 
@@ -100,7 +101,7 @@ class CuponsService:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Cupom não encontrado")
         self.repo.delete(cupom)
 
-    def _get_empresas(self, empresa_ids: list[int]):
+    def _get_empresas(self, empresa_ids: List[int]):
         empresas = (
             self.db.query(EmpresaModel)
             .filter(EmpresaModel.id.in_(empresa_ids))
