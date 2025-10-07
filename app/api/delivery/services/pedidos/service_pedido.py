@@ -944,7 +944,45 @@ class PedidoService:
             endereco = self.repo.get_endereco(payload.endereco_id)
             if not endereco:
                 raise HTTPException(status.HTTP_404_NOT_FOUND, "Endereço não encontrado")
+
+            if (
+                endereco.cliente_id is not None
+                and pedido.cliente_id is not None
+                and endereco.cliente_id != pedido.cliente_id
+            ):
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, "Endereço não pertence ao cliente do pedido")
+
             pedido.endereco_id = payload.endereco_id
+            pedido.endereco = endereco
+
+            endereco_latitude = float(endereco.latitude) if endereco.latitude else None
+            endereco_longitude = float(endereco.longitude) if endereco.longitude else None
+
+            if endereco_latitude and endereco_longitude:
+                from geoalchemy2 import WKTElement
+
+                pedido.endereco_geo = WKTElement(
+                    f"POINT({endereco_longitude} {endereco_latitude})",
+                    srid=4326,
+                )
+            else:
+                pedido.endereco_geo = None
+
+            pedido.endereco_snapshot = {
+                "id": endereco.id,
+                "logradouro": endereco.logradouro,
+                "numero": endereco.numero,
+                "complemento": endereco.complemento,
+                "bairro": endereco.bairro,
+                "cidade": endereco.cidade,
+                "estado": endereco.estado,
+                "cep": endereco.cep,
+                "latitude": endereco_latitude,
+                "longitude": endereco_longitude,
+                "is_principal": endereco.is_principal,
+                "cliente_id": endereco.cliente_id,
+                "snapshot_em": str(now_trimmed()),
+            }
 
         if payload.cupom_id is not None:
             pedido.cupom_id = payload.cupom_id
