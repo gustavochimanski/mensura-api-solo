@@ -1004,7 +1004,7 @@ class PedidoService:
                 raise HTTPException(status.HTTP_404_NOT_FOUND, f"Item {item.id} não encontrado")
             self.db.delete(it_db)
 
-        elif acao == "novo-item":
+        elif acao == "adicionar":
             if not item.produto_cod_barras:
                 raise HTTPException(status.HTTP_400_BAD_REQUEST, "Código de barras obrigatório para adicionar")
             if not item.quantidade or item.quantidade <= 0:
