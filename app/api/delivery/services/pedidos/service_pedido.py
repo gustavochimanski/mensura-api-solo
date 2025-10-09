@@ -44,9 +44,7 @@ from app.api.delivery.schemas.schema_shared_enums import (
     PedidoStatusEnum,
     TipoEntregaEnum,
 )
-from app.api.delivery.schemas.schema_transacao_pagamento import (
-    TransacaoResponse,
-)
+from app.api.delivery.schemas.schema_transacao_pagamento import TransacaoResponse
 from app.api.delivery.services.meio_pagamento_service import MeioPagamentoService
 from app.api.delivery.services.pagamento.service_pagamento import PagamentoService
 from app.api.delivery.services.service_pagamento_gateway import PaymentResult

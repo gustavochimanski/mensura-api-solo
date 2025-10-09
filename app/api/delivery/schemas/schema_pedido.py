@@ -15,7 +15,7 @@ class EnderecoPedidoDetalhe(BaseModel):
 
 
 from .schema_cupom import CupomOut
-from .schema_transacao_pagamento import TransacaoOut
+from .schema_transacao_pagamento import TransacaoResponse
 from .schema_pedido_status_historico import PedidoStatusHistoricoOut
 from app.api.mensura.schemas.schema_empresa import EmpresaResponse
 
@@ -112,7 +112,7 @@ class PedidoResponse(BaseModel):
     data_criacao: datetime
     data_atualizacao: datetime
     itens: List[ItemPedidoResponse]
-    transacao: Optional[TransacaoOut] = None
+    transacao: Optional[TransacaoResponse] = None
     model_config = ConfigDict(from_attributes=True)
 
 class PedidoResponseCompleto(BaseModel):
@@ -178,7 +178,7 @@ class PedidoResponseCompletoTotal(BaseModel):
     entregador: Optional[EntregadorOut] = None
     meio_pagamento: Optional[MeioPagamentoResponse] = None
     cupom: Optional[CupomOut] = None
-    transacao: Optional[TransacaoOut] = None
+    transacao: Optional[TransacaoResponse] = None
     historicos: List[PedidoStatusHistoricoOut] = []
     tipo_entrega: TipoEntregaEnum
     origem: OrigemPedidoEnum
