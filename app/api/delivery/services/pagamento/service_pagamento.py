@@ -67,14 +67,6 @@ class PagamentoService:
         customer: Dict[str, Any] | None = None,
         existing_payment_id: str | None = None,
     ) -> TransacaoResponse:
-        payload = TransacaoCreateRequest(
-            pedido_id=pedido_id,
-            gateway=gateway,
-            metodo=metodo,
-            valor=float(valor),
-            moeda=moeda,
-        )
-
         transacao = self.repo.criar(
             pedido_id=pedido_id,
             meio_pagamento_id=meio_pagamento_id,

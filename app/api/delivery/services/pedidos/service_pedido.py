@@ -49,7 +49,9 @@ from app.api.delivery.schemas.schema_transacao_pagamento import (
 )
 from app.api.delivery.services.meio_pagamento_service import MeioPagamentoService
 from app.api.delivery.services.pagamento.service_pagamento import PagamentoService
+from app.api.delivery.services.service_pagamento_gateway import PaymentResult
 from app.api.mensura.repositories.empresa_repo import EmpresaRepository
+from app.api.mensura.schemas.schema_empresa import EmpresaResponse
 from app.utils.logger import logger
 from app.utils.database_utils import now_trimmed
 
@@ -808,7 +810,7 @@ class PedidoService:
             entregador=EntregadorOut.model_validate(pedido.entregador) if pedido.entregador else None,
             meio_pagamento=MeioPagamentoResponse.model_validate(pedido.meio_pagamento) if pedido.meio_pagamento else None,
             cupom=CupomOut.model_validate(pedido.cupom) if pedido.cupom else None,
-            transacao=TransacaoOut.model_validate(pedido.transacao) if pedido.transacao else None,
+            transacao=TransacaoResponse.model_validate(pedido.transacao) if pedido.transacao else None,
             historicos=[PedidoStatusHistoricoOut.model_validate(h) for h in pedido.historicos] if pedido.historicos else [],
             tipo_entrega=pedido.tipo_entrega if isinstance(pedido.tipo_entrega, TipoEntregaEnum)
                         else TipoEntregaEnum(pedido.tipo_entrega),
