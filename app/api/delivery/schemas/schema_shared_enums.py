@@ -9,6 +9,7 @@ class PedidoStatusEnum(str, Enum):
     C = "C"  # CANCELADO
     D = "D"  # EDITADO
     X = "X"  # EM EDITACAO
+    A = "A"  # AGUARDANDO_PAGAMENTO
 
 class TipoEntregaEnum(str, Enum):
     DELIVERY = "DELIVERY"
@@ -24,6 +25,7 @@ class PagamentoGatewayEnum(str, Enum):
     PAGSEGURO = "PAGSEGURO"
     STRIPE = "STRIPE"
     PIX_INTERNO = "PIX_INTERNO"
+    MOCK = "MOCK"
     OUTRO = "OUTRO"
 
 class PagamentoMetodoEnum(str, Enum):

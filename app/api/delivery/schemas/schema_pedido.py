@@ -112,6 +112,7 @@ class PedidoResponse(BaseModel):
     data_criacao: datetime
     data_atualizacao: datetime
     itens: List[ItemPedidoResponse]
+    transacao: Optional[TransacaoOut] = None
     model_config = ConfigDict(from_attributes=True)
 
 class PedidoResponseCompleto(BaseModel):

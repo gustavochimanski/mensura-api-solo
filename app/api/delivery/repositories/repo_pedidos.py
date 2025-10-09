@@ -55,7 +55,7 @@ class PedidoRepository:
                 joinedload(PedidoDeliveryModel.cliente).joinedload(ClienteDeliveryModel.enderecos),
                 joinedload(PedidoDeliveryModel.endereco),
                 joinedload(PedidoDeliveryModel.meio_pagamento),
-                # joinedload(PedidoDeliveryModel.transacao),
+                joinedload(PedidoDeliveryModel.transacao),
             )
             .filter(PedidoDeliveryModel.id == pedido_id)
             .first()
@@ -164,18 +164,28 @@ class PedidoRepository:
         self,
         *,
         pedido_id: int,
+        meio_pagamento_id: int,
         gateway: str,
         metodo: str,
         valor: Decimal,
         moeda: str = "BRL",
+        payload_solicitacao: dict | None = None,
+        provider_transaction_id: str | None = None,
+        qr_code: str | None = None,
+        qr_code_base64: str | None = None,
     ) -> TransacaoPagamentoModel:
         tx = TransacaoPagamentoModel(
             pedido_id=pedido_id,
+            meio_pagamento_id=meio_pagamento_id,
             gateway=gateway,
             metodo=metodo,
             valor=valor,
             moeda=moeda,
             status="PENDENTE",
+            payload_solicitacao=payload_solicitacao,
+            provider_transaction_id=provider_transaction_id,
+            qr_code=qr_code,
+            qr_code_base64=qr_code_base64,
         )
         self.db.add(tx)
         self.db.flush()
@@ -191,6 +201,7 @@ class PedidoRepository:
         qr_code: str | None = None,
         qr_code_base64: str | None = None,
         timestamp_field: str | None = None,
+        payload_solicitacao: dict | None = None,
     ):
         tx.status = status
         if provider_transaction_id is not None:
@@ -201,6 +212,8 @@ class PedidoRepository:
             tx.qr_code = qr_code
         if qr_code_base64 is not None:
             tx.qr_code_base64 = qr_code_base64
+        if payload_solicitacao is not None:
+            tx.payload_solicitacao = payload_solicitacao
         if timestamp_field:
             setattr(tx, timestamp_field, func.now())
 

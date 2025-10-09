@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from math import radians, cos, sin, asin, sqrt
 
 from fastapi import HTTPException, status
@@ -13,6 +13,7 @@ from sqlalchemy import update
 from app.api.delivery.models.model_pedido_dv import PedidoDeliveryModel
 from app.api.delivery.models.model_pedido_item_dv import PedidoItemModel
 from app.api.delivery.repositories.repo_pedidos import PedidoRepository
+from app.api.delivery.services.pagamento.service_pagamento import PagamentoService
 from app.api.delivery.repositories.repo_entregadores import EntregadorRepository
 from app.api.delivery.services.meio_pagamento_service import MeioPagamentoService
 from app.api.mensura.repositories.empresa_repo import EmpresaRepository
@@ -28,7 +29,7 @@ from app.api.delivery.schemas.schema_cupom import CupomOut
 from app.api.delivery.schemas.schema_transacao_pagamento import TransacaoOut
 from app.api.delivery.schemas.schema_pedido_status_historico import PedidoStatusHistoricoOut
 from app.api.mensura.schemas.schema_empresa import EmpresaResponse
-from app.api.delivery.schemas.schema_meio_pagamento import MeioPagamentoResponse
+from app.api.delivery.schemas.schema_meio_pagamento import MeioPagamentoResponse, MeioPagamentoTipoEnum
 from app.api.delivery.schemas.schema_shared_enums import (
     PedidoStatusEnum, TipoEntregaEnum, OrigemPedidoEnum,
     PagamentoMetodoEnum, PagamentoGatewayEnum, PagamentoStatusEnum
@@ -51,7 +52,7 @@ class PedidoService:
         self.repo = PedidoRepository(db)
         self.repo_empresa = EmpresaRepository(db)
         self.repo_entregador = EntregadorRepository(db)
-        self.gateway = PaymentGatewayClient()  # MOCK
+        self.gateway = PaymentGatewayClient()
         self._cache_regioes = {}  # Cache simples para regiões
 
     # ---------------- Helpers ----------------
@@ -95,6 +96,7 @@ class PedidoService:
                 )
                 for it in pedido.itens
             ],
+            transacao=TransacaoOut.model_validate(pedido.transacao) if pedido.transacao else None,
         )
 
     def _calcular_taxas(
@@ -444,8 +446,11 @@ class PedidoService:
             }
 
         try:
-            # Todos os pedidos sempre começam com status "I" (Pendente de Impressão)
-            status_inicial = PedidoStatusEnum.I.value
+            status_inicial = (
+                PedidoStatusEnum.P.value
+                if self._is_pix_online_meio_pagamento(meio_pagamento)
+                else PedidoStatusEnum.I.value
+            )
 
             # CRIA PEDIDO — garante cliente_id persistido de cara
             pedido = self.repo.criar_pedido(
@@ -514,20 +519,13 @@ class PedidoService:
             self.repo.commit()
             logger.info(f"[finalizar_pedido] após commit cliente_id={pedido.cliente_id}")
 
-            # Se for PIX_ONLINE, processa o pagamento automaticamente
-            if (meio_pagamento and 
-                hasattr(meio_pagamento, 'metodo') and 
-                meio_pagamento.metodo == PagamentoMetodoEnum.PIX_ONLINE):
+            # Se for PIX_ONLINE, cria/atualiza transação no gateway sem alterar status do pedido
+            if self._is_pix_online_meio_pagamento(meio_pagamento):
                 try:
-                    await self.confirmar_pagamento(
-                        pedido_id=pedido.id,
-                        metodo=PagamentoMetodoEnum.PIX_ONLINE
-                    )
-                    # Recarrega o pedido após confirmação de pagamento
+                    await self._processar_pagamento_pix_online(pedido)
                     pedido = self.repo.get_pedido(pedido.id)
                 except Exception as e:
-                    logger.error(f"Erro ao processar pagamento PIX_ONLINE: {e}")
-                    # Continua mesmo com erro no pagamento
+                    logger.error(f"Erro ao iniciar transação PIX_ONLINE: {e}")
 
             # Recarrega fresco para resposta (com cliente/endereço/meio_pagamento)
             pedido = self.repo.get_pedido(pedido.id)
@@ -569,6 +567,7 @@ class PedidoService:
         try:
             tx = self.repo.criar_transacao_pagamento(
                 pedido_id=pedido.id,
+                meio_pagamento_id=pedido.meio_pagamento_id,
                 gateway=gateway.value,
                 metodo=metodo.value,
                 valor=_dec(pedido.valor_total),

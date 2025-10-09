@@ -33,3 +33,8 @@ CORS_ALLOW_ALL = os.getenv("CORS_ALLOW_ALL", "false").lower() in ("1", "true", "
 # FastAPI / App
 BASE_URL = os.getenv("BASE_URL", "")
 ENABLE_DOCS = os.getenv("ENABLE_DOCS", "true").lower() in ("1", "true", "yes")
+
+# Mercado Pago
+MERCADOPAGO_ACCESS_TOKEN = os.getenv("MERCADOPAGO_ACCESS_TOKEN")
+MERCADOPAGO_BASE_URL = os.getenv("MERCADOPAGO_BASE_URL", "https://api.mercadopago.com")
+MERCADOPAGO_TIMEOUT_SECONDS = int(os.getenv("MERCADOPAGO_TIMEOUT_SECONDS", 20))
