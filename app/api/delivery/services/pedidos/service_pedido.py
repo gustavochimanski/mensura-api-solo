@@ -623,8 +623,12 @@ class PedidoService:
                     qr_code_base64=result.qr_code_base64,
                     timestamp_field="pago_em",
                 )
-                atualizar_para = PedidoStatusEnum.I.value if metodo == PagamentoMetodoEnum.PIX_ONLINE else PedidoStatusEnum.A.value
-                self.repo.atualizar_status_pedido(pedido, atualizar_para, motivo="Pagamento confirmado")
+                novo_status = (
+                    PedidoStatusEnum.I.value
+                    if metodo == PagamentoMetodoEnum.PIX_ONLINE
+                    else PedidoStatusEnum.A.value
+                )
+                self.repo.atualizar_status_pedido(pedido, novo_status, motivo="Pagamento confirmado")
             else:
                 self.repo.atualizar_transacao_status(
                     tx,
