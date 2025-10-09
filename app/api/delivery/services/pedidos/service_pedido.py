@@ -26,7 +26,7 @@ from app.api.delivery.schemas.schema_cliente import ClienteOut
 from app.api.delivery.schemas.schema_endereco import EnderecoOut
 from app.api.delivery.schemas.schema_entregador import EntregadorOut
 from app.api.delivery.schemas.schema_cupom import CupomOut
-from app.api.delivery.schemas.schema_transacao_pagamento import TransacaoOut
+from app.api.delivery.schemas.schema_transacao_pagamento import TransacaoResponse
 from app.api.delivery.schemas.schema_pedido_status_historico import PedidoStatusHistoricoOut
 from app.api.mensura.schemas.schema_empresa import EmpresaResponse
 from app.api.delivery.schemas.schema_meio_pagamento import MeioPagamentoResponse, MeioPagamentoTipoEnum
@@ -52,7 +52,7 @@ class PedidoService:
         self.repo = PedidoRepository(db)
         self.repo_empresa = EmpresaRepository(db)
         self.repo_entregador = EntregadorRepository(db)
-        self.gateway = PaymentGatewayClient()
+        self.pagamentos = PagamentoService(db)
         self._cache_regioes = {}  # Cache simples para regiões
 
     # ---------------- Helpers ----------------
@@ -96,7 +96,8 @@ class PedidoService:
                 )
                 for it in pedido.itens
             ],
-            transacao=TransacaoOut.model_validate(pedido.transacao) if pedido.transacao else None,
+            transacao=TransacaoResponse.model_validate(pedido.transacao) if pedido.transacao else None,
+            transacao=TransacaoResponse.model_validate(pedido.transacao) if pedido.transacao else None,
         )
 
     def _calcular_taxas(
