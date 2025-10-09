@@ -26,6 +26,7 @@ from app.api.delivery.schemas.schema_pedido import (
     ItemPedidoEditar,
     ItemPedidoRequest,
     ItemPedidoResponse,
+    PedidoPagamentoResumo,
     PedidoKanbanResponse,
     PedidoResponse,
     PedidoResponseCompleto,
@@ -46,6 +47,7 @@ from app.api.delivery.schemas.schema_shared_enums import (
 )
 from app.api.delivery.schemas.schema_transacao_pagamento import (
     TransacaoResponse,
+    TransacaoStatusUpdateRequest,
 )
 from app.api.delivery.services.meio_pagamento_service import MeioPagamentoService
 from app.api.delivery.services.pagamento.service_pagamento import PagamentoService
@@ -72,7 +74,118 @@ class PedidoService:
         self._cache_regioes = {}  # Cache simples para regiões
 
     # ---------------- Helpers ----------------
+    @staticmethod
+    def _safe_enum(enum_cls, value):
+        if value is None:
+            return None
+        try:
+            return enum_cls(value)
+        except ValueError:
+            return None
+
+    def _build_pagamento_resumo(self, pedido: PedidoDeliveryModel) -> PedidoPagamentoResumo | None:
+        transacao = getattr(pedido, "transacao", None)
+
+        meio_pagamento_rel = None
+        meio_pagamento_id = None
+
+        if transacao and getattr(transacao, "meio_pagamento", None):
+            meio_pagamento_rel = transacao.meio_pagamento
+            meio_pagamento_id = getattr(transacao, "meio_pagamento_id", None)
+        else:
+            meio_pagamento_rel = getattr(pedido, "meio_pagamento", None)
+            meio_pagamento_id = getattr(pedido, "meio_pagamento_id", None)
+
+        if not transacao and meio_pagamento_rel is None and meio_pagamento_id is None:
+            return None
+
+        status = None
+        metodo = None
+        gateway = None
+        provider_transaction_id = None
+        valor = float(pedido.valor_total or 0)
+        atualizado_em = getattr(pedido, "data_atualizacao", None)
+
+        if transacao:
+            status = self._safe_enum(PagamentoStatusEnum, getattr(transacao, "status", None))
+            metodo = self._safe_enum(PagamentoMetodoEnum, getattr(transacao, "metodo", None))
+            gateway = self._safe_enum(PagamentoGatewayEnum, getattr(transacao, "gateway", None))
+            provider_transaction_id = getattr(transacao, "provider_transaction_id", None)
+
+            if getattr(transacao, "valor", None) is not None:
+                valor = float(transacao.valor)
+
+            atualizado_em = (
+                getattr(transacao, "pago_em", None)
+                or getattr(transacao, "autorizado_em", None)
+                or getattr(transacao, "cancelado_em", None)
+                or getattr(transacao, "estornado_em", None)
+                or getattr(transacao, "updated_at", None)
+                or getattr(transacao, "created_at", None)
+            )
+
+        esta_pago = status in {PagamentoStatusEnum.PAGO, PagamentoStatusEnum.AUTORIZADO} if status else False
+
+        meio_pagamento_nome = None
+        if meio_pagamento_rel is not None:
+            display_fn = getattr(meio_pagamento_rel, "display", None)
+            if callable(display_fn):
+                try:
+                    meio_pagamento_nome = display_fn()
+                except Exception:
+                    meio_pagamento_nome = getattr(meio_pagamento_rel, "descricao", None)
+            else:
+                meio_pagamento_nome = getattr(meio_pagamento_rel, "descricao", None)
+
+        return PedidoPagamentoResumo(
+            status=status,
+            esta_pago=esta_pago,
+            valor=valor,
+            atualizado_em=atualizado_em,
+            meio_pagamento_id=meio_pagamento_id,
+            meio_pagamento_nome=meio_pagamento_nome,
+            metodo=metodo,
+            gateway=gateway,
+            provider_transaction_id=provider_transaction_id,
+        )
+
+    def _atualizar_status_pedido_por_pagamento(
+        self,
+        pedido: PedidoDeliveryModel,
+        status_pagamento: PagamentoStatusEnum,
+    ) -> bool:
+        if not status_pagamento:
+            return False
+
+        status_atual = PedidoStatusEnum(pedido.status)
+        novo_status = None
+        motivo = None
+
+        if status_pagamento == PagamentoStatusEnum.PAGO:
+            if status_atual in {PedidoStatusEnum.A, PedidoStatusEnum.P, PedidoStatusEnum.I}:
+                novo_status = PedidoStatusEnum.I.value
+                motivo = "Pagamento confirmado"
+        elif status_pagamento == PagamentoStatusEnum.AUTORIZADO:
+            if status_atual == PedidoStatusEnum.A:
+                novo_status = PedidoStatusEnum.I.value
+                motivo = "Pagamento autorizado"
+        elif status_pagamento in {PagamentoStatusEnum.CANCELADO, PagamentoStatusEnum.ESTORNADO}:
+            if status_atual not in {PedidoStatusEnum.C, PedidoStatusEnum.E}:
+                novo_status = PedidoStatusEnum.C.value
+                motivo = "Pagamento cancelado"
+        elif status_pagamento == PagamentoStatusEnum.RECUSADO:
+            if status_atual not in {PedidoStatusEnum.C, PedidoStatusEnum.E}:
+                novo_status = PedidoStatusEnum.A.value
+                motivo = "Pagamento recusado"
+
+        if novo_status and pedido.status != novo_status:
+            self.repo.atualizar_status_pedido(pedido, novo_status, motivo=motivo)
+            return True
+
+        return False
+
     def _pedido_to_response(self, pedido: PedidoDeliveryModel) -> PedidoResponse:
+        pagamento = self._build_pagamento_resumo(pedido)
         return PedidoResponse(
             id=pedido.id,
             status=PedidoStatusEnum(pedido.status),
@@ -113,6 +226,7 @@ class PedidoService:
                 for it in pedido.itens
             ],
             transacao=TransacaoResponse.model_validate(pedido.transacao) if pedido.transacao else None,
+            pagamento=pagamento,
         )
 
     def _calcular_taxas(
@@ -598,7 +712,7 @@ class PedidoService:
 
             # Se deve usar gateway, chama o gateway de pagamento
             if self._deve_usar_gateway(metodo):
-                result = await self.gateway.charge(
+                result = await self.pagamentos.gateway.charge(
                     order_id=pedido.id,
                     amount=_dec(pedido.valor_total),
                     metodo=metodo,
@@ -625,12 +739,7 @@ class PedidoService:
                     qr_code_base64=result.qr_code_base64,
                     timestamp_field="pago_em",
                 )
-                novo_status = (
-                    PedidoStatusEnum.I.value
-                    if metodo == PagamentoMetodoEnum.PIX_ONLINE
-                    else PedidoStatusEnum.A.value
-                )
-                self.repo.atualizar_status_pedido(pedido, novo_status, motivo="Pagamento confirmado")
+                self._atualizar_status_pedido_por_pagamento(pedido, result.status)
             else:
                 self.repo.atualizar_transacao_status(
                     tx,
@@ -638,6 +747,7 @@ class PedidoService:
                     provider_transaction_id=result.provider_transaction_id,
                     payload_retorno=result.payload,
                 )
+                self._atualizar_status_pedido_por_pagamento(pedido, PagamentoStatusEnum.RECUSADO)
 
             self.repo.commit()
             pedido = self.repo.get_pedido(pedido.id)
@@ -646,6 +756,30 @@ class PedidoService:
         except Exception as e:
             self.repo.rollback()
             raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Erro ao confirmar pagamento: {e}")
+
+    async def atualizar_status_pagamento(
+        self,
+        *,
+        pedido_id: int,
+        payload: TransacaoStatusUpdateRequest,
+    ) -> PedidoResponse:
+        pedido = self.repo.get_pedido(pedido_id)
+        if not pedido:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
+
+        transacao = await self.pagamentos.atualizar_status(
+            pedido_id=pedido_id,
+            payload=payload,
+        )
+
+        pedido = self.repo.get_pedido(pedido_id)
+        mudou_status = self._atualizar_status_pedido_por_pagamento(pedido, transacao.status)
+
+        if mudou_status:
+            self.repo.commit()
+            pedido = self.repo.get_pedido(pedido_id)
+
+        return self._pedido_to_response(pedido)
 
     # --------------- Consultas ---------------
     def listar_pedidos(self, cliente_id: int, skip: int = 0, limit: int = 50) -> list[PedidoResponse]:
@@ -687,6 +821,7 @@ class PedidoService:
         return self._pedido_to_response(pedido)
 
     def _pedido_to_response_completo(self, pedido: PedidoDeliveryModel) -> PedidoResponseCompleto:
+        pagamento = self._build_pagamento_resumo(pedido)
         return PedidoResponseCompleto(
             id=pedido.id,
             status=PedidoStatusEnum(pedido.status),
@@ -725,6 +860,8 @@ class PedidoService:
                 )
                 for it in pedido.itens
             ]
+            ,
+            pagamento=pagamento,
         )
 
     def get_pedido_by_id_completo(self, pedido_id: int) -> PedidoResponseCompleto:
@@ -734,6 +871,7 @@ class PedidoService:
         return self._pedido_to_response_completo(pedido)
 
     def _pedido_to_response_completo_com_endereco(self, pedido: PedidoDeliveryModel) -> PedidoResponseCompletoComEndereco:
+        pagamento = self._build_pagamento_resumo(pedido)
         return PedidoResponseCompletoComEndereco(
             id=pedido.id,
             status=PedidoStatusEnum(pedido.status),
@@ -772,6 +910,8 @@ class PedidoService:
                 )
                 for it in pedido.itens
             ]
+            ,
+            pagamento=pagamento,
         )
 
     def _build_endereco_selecionado(self, pedido: PedidoDeliveryModel) -> EnderecoOut | dict | None:
@@ -808,6 +948,7 @@ class PedidoService:
         return self._pedido_to_response_completo_com_endereco(pedido)
 
     def _pedido_to_response_completo_total(self, pedido: PedidoDeliveryModel) -> PedidoResponseCompletoTotal:
+        pagamento = self._build_pagamento_resumo(pedido)
         return PedidoResponseCompletoTotal(
             id=pedido.id,
             status=PedidoStatusEnum(pedido.status),
@@ -851,6 +992,8 @@ class PedidoService:
                 )
                 for it in pedido.itens
             ]
+            ,
+            pagamento=pagamento,
         )
 
     def get_pedido_by_id_completo_total(self, pedido_id: int) -> PedidoResponseCompletoTotal:
@@ -866,6 +1009,7 @@ class PedidoService:
         if pedido.meio_pagamento:
             meio_pagamento_nome = pedido.meio_pagamento.display()
         
+        pagamento = self._build_pagamento_resumo(pedido)
         return PedidoResponseSimplificado(
             id=pedido.id,
             status=PedidoStatusEnum(pedido.status),
@@ -894,6 +1038,8 @@ class PedidoService:
                 ) for it in pedido.itens
             ],
             meio_pagamento_nome=meio_pagamento_nome
+            ,
+            pagamento=pagamento,
         )
 
     # ---------------- Admin / Kanban ----------------
@@ -955,6 +1101,7 @@ class PedidoService:
                     meio_pagamento_descricao=p.meio_pagamento.display() if p.meio_pagamento else None,
                     observacao_geral=p.observacao_geral,
                     meio_pagamento_id=p.meio_pagamento.id if p.meio_pagamento else None,
+                    pagamento=self._build_pagamento_resumo(p),
                 )
             )
 

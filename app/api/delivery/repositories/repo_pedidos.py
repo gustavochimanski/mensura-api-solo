@@ -55,7 +55,7 @@ class PedidoRepository:
                 joinedload(PedidoDeliveryModel.cliente).joinedload(ClienteDeliveryModel.enderecos),
                 joinedload(PedidoDeliveryModel.endereco),
                 joinedload(PedidoDeliveryModel.meio_pagamento),
-                joinedload(PedidoDeliveryModel.transacao),
+                joinedload(PedidoDeliveryModel.transacao).joinedload(TransacaoPagamentoModel.meio_pagamento),
             )
             .filter(PedidoDeliveryModel.id == pedido_id)
             .first()
@@ -82,6 +82,7 @@ class PedidoRepository:
             joinedload(PedidoDeliveryModel.cliente).joinedload(ClienteDeliveryModel.enderecos),
             joinedload(PedidoDeliveryModel.endereco),
             joinedload(PedidoDeliveryModel.meio_pagamento),
+            joinedload(PedidoDeliveryModel.transacao).joinedload(TransacaoPagamentoModel.meio_pagamento),
         )
 
         query = query.order_by(PedidoDeliveryModel.data_criacao.desc())
@@ -97,6 +98,7 @@ class PedidoRepository:
             joinedload(PedidoDeliveryModel.cliente).joinedload(ClienteDeliveryModel.enderecos),
             joinedload(PedidoDeliveryModel.endereco),
             joinedload(PedidoDeliveryModel.meio_pagamento),
+            joinedload(PedidoDeliveryModel.transacao).joinedload(TransacaoPagamentoModel.meio_pagamento),
         ).order_by(PedidoDeliveryModel.data_criacao.desc())
 
         return query_sem_data.limit(limit).all()

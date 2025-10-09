@@ -3,7 +3,14 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, condecimal, Field
 
 from .schema_meio_pagamento import MeioPagamentoResponse
-from .schema_shared_enums import PedidoStatusEnum, TipoEntregaEnum, OrigemPedidoEnum
+from .schema_shared_enums import (
+    PedidoStatusEnum,
+    TipoEntregaEnum,
+    OrigemPedidoEnum,
+    PagamentoGatewayEnum,
+    PagamentoMetodoEnum,
+    PagamentoStatusEnum,
+)
 from .schema_cliente import ClienteOut
 from .schema_endereco import EnderecoOut
 from .schema_entregador import EntregadorOut
@@ -18,6 +25,20 @@ from .schema_cupom import CupomOut
 from .schema_transacao_pagamento import TransacaoResponse
 from .schema_pedido_status_historico import PedidoStatusHistoricoOut
 from app.api.mensura.schemas.schema_empresa import EmpresaResponse
+
+
+class PedidoPagamentoResumo(BaseModel):
+    status: PagamentoStatusEnum | None = None
+    esta_pago: bool = False
+    valor: float | None = None
+    atualizado_em: datetime | None = None
+    meio_pagamento_id: int | None = None
+    meio_pagamento_nome: str | None = None
+    metodo: PagamentoMetodoEnum | None = None
+    gateway: PagamentoGatewayEnum | None = None
+    provider_transaction_id: str | None = None
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ======================================================================
@@ -35,6 +56,7 @@ class PedidoKanbanResponse(BaseModel):
     endereco: str | None = None
     meio_pagamento_id: Optional[int] = None
     meio_pagamento_descricao: str | None = None  # <- novo campo
+    pagamento: PedidoPagamentoResumo | None = None
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -113,6 +135,7 @@ class PedidoResponse(BaseModel):
     data_atualizacao: datetime
     itens: List[ItemPedidoResponse]
     transacao: Optional[TransacaoResponse] = None
+    pagamento: PedidoPagamentoResumo | None = None
     model_config = ConfigDict(from_attributes=True)
 
 class PedidoResponseCompleto(BaseModel):
@@ -140,6 +163,7 @@ class PedidoResponseCompleto(BaseModel):
     data_criacao: datetime
     data_atualizacao: datetime
     itens: List[ItemPedidoResponse]
+    pagamento: PedidoPagamentoResumo | None = None
     model_config = ConfigDict(from_attributes=True)
 
 class PedidoResponseCompletoComEndereco(BaseModel):
@@ -167,6 +191,7 @@ class PedidoResponseCompletoComEndereco(BaseModel):
     data_criacao: datetime
     data_atualizacao: datetime
     itens: List[ItemPedidoResponse]
+    pagamento: PedidoPagamentoResumo | None = None
     model_config = ConfigDict(from_attributes=True)
 
 class PedidoResponseCompletoTotal(BaseModel):
@@ -179,7 +204,7 @@ class PedidoResponseCompletoTotal(BaseModel):
     meio_pagamento: Optional[MeioPagamentoResponse] = None
     cupom: Optional[CupomOut] = None
     transacao: Optional[TransacaoResponse] = None
-    historicos: List[PedidoStatusHistoricoOut] = []
+    historicos: List[PedidoStatusHistoricoOut] = Field(default_factory=list)
     tipo_entrega: TipoEntregaEnum
     origem: OrigemPedidoEnum
     subtotal: float
@@ -196,6 +221,7 @@ class PedidoResponseCompletoTotal(BaseModel):
     data_criacao: datetime
     data_atualizacao: datetime
     itens: List[ItemPedidoResponse]
+    pagamento: PedidoPagamentoResumo | None = None
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -218,4 +244,5 @@ class PedidoResponseSimplificado(BaseModel):
     data_atualizacao: datetime
     itens: List[ItemPedidoResponse]
     meio_pagamento_nome: Optional[str] = None
+    pagamento: PedidoPagamentoResumo | None = None
     model_config = ConfigDict(from_attributes=True)

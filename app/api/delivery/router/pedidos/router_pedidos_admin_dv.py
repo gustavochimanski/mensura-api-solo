@@ -11,6 +11,7 @@ from app.api.delivery.schemas.schema_pedido import (
     ItemPedidoEditar,
     PedidoKanbanResponse,
 )
+from app.api.delivery.schemas.schema_transacao_pagamento import TransacaoStatusUpdateRequest
 from app.api.delivery.services.pedidos.service_pedido import PedidoService
 from app.core.admin_dependencies import get_current_user
 from app.database.db_connection import get_db
@@ -256,3 +257,24 @@ def desvincular_entregador(
         )
     
     return svc.desvincular_entregador(pedido_id)
+
+
+# ======================================================================
+# =============== ATUALIZA STATUS PAGAMENTO VIA WEBHOOK ================
+@router.post(
+    "/{pedido_id}/pagamento/status",
+    response_model=PedidoResponse,
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(get_current_user)],
+)
+async def atualizar_status_pagamento(
+    pedido_id: int = Path(..., description="ID do pedido", gt=0),
+    payload: TransacaoStatusUpdateRequest = Body(...),
+    db: Session = Depends(get_db),
+):
+    """Atualiza o status do pagamento a partir de um evento externo (webhook/admin)."""
+    logger.info(
+        f"[Pedidos] Atualizar status pagamento - pedido_id={pedido_id} status={payload.status}"
+    )
+    svc = PedidoService(db)
+    return await svc.atualizar_status_pagamento(pedido_id=pedido_id, payload=payload)
