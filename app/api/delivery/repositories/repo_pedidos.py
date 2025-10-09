@@ -81,9 +81,8 @@ class PedidoRepository:
         )
 
         if incluir_status:
-            query = query.filter(PedidoDeliveryModel.status.in_(incluir_status))
-        else:
-            query = query.filter(PedidoDeliveryModel.status != "I")  # Exclui pedidos com status PENDENTE_IMPRESSAO
+            if "ALL" not in incluir_status:
+                query = query.filter(PedidoDeliveryModel.status.in_(incluir_status))
 
         query = query.order_by(PedidoDeliveryModel.data_criacao.desc())
 
