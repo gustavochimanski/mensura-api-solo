@@ -897,9 +897,8 @@ class PedidoService:
         )
 
     # ---------------- Admin / Kanban ----------------
-    def list_all_kanban(self, limit: int = 500, date_filter: date | None = None, empresa_id: int = 1, incluir_status: list[PedidoStatusEnum] | None = None):
-        status_list = [s.value for s in incluir_status] if incluir_status else None
-        pedidos = self.repo.list_all_kanban(limit=limit, date_filter=date_filter, empresa_id=empresa_id, incluir_status=status_list)
+    def list_all_kanban(self, limit: int = 500, date_filter: date | None = None, empresa_id: int = 1):
+        pedidos = self.repo.list_all_kanban(limit=limit, date_filter=date_filter, empresa_id=empresa_id)
         resultados = []
 
         for p in pedidos:

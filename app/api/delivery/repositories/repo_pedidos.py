@@ -69,7 +69,7 @@ class PedidoRepository:
             .all()
         )
 
-    def list_all_kanban(self, limit: int = 500, date_filter: date | None = None, empresa_id: int = 1, incluir_status: list[str] | None = None):
+    def list_all_kanban(self, limit: int = 500, date_filter: date | None = None, empresa_id: int = 1):
         query = (
             self.db.query(PedidoDeliveryModel)
             .options(
@@ -79,10 +79,6 @@ class PedidoRepository:
             )
             .filter(PedidoDeliveryModel.empresa_id == empresa_id)
         )
-
-        if incluir_status:
-            if "ALL" not in incluir_status:
-                query = query.filter(PedidoDeliveryModel.status.in_(incluir_status))
 
         query = query.order_by(PedidoDeliveryModel.data_criacao.desc())
 

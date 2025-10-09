@@ -32,7 +32,6 @@ def listar_pedidos_admin_kanban(
     date_filter: date | None = Query(None, description="Filtrar pedidos por data (YYYY-MM-DD)"),
     empresa_id: int = Query(..., description="ID da empresa para filtrar pedidos", gt=0),
     limit: int = Query(500, ge=1, le=1000),
-    status: list[str] | None = Query(None, description="Lista de status para filtrar"),
 ):
     """
     Lista pedidos do sistema para visualização no Kanban (admin).
@@ -47,7 +46,6 @@ def listar_pedidos_admin_kanban(
         date_filter=date_filter,
         empresa_id=empresa_id,
         limit=limit,
-        incluir_status=[PedidoStatusEnum(s) for s in status] if status else None,
     )
     return pedidos
 
