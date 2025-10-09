@@ -8,6 +8,10 @@ from app.api.delivery.schemas.schema_pedido import FinalizarPedidoRequest, Pedid
 from app.api.delivery.schemas.schema_shared_enums import PagamentoMetodoEnum, PagamentoGatewayEnum
 from app.api.delivery.schemas.schema_transacao_pagamento import ConsultarTransacaoResponse, TransacaoResponse
 from app.api.delivery.services.pedidos.service_pedido import PedidoService
+from app.api.delivery.services.pagamento.service_pagamento import PagamentoService
+from app.core.client_dependecies import get_cliente_by_super_token
+from app.database.db_connection import get_db
+from app.utils.logger import logger
 
 router = APIRouter(prefix="/api/delivery/cliente/pedidos", tags=["Pedidos - Cliente - Delivery"])
 
