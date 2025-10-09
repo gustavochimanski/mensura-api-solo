@@ -537,7 +537,14 @@ class PedidoService:
             # Se for PIX_ONLINE, cria/atualiza transação no gateway sem alterar status do pedido
             if self._is_pix_online_meio_pagamento(meio_pagamento):
                 try:
-                    await self._processar_pagamento_pix_online(pedido)
+                    await self.pagamentos.iniciar_transacao(
+                        pedido_id=pedido.id,
+                        meio_pagamento_id=pedido.meio_pagamento_id,
+                        valor=_dec(pedido.valor_total),
+                        metodo=PagamentoMetodoEnum.PIX_ONLINE,
+                        gateway=PagamentoGatewayEnum.MERCADOPAGO,
+                        metadata={"pedido_id": pedido.id, "empresa_id": pedido.empresa_id},
+                    )
                     pedido = self.repo.get_pedido(pedido.id)
                 except Exception as e:
                     logger.error(f"Erro ao iniciar transação PIX_ONLINE: {e}")
