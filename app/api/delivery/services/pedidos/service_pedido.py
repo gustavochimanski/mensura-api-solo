@@ -47,7 +47,6 @@ from app.api.delivery.schemas.schema_shared_enums import (
 from app.api.delivery.schemas.schema_transacao_pagamento import TransacaoResponse
 from app.api.delivery.services.meio_pagamento_service import MeioPagamentoService
 from app.api.delivery.services.pagamento.service_pagamento import PagamentoService
-from app.api.delivery.services.service_pagamento_gateway import PaymentResult
 from app.api.mensura.repositories.empresa_repo import EmpresaRepository
 from app.api.mensura.schemas.schema_empresa import EmpresaResponse
 from app.utils.logger import logger
@@ -462,7 +461,7 @@ class PedidoService:
 
         try:
             status_inicial = (
-                PedidoStatusEnum.P.value
+                PedidoStatusEnum.A.value
                 if self._is_pix_online_meio_pagamento(meio_pagamento)
                 else PedidoStatusEnum.I.value
             )
@@ -624,7 +623,8 @@ class PedidoService:
                     qr_code_base64=result.qr_code_base64,
                     timestamp_field="pago_em",
                 )
-                self.repo.atualizar_status_pedido(pedido, PedidoStatusEnum.A.value, motivo="Pagamento confirmado")
+                atualizar_para = PedidoStatusEnum.I.value if metodo == PagamentoMetodoEnum.PIX_ONLINE else PedidoStatusEnum.A.value
+                self.repo.atualizar_status_pedido(pedido, atualizar_para, motivo="Pagamento confirmado")
             else:
                 self.repo.atualizar_transacao_status(
                     tx,
