@@ -1,16 +1,13 @@
 from datetime import date
-from typing import List
 
-from app.api.mensura.models.user_model import UserModel
-from fastapi import APIRouter, status, Path, Query, Depends, Body, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query, status, Path, Body
 from sqlalchemy.orm import Session
 
-from app.api.delivery.schemas.schema_pedido import PedidoResponse, PedidoKanbanResponse, \
-    EditarPedidoRequest, ItemPedidoEditar, PedidoResponseCompletoTotal
-from app.api.delivery.schemas.schema_shared_enums import PedidoStatusEnum
+from app.api.delivery.schemas.schema_pedido import PedidoResponse, PedidoResponseCompleto, PedidoKanbanResponse, PedidoResponseCompletoTotal, EditarPedidoRequest, ItemPedidoEditar
 from app.api.delivery.services.pedidos.service_pedido import PedidoService
 from app.core.admin_dependencies import get_current_user
 from app.database.db_connection import get_db
+from app.api.delivery.schemas.schema_shared_enums import PedidoStatusEnum
 from app.utils.logger import logger
 
 router = APIRouter(prefix="/api/delivery/pedidos/admin", tags=["Pedidos - Admin - Delivery"])
@@ -26,7 +23,9 @@ router = APIRouter(prefix="/api/delivery/pedidos/admin", tags=["Pedidos - Admin 
 def listar_pedidos_admin_kanban(
     db: Session = Depends(get_db),
     date_filter: date | None = Query(None, description="Filtrar pedidos por data (YYYY-MM-DD)"),
-    empresa_id: int = Query(..., description="ID da empresa para filtrar pedidos", gt=0)
+    empresa_id: int = Query(..., description="ID da empresa para filtrar pedidos", gt=0),
+    limit: int = Query(500, ge=1, le=1000),
+    status: list[str] | None = Query(None, description="Lista de status para filtrar"),
 ):
     """
     Lista pedidos do sistema para visualização no Kanban (admin).
@@ -37,7 +36,13 @@ def listar_pedidos_admin_kanban(
     Retorna lista de pedidos com informações resumidas para o Kanban.
     """
     logger.info(f"[Pedidos] Listar Kanban - empresa_id={empresa_id}, date_filter={date_filter}")
-    return PedidoService(db).list_all_kanban(date_filter=date_filter, empresa_id=empresa_id)
+    pedidos = PedidoService(db).list_all_kanban(
+        date_filter=date_filter,
+        empresa_id=empresa_id,
+        limit=limit,
+        incluir_status=[PedidoStatusEnum(s) for s in status] if status else None,
+    )
+    return pedidos
 
 # ======================================================================
 # ===================== GET PEDIDO BY ID ===============================

@@ -69,7 +69,7 @@ class PedidoRepository:
             .all()
         )
 
-    def list_all_kanban(self, limit: int = 500, date_filter: date | None = None, empresa_id: int = 1):
+    def list_all_kanban(self, limit: int = 500, date_filter: date | None = None, empresa_id: int = 1, incluir_status: list[str] | None = None):
         query = (
             self.db.query(PedidoDeliveryModel)
             .options(
@@ -78,9 +78,14 @@ class PedidoRepository:
                 joinedload(PedidoDeliveryModel.meio_pagamento),
             )
             .filter(PedidoDeliveryModel.empresa_id == empresa_id)
-            .filter(PedidoDeliveryModel.status != "I")  # Exclui pedidos com status PENDENTE_IMPRESSAO
-            .order_by(PedidoDeliveryModel.data_criacao.desc())
         )
+
+        if incluir_status:
+            query = query.filter(PedidoDeliveryModel.status.in_(incluir_status))
+        else:
+            query = query.filter(PedidoDeliveryModel.status != "I")  # Exclui pedidos com status PENDENTE_IMPRESSAO
+
+        query = query.order_by(PedidoDeliveryModel.data_criacao.desc())
 
         if date_filter:
             query = query.filter(func.date(PedidoDeliveryModel.data_criacao) == date_filter)
