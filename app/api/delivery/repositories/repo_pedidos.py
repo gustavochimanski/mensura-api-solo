@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Optional
 
@@ -70,22 +70,36 @@ class PedidoRepository:
         )
 
     def list_all_kanban(self, limit: int = 500, date_filter: date | None = None, empresa_id: int = 1):
-        query = (
-            self.db.query(PedidoDeliveryModel)
-            .options(
-                joinedload(PedidoDeliveryModel.cliente).joinedload(ClienteDeliveryModel.enderecos),
-                joinedload(PedidoDeliveryModel.endereco),
-                joinedload(PedidoDeliveryModel.meio_pagamento),
-            )
-            .filter(PedidoDeliveryModel.empresa_id == empresa_id)
+        query = self.db.query(PedidoDeliveryModel).filter(PedidoDeliveryModel.empresa_id == empresa_id)
+
+        if date_filter:
+            start_dt = datetime.combine(date_filter, datetime.min.time())
+            end_dt = start_dt + timedelta(days=1)
+            query = query.filter(PedidoDeliveryModel.data_criacao >= start_dt)
+            query = query.filter(PedidoDeliveryModel.data_criacao < end_dt)
+
+        query = query.options(
+            joinedload(PedidoDeliveryModel.cliente).joinedload(ClienteDeliveryModel.enderecos),
+            joinedload(PedidoDeliveryModel.endereco),
+            joinedload(PedidoDeliveryModel.meio_pagamento),
         )
 
         query = query.order_by(PedidoDeliveryModel.data_criacao.desc())
 
-        if date_filter:
-            query = query.filter(func.date(PedidoDeliveryModel.data_criacao) == date_filter)
+        resultados = query.limit(limit).all()
 
-        return query.limit(limit).all()
+        if resultados:
+            return resultados
+
+        # fallback ignora data
+        query_sem_data = self.db.query(PedidoDeliveryModel).filter(PedidoDeliveryModel.empresa_id == empresa_id)
+        query_sem_data = query_sem_data.options(
+            joinedload(PedidoDeliveryModel.cliente).joinedload(ClienteDeliveryModel.enderecos),
+            joinedload(PedidoDeliveryModel.endereco),
+            joinedload(PedidoDeliveryModel.meio_pagamento),
+        ).order_by(PedidoDeliveryModel.data_criacao.desc())
+
+        return query_sem_data.limit(limit).all()
 
     # -------------------- Mutations -------------------
     def criar_pedido(
