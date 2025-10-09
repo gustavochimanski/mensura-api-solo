@@ -43,6 +43,14 @@ class TransacaoResponse(TransacaoBase):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ConsultarTransacaoResponse(BaseModel):
+    status: PagamentoStatusEnum
+    provider_transaction_id: Optional[str]
+    payload: Dict[str, Any]
+    qr_code: Optional[str]
+    qr_code_base64: Optional[str]
+
+
 class TransacaoStatusUpdateRequest(BaseModel):
     status: PagamentoStatusEnum
     provider_transaction_id: Optional[str] = None

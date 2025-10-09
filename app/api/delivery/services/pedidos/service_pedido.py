@@ -1247,3 +1247,14 @@ class PedidoService:
             return meio_pagamento.get("tipo") == MeioPagamentoTipoEnum.PIX_ONLINE
 
         return meio_tipo == "PIX_ONLINE"
+
+    async def consultar_pagamento_gateway(
+        self,
+        *,
+        gateway: PagamentoGatewayEnum,
+        provider_transaction_id: str,
+    ):
+        return await self.pagamentos.consultar_gateway(
+            gateway=gateway,
+            provider_transaction_id=provider_transaction_id,
+        )
