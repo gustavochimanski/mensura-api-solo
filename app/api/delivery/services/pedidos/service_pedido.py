@@ -1223,3 +1223,16 @@ class PedidoService:
         # Recarrega o pedido para retornar os dados atualizados
         pedido = self.repo.get_pedido(pedido_id)
         return self._pedido_to_response(pedido)
+
+    def _is_pix_online_meio_pagamento(self, meio_pagamento) -> bool:
+        if not meio_pagamento:
+            return False
+
+        meio_tipo = getattr(meio_pagamento, "tipo", None)
+        if isinstance(meio_tipo, MeioPagamentoTipoEnum):
+            return meio_tipo == MeioPagamentoTipoEnum.PIX_ONLINE
+
+        if isinstance(meio_pagamento, dict):
+            return meio_pagamento.get("tipo") == MeioPagamentoTipoEnum.PIX_ONLINE
+
+        return meio_tipo == "PIX_ONLINE"
