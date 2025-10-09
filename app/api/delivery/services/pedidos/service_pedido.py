@@ -114,7 +114,6 @@ class PedidoService:
                 for it in pedido.itens
             ],
             transacao=TransacaoResponse.model_validate(pedido.transacao) if pedido.transacao else None,
-            transacao=TransacaoResponse.model_validate(pedido.transacao) if pedido.transacao else None,
         )
 
     def _calcular_taxas(
