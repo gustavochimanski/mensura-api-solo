@@ -6,6 +6,9 @@ from app.api.delivery.router.categorias.router_categorias_admin_dv import router
 from app.api.delivery.router.client.router_client_dv import router as cliente_router
 from app.api.delivery.router.client.router_client_admin_dv import router as cliente_admin_router
 from app.api.delivery.router.pedidos.router_pedidos_dv import router as pedidos_router
+from app.api.delivery.router.pagamentos.router_pagamentos_dv import router as pagamentos_router
+from app.api.delivery.router.pedidos.router_pedidos_admin_dv import router as router_pedidos_admin
+from app.api.delivery.router.pagamentos.router_pagamentos_admin_dv import router as router_pagamentos_admin
 from app.api.delivery.router.router_produtos_dv import router as produtos_router
 from app.api.delivery.router.router_vitrine import router as vitrines_router
 from app.api.delivery.router.router_cupons_dv import router as cupons_router
@@ -17,7 +20,6 @@ from app.api.delivery.router.meio_pagamento.router_meio_pagamento_admin_dv impor
 from app.api.delivery.router.parceiros.router_parceiros_publico import router as parceiros_publico_router
 from app.api.delivery.router.parceiros.router_parceiros_admin import router as parceiros_admin_router
 from app.api.delivery.router.router_regiao_entrega import router as regiao_entrega_router
-from app.api.delivery.router.pedidos.router_pedidos_admin_dv import router as router_pedidos_admin
 from app.api.delivery.router.router_printer import router as printer_router
 
 from app.core.admin_dependencies import get_current_user
@@ -31,6 +33,7 @@ api_delivery.include_router(categorias_router)
 
 # Routers para clientes (usam super_token)
 api_delivery.include_router(pedidos_router)
+api_delivery.include_router(pagamentos_router)
 api_delivery.include_router(printer_router)
 api_delivery.include_router(cliente_router)
 api_delivery.include_router(enderecos_router)
@@ -38,6 +41,7 @@ api_delivery.include_router(meio_pagamento_router)
 
 # Routers para admin (usam get_current_user)
 api_delivery.include_router(router_pedidos_admin)
+api_delivery.include_router(router_pagamentos_admin)
 api_delivery.include_router(cliente_admin_router)
 api_delivery.include_router(enderecos_admin_router)
 api_delivery.include_router(meio_pagamento_admin_router)
