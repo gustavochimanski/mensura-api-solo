@@ -12,29 +12,44 @@ from sqlalchemy import update
 
 from app.api.delivery.models.model_pedido_dv import PedidoDeliveryModel
 from app.api.delivery.models.model_pedido_item_dv import PedidoItemModel
-from app.api.delivery.repositories.repo_pedidos import PedidoRepository
-from app.api.delivery.services.pagamento.service_pagamento import PagamentoService
 from app.api.delivery.repositories.repo_entregadores import EntregadorRepository
-from app.api.delivery.services.meio_pagamento_service import MeioPagamentoService
-from app.api.mensura.repositories.empresa_repo import EmpresaRepository
-from app.api.delivery.schemas.schema_pedido import (
-    FinalizarPedidoRequest, ItemPedidoRequest,
-    PedidoResponse, ItemPedidoResponse, PedidoKanbanResponse, PedidoResponseCompleto, PedidoResponseCompletoComEndereco, PedidoResponseCompletoTotal,
-    EditarPedidoRequest, ItemPedidoEditar, PedidoResponseSimplificado, EnderecoPedidoDetalhe
-)
+from app.api.delivery.repositories.repo_pedidos import PedidoRepository
 from app.api.delivery.schemas.schema_cliente import ClienteOut
+from app.api.delivery.schemas.schema_cupom import CupomOut
 from app.api.delivery.schemas.schema_endereco import EnderecoOut
 from app.api.delivery.schemas.schema_entregador import EntregadorOut
-from app.api.delivery.schemas.schema_cupom import CupomOut
-from app.api.delivery.schemas.schema_transacao_pagamento import TransacaoResponse
-from app.api.delivery.schemas.schema_pedido_status_historico import PedidoStatusHistoricoOut
-from app.api.mensura.schemas.schema_empresa import EmpresaResponse
 from app.api.delivery.schemas.schema_meio_pagamento import MeioPagamentoResponse, MeioPagamentoTipoEnum
-from app.api.delivery.schemas.schema_shared_enums import (
-    PedidoStatusEnum, TipoEntregaEnum, OrigemPedidoEnum,
-    PagamentoMetodoEnum, PagamentoGatewayEnum, PagamentoStatusEnum
+from app.api.delivery.schemas.schema_pedido import (
+    EditarPedidoRequest,
+    EnderecoPedidoDetalhe,
+    FinalizarPedidoRequest,
+    ItemPedidoEditar,
+    ItemPedidoRequest,
+    ItemPedidoResponse,
+    PedidoKanbanResponse,
+    PedidoResponse,
+    PedidoResponseCompleto,
+    PedidoResponseCompletoComEndereco,
+    PedidoResponseCompletoTotal,
+    PedidoResponseSimplificado,
 )
-from app.api.delivery.services.service_pagamento_gateway import PaymentGatewayClient, PaymentResult
+from app.api.delivery.schemas.schema_pedido_status_historico import (
+    PedidoStatusHistoricoOut,
+)
+from app.api.delivery.schemas.schema_shared_enums import (
+    OrigemPedidoEnum,
+    PagamentoGatewayEnum,
+    PagamentoMetodoEnum,
+    PagamentoStatusEnum,
+    PedidoStatusEnum,
+    TipoEntregaEnum,
+)
+from app.api.delivery.schemas.schema_transacao_pagamento import (
+    TransacaoResponse,
+)
+from app.api.delivery.services.meio_pagamento_service import MeioPagamentoService
+from app.api.delivery.services.pagamento.service_pagamento import PagamentoService
+from app.api.mensura.repositories.empresa_repo import EmpresaRepository
 from app.utils.logger import logger
 from app.utils.database_utils import now_trimmed
 
