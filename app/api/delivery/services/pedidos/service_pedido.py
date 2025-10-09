@@ -52,7 +52,7 @@ from app.api.mensura.repositories.empresa_repo import EmpresaRepository
 from app.api.mensura.schemas.schema_empresa import EmpresaResponse
 from app.utils.logger import logger
 from app.utils.database_utils import now_trimmed
-
+#
 
 QTD_MAX_ITENS = 200
 
