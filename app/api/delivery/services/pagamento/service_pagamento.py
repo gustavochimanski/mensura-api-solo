@@ -18,7 +18,7 @@ from app.api.delivery.schemas.schema_transacao_pagamento import (
     TransacaoResponse,
     TransacaoStatusUpdateRequest,
 )
-from app.api.delivery.services.service_pagamento_gateway import (
+from .service_pagamento_gateway import (
     PaymentGatewayClient,
     PaymentResult,
 )
