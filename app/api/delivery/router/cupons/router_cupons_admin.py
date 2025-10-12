@@ -7,7 +7,7 @@ from app.api.delivery.services.service_cupom import CuponsService
 from app.api.delivery.schemas.schema_cupom import (
     CupomOut, CupomCreate, CupomUpdate
 )
-from clientes.mensura_api.app.core.admin_dependencies import get_current_user
+from app.core.admin_dependencies import get_current_user
 
 router = APIRouter(prefix="/api/delivery/admin/cupons",
     tags=["Admin - Delivery - Cupons"],

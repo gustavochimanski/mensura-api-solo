@@ -16,7 +16,7 @@ from app.api.mensura.schemas.schema_produtos import (
 from app.utils.minio_client import upload_file_to_minio
 from app.utils.logger import logger
 from sqlalchemy.exc import IntegrityError
-from clientes.mensura_api.app.core.admin_dependencies import get_current_user
+from app.core.admin_dependencies import get_current_user
 
 router = APIRouter(prefix="/api/delivery/admin/produtos", tags=["Admin - Delivery - Produtos"], dependencies=[Depends(get_current_user)])
 

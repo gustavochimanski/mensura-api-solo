@@ -13,7 +13,7 @@ from app.api.delivery.schemas.schema_categoria import (
     CategoriaDeliveryOut, CategoriaSearchOut
 )
 from app.utils.logger import logger
-from clientes.mensura_api.app.core.client_dependecies import get_cliente_by_super_token
+from app.core.client_dependecies import get_cliente_by_super_token
 
 router = APIRouter(prefix="/api/delivery/client/categorias", 
         tags=["Client - Delivery - Categorias"], 

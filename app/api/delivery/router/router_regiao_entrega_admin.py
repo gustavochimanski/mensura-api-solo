@@ -4,7 +4,7 @@ from app.api.delivery.schemas.schema_regiao_entrega import RegiaoEntregaCreate, 
 from app.api.delivery.services.service_regiao_entrega import RegiaoEntregaService
 from app.database.db_connection import get_db
 from app.utils.geopapify_client import GeoapifyClient
-from clientes.mensura_api.app.core.admin_dependencies import get_current_user
+from app.core.admin_dependencies import get_current_user
 
 router = APIRouter(prefix="/api/delivery/admin/regioes-entrega", tags=["Admin - Delivery - Regiões de Entrega"], 
 dependencies=[Depends(get_current_user)])
