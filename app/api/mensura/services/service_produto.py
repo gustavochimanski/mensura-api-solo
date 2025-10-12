@@ -1,7 +1,7 @@
 from decimal import Decimal
 
 from fastapi import HTTPException
-from rich import status
+from fastapi import status
 from sqlalchemy.orm import Session
 
 from app.api.mensura.repositories.empresa_repo import EmpresaRepository
