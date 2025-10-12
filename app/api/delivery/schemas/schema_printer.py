@@ -1,3 +1,47 @@
+from __future__ import annotations
+
+from datetime import datetime
+from typing import List, Optional
+
+from pydantic import BaseModel
+
+
+class ItemPedidoPrinter(BaseModel):
+    descricao: str
+    quantidade: int
+    preco: float
+    observacao: Optional[str] = None
+
+
+class PedidoParaImpressao(BaseModel):
+    id: int
+    status: str
+    cliente_nome: str
+    cliente_telefone: Optional[str] = None
+    valor_total: float
+    data_criacao: datetime
+    endereco: Optional[str] = None
+    meio_pagamento_descricao: Optional[str] = None
+    observacao_geral: Optional[str] = None
+    itens: List[ItemPedidoPrinter]
+
+
+class PedidoPendenteImpressaoResponse(BaseModel):
+    id: int
+    status: str
+    cliente_nome: str
+    cliente_telefone: Optional[str] = None
+    valor_total: float
+    data_criacao: datetime
+    endereco: Optional[str] = None
+    meio_pagamento_descricao: Optional[str] = None
+
+
+class RespostaImpressaoPrinter(BaseModel):
+    sucesso: bool
+    mensagem: str
+    numero_pedido: Optional[int] = None
+
 """
 Schemas específicos para comunicação com Printer API
 """
