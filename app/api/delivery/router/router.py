@@ -19,7 +19,6 @@ from app.api.delivery.router import router_vitrines_admin
 from app.api.delivery.router.pagamentos import router_pagamentos_admin
 from app.api.delivery.router.parceiros import router_parceiros_admin
 from app.api.delivery.router.pedidos import router_pedidos_admin
-from app.api.delivery.router.produtos import router_produtos_admin
 from app.api.delivery.router.pagamentos import router_pagamentos_webhook
 
 api_delivery = APIRouter()
@@ -47,7 +46,6 @@ api_delivery.include_router(router_meio_pagamento_admin.router)
 api_delivery.include_router(router_pagamentos_admin.router)
 api_delivery.include_router(router_parceiros_admin.router)
 api_delivery.include_router(router_pedidos_admin.router)
-api_delivery.include_router(router_produtos_admin.router)
 api_delivery.include_router(router_entregadores_admin.router)
 api_delivery.include_router(router_regiao_entrega_admin.router)
 api_delivery.include_router(router_vitrines_admin.router)
