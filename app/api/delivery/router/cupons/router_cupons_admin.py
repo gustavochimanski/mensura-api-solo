@@ -7,8 +7,12 @@ from app.api.delivery.services.service_cupom import CuponsService
 from app.api.delivery.schemas.schema_cupom import (
     CupomOut, CupomCreate, CupomUpdate
 )
+from clientes.mensura_api.app.core.admin_dependencies import get_current_user
 
-router = APIRouter(prefix="/api/delivery/cupons", tags=["Cupons - Admin - Delivery"])
+router = APIRouter(prefix="/api/delivery/admin/cupons",
+    tags=["Admin - Delivery - Cupons"],
+    dependencies=[Depends(get_current_user)]
+)
 
 @router.get("", response_model=List[CupomOut])
 def listar_cupons(

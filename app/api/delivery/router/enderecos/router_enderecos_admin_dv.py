@@ -9,7 +9,10 @@ from app.database.db_connection import get_db
 from app.api.delivery.schemas.schema_endereco import EnderecoOut, EnderecoCreate, EnderecoUpdate
 from app.utils.logger import logger
 
-router = APIRouter(prefix="/api/delivery/enderecos/admin", tags=["Endereços - Admin - Delivery"])
+router = APIRouter(prefix="/api/delivery/admin/enderecos", 
+    tags=["Admin - Delivery - Endereços"],
+    dependencies=[Depends(get_current_user)]
+)
 
 # ======================================================================
 # ============================= ADMIN ==================================
@@ -18,14 +21,12 @@ router = APIRouter(prefix="/api/delivery/enderecos/admin", tags=["Endereços - A
 @router.get("/cliente/{cliente_id}", response_model=List[EnderecoOut])
 def listar_enderecos_admin(
     cliente_id: int = Path(..., description="ID do cliente para listar endereços"),
-    current_user=Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
     Endpoint para admin listar endereços de um cliente específico.
     Requer autenticação de admin.
     """
-    logger.info(f"[Enderecos Admin] Listar - cliente_id={cliente_id} admin={current_user.id}")
     svc = EnderecosService(db)
     return svc.list_by_cliente_id(cliente_id)
 
@@ -33,7 +34,6 @@ def listar_enderecos_admin(
 def criar_endereco_admin(
     cliente_id: int = Path(..., description="ID do cliente para criar endereço"),
     payload: EnderecoCreate = ...,
-    current_user=Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -41,7 +41,6 @@ def criar_endereco_admin(
     Verifica se o endereço já existe antes de criar.
     Requer autenticação de admin.
     """
-    logger.info(f"[Enderecos Admin] Criar - cliente_id={cliente_id} admin={current_user.id}")
     svc = EnderecosService(db)
     return svc.create_by_cliente_id(cliente_id, payload)
 
@@ -50,7 +49,6 @@ def atualizar_endereco_admin(
     cliente_id: int = Path(..., description="ID do cliente"),
     endereco_id: int = Path(..., description="ID do endereço para atualizar"),
     payload: EnderecoUpdate = ...,
-    current_user=Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -59,6 +57,5 @@ def atualizar_endereco_admin(
     Verifica se o endereço está sendo usado em pedidos ativos.
     Requer autenticação de admin.
     """
-    logger.info(f"[Enderecos Admin] Atualizar - cliente_id={cliente_id} endereco_id={endereco_id} admin={current_user.id}")
     svc = EnderecosService(db)
     return svc.update_by_cliente_id(cliente_id, endereco_id, payload)

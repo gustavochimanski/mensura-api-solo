@@ -10,14 +10,14 @@ from app.core.admin_dependencies import get_current_user
 from app.database.db_connection import get_db
 from app.utils.minio_client import upload_file_to_minio
 
-router = APIRouter(prefix="/api/delivery/parceiros/admin", tags=["Parceiros - Admin - Delivery"])
+router = APIRouter(prefix="/api/delivery/admin/parceiros", tags=["Admin - Delivery -Parceiros"], dependencies=[Depends(get_current_user)])
 
 # ======================================================================
 # =========================== ENDPOINTS ADMIN ==========================
 # ======================================================================
 
 # CRUD Parceiros
-@router.get("/", response_model=list[ParceiroOut], dependencies=[Depends(get_current_user)])
+@router.get("/", response_model=list[ParceiroOut])
 def list_parceiros(db: Session = Depends(get_db)):
     """
     Lista parceiros cadastrados (endpoint admin)
@@ -25,7 +25,7 @@ def list_parceiros(db: Session = Depends(get_db)):
     return ParceirosService(db).list_parceiros()
 
 
-@router.get("/{parceiro_id}", response_model=ParceiroOut, dependencies=[Depends(get_current_user)])
+@router.get("/{parceiro_id}", response_model=ParceiroOut)
 def get_parceiro(parceiro_id: int, db: Session = Depends(get_db)):
     """
     Retorna dados de um parceiro específico (endpoint admin)
@@ -33,21 +33,21 @@ def get_parceiro(parceiro_id: int, db: Session = Depends(get_db)):
     return ParceirosService(db).get_parceiro(parceiro_id)
 
 
-@router.post("/", response_model=ParceiroOut, status_code=status.HTTP_201_CREATED, dependencies=[Depends(get_current_user)])
+@router.post("/", response_model=ParceiroOut, status_code=status.HTTP_201_CREATED)
 def create_parceiro(body: ParceiroIn, db: Session = Depends(get_db)):
     """
     Cria um novo parceiro (endpoint admin)
     """
     return ParceirosService(db).create_parceiro(body)
 
-@router.put("/{parceiro_id}", response_model=ParceiroOut, dependencies=[Depends(get_current_user)])
+@router.put("/{parceiro_id}", response_model=ParceiroOut)
 def update_parceiro(parceiro_id: int, body: ParceiroIn, db: Session = Depends(get_db)):
     """
     Atualiza um parceiro existente (endpoint admin)
     """
     return ParceirosService(db).update_parceiro(parceiro_id, body.model_dump(exclude_unset=True))
 
-@router.delete("/{parceiro_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(get_current_user)])
+@router.delete("/{parceiro_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_parceiro(parceiro_id: int, db: Session = Depends(get_db)):
     """
     Deleta um parceiro (endpoint admin)
@@ -55,7 +55,7 @@ def delete_parceiro(parceiro_id: int, db: Session = Depends(get_db)):
     return ParceirosService(db).delete_parceiro(parceiro_id)
 
 # CRUD Banners
-@router.post("/banners", response_model=BannerParceiroOut, status_code=status.HTTP_201_CREATED, dependencies=[Depends(get_current_user)])
+@router.post("/banners", response_model=BannerParceiroOut, status_code=status.HTTP_201_CREATED)
 def create_banner(
     nome: str = Form(...),
     tipo_banner: str = Form(...),
@@ -83,14 +83,14 @@ def create_banner(
     )
     return ParceirosService(db).create_banner(body)
 
-@router.put("/banners/{banner_id}", response_model=BannerParceiroOut, dependencies=[Depends(get_current_user)])
+@router.put("/banners/{banner_id}", response_model=BannerParceiroOut)
 def update_banner(banner_id: int, body: BannerParceiroIn, db: Session = Depends(get_db)):
     """
     Atualiza um banner existente (endpoint admin)
     """
     return ParceirosService(db).update_banner(banner_id, body.model_dump(exclude_unset=True))
 
-@router.delete("/banners/{banner_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(get_current_user)])
+@router.delete("/banners/{banner_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_banner(banner_id: int, db: Session = Depends(get_db)):
     """
     Deleta um banner (endpoint admin)

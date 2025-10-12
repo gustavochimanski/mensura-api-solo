@@ -9,13 +9,13 @@ from app.api.delivery.schemas.schema_cupom import CupomParceiroOut
 from app.api.delivery.services.service_parceiros import ParceirosService
 from app.database.db_connection import get_db
 
-router = APIRouter(prefix="/api/delivery/public", tags=["Parceiros - Público - Delivery"])
+router = APIRouter(prefix="/api/delivery/public/parceiros", tags=["Public - Delivery - Parceiros"])
 
 # ======================================================================
 # ========================= ENDPOINTS PÚBLICOS =========================
 # ======================================================================
 
-@router.get("/parceiros", response_model=list[ParceiroOut])
+@router.get("/", response_model=list[ParceiroOut])
 def list_parceiros(db: Session = Depends(get_db)):
     """
     Lista todos os parceiros (endpoint público)
@@ -30,7 +30,7 @@ def list_banners(parceiro_id: Optional[int] = Query(None), db: Session = Depends
     """
     return ParceirosService(db).list_banners(parceiro_id)
 
-@router.get("/parceiros/{parceiro_id}/full", response_model=ParceiroCompletoOut)
+@router.get("/{parceiro_id}/full", response_model=ParceiroCompletoOut)
 def get_parceiro_completo(parceiro_id: int, db: Session = Depends(get_db)):
     """
     Retorna parceiro completo com banners e cupons (endpoint público)

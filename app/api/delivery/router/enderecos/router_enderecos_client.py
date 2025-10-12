@@ -8,7 +8,10 @@ from app.api.delivery.schemas.schema_endereco import EnderecoOut, EnderecoCreate
 from app.utils.logger import logger
 
 
-router = APIRouter(prefix="/api/delivery/cliente/enderecos", tags=["Endereços - Cliente - Delivery"])
+router = APIRouter(prefix="/api/delivery/client/enderecos", 
+    tags=["Client - Enderecos - Delivery"],
+    dependencies=[Depends(get_cliente_by_super_token)]
+)
 
 # SEGURANÇA: Este router implementa verificações para garantir que clientes
 # só possam acessar e modificar seus próprios endereços. As verificações são

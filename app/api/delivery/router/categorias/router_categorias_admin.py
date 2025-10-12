@@ -16,7 +16,10 @@ from app.api.delivery.schemas.schema_categoria import (
 )
 from app.utils.logger import logger
 
-router = APIRouter(prefix="/api/delivery/categorias/admin", tags=["Admin - Delivery - Categorias"])
+router = APIRouter(prefix="/api/delivery/admin/categorias",
+        tags=["Admin - Delivery - Categorias"],
+        dependencies=[Depends(get_current_user)]
+    )
 
 # -------- SEARCH --------
 @router.get("/search", response_model=List[CategoriaSearchOut])
@@ -24,7 +27,6 @@ def search_categorias(
     q: Optional[str] = Query(None, description="Termo de busca por descrição/slug"),
     limit: int = Query(30, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    current_user: UserModel = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     repos = CategoriaDeliveryRepository(db)
@@ -45,7 +47,6 @@ def search_categorias(
 @router.get("/{cat_id}", response_model=CategoriaDeliveryOut)
 def get_categoria(
     cat_id: int = Path(..., title="ID da categoria"),
-    current_user: UserModel = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     repos = CategoriaDeliveryRepository(db)
@@ -73,7 +74,6 @@ def get_categoria(
 )
 def criar_categoria(
     body: CategoriaDeliveryIn,
-    current_user: UserModel = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     logger.info(f"[Categorias Admin] Criando categoria - descricao={body.descricao}, imagem={body.imagem}, parent_id={body.parent_id}")
@@ -120,7 +120,6 @@ def criar_categoria(
 def editar_categoria(
     cat_id: int,
     body: CategoriaDeliveryIn,
-    current_user: UserModel = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     service = CategoriasService(db)
@@ -146,7 +145,6 @@ def editar_categoria(
 )
 def deletar_categoria(
     cat_id: int = Path(..., title="ID da categoria"),
-    current_user: UserModel = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     service = CategoriasService(db)
@@ -162,7 +160,6 @@ def deletar_categoria(
 )
 def move_categoria_direita(
     cat_id: int = Path(..., title="ID da categoria"),
-    current_user: UserModel = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     repos = CategoriaDeliveryRepository(db)
@@ -187,7 +184,6 @@ def move_categoria_direita(
 )
 def move_categoria_esquerda(
     cat_id: int = Path(..., title="ID da categoria"),
-    current_user: UserModel = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     repos = CategoriaDeliveryRepository(db)
@@ -214,7 +210,6 @@ async def upload_imagem_categoria(
     cat_id: int,
     cod_empresa: int = Form(...),
     imagem: UploadFile = File(...),
-    current_user: UserModel = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     logger.info(f"[Categorias Admin] Upload imagem - categoria_id={cat_id}, empresa_id={cod_empresa}")

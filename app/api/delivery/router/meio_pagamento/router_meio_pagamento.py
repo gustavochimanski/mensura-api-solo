@@ -8,9 +8,12 @@ from app.api.delivery.services.meio_pagamento_service import MeioPagamentoServic
 from app.core.client_dependecies import get_cliente_by_super_token
 from app.database.db_connection import get_db
 
-router = APIRouter(prefix="/api/delivery/cliente/meios-pagamento", tags=["Meios de Pagamento - Cliente - Delivery"])
+router = APIRouter(prefix="/api/delivery/client/meios-pagamento", 
+    tags=["Client - Delivery - Meios de Pagamento "],
+    dependencies=[Depends(get_cliente_by_super_token)]
+)
 
-@router.get("/", response_model=List[MeioPagamentoResponse], dependencies=[Depends(get_cliente_by_super_token)])
+@router.get("/", response_model=List[MeioPagamentoResponse])
 def listar_meios_pagamento(db: Session = Depends(get_db)):
     return MeioPagamentoService(db).list_all()
 

@@ -17,7 +17,7 @@ from app.database.db_connection import get_db
 from app.api.delivery.schemas.schema_shared_enums import PedidoStatusEnum
 from app.utils.logger import logger
 
-router = APIRouter(prefix="/api/delivery/pedidos/admin", tags=["Pedidos - Admin - Delivery"])
+router = APIRouter(prefix="/api/delivery/admin/pedidos", tags=["Admin - Delivery - Pedidos"], dependencies=[Depends(get_current_user)])
 
 # ======================================================================
 # ============================ KANBAN ==================================
@@ -25,7 +25,6 @@ router = APIRouter(prefix="/api/delivery/pedidos/admin", tags=["Pedidos - Admin 
     "/kanban",
     response_model=list[PedidoKanbanResponse],
     status_code=status.HTTP_200_OK,
-    dependencies=[Depends(get_current_user)]
 )
 def listar_pedidos_admin_kanban(
     db: Session = Depends(get_db),
@@ -55,7 +54,6 @@ def listar_pedidos_admin_kanban(
     "/{pedido_id}", 
     response_model=PedidoResponseCompletoTotal, 
     status_code=status.HTTP_200_OK,
-    dependencies=[Depends(get_current_user)]
 )
 def get_pedido(
     pedido_id: int = Path(..., description="ID do pedido", gt=0), 
@@ -87,7 +85,6 @@ def get_pedido(
     "/status/{pedido_id}",
     response_model=PedidoResponse,
     status_code=status.HTTP_200_OK,
-    dependencies=[Depends(get_current_user)]
 )
 def atualizar_status_pedido(
     pedido_id: int = Path(..., description="ID do pedido", gt=0),
@@ -122,7 +119,6 @@ def atualizar_status_pedido(
     "/{pedido_id}",
     response_model=PedidoResponse,
     status_code=status.HTTP_200_OK,
-    dependencies=[Depends(get_current_user)]
 )
 def atualizar_pedido(
     pedido_id: int = Path(..., description="ID do pedido a ser atualizado", gt=0),
@@ -163,7 +159,6 @@ def atualizar_pedido(
     "/{pedido_id}/itens",
     response_model=PedidoResponse,
     status_code=status.HTTP_200_OK,
-    dependencies=[Depends(get_current_user)]
 )
 def atualizar_item(
     pedido_id: int = Path(..., description="ID do pedido", gt=0),
@@ -230,8 +225,7 @@ def vincular_entregador(
 @router.delete(
     "/{pedido_id}/entregador",
     response_model=PedidoResponse,
-    status_code=status.HTTP_200_OK,
-    dependencies=[Depends(get_current_user)]
+    status_code=status.HTTP_200_OK, 
 )
 def desvincular_entregador(
     pedido_id: int = Path(..., description="ID do pedido", gt=0),

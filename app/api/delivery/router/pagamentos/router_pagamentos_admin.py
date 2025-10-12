@@ -8,7 +8,7 @@ from app.core.admin_dependencies import get_current_user
 from app.database.db_connection import get_db
 from app.utils.logger import logger
 
-router = APIRouter(prefix="/api/delivery/admin/pagamentos", tags=["Pagamentos - Admin - Delivery"], dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/api/delivery/admin/pagamentos", tags=[" Admin - Delivery - Pagamentos"], dependencies=[Depends(get_current_user)])
 
 
 @router.post(

@@ -15,8 +15,8 @@ from app.utils.logger import logger
 
 
 router = APIRouter(
-    prefix="/api/delivery/webhooks/pagamentos",
-    tags=["Pagamentos - Webhooks - Delivery"],
+    prefix="/api/delivery/public/webhooks/pagamentos",
+    tags=["Public - Delivery - Mercado Pago Webhooks"],
 )
 
 

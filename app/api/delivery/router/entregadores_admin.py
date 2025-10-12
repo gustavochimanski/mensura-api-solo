@@ -8,8 +8,9 @@ from app.api.delivery.schemas.schema_entregador import (
     EntregadorOut, EntregadorCreate, EntregadorUpdate
 )
 from app.utils.logger import logger
+from clientes.mensura_api.app.core.admin_dependencies import get_current_user
 
-router = APIRouter(prefix="/api/delivery/entregadores", tags=["Entregadores - Admin - Delivery"])
+router = APIRouter(prefix="/api/delivery/admin/entregadores", tags=["Admin - Delivery - Entregadores"], dependencies=[Depends(get_current_user)])
 
 @router.get("", response_model=List[EntregadorOut])
 def listar_entregadores(

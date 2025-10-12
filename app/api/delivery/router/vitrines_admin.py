@@ -11,12 +11,13 @@ from app.api.delivery.schemas.schema_vitrine import (
 )
 from app.database.db_connection import get_db
 from app.utils.logger import logger
+from clientes.mensura_api.app.core.admin_dependencies import get_current_user
 
-router = APIRouter(prefix="/api/delivery/vitrines", tags=["Vitrines - Admin - Delivery"])
+router = APIRouter(prefix="/api/delivery/vitrines", tags=["Admin - Delivery - Vitrines"], dependencies=[Depends(get_current_user)])
 
 
 class VinculoRequest(BaseModel):
-    empresa_id: int
+    empresa_id: int                 
     cod_barras: str
 
 

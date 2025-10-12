@@ -4,14 +4,16 @@ from app.api.delivery.schemas.schema_regiao_entrega import RegiaoEntregaCreate, 
 from app.api.delivery.services.service_regiao_entrega import RegiaoEntregaService
 from app.database.db_connection import get_db
 from app.utils.geopapify_client import GeoapifyClient
+from clientes.mensura_api.app.core.admin_dependencies import get_current_user
 
-router = APIRouter(prefix="/api/delivery/regioes-entrega", tags=["Regiões de Entrega - Admin - Delivery"])
+router = APIRouter(prefix="/api/delivery/admin/regioes-entrega", tags=["Admin - Delivery - Regiões de Entrega"], 
+dependencies=[Depends(get_current_user)])
 
 @router.get("/{empresa_id}", response_model=list[RegiaoEntregaOut])
 def list_regioes(empresa_id: int, db: Session = Depends(get_db)):
-    return RegiaoEntregaService(db).list(empresa_id)
+    return RegiaoEntregaService(db).list(empresa_id)    
 
-@router.get("/detalhe/{regiao_id}", response_model=RegiaoEntregaOut)
+@router.get("/detalhes/{regiao_id}", response_model=RegiaoEntregaOut)
 def get_regiao(regiao_id: int, db: Session = Depends(get_db)):
     return RegiaoEntregaService(db).get(regiao_id)
 

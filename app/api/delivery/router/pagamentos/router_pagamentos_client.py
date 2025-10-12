@@ -13,7 +13,7 @@ from app.core.client_dependecies import get_cliente_by_super_token
 from app.database.db_connection import get_db
 from app.utils.logger import logger
 
-router = APIRouter(prefix="/api/delivery/cliente/pagamentos", tags=["Pagamentos - Cliente - Delivery"])
+router = APIRouter(prefix="/api/delivery/client/pagamentos", tags=["Client  Delivery - Pagamentos"], dependencies=[Depends(get_cliente_by_super_token)])
 
 
 @router.post("/{pedido_id}/confirmar", response_model=PedidoResponse, status_code=status.HTTP_200_OK)
