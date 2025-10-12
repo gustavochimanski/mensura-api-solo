@@ -7,9 +7,9 @@ from fastapi.staticfiles import StaticFiles
 from app.core.admin_dependencies import get_current_user
 from app.utils.logger import logger  # ✅ Logger centralizado
 from app.config.settings import CORS_ORIGINS, CORS_ALLOW_ALL, BASE_URL as SETTINGS_BASE_URL, ENABLE_DOCS
-from clientes.mensura_api.app.api.auth import auth_controller
-from clientes.mensura_api.app.api.delivery.router.router import api_delivery
-from clientes.mensura_api.app.api.mensura.router.router import mensura_router
+from app.api.auth import auth_controller
+from app.api.delivery.router.router import api_delivery
+from app.api.mensura.router.router import mensura_router
 
 # ───────────────────────────
 # Diretórios

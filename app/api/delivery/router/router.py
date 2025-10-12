@@ -1,24 +1,24 @@
 from fastapi import APIRouter, Depends
 
-from clientes.mensura_api.app.api.delivery.router import router_home_public, router_printer_public
-from clientes.mensura_api.app.api.delivery.router.categorias import router_categorias_client
-from clientes.mensura_api.app.api.delivery.router.clientes import router_clientes_client
-from clientes.mensura_api.app.api.delivery.router.enderecos import router_enderecos_client
-from clientes.mensura_api.app.api.delivery.router.meio_pagamento import router_meio_pagamento_client
-from clientes.mensura_api.app.api.delivery.router.parceiros import router_parceiros_public
-from clientes.mensura_api.app.api.delivery.router.pagamentos import router_pagamentos_client
-from clientes.mensura_api.app.api.delivery.router.categorias import router_categorias_admin
-from clientes.mensura_api.app.api.delivery.router.clientes import router_clientes_admin
-from clientes.mensura_api.app.api.delivery.router.cupons import router_cupons_admin
-from clientes.mensura_api.app.api.delivery.router.enderecos import router_enderecos_admin
-from clientes.mensura_api.app.api.delivery.router.meio_pagamento import router_meio_pagamento_admin
-from clientes.mensura_api.app.api.delivery.router import router_entregadores_admin
-from clientes.mensura_api.app.api.delivery.router import router_regiao_entrega_admin
-from clientes.mensura_api.app.api.delivery.router import router_vitrines_admin
-from clientes.mensura_api.app.api.delivery.router.pagamentos import router_pagamentos_admin
-from clientes.mensura_api.app.api.delivery.router.parceiros import router_parceiros_admin
-from clientes.mensura_api.app.api.delivery.router.pedidos import router_pedidos_admin_dv
-from clientes.mensura_api.app.api.delivery.router.produtos import router_produtos_admin
+from app.api.delivery.router import router_home_public, router_printer_public
+from app.api.delivery.router.categorias import router_categorias_client
+from app.api.delivery.router.clientes import router_clientes_client
+from app.api.delivery.router.enderecos import router_enderecos_client
+from app.api.delivery.router.meio_pagamento import router_meio_pagamento_client
+from app.api.delivery.router.parceiros import router_parceiros_public
+from app.api.delivery.router.pagamentos import router_pagamentos_client
+from app.api.delivery.router.categorias import router_categorias_admin
+from app.api.delivery.router.clientes import router_clientes_admin
+from app.api.delivery.router.cupons import router_cupons_admin
+from app.api.delivery.router.enderecos import router_enderecos_admin
+from app.api.delivery.router.meio_pagamento import router_meio_pagamento_admin
+from app.api.delivery.router import router_entregadores_admin
+from app.api.delivery.router import router_regiao_entrega_admin
+from app.api.delivery.router import router_vitrines_admin
+from app.api.delivery.router.pagamentos import router_pagamentos_admin
+from app.api.delivery.router.parceiros import router_parceiros_admin
+from app.api.delivery.router.pedidos import router_pedidos_admin_dv
+from app.api.delivery.router.produtos import router_produtos_admin
 
 api_delivery = APIRouter()
 
