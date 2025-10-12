@@ -12,11 +12,12 @@ from sqlalchemy.orm import Session
 from app.api.mensura.schemas.schema_produtos import ProdutosPaginadosResponse, CriarNovoProdutoResponse, \
     CriarNovoProdutoRequest, AtualizarProdutoRequest
 from app.api.mensura.services.service_produto import ProdutosMensuraService
+from app.core.admin_dependencies import get_current_user
 from app.database.db_connection import get_db
 from app.utils.logger import logger
 from app.utils.minio_client import upload_file_to_minio
 
-router = APIRouter(prefix="/api/mensura/admin/produtos", tags=["Produtos - Mensura "])
+router = APIRouter(prefix="/api/mensura/admin/produtos", tags=["Admin - Mensura - Produtos"], dependencies=[Depends(get_current_user)])
 class SetDisponibilidadeRequest(BaseModel):
   empresa_id: int
   disponivel: bool

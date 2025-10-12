@@ -6,8 +6,9 @@ from sqlalchemy.orm import Session
 from app.database.db_connection import get_db
 from app.api.mensura.services.usuario_service import UserService
 from app.api.mensura.schemas.schema_usuario import UserCreate, UserUpdate, UserResponse
+from app.core.admin_dependencies import get_current_user
 
-router = APIRouter(prefix="/api/mensura/usuarios", tags=["Usuarios"])
+router = APIRouter(prefix="/api/mensura/admin/usuarios", tags=["Admin - Mensura - Usuarios"], dependencies=[Depends(get_current_user)])
 
 @router.post("/", response_model=UserResponse)
 def create_user(request: UserCreate, db: Session = Depends(get_db)):
