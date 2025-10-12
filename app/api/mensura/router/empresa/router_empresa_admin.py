@@ -15,7 +15,7 @@ from app.api.mensura.schemas.schema_endereco import EnderecoCreate
 from app.api.mensura.services.empresa_service import EmpresaService
 from app.utils.slug_utils import make_slug
 
-router = APIRouter(prefix="/api/mensura/empresas", tags=["Empresas"])
+router = APIRouter(prefix="/api/mensura/admin/empresas", tags=["Admin - Mensura - Empresas"], )
 
 @router.get("/cardapios", response_model=List[EmpresaCardapioLinkResponse])
 def list_cardapio_links(db: Session = Depends(get_db)):

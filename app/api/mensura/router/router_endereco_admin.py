@@ -6,8 +6,10 @@ from sqlalchemy.orm import Session
 from app.database.db_connection import get_db
 from app.api.mensura.services.endereco_service import EnderecoService
 from app.api.mensura.schemas.schema_endereco import EnderecoCreate, EnderecoUpdate, EnderecoResponse
+from app.core.admin_dependencies import get_current_user
 
-router = APIRouter(prefix="/api/mensura/enderecos", tags=["Enderecos"])
+router = APIRouter(prefix="/api/mensura/admin/enderecos", tags=["Admin - Mensura - Enderecos"], 
+dependencies=[Depends(get_current_user)])
 
 @router.post("/", response_model=EnderecoResponse)
 def create_endereco(request: EnderecoCreate, db: Session = Depends(get_db)):

@@ -4,6 +4,7 @@ from decimal import Decimal
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, UploadFile, Form, File, HTTPException
+from pydantic import BaseModel
 from rich import status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -15,8 +16,35 @@ from app.database.db_connection import get_db
 from app.utils.logger import logger
 from app.utils.minio_client import upload_file_to_minio
 
-router = APIRouter(prefix="/api/mensura", tags=["Produtos - Mensura "])
-@router.get(path="/produtos", response_model=ProdutosPaginadosResponse, summary="Lista produtos ERP", description="Retorna produtos com todas as colunas inclusas para exibição")
+router = APIRouter(prefix="/api/mensura/admin/produtos", tags=["Produtos - Mensura "])
+class SetDisponibilidadeRequest(BaseModel):
+  empresa_id: int
+  disponivel: bool
+
+# ---------- Endpoints ----------
+@router.get("/search")
+def search_produtos(
+        db: Session = Depends(get_db),
+        cod_empresa: int = Query(..., description="Empresa dona dos vínculos"),
+        q: Optional[str] = Query(None, description="Termo de busca (descrição ou código de barras)"),
+        page: int = Query(1, ge=1),
+        limit: int = Query(30, ge=1, le=100),
+        apenas_disponiveis: bool = Query(False, description="Somente ativos+disponíveis"),
+):
+  logger.info(
+    f"[Produtos] Search - empresa={cod_empresa} q={q!r} page={page} limit={limit} disp={apenas_disponiveis}"
+  )
+  svc = ProdutosMensuraService(db)
+  return svc.buscar_paginado(
+    empresa_id=cod_empresa,
+    q=q,
+    page=page,
+    limit=limit,
+    apenas_disponiveis=apenas_disponiveis,
+  )
+
+
+@router.get(path="/", response_model=ProdutosPaginadosResponse, summary="Lista produtos ERP", description="Retorna produtos com todas as colunas inclusas para exibição")
 def listar_delivery(
   db: Session = Depends(get_db),
   cod_empresa: int = Query(...),
@@ -34,7 +62,7 @@ def listar_delivery(
     return service.listar_paginado(cod_empresa, page, limit, apenas_disponiveis=apenas_disponiveis)
 
 
-@router.post("/produtos", response_model=CriarNovoProdutoResponse)
+@router.post("/", response_model=CriarNovoProdutoResponse)
 async def criar_produto(
   cod_empresa: int = Form(...),
   cod_barras: str = Form(...),
@@ -82,7 +110,7 @@ async def criar_produto(
     raise HTTPException(400, detail="Erro de integridade nos dados")
 
 
-@router.put("/produtos/{cod_barras}", response_model=CriarNovoProdutoResponse)
+@router.put("/{cod_barras}", response_model=CriarNovoProdutoResponse)
 async def atualizar_produto(
   cod_barras: str,
   cod_empresa: int = Form(...),
@@ -148,3 +176,15 @@ async def atualizar_produto(
     db.rollback()
     logger.error(f"Erro ao atualizar produto {cod_barras}: {str(e)}")
     raise HTTPException(status_code=500, detail="Erro interno do servidor")
+
+
+@router.delete("/{cod_barras}", status_code=status.HTTP_204_NO_CONTENT)
+def deletar_produto(
+  cod_barras: str,
+  empresa_id: int = Query(..., description="Empresa dona do vínculo a ser removido"),
+  db: Session = Depends(get_db)
+):
+  logger.info(f"[Produtos] Deletar - {cod_barras} / empresa {empresa_id}")
+  service = ProdutosMensuraService(db)
+  service.deletar_produto(empresa_id, cod_barras)
+  return None
