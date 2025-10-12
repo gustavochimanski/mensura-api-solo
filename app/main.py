@@ -73,5 +73,5 @@ def startup():
 # Rotas
 # ───────────────────────────
 app.include_router(auth_controller.router)
-app.include_router(api_delivery.router)
+app.include_router(api_delivery)
 app.include_router(mensura_router)
