@@ -10,10 +10,10 @@ from app.api.mensura.router.router_endereco import router as router_endereco
 from app.api.mensura.router.router_produtos import router as router_produtos
 from app.core.admin_dependencies import get_current_user
 
-router = APIRouter()
-router.include_router(router_empresa, dependencies=[Depends(get_current_user)])
-router.include_router(router_empresa_client)
-router.include_router(router_endereco, dependencies=[Depends(get_current_user)])
-router.include_router(router_geoapify)
-router.include_router(router_produtos, dependencies=[Depends(get_current_user)])
-router.include_router(router_usuario, dependencies=[Depends(get_current_user)])
+mensura_router = APIRouter()
+mensura_router.include_router(router_empresa, dependencies=[Depends(get_current_user)])
+mensura_router.include_router(router_empresa_client)
+mensura_router.include_router(router_endereco, dependencies=[Depends(get_current_user)])
+mensura_router.include_router(router_geoapify)
+mensura_router.include_router(router_produtos, dependencies=[Depends(get_current_user)])
+mensura_router.include_router(router_usuario, dependencies=[Depends(get_current_user)])
