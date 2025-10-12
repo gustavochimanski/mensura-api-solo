@@ -9,6 +9,9 @@ from app.api.delivery.router.pedidos.router_pedidos_dv import router as pedidos_
 from app.api.delivery.router.pagamentos.router_pagamentos_dv import router as pagamentos_router
 from app.api.delivery.router.pedidos.router_pedidos_admin_dv import router as router_pedidos_admin
 from app.api.delivery.router.pagamentos.router_pagamentos_admin_dv import router as router_pagamentos_admin
+from app.api.delivery.router.pagamentos.router_pagamentos_webhook_dv import (
+    router as pagamentos_webhook_router,
+)
 from app.api.delivery.router.router_produtos_dv import router as produtos_router
 from app.api.delivery.router.router_vitrine import router as vitrines_router
 from app.api.delivery.router.router_cupons_dv import router as cupons_router
@@ -30,6 +33,7 @@ api_delivery = APIRouter()
 api_delivery.include_router(home_router)
 api_delivery.include_router(parceiros_publico_router)
 api_delivery.include_router(categorias_router)
+api_delivery.include_router(pagamentos_webhook_router)
 
 # Routers para clientes (usam super_token)
 api_delivery.include_router(pedidos_router)
