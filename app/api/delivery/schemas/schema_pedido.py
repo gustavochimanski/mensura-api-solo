@@ -56,6 +56,7 @@ class PedidoKanbanResponse(BaseModel):
     endereco: str | None = None
     meio_pagamento_id: Optional[int] = None
     meio_pagamento_descricao: str | None = None  # <- novo campo
+    entregador: dict | None = None  # {"id": int, "nome": str}
     pagamento: PedidoPagamentoResumo | None = None
     model_config = ConfigDict(from_attributes=True)
 

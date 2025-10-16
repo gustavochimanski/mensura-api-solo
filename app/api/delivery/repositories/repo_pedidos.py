@@ -81,6 +81,7 @@ class PedidoRepository:
         query = query.options(
             joinedload(PedidoDeliveryModel.cliente).joinedload(ClienteDeliveryModel.enderecos),
             joinedload(PedidoDeliveryModel.endereco),
+            joinedload(PedidoDeliveryModel.entregador),
             joinedload(PedidoDeliveryModel.meio_pagamento),
             joinedload(PedidoDeliveryModel.transacao).joinedload(TransacaoPagamentoModel.meio_pagamento),
         )
@@ -97,6 +98,7 @@ class PedidoRepository:
         query_sem_data = query_sem_data.options(
             joinedload(PedidoDeliveryModel.cliente).joinedload(ClienteDeliveryModel.enderecos),
             joinedload(PedidoDeliveryModel.endereco),
+            joinedload(PedidoDeliveryModel.entregador),
             joinedload(PedidoDeliveryModel.meio_pagamento),
             joinedload(PedidoDeliveryModel.transacao).joinedload(TransacaoPagamentoModel.meio_pagamento),
         ).order_by(PedidoDeliveryModel.data_criacao.desc())

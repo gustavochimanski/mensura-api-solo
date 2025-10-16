@@ -1101,6 +1101,7 @@ class PedidoService:
                     meio_pagamento_descricao=p.meio_pagamento.display() if p.meio_pagamento else None,
                     observacao_geral=p.observacao_geral,
                     meio_pagamento_id=p.meio_pagamento.id if p.meio_pagamento else None,
+                    entregador={"id": p.entregador.id, "nome": p.entregador.nome} if getattr(p, "entregador", None) else None,
                     pagamento=self._build_pagamento_resumo(p),
                 )
             )
