@@ -13,6 +13,7 @@ class ParceiroOut(BaseModel):
     id: int
     nome: str
     ativo: bool
+    banners: List[BannerParceiroOut] = []
     model_config = ConfigDict(from_attributes=True)
 
 # Banner Parceiro

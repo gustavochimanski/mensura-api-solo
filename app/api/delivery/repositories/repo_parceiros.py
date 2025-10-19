@@ -21,10 +21,19 @@ class ParceirosRepository:
         return p
 
     def list_parceiros(self) -> List[ParceiroModel]:
-        return self.db.query(ParceiroModel).all()
+        return (
+            self.db.query(ParceiroModel)
+            .options(joinedload(ParceiroModel.banners).joinedload(BannerParceiroModel.categoria))
+            .all()
+        )
 
     def get_parceiro(self, parceiro_id: int) -> ParceiroModel:
-        p = self.db.query(ParceiroModel).filter_by(id=parceiro_id).first()
+        p = (
+            self.db.query(ParceiroModel)
+            .options(joinedload(ParceiroModel.banners).joinedload(BannerParceiroModel.categoria))
+            .filter_by(id=parceiro_id)
+            .first()
+        )
         if not p:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Parceiro não encontrado")
         return p
