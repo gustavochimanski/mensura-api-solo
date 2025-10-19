@@ -31,5 +31,5 @@ mensura_router.include_router(
 mensura_router.include_router(router_geoapify_client)
 mensura_router.include_router(router_geoapify_admin)
 mensura_router.include_router(router_produtos, dependencies=[Depends(get_current_user)])
-mensura_router.include_router(router_categorias, dependencies=[Depends(get_current_user)])
+mensura_router.include_router(router_categorias)
 mensura_router.include_router(router_usuario, dependencies=[Depends(get_current_user)])
