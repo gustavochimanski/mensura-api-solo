@@ -527,6 +527,19 @@ class PedidoService:
             meio_pagamento = MeioPagamentoService(self.db).get(payload.meio_pagamento_id)
             if not meio_pagamento or not meio_pagamento.ativo:
                 raise HTTPException(400, "Meio de pagamento inválido ou inativo")
+        # Validação de consistência do troco (apenas para dinheiro)
+        if getattr(payload, "troco_para", None) is not None and meio_pagamento is not None:
+            try:
+                mp_tipo = getattr(meio_pagamento, "tipo", None)
+                is_dinheiro = (
+                    mp_tipo == MeioPagamentoTipoEnum.DINHEIRO
+                    or str(mp_tipo).upper() == "DINHEIRO"
+                )
+            except Exception:
+                is_dinheiro = False
+            if is_dinheiro:
+                # O valor de troco deve ser maior ou igual ao total a pagar (será comparado após cálculo)
+                pass
 
         empresa = self.repo_empresa.get_empresa_by_id(payload.empresa_id)
         if not empresa:
@@ -644,6 +657,27 @@ class PedidoService:
             pedido.observacao_geral = payload.observacao_geral
             if payload.troco_para:
                 pedido.troco_para = _dec(payload.troco_para)
+
+            # Após calcular totais, valida troco x total quando meio de pagamento for dinheiro
+            if getattr(payload, "troco_para", None) is not None and meio_pagamento is not None:
+                mp_tipo = getattr(meio_pagamento, "tipo", None)
+                is_dinheiro = (
+                    mp_tipo == MeioPagamentoTipoEnum.DINHEIRO
+                    or str(mp_tipo).upper() == "DINHEIRO"
+                )
+                if is_dinheiro:
+                    valor_total = _dec(pedido.valor_total or 0)
+                    troco_para = _dec(payload.troco_para)
+                    if troco_para < valor_total:
+                        raise HTTPException(
+                            status.HTTP_400_BAD_REQUEST,
+                            detail={
+                                "code": "TROCO_INSUFICIENTE",
+                                "message": "Valor para troco menor que o total do pedido.",
+                                "valor_total": float(valor_total),
+                                "troco_para": float(troco_para),
+                            },
+                        )
 
             logger.info(f"[finalizar_pedido] antes commit cliente_id={pedido.cliente_id}")
             self.repo.commit()
@@ -1181,7 +1215,60 @@ class PedidoService:
         if payload.observacao_geral is not None:
             pedido.observacao_geral = payload.observacao_geral
         if payload.troco_para is not None:
+            # Se meio_pagamento_id foi atualizado, utiliza-o para validar; caso contrário usa o atual
+            meio_pagamento_atual = None
+            try:
+                meio_pagamento_id_ref = payload.meio_pagamento_id if payload.meio_pagamento_id is not None else pedido.meio_pagamento_id
+                if meio_pagamento_id_ref is not None:
+                    meio_pagamento_atual = MeioPagamentoService(self.db).get(meio_pagamento_id_ref)
+            except Exception:
+                meio_pagamento_atual = None
+
+            # Aplica provisoriamente
             pedido.troco_para = _dec(payload.troco_para)
+
+            # Recalcula totais antes da validação final
+            subtotal = pedido.subtotal or Decimal("0")
+            desconto = self._aplicar_cupom(
+                cupom_id=pedido.cupom_id,
+                subtotal=subtotal,
+                empresa_id=pedido.empresa_id,
+            )
+            taxa_entrega, taxa_servico = self._calcular_taxas(
+                tipo_entrega=pedido.tipo_entrega if isinstance(pedido.tipo_entrega, TipoEntregaEnum)
+                            else TipoEntregaEnum(pedido.tipo_entrega),
+                subtotal=subtotal,
+                endereco=endereco or pedido.endereco,  # se não veio novo, usa o atual
+                empresa_id=pedido.empresa_id,
+            )
+            self.repo.atualizar_totais(
+                pedido,
+                subtotal=subtotal,
+                desconto=desconto,
+                taxa_entrega=taxa_entrega,
+                taxa_servico=taxa_servico,
+            )
+
+            # Valida troco x total apenas para dinheiro
+            if meio_pagamento_atual is not None:
+                mp_tipo = getattr(meio_pagamento_atual, "tipo", None)
+                is_dinheiro = (
+                    mp_tipo == MeioPagamentoTipoEnum.DINHEIRO
+                    or str(mp_tipo).upper() == "DINHEIRO"
+                )
+                if is_dinheiro:
+                    valor_total = _dec(pedido.valor_total or 0)
+                    troco_para = _dec(pedido.troco_para)
+                    if troco_para < valor_total:
+                        raise HTTPException(
+                            status.HTTP_400_BAD_REQUEST,
+                            detail={
+                                "code": "TROCO_INSUFICIENTE",
+                                "message": "Valor para troco menor que o total do pedido.",
+                                "valor_total": float(valor_total),
+                                "troco_para": float(troco_para),
+                            },
+                        )
 
         subtotal = pedido.subtotal or Decimal("0")
         desconto = self._aplicar_cupom(
