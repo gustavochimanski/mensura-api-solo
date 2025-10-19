@@ -13,7 +13,7 @@ from app.api.mensura.schemas.schema_categorias import (
     CategoriaListItem
 )
 
-router = APIRouter(prefix="/categorias", tags=["Categorias"])
+router = APIRouter(prefix="/api/mensura/admin/categorias", tags=["Admin - Mensura - Categorias"], dependencies=[Depends(get_current_user)])
 
 
 @router.post("/", response_model=CategoriaResponse, status_code=status.HTTP_201_CREATED)
