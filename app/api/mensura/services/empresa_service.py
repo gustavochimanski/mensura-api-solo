@@ -14,7 +14,7 @@ from app.api.mensura.schemas.schema_empresa import (
 )
 from app.api.mensura.schemas.schema_endereco import EnderecoCreate, EnderecoUpdate
 from app.api.mensura.services.endereco_service import EnderecoService
-from app.utils.minio_client import upload_file_to_minio, remover_arquivo_minio
+from app.utils.minio_client import upload_file_to_minio, remover_arquivo_minio, gerar_nome_bucket, configurar_permissoes_bucket
 
 
 from app.api.mensura.models.association_tables import entregador_empresa, usuario_empresa
@@ -85,6 +85,22 @@ class EmpresaService:
         try:
             self.db.commit()
             self.db.refresh(empresa)
+            
+            # Configura bucket MinIO para a nova empresa
+            if empresa.cnpj:
+                try:
+                    bucket_name = gerar_nome_bucket(empresa.cnpj)
+                    if bucket_name:
+                        from app.utils.minio_client import client
+                        if not client.bucket_exists(bucket_name):
+                            client.make_bucket(bucket_name)
+                        # Configura permissões públicas
+                        configurar_permissoes_bucket(bucket_name)
+                except Exception as e:
+                    # Log do erro mas não falha a criação da empresa
+                    from app.utils.logger import logger
+                    logger.warning(f"Falha ao configurar bucket MinIO para empresa {empresa.id}: {e}")
+                    
         except IntegrityError as e:
             self.db.rollback()
             # verifica se é duplicidade de cardapio_link
@@ -145,6 +161,24 @@ class EmpresaService:
 
         self.db.commit()
         self.db.refresh(empresa)
+        
+        # Verifica e configura bucket MinIO após edição
+        if empresa.cnpj:
+            try:
+                bucket_name = gerar_nome_bucket(empresa.cnpj)
+                if bucket_name:
+                    from app.utils.minio_client import client
+                    # Verifica se bucket existe
+                    if not client.bucket_exists(bucket_name):
+                        client.make_bucket(bucket_name)
+                    
+                    # Configura permissões públicas (sempre verifica na edição)
+                    configurar_permissoes_bucket(bucket_name)
+            except Exception as e:
+                # Log do erro mas não falha a edição da empresa
+                from app.utils.logger import logger
+                logger.warning(f"Falha ao verificar/configurar bucket MinIO para empresa {empresa.id}: {e}")
+        
         return empresa
 
     # ---------- HELPER: CONTAGEM DE VÍNCULOS QUE BLOQUEIAM A REMOÇÃO ----------

@@ -42,6 +42,42 @@ def gerar_nome_bucket(cnpj: str) -> str:
     return slugify(cnpj)[:63]
 
 
+def configurar_permissoes_bucket(bucket_name: str) -> bool:
+    """
+    Configura permissões públicas de download para um bucket do MinIO.
+    Retorna True se configurado com sucesso, False caso contrário.
+    """
+    try:
+        logger.info(f"[MinIO] Configurando permissões públicas para bucket: {bucket_name}")
+        
+        # Verifica se o bucket existe
+        if not client.bucket_exists(bucket_name):
+            logger.warning(f"[MinIO] Bucket não existe para configurar permissões: {bucket_name}")
+            return False
+        
+        # Configura política pública para download
+        policy = {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Principal": "*",
+                    "Action": "s3:GetObject",
+                    "Resource": f"arn:aws:s3:::{bucket_name}/*"
+                }
+            ]
+        }
+        
+        import json
+        client.set_bucket_policy(bucket_name, json.dumps(policy))
+        logger.info(f"[MinIO] Permissões públicas configuradas com sucesso para bucket: {bucket_name}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"[MinIO] Erro ao configurar permissões do bucket {bucket_name}: {e}")
+        return False
+
+
 
 
 def upload_file_to_minio(
@@ -72,8 +108,18 @@ def upload_file_to_minio(
     if not client.bucket_exists(bucket_name):
         logger.info(f"[MinIO] Criando bucket: {bucket_name}")
         client.make_bucket(bucket_name)
+        # Configura permissões públicas automaticamente para novos buckets
+        configurar_permissoes_bucket(bucket_name)
     else:
         logger.info(f"[MinIO] Bucket já existe: {bucket_name}")
+        # Verifica e configura permissões se necessário
+        try:
+            # Tenta acessar a política do bucket para verificar se já está configurada
+            client.get_bucket_policy(bucket_name)
+        except Exception:
+            # Se não conseguir obter a política, configura as permissões
+            logger.info(f"[MinIO] Configurando permissões para bucket existente: {bucket_name}")
+            configurar_permissoes_bucket(bucket_name)
 
     # 3️⃣ Usa o arquivo original
     file_data = file.file
@@ -172,4 +218,73 @@ def remover_arquivo_minio(file_url: str) -> bool:
     except Exception as e:
         logger.error(f"[MinIO] Erro ao remover arquivo: {e} | URL: {file_url}")
         return False
+
+
+def corrigir_permissoes_todos_buckets() -> dict:
+    """
+    Corrige permissões de todos os buckets existentes no MinIO.
+    Retorna um dicionário com o status de cada bucket.
+    """
+    resultado = {
+        "buckets_processados": 0,
+        "sucessos": 0,
+        "falhas": 0,
+        "detalhes": []
+    }
+    
+    try:
+        logger.info("[MinIO] Iniciando correção de permissões para todos os buckets")
+        
+        # Lista todos os buckets
+        buckets = client.list_buckets()
+        
+        for bucket in buckets:
+            bucket_name = bucket.name
+            resultado["buckets_processados"] += 1
+            
+            try:
+                logger.info(f"[MinIO] Processando bucket: {bucket_name}")
+                
+                # Verifica se já tem política configurada
+                try:
+                    client.get_bucket_policy(bucket_name)
+                    logger.info(f"[MinIO] Bucket {bucket_name} já possui política configurada")
+                    resultado["detalhes"].append({
+                        "bucket": bucket_name,
+                        "status": "já_configurado",
+                        "mensagem": "Política já configurada"
+                    })
+                except Exception:
+                    # Configura permissões se não tiver
+                    if configurar_permissoes_bucket(bucket_name):
+                        resultado["sucessos"] += 1
+                        resultado["detalhes"].append({
+                            "bucket": bucket_name,
+                            "status": "configurado",
+                            "mensagem": "Permissões configuradas com sucesso"
+                        })
+                    else:
+                        resultado["falhas"] += 1
+                        resultado["detalhes"].append({
+                            "bucket": bucket_name,
+                            "status": "erro",
+                            "mensagem": "Falha ao configurar permissões"
+                        })
+                        
+            except Exception as e:
+                resultado["falhas"] += 1
+                logger.error(f"[MinIO] Erro ao processar bucket {bucket_name}: {e}")
+                resultado["detalhes"].append({
+                    "bucket": bucket_name,
+                    "status": "erro",
+                    "mensagem": f"Erro: {str(e)}"
+                })
+        
+        logger.info(f"[MinIO] Correção concluída - Processados: {resultado['buckets_processados']}, Sucessos: {resultado['sucessos']}, Falhas: {resultado['falhas']}")
+        
+    except Exception as e:
+        logger.error(f"[MinIO] Erro geral na correção de permissões: {e}")
+        resultado["erro_geral"] = str(e)
+    
+    return resultado
 

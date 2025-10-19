@@ -20,6 +20,7 @@ from app.api.delivery.router.pagamentos import router_pagamentos_admin
 from app.api.delivery.router.parceiros import router_parceiros_admin
 from app.api.delivery.router.pedidos import router_pedidos_admin
 from app.api.delivery.router.pagamentos import router_pagamentos_webhook
+from app.api.delivery.router.admin.router_minio_admin import router as router_minio_admin
 
 api_delivery = APIRouter()
 
@@ -49,3 +50,4 @@ api_delivery.include_router(router_pedidos_admin.router)
 api_delivery.include_router(router_entregadores_admin.router)
 api_delivery.include_router(router_regiao_entrega_admin.router)
 api_delivery.include_router(router_vitrines_admin.router)
+api_delivery.include_router(router_minio_admin)
