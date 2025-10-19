@@ -19,6 +19,7 @@ from app.api.mensura.router.router_endereco_admin import (
     router as router_endereco_admin,
 )
 from app.api.mensura.router.router_produtos import router as router_produtos
+from app.api.mensura.router.router_categorias import router as router_categorias
 from app.core.admin_dependencies import get_current_user
 
 mensura_router = APIRouter()
@@ -30,4 +31,5 @@ mensura_router.include_router(
 mensura_router.include_router(router_geoapify_client)
 mensura_router.include_router(router_geoapify_admin)
 mensura_router.include_router(router_produtos, dependencies=[Depends(get_current_user)])
+mensura_router.include_router(router_categorias, dependencies=[Depends(get_current_user)])
 mensura_router.include_router(router_usuario, dependencies=[Depends(get_current_user)])
