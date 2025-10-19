@@ -3,20 +3,7 @@ from pydantic import BaseModel, ConfigDict, constr
 from typing import List, Optional
 from app.api.delivery.schemas.schema_cupom import CupomParceiroOut
 
-# Parceiro DTOs
-class ParceiroIn(BaseModel):
-    nome: constr(min_length=1, max_length=100)
-    ativo: bool
-    model_config = ConfigDict(from_attributes=True)
-
-class ParceiroOut(BaseModel):
-    id: int
-    nome: str
-    ativo: bool
-    banners: List[BannerParceiroOut] = []
-    model_config = ConfigDict(from_attributes=True)
-
-# Banner Parceiro
+# Banner Parceiro (definido primeiro para ser usado em ParceiroOut)
 class BannerParceiroIn(BaseModel):
     nome: constr(min_length=1, max_length=100)
     parceiro_id: int
@@ -34,6 +21,19 @@ class BannerParceiroOut(BaseModel):
     imagem: Optional[str]
     categoria_id: int
     href_destino: str
+    model_config = ConfigDict(from_attributes=True)
+
+# Parceiro DTOs
+class ParceiroIn(BaseModel):
+    nome: constr(min_length=1, max_length=100)
+    ativo: bool
+    model_config = ConfigDict(from_attributes=True)
+
+class ParceiroOut(BaseModel):
+    id: int
+    nome: str
+    ativo: bool
+    banners: List[BannerParceiroOut] = []
     model_config = ConfigDict(from_attributes=True)
 
 # Parceiro Completo com Banners e Cupons
