@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 
 from app.database.db_connection import get_db
+from app.core.admin_dependencies import get_current_user
 from app.api.mensura.services.service_categorias import CategoriaService
 from app.api.mensura.schemas.schema_categorias import (
     CriarCategoriaRequest,
