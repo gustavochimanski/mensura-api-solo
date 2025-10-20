@@ -163,13 +163,23 @@ class PedidoRepository:
         self.db.flush()
 
     def add_status_historico(
-        self, pedido_id: int, status: str, motivo: str | None = None, criado_por: str | None = "system"
+        self, 
+        pedido_id: int, 
+        status: str, 
+        motivo: str | None = None, 
+        observacoes: str | None = None,
+        criado_por: str | None = "system",
+        ip_origem: str | None = None,
+        user_agent: str | None = None
     ):
         hist = PedidoStatusHistoricoModel(
             pedido_id=pedido_id,
             status=status,
             motivo=motivo,
+            observacoes=observacoes,
             criado_por=criado_por,
+            ip_origem=ip_origem,
+            user_agent=user_agent,
         )
         self.db.add(hist)
 
