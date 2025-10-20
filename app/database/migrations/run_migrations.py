@@ -16,7 +16,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
 from app.database.db_connection import engine
-from app.database.migrations.001_add_audit_fields_to_pedido_status_historico import upgrade as upgrade_001
+from app.database.migrations.migration_001_add_audit_fields_to_pedido_status_historico import upgrade as upgrade_001
 
 def run_migrations():
     """Executa todas as migrations em ordem"""
