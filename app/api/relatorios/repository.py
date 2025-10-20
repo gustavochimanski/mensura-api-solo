@@ -88,6 +88,7 @@ class RelatorioRepository:
                     )
                 )
             )
+            .select_from(PedidoDeliveryModel)
             .join(
                 PedidoStatusHistoricoModel,
                 PedidoStatusHistoricoModel.pedido_id == PedidoDeliveryModel.id,
