@@ -78,27 +78,36 @@ class RelatorioRepository:
     def _media_tempo_entrega_minutos(
         self, empresa_id: int, inicio: datetime, fim: datetime
     ) -> float:
+        finalizacao_subquery = (
+            self.db.query(
+                PedidoStatusHistoricoModel.pedido_id.label("pedido_id"),
+                func.max(PedidoStatusHistoricoModel.criado_em).label("finalizado_em"),
+            )
+            .filter(PedidoStatusHistoricoModel.status == "E")
+            .group_by(PedidoStatusHistoricoModel.pedido_id)
+            .subquery()
+        )
+
         avg_seconds = (
             self.db.query(
                 func.avg(
                     func.extract(
                         "epoch",
-                        PedidoStatusHistoricoModel.criado_em
+                        finalizacao_subquery.c.finalizado_em
                         - PedidoDeliveryModel.data_criacao,
                     )
                 )
             )
             .select_from(PedidoDeliveryModel)
             .join(
-                PedidoStatusHistoricoModel,
-                PedidoStatusHistoricoModel.pedido_id == PedidoDeliveryModel.id,
+                finalizacao_subquery,
+                finalizacao_subquery.c.pedido_id == PedidoDeliveryModel.id,
             )
             .filter(
                 PedidoDeliveryModel.empresa_id == empresa_id,
                 PedidoDeliveryModel.data_criacao >= inicio,
                 PedidoDeliveryModel.data_criacao < fim,
                 PedidoDeliveryModel.status == "E",
-                PedidoStatusHistoricoModel.status == "E",
             )
             .scalar()
         )
