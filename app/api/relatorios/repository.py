@@ -224,14 +224,24 @@ class RelatorioRepository:
 
         return {
             "data": dia,
-            "empresa_id": empresa_id,
-            "pedidos_dia": resumo_dia.quantidade,
-            "faturamento_dia": resumo_dia.faturamento,
-            "faturamento_ontem": resumo_ontem.faturamento,
-            "faturamento_mes_anterior": resumo_mes_passado.faturamento,
-            "ticket_medio_dia": ticket_medio_dia,
-            "ticket_medio_ontem": ticket_medio_ontem,
-            "tempo_medio_entrega_minutos": tempo_medio,
+            "empresa": {
+                "id": empresa_id,
+            },
+            "pedidos": {
+                "dia": resumo_dia.quantidade,
+            },
+            "faturamento": {
+                "dia": resumo_dia.faturamento,
+                "ontem": resumo_ontem.faturamento,
+                "mes_anterior": resumo_mes_passado.faturamento,
+            },
+            "ticket_medio": {
+                "dia": ticket_medio_dia,
+                "ontem": ticket_medio_ontem,
+            },
+            "tempo_entrega": {
+                "medio_minutos": tempo_medio,
+            },
             "vendas_por_hora": self._vendas_por_hora(empresa_id, inicio_dia, fim_dia),
             "top_produtos": self._top_produtos(empresa_id, inicio_dia, fim_dia),
         }
