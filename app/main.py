@@ -10,6 +10,7 @@ from app.config.settings import CORS_ORIGINS, CORS_ALLOW_ALL, BASE_URL as SETTIN
 from app.api.auth import auth_controller
 from app.api.delivery.router.router import api_delivery
 from app.api.mensura.router.router import mensura_router
+from app.api.mesas.router.router import api_mesas
 from app.api.relatorios.router import router as relatorios_router
 
 # ───────────────────────────
@@ -76,4 +77,5 @@ def startup():
 app.include_router(auth_controller.router)
 app.include_router(api_delivery)
 app.include_router(mensura_router)
+app.include_router(api_mesas)
 app.include_router(relatorios_router)

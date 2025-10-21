@@ -26,6 +26,7 @@ from app.api.delivery.schemas.schema_pedido import (
     ItemPedidoEditar,
     ItemPedidoRequest,
     ItemPedidoResponse,
+    MeioPagamentoKanbanResponse,
     PedidoPagamentoResumo,
     PedidoKanbanResponse,
     PedidoResponse,
@@ -1132,9 +1133,8 @@ class PedidoService:
                     telefone_cliente=cliente.telefone if cliente else None,
                     nome_cliente=cliente.nome if cliente else None,
                     endereco=endereco_str,
-                    meio_pagamento_descricao=p.meio_pagamento.display() if p.meio_pagamento else None,
                     observacao_geral=p.observacao_geral,
-                    meio_pagamento_id=p.meio_pagamento.id if p.meio_pagamento else None,
+                    meio_pagamento=MeioPagamentoKanbanResponse.model_validate(p.meio_pagamento) if p.meio_pagamento else None,
                     entregador={"id": p.entregador.id, "nome": p.entregador.nome} if getattr(p, "entregador", None) else None,
                     pagamento=self._build_pagamento_resumo(p),
                 )

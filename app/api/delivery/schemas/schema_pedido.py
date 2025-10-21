@@ -2,7 +2,7 @@ from typing import List, Optional
 from datetime import datetime
 from pydantic import BaseModel, ConfigDict, condecimal, Field
 
-from .schema_meio_pagamento import MeioPagamentoResponse
+from .schema_meio_pagamento import MeioPagamentoResponse, MeioPagamentoTipoEnum
 from .schema_shared_enums import (
     PedidoStatusEnum,
     TipoEntregaEnum,
@@ -25,6 +25,15 @@ from .schema_cupom import CupomOut
 from .schema_transacao_pagamento import TransacaoResponse
 from .schema_pedido_status_historico import PedidoStatusHistoricoOut
 from app.api.mensura.schemas.schema_empresa import EmpresaResponse
+
+
+class MeioPagamentoKanbanResponse(BaseModel):
+    """Schema simplificado para meio de pagamento no kanban (sem timestamps)"""
+    id: int
+    nome: str
+    tipo: MeioPagamentoTipoEnum
+    ativo: bool
+    model_config = ConfigDict(from_attributes=True)
 
 
 class PedidoPagamentoResumo(BaseModel):
@@ -54,8 +63,7 @@ class PedidoKanbanResponse(BaseModel):
     data_criacao: datetime
     observacao_geral: Optional[str] = None
     endereco: str | None = None
-    meio_pagamento_id: Optional[int] = None
-    meio_pagamento_descricao: str | None = None  # <- novo campo
+    meio_pagamento: Optional[MeioPagamentoKanbanResponse] = None  # Objeto simplificado do meio de pagamento
     entregador: dict | None = None  # {"id": int, "nome": str}
     pagamento: PedidoPagamentoResumo | None = None
     model_config = ConfigDict(from_attributes=True)
