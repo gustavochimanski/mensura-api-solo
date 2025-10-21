@@ -4,7 +4,7 @@ from fastapi import (
 from sqlalchemy.orm import Session
 from typing import Optional, List
 
-from app.core.client_dependecies import get_current_client
+from app.core.client_dependecies import get_cliente_by_super_token
 from app.database.db_connection import get_db
 from app.api.mesas.services.service_mesas import MesaService
 from app.api.mesas.schemas.schema_mesa import (
@@ -16,7 +16,7 @@ from app.utils.logger import logger
 router = APIRouter(
     prefix="/api/mesas/client/mesas",
     tags=["Client - Mesas"],
-    dependencies=[Depends(get_current_client)]
+    dependencies=[Depends(get_cliente_by_super_token)]
 )
 
 # -------- ESTATÍSTICAS --------
