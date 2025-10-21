@@ -121,7 +121,7 @@ class RelatorioRepository:
     ) -> List[Dict[str, float | int]]:
         rows = (
             self.db.query(
-                func.date_part("hour", PedidoDeliveryModel.data_criacao).label("hora"),
+                func.date_part("hour", func.timezone('America/Sao_Paulo', PedidoDeliveryModel.data_criacao)).label("hora"),
                 func.count(PedidoDeliveryModel.id).label("quantidade"),
                 func.coalesce(func.sum(PedidoDeliveryModel.valor_total), 0).label(
                     "faturamento"
