@@ -11,6 +11,12 @@ from app.api.delivery.schemas.schema_pedido import (
     ItemPedidoEditar,
     PedidoKanbanResponse,
 )
+from app.api.delivery.schemas.schema_pedido_status_historico import (
+    AlterarStatusPedidoRequest,
+    AlterarStatusPedidoBody,
+    HistoricoDoPedidoResponse,
+    PedidoStatusHistoricoOut,
+)
 from app.api.delivery.services.pedidos.service_pedido import PedidoService
 from app.core.admin_dependencies import get_current_user
 from app.database.db_connection import get_db
@@ -111,6 +117,118 @@ def atualizar_status_pedido(
         )
     
     return svc.atualizar_status(pedido_id=pedido_id, novo_status=novo_status)
+
+
+# ======================================================================
+# ================= ALTERAR STATUS COM HISTÓRICO =======================
+@router.put(
+    "/status/{pedido_id}/historico",
+    response_model=PedidoResponse,
+    status_code=status.HTTP_200_OK,
+)
+def alterar_status_pedido_com_historico(
+    pedido_id: int = Path(..., description="ID do pedido", gt=0),
+    payload: AlterarStatusPedidoBody = Body(...),
+    db: Session = Depends(get_db),
+):
+    """
+    Altera o status de um pedido com histórico detalhado (admin).
+    
+    - **pedido_id**: ID do pedido (obrigatório, deve ser maior que 0)
+    - **payload**: Dados para alteração do status incluindo motivo e observações
+    
+    Campos do payload:
+    - **status**: Novo status do pedido (obrigatório)
+    - **motivo**: Motivo da alteração (opcional)
+    - **observacoes**: Observações adicionais (opcional)
+    - **criado_por**: Quem fez a alteração (opcional, padrão: "admin")
+    - **ip_origem**: IP de origem (opcional)
+    - **user_agent**: User agent do cliente (opcional)
+    """
+    logger.info(f"[Pedidos] Alterar status com histórico - pedido_id={pedido_id} -> {payload.status}")
+    svc = PedidoService(db)
+    
+    # Verifica se o pedido existe
+    pedido = svc.repo.get_pedido(pedido_id)
+    if not pedido:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Pedido com ID {pedido_id} não encontrado"
+        )
+    
+    # Atualiza o status do pedido com histórico detalhado
+    svc.repo.atualizar_status_pedido_com_historico_detalhado(
+        pedido=pedido,
+        novo_status=payload.status.value,
+        motivo=payload.motivo,
+        observacoes=payload.observacoes,
+        criado_por=payload.criado_por or "admin",
+        ip_origem=payload.ip_origem,
+        user_agent=payload.user_agent
+    )
+    
+    svc.repo.commit()
+    
+    # Recarrega o pedido para retornar os dados atualizados
+    pedido_atualizado = svc.repo.get_pedido(pedido_id)
+    return svc._pedido_to_response(pedido_atualizado)
+
+
+# ======================================================================
+# ================= OBTER HISTÓRICO DO PEDIDO ==========================
+@router.get(
+    "/{pedido_id}/historico",
+    response_model=HistoricoDoPedidoResponse,
+    status_code=status.HTTP_200_OK,
+)
+def obter_historico_pedido(
+    pedido_id: int = Path(..., description="ID do pedido", gt=0),
+    db: Session = Depends(get_db),
+):
+    """
+    Obtém o histórico completo de alterações de status de um pedido.
+    
+    - **pedido_id**: ID do pedido (obrigatório, deve ser maior que 0)
+    
+    Retorna todos os registros de mudança de status com timestamps, motivos e observações.
+    """
+    logger.info(f"[Pedidos] Obter histórico - pedido_id={pedido_id}")
+    svc = PedidoService(db)
+    
+    # Verifica se o pedido existe
+    pedido = svc.repo.get_pedido(pedido_id)
+    if not pedido:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Pedido com ID {pedido_id} não encontrado"
+        )
+    
+    # Busca o histórico do pedido
+    from app.api.delivery.models.model_pedido_status_historico_dv import PedidoStatusHistoricoModel
+    historicos = (
+        db.query(PedidoStatusHistoricoModel)
+        .filter(PedidoStatusHistoricoModel.pedido_id == pedido_id)
+        .order_by(PedidoStatusHistoricoModel.criado_em.desc())
+        .all()
+    )
+    
+    return HistoricoDoPedidoResponse(
+        pedido_id=pedido_id,
+        historicos=[
+            PedidoStatusHistoricoOut(
+                id=h.id,
+                pedido_id=h.pedido_id,
+                status=h.status,
+                motivo=h.motivo,
+                observacoes=h.observacoes,
+                criado_em=h.criado_em,
+                criado_por=h.criado_por,
+                ip_origem=h.ip_origem,
+                user_agent=h.user_agent,
+            )
+            for h in historicos
+        ]
+    )
 
 
 # ======================================================================

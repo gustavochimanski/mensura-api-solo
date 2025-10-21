@@ -12,6 +12,14 @@ class AlterarStatusPedidoRequest(BaseModel):
     ip_origem: Optional[constr(max_length=45)] = None
     user_agent: Optional[constr(max_length=500)] = None
 
+class AlterarStatusPedidoBody(BaseModel):
+    status: PedidoStatusEnum
+    motivo: Optional[str] = None
+    observacoes: Optional[str] = None
+    criado_por: Optional[constr(max_length=60)] = None
+    ip_origem: Optional[constr(max_length=45)] = None
+    user_agent: Optional[constr(max_length=500)] = None
+
 class PedidoStatusHistoricoOut(BaseModel):
     id: int
     pedido_id: int

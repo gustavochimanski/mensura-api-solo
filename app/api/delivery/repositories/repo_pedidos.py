@@ -187,6 +187,28 @@ class PedidoRepository:
         pedido.status = novo_status
         self.add_status_historico(pedido.id, novo_status, motivo=motivo)
 
+    def atualizar_status_pedido_com_historico_detalhado(
+        self, 
+        pedido: PedidoDeliveryModel, 
+        novo_status: str, 
+        motivo: str | None = None,
+        observacoes: str | None = None,
+        criado_por: str | None = "admin",
+        ip_origem: str | None = None,
+        user_agent: str | None = None
+    ):
+        """Atualiza status do pedido com histórico detalhado em uma única operação"""
+        pedido.status = novo_status
+        self.add_status_historico(
+            pedido_id=pedido.id,
+            status=novo_status,
+            motivo=motivo,
+            observacoes=observacoes,
+            criado_por=criado_por,
+            ip_origem=ip_origem,
+            user_agent=user_agent
+        )
+
     # ----------------- Transação pagamento -------------
     def criar_transacao_pagamento(
         self,
