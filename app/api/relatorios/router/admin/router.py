@@ -3,8 +3,8 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from app.api.relatorios.repository import RelatorioRepository
-from app.api.relatorios.service import RelatoriosService
+from app.api.relatorios.repositories.repository import RelatorioRepository
+from app.api.relatorios.services.service import RelatoriosService
 from app.core.admin_dependencies import get_current_user
 from app.database.db_connection import get_db
 
