@@ -31,7 +31,7 @@ class MesaModel(Base):
     # Relacionamentos
     pedidos = relationship("PedidoMesaModel", back_populates="mesa", cascade="all, delete-orphan")
     cliente_atual_id = Column(Integer, ForeignKey("delivery.clientes_dv.id", ondelete="SET NULL"), nullable=True)
-    cliente_atual = relationship("ClienteDeliveryModel")
+    cliente_atual = relationship("ClienteDeliveryModel", lazy="select")
     historico = relationship("MesaHistoricoModel", back_populates="mesa", cascade="all, delete-orphan")
     
     created_at = Column(DateTime, default=now_trimmed, nullable=False)

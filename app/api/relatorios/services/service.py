@@ -4,8 +4,7 @@ from datetime import date, datetime
 
 from fastapi import HTTPException, status
 
-from app.api.relatorios.repository import RelatorioRepository
-
+from app.api.relatorios.repositories.admin.repo_relatorios import RelatorioRepository
 
 class RelatoriosService:
     def __init__(self, repository: RelatorioRepository) -> None:

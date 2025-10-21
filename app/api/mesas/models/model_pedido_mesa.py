@@ -29,7 +29,7 @@ class PedidoMesaModel(Base):
     mesa = relationship("MesaModel", back_populates="pedidos")
     
     cliente_id = Column(Integer, ForeignKey("delivery.clientes_dv.id", ondelete="SET NULL"), nullable=True)
-    cliente = relationship("ClienteDeliveryModel")
+    cliente = relationship("ClienteDeliveryModel", lazy="select")
     
     # Dados do pedido
     numero_pedido = Column(String(20), nullable=False, unique=True)

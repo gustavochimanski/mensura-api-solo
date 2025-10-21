@@ -8,7 +8,7 @@ from app.api.relatorios.service import RelatoriosService
 from app.core.admin_dependencies import get_current_user
 from app.database.db_connection import get_db
 
-router = APIRouter(prefix="/relatorios", tags=["Relatórios"], dependencies=[Depends(get_current_user)])
+router = APIRouter(prefix="/api/relatorios/admin/relatorios", tags=["Admin - Relatórios - Panorâmico Diário"], dependencies=[Depends(get_current_user)])
 
 
 @router.get("/panoramico-dia")

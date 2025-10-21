@@ -35,11 +35,11 @@ class MesaHistoricoModel(Base):
     
     # Relacionamento com cliente (opcional)
     cliente_id = Column(Integer, ForeignKey("delivery.clientes_dv.id", ondelete="SET NULL"), nullable=True)
-    cliente = relationship("ClienteDeliveryModel")
+    cliente = relationship("ClienteDeliveryModel", lazy="select")
     
     # Relacionamento com usuário que executou a operação (opcional)
     usuario_id = Column(Integer, ForeignKey("mensura.usuarios.id", ondelete="SET NULL"), nullable=True)
-    usuario = relationship("UserModel")
+    usuario = relationship("UserModel", lazy="select")
     
     # Dados da operação
     tipo_operacao = Column(Enum(TipoOperacaoMesa), nullable=False)
