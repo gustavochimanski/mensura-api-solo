@@ -226,6 +226,11 @@ class RelatorioRepository:
             if resumo_ontem.quantidade
             else 0.0
         )
+        ticket_medio_mes_passado = (
+            round(resumo_mes_passado.faturamento / resumo_mes_passado.quantidade, 2)
+            if resumo_mes_passado.quantidade
+            else 0.0
+        )
 
         tempo_medio = self._media_tempo_entrega_minutos(
             empresa_id, inicio_dia, fim_dia
@@ -238,6 +243,8 @@ class RelatorioRepository:
             },
             "pedidos": {
                 "dia": resumo_dia.quantidade,
+                "ontem": resumo_ontem.quantidade,
+                "mes_anterior": resumo_mes_passado.quantidade,
             },
             "faturamento": {
                 "dia": resumo_dia.faturamento,
@@ -247,6 +254,7 @@ class RelatorioRepository:
             "ticket_medio": {
                 "dia": ticket_medio_dia,
                 "ontem": ticket_medio_ontem,
+                "mes_anterior": ticket_medio_mes_passado,
             },
             "tempo_entrega": {
                 "medio_minutos": tempo_medio,
