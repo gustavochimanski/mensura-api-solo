@@ -21,7 +21,7 @@ class MesaIn(BaseModel):
     status: Optional[StatusMesaEnum] = StatusMesaEnum.DISPONIVEL
     posicao_x: Optional[int] = Field(None, ge=0)
     posicao_y: Optional[int] = Field(None, ge=0)
-    ativa: Optional[constr(regex="^[SN]$")] = "S"
+    ativa: Optional[constr(pattern="^[SN]$")] = "S"
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -61,7 +61,7 @@ class MesaUpdate(BaseModel):
     status: Optional[StatusMesaEnum] = None
     posicao_x: Optional[int] = Field(None, ge=0)
     posicao_y: Optional[int] = Field(None, ge=0)
-    ativa: Optional[constr(regex="^[SN]$")] = None
+    ativa: Optional[constr(pattern="^[SN]$")] = None
 
     model_config = ConfigDict(from_attributes=True)
 
