@@ -11,7 +11,7 @@ from app.api.auth import auth_controller
 from app.api.delivery.router.router import api_delivery
 from app.api.mensura.router.router import mensura_router
 from app.api.mesas.router.router import api_mesas
-from app.api.relatorios.router import router as relatorios_router
+from app.api.relatorios.router.router import router as relatorios_router
 
 # ───────────────────────────
 # Diretórios
