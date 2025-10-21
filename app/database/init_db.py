@@ -179,6 +179,9 @@ def importar_models():
     from app.api.delivery.models.model_regiao_entrega import RegiaoEntregaModel
     # ─── Models Mesas ───────────────────────────────────────────
     from app.api.mesas.models.model_mesa import MesaModel
+    from app.api.mesas.models.model_mesa_historico import MesaHistoricoModel
+    from app.api.mesas.models.model_pedido_mesa import PedidoMesaModel
+    from app.api.mesas.models.model_pedido_mesa_item import PedidoMesaItemModel
 
     logger.info("📦 Models importados com sucesso.")
 

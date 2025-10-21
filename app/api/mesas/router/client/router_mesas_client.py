@@ -10,6 +10,7 @@ from app.api.mesas.services.service_mesas import MesaService
 from app.api.mesas.schemas.schema_mesa import (
     MesaOut, MesaListOut, MesaStatsOut, StatusMesaEnum
 )
+from app.api.mesas.schemas.schema_mesa_historico import MesaHistoricoListOut
 from app.api.mesas.models.model_mesa import StatusMesa
 from app.utils.logger import logger
 
@@ -273,4 +274,27 @@ def list_mesas_por_capacidade(
             label=m.label
         )
         for m in mesas_filtradas
+    ]
+
+# -------- HISTÓRICO DA MESA --------
+@router.get("/{mesa_id}/historico", response_model=List[MesaHistoricoListOut])
+def get_mesa_historico(
+    mesa_id: int = Path(..., title="ID da mesa"),
+    limit: int = Query(50, title="Limite de registros", ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    """Retorna o histórico de operações de uma mesa"""
+    service = MesaService(db)
+    historico = service.get_historico(mesa_id, limit)
+    
+    return [
+        MesaHistoricoListOut(
+            id=h.id,
+            mesa_id=h.mesa_id,
+            tipo_operacao=h.tipo_operacao,
+            tipo_operacao_descricao=h.tipo_operacao_descricao,
+            resumo_operacao=h.resumo_operacao,
+            created_at=h.created_at
+        )
+        for h in historico
     ]

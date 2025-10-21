@@ -1,6 +1,6 @@
 # app/api/mesas/models/model_mesa.py
 from typing import Optional
-from sqlalchemy import Column, Integer, String, DateTime, func, Enum
+from sqlalchemy import Column, Integer, String, DateTime, func, Enum, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.hybrid import hybrid_property
 import enum
@@ -26,12 +26,13 @@ class MesaModel(Base):
     descricao = Column(String(100), nullable=True)
     capacidade = Column(Integer, nullable=False, default=4)
     status = Column(Enum(StatusMesa), nullable=False, default=StatusMesa.DISPONIVEL)
-    posicao_x = Column(Integer, nullable=True)  # Posição X no layout
-    posicao_y = Column(Integer, nullable=True)  # Posição Y no layout
     ativa = Column(String(1), nullable=False, default="S")  # S/N para ativa/inativa
     
-    # Relacionamento com pedidos (uma mesa pode ter vários pedidos)
-    pedidos = relationship("PedidoDeliveryModel", back_populates="mesa")
+    # Relacionamentos
+    pedidos = relationship("PedidoMesaModel", back_populates="mesa", cascade="all, delete-orphan")
+    cliente_atual_id = Column(Integer, ForeignKey("delivery.clientes_dv.id", ondelete="SET NULL"), nullable=True)
+    cliente_atual = relationship("ClienteDeliveryModel")
+    historico = relationship("MesaHistoricoModel", back_populates="mesa", cascade="all, delete-orphan")
     
     created_at = Column(DateTime, default=now_trimmed, nullable=False)
     updated_at = Column(DateTime, default=now_trimmed, onupdate=now_trimmed, nullable=False)

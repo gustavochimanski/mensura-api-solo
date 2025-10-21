@@ -132,3 +132,18 @@ class MesaService:
         if not mesa.is_ocupada:
             raise ValueError("Mesa não está ocupada")
         return self.liberar_mesa(mesa_id)
+    
+    def get_historico(self, mesa_id: int, limit: int = 50):
+        """Retorna o histórico de uma mesa"""
+        logger.info(f"[MesaService] Obtendo histórico da mesa - id={mesa_id}, limit={limit}")
+        return self.repo.get_historico(mesa_id, limit)
+    
+    def associar_cliente(self, mesa_id: int, cliente_id: int):
+        """Associa um cliente à mesa"""
+        logger.info(f"[MesaService] Associando cliente à mesa - mesa_id={mesa_id}, cliente_id={cliente_id}")
+        return self.repo.associar_cliente(mesa_id, cliente_id)
+    
+    def desassociar_cliente(self, mesa_id: int):
+        """Desassocia o cliente da mesa"""
+        logger.info(f"[MesaService] Desassociando cliente da mesa - mesa_id={mesa_id}")
+        return self.repo.desassociar_cliente(mesa_id)

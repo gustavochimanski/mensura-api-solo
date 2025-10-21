@@ -6,12 +6,43 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 
 from app.api.mesas.models.model_mesa import MesaModel, StatusMesa
+from app.api.mesas.models.model_mesa_historico import MesaHistoricoModel, TipoOperacaoMesa
 from app.api.mesas.schemas.schema_mesa import MesaIn, StatusMesaEnum
 
 
 class MesaRepository:
     def __init__(self, db: Session):
         self.db = db
+    
+    def _registrar_historico(self, mesa_id: int, tipo_operacao: TipoOperacaoMesa, 
+                          status_anterior: str = None, status_novo: str = None,
+                          descricao: str = None, observacoes: str = None,
+                          cliente_id: int = None, usuario_id: int = None,
+                          ip_origem: str = None, user_agent: str = None):
+        """Registra uma operação no histórico da mesa"""
+        from app.utils.logger import logger
+        
+        try:
+            historico = MesaHistoricoModel(
+                mesa_id=mesa_id,
+                cliente_id=cliente_id,
+                usuario_id=usuario_id,
+                tipo_operacao=tipo_operacao,
+                status_anterior=status_anterior,
+                status_novo=status_novo,
+                descricao=descricao,
+                observacoes=observacoes,
+                ip_origem=ip_origem,
+                user_agent=user_agent
+            )
+            
+            self.db.add(historico)
+            self.db.commit()
+            logger.info(f"[Mesas] Histórico registrado - mesa_id={mesa_id}, operacao={tipo_operacao.value}")
+            
+        except Exception as e:
+            logger.error(f"[Mesas] Erro ao registrar histórico: {e}")
+            # Não falha a operação principal se o histórico falhar
 
     # -------- CRUD --------
     def create(self, data: MesaIn) -> MesaModel:
@@ -48,6 +79,15 @@ class MesaRepository:
             self.db.commit()
             self.db.refresh(nova)
             logger.info(f"[Mesas] Mesa salva no banco - id={nova.id}, numero={nova.numero}")
+            
+            # Registra no histórico
+            self._registrar_historico(
+                mesa_id=nova.id,
+                tipo_operacao=TipoOperacaoMesa.MESA_CRIADA,
+                descricao=f"Mesa {nova.numero} criada",
+                observacoes=f"Capacidade: {nova.capacidade}, Status inicial: {nova.status.value}"
+            )
+            
             return nova
         except Exception as e:
             logger.error(f"[Mesas] Erro ao salvar mesa no banco: {e}")
@@ -152,12 +192,23 @@ class MesaRepository:
         logger.info(f"[Mesas] Atualizando status da mesa - id={mesa_id}, status={status}")
         
         mesa = self.get_by_id(mesa_id)
+        status_anterior = mesa.status.value
         mesa.status = status
         
         try:
             self.db.commit()
             self.db.refresh(mesa)
             logger.info(f"[Mesas] Status da mesa atualizado - id={mesa_id}, status={status}")
+            
+            # Registra no histórico
+            self._registrar_historico(
+                mesa_id=mesa_id,
+                tipo_operacao=TipoOperacaoMesa.STATUS_ALTERADO,
+                status_anterior=status_anterior,
+                status_novo=status.value,
+                descricao=f"Status alterado de '{status_anterior}' para '{status.value}'"
+            )
+            
             return mesa
         except Exception as e:
             logger.error(f"[Mesas] Erro ao atualizar status da mesa: {e}")
@@ -172,13 +223,7 @@ class MesaRepository:
         
         mesa = self.get_by_id(mesa_id)
         
-        # Verifica se a mesa tem pedidos associados
-        if mesa.pedidos:
-            logger.warning(f"[Mesas] Tentativa de deletar mesa com pedidos - id={mesa_id}")
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                "Não é possível deletar mesa que possui pedidos associados"
-            )
+        # Note: Verificação de pedidos removida - sistema de delivery é separado do sistema de mesas
         
         logger.info(f"[Mesas] Deletando mesa - id={mesa_id}, numero={mesa.numero}")
         self.db.delete(mesa)
@@ -256,3 +301,72 @@ class MesaRepository:
     def marcar_livre(self, mesa_id: int) -> MesaModel:
         """Marca mesa como livre (muda status para LIVRE)"""
         return self.update_status(mesa_id, StatusMesa.LIVRE)
+    
+    def associar_cliente(self, mesa_id: int, cliente_id: int) -> MesaModel:
+        """Associa um cliente à mesa"""
+        from app.utils.logger import logger
+        
+        mesa = self.get_by_id(mesa_id)
+        mesa.cliente_atual_id = cliente_id
+        
+        try:
+            self.db.commit()
+            self.db.refresh(mesa)
+            logger.info(f"[Mesas] Cliente associado à mesa - mesa_id={mesa_id}, cliente_id={cliente_id}")
+            
+            # Registra no histórico
+            self._registrar_historico(
+                mesa_id=mesa_id,
+                tipo_operacao=TipoOperacaoMesa.CLIENTE_ASSOCIADO,
+                cliente_id=cliente_id,
+                descricao=f"Cliente associado à mesa {mesa.numero}"
+            )
+            
+            return mesa
+        except Exception as e:
+            logger.error(f"[Mesas] Erro ao associar cliente à mesa: {e}")
+            self.db.rollback()
+            raise HTTPException(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                "Erro ao associar cliente à mesa"
+            )
+    
+    def desassociar_cliente(self, mesa_id: int) -> MesaModel:
+        """Desassocia o cliente da mesa"""
+        from app.utils.logger import logger
+        
+        mesa = self.get_by_id(mesa_id)
+        cliente_id_anterior = mesa.cliente_atual_id
+        mesa.cliente_atual_id = None
+        
+        try:
+            self.db.commit()
+            self.db.refresh(mesa)
+            logger.info(f"[Mesas] Cliente desassociado da mesa - mesa_id={mesa_id}")
+            
+            # Registra no histórico
+            self._registrar_historico(
+                mesa_id=mesa_id,
+                tipo_operacao=TipoOperacaoMesa.CLIENTE_DESASSOCIADO,
+                cliente_id=cliente_id_anterior,
+                descricao=f"Cliente desassociado da mesa {mesa.numero}"
+            )
+            
+            return mesa
+        except Exception as e:
+            logger.error(f"[Mesas] Erro ao desassociar cliente da mesa: {e}")
+            self.db.rollback()
+            raise HTTPException(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                "Erro ao desassociar cliente da mesa"
+            )
+    
+    def get_historico(self, mesa_id: int, limit: int = 50) -> list[MesaHistoricoModel]:
+        """Retorna o histórico de uma mesa"""
+        return (
+            self.db.query(MesaHistoricoModel)
+            .filter(MesaHistoricoModel.mesa_id == mesa_id)
+            .order_by(MesaHistoricoModel.created_at.desc())
+            .limit(limit)
+            .all()
+        )
