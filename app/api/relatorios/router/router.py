@@ -4,5 +4,6 @@ from fastapi import APIRouter
 # Router principal que agrupa todos os routers de relatórios
 router = APIRouter()
 
-# Por enquanto, router vazio para evitar problemas de importação
-# Os routers específicos serão adicionados quando necessário
+# Inclui os routers específicos de relatórios
+from .admin import router as admin_router
+router.include_router(admin_router)
