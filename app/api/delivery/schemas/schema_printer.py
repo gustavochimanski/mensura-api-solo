@@ -26,15 +26,6 @@ class PedidoParaImpressao(BaseModel):
     itens: List[ItemPedidoPrinter]
 
 
-class PedidoPendenteImpressaoResponse(BaseModel):
-    id: int
-    status: str
-    cliente_nome: str
-    cliente_telefone: Optional[str] = None
-    valor_total: float
-    data_criacao: datetime
-    endereco: Optional[str] = None
-    meio_pagamento_descricao: Optional[str] = None
 
 
 class RespostaImpressaoPrinter(BaseModel):
