@@ -56,6 +56,8 @@ class RelatorioRepository:
     def _resumo_periodo(
         self, empresa_id: int, inicio: datetime, fim: datetime
     ) -> PeriodoResumo:
+        # Considera todos os pedidos exceto cancelados (status != "C")
+        # Isso inclui: P, I, R, S, E, D, X, A (Pendente, Impressão, Preparo, Saiu, Entregue, Editado, Em Edição, Aguardando)
         quantidade, faturamento = (
             self.db.query(
                 func.count(PedidoDeliveryModel.id),
@@ -65,7 +67,7 @@ class RelatorioRepository:
                 PedidoDeliveryModel.empresa_id == empresa_id,
                 PedidoDeliveryModel.data_criacao >= inicio,
                 PedidoDeliveryModel.data_criacao < fim,
-                PedidoDeliveryModel.status == "E",
+                PedidoDeliveryModel.status != "C",  # Exclui apenas cancelados
             )
             .one()
         )
@@ -107,7 +109,7 @@ class RelatorioRepository:
                 PedidoDeliveryModel.empresa_id == empresa_id,
                 PedidoDeliveryModel.data_criacao >= inicio,
                 PedidoDeliveryModel.data_criacao < fim,
-                PedidoDeliveryModel.status == "E",
+                PedidoDeliveryModel.status != "C",  # Exclui apenas cancelados
             )
             .scalar()
         )
@@ -129,7 +131,7 @@ class RelatorioRepository:
                 PedidoDeliveryModel.empresa_id == empresa_id,
                 PedidoDeliveryModel.data_criacao >= inicio,
                 PedidoDeliveryModel.data_criacao < fim,
-                PedidoDeliveryModel.status == "E",
+                PedidoDeliveryModel.status != "C",  # Exclui apenas cancelados
             )
             .group_by("hora")
             .order_by("hora")
@@ -185,7 +187,7 @@ class RelatorioRepository:
                 PedidoDeliveryModel.empresa_id == empresa_id,
                 PedidoDeliveryModel.data_criacao >= inicio,
                 PedidoDeliveryModel.data_criacao < fim,
-                PedidoDeliveryModel.status == "E",
+                PedidoDeliveryModel.status != "C",  # Exclui apenas cancelados
             )
             .group_by(descricao_expr)
             .order_by(func.sum(PedidoItemModel.quantidade).desc())
