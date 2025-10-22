@@ -205,7 +205,7 @@ class RelatorioRepository:
             for row in rows
         ]
 
-    def _top_motoboys(
+    def _top_entregadores(
         self, empresa_id: int, inicio: datetime, fim: datetime, limite: int = 5
     ) -> List[Dict[str, float | int | str]]:
         rows = (
@@ -308,6 +308,6 @@ class RelatorioRepository:
             },
             "vendas_por_hora": self._vendas_por_hora(empresa_id, inicio_dia, fim_dia),
             "top_produtos": self._top_produtos(empresa_id, inicio_dia, fim_dia),
-            "top_motoboys": self._top_motoboys(empresa_id, inicio_dia, fim_dia),
+            "top_entregadores": self._top_entregadores(empresa_id, inicio_dia, fim_dia),
         }
 
