@@ -13,6 +13,7 @@ from app.api.delivery.models.model_pedido_item_dv import PedidoItemModel
 from app.api.delivery.models.model_pedido_status_historico_dv import (
     PedidoStatusHistoricoModel,
 )
+from app.api.delivery.models.model_entregador_dv import EntregadorDeliveryModel
 from app.api.mensura.models.cadprod_model import ProdutoModel
 
 
@@ -204,6 +205,50 @@ class RelatorioRepository:
             for row in rows
         ]
 
+    def _top_motoboys(
+        self, empresa_id: int, inicio: datetime, fim: datetime, limite: int = 5
+    ) -> List[Dict[str, float | int | str]]:
+        rows = (
+            self.db.query(
+                EntregadorDeliveryModel.nome.label("nome"),
+                EntregadorDeliveryModel.telefone.label("telefone"),
+                func.count(PedidoDeliveryModel.id).label("quantidade_pedidos"),
+                func.coalesce(
+                    func.sum(PedidoDeliveryModel.valor_total),
+                    0,
+                ).label("faturamento_total"),
+            )
+            .join(
+                PedidoDeliveryModel,
+                PedidoDeliveryModel.entregador_id == EntregadorDeliveryModel.id,
+            )
+            .filter(
+                PedidoDeliveryModel.empresa_id == empresa_id,
+                PedidoDeliveryModel.data_criacao >= inicio,
+                PedidoDeliveryModel.data_criacao < fim,
+                PedidoDeliveryModel.status != "C",  # Exclui apenas cancelados
+                PedidoDeliveryModel.entregador_id.isnot(None),  # Apenas pedidos com entregador
+            )
+            .group_by(
+                EntregadorDeliveryModel.id,
+                EntregadorDeliveryModel.nome,
+                EntregadorDeliveryModel.telefone,
+            )
+            .order_by(func.count(PedidoDeliveryModel.id).desc())
+            .limit(limite)
+            .all()
+        )
+
+        return [
+            {
+                "nome": row.nome or "Não identificado",
+                "telefone": row.telefone or "Não informado",
+                "quantidade_pedidos": int(row.quantidade_pedidos or 0),
+                "faturamento_total": _decimal_to_float(row.faturamento_total),
+            }
+            for row in rows
+        ]
+
     def obter_panoramico_diario(
         self, empresa_id: int, dia: date
     ) -> Dict[str, object]:
@@ -263,5 +308,6 @@ class RelatorioRepository:
             },
             "vendas_por_hora": self._vendas_por_hora(empresa_id, inicio_dia, fim_dia),
             "top_produtos": self._top_produtos(empresa_id, inicio_dia, fim_dia),
+            "top_motoboys": self._top_motoboys(empresa_id, inicio_dia, fim_dia),
         }
 
