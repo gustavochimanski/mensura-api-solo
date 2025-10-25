@@ -82,7 +82,7 @@ class RelatorioRepository:
 
     def _media_tempo_entrega_minutos(
         self, empresa_id: int, inicio: datetime, fim: datetime
-    ) -> float:
+    ) -> tuple[float, float]:
         # Calcular tempo médio para pedidos de delivery
         finalizacao_subquery = (
             self.db.query(
@@ -136,19 +136,11 @@ class RelatorioRepository:
             .scalar()
         )
 
-        # Combinar os tempos médios (média ponderada)
-        tempos = []
-        if avg_seconds_delivery:
-            tempos.append(float(avg_seconds_delivery))
-        if avg_seconds_mesa:
-            tempos.append(float(avg_seconds_mesa))
-
-        if not tempos:
-            return 0.0
-
-        # Calcular média simples dos tempos
-        tempo_medio_segundos = sum(tempos) / len(tempos)
-        return round(tempo_medio_segundos / 60.0, 2)
+        # Retornar tempos médios separados em minutos
+        tempo_delivery_minutos = round(float(avg_seconds_delivery) / 60.0, 2) if avg_seconds_delivery else 0.0
+        tempo_mesa_minutos = round(float(avg_seconds_mesa) / 60.0, 2) if avg_seconds_mesa else 0.0
+        
+        return tempo_delivery_minutos, tempo_mesa_minutos
 
     def _vendas_por_hora(
         self, empresa_id: int, inicio: datetime, fim: datetime
@@ -312,7 +304,7 @@ class RelatorioRepository:
             else 0.0
         )
 
-        tempo_medio = self._media_tempo_entrega_minutos(
+        tempo_medio_delivery, tempo_medio_mesa = self._media_tempo_entrega_minutos(
             empresa_id, inicio_dia, fim_dia
         )
 
@@ -337,7 +329,8 @@ class RelatorioRepository:
                 "mes_anterior": ticket_medio_mes_passado,
             },
             "tempo_entrega": {
-                "medio_minutos": tempo_medio,
+                "delivery_minutos": tempo_medio_delivery,
+                "local_minutos": tempo_medio_mesa,
             },
             "vendas_por_hora": self._vendas_por_hora(empresa_id, inicio_dia, fim_dia),
             "top_produtos": self._top_produtos(empresa_id, inicio_dia, fim_dia),
