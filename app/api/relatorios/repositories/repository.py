@@ -17,6 +17,7 @@ from app.api.delivery.models.model_pedido_status_historico_dv import (
 from app.api.delivery.models.model_entregador_dv import EntregadorDeliveryModel
 from app.api.mensura.models.cadprod_model import ProdutoModel
 from app.api.mesas.models.model_pedido_mesa import PedidoMesaModel, StatusPedidoMesa
+from app.api.mesas.models.model_mesa_historico import MesaHistoricoModel, TipoOperacaoMesa
 
 
 def _day_bounds(target_date: date) -> Tuple[datetime, datetime]:
@@ -97,6 +98,7 @@ class RelatorioRepository:
         )
 
         # Calcular tempo médio para pedidos de mesa (entrega local)
+        # Buscar pedidos de mesa que foram entregues no período
         pedidos_mesa_entregues = (
             self.db.query(PedidoMesaModel)
             .filter(
@@ -132,14 +134,31 @@ class RelatorioRepository:
                 tempo_medio_segundos = sum(tempos_delivery) / len(tempos_delivery)
                 tempo_delivery_minutos = round(tempo_medio_segundos / 60.0, 2)
 
-        # Calcular tempo médio para mesa
+        # Calcular tempo médio para mesa (entrega local)
         tempo_mesa_minutos = 0.0
         if pedidos_mesa_entregues:
             tempos_mesa = []
             for pedido in pedidos_mesa_entregues:
-                tempo_segundos = (pedido.updated_at - pedido.created_at).total_seconds()
-                if tempo_segundos > 0:
-                    tempos_mesa.append(tempo_segundos)
+                # Buscar quando o pedido foi finalizado no histórico da mesa
+                finalizacao = (
+                    self.db.query(MesaHistoricoModel.created_at)
+                    .filter(
+                        MesaHistoricoModel.mesa_id == pedido.mesa_id,
+                        MesaHistoricoModel.tipo_operacao == TipoOperacaoMesa.PEDIDO_FINALIZADO
+                    )
+                    .order_by(MesaHistoricoModel.created_at.desc())
+                    .first()
+                )
+                
+                if finalizacao:
+                    tempo_segundos = (finalizacao[0] - pedido.created_at).total_seconds()
+                    if tempo_segundos > 0:
+                        tempos_mesa.append(tempo_segundos)
+                else:
+                    # Fallback: usar updated_at se não encontrar no histórico
+                    tempo_segundos = (pedido.updated_at - pedido.created_at).total_seconds()
+                    if tempo_segundos > 0:
+                        tempos_mesa.append(tempo_segundos)
             
             if tempos_mesa:
                 tempo_medio_segundos = sum(tempos_mesa) / len(tempos_mesa)
