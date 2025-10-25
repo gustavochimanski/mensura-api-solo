@@ -14,7 +14,7 @@ class MesaService:
 
     def create(self, data: MesaIn):
         """Cria uma nova mesa"""
-        logger.info(f"[MesaService] Criando mesa - numero={data.numero}")
+        logger.info(f"[MesaService] Criando mesa - capacidade={data.capacidade}")
         return self.repo.create(data)
 
     def get_by_id(self, mesa_id: int):

@@ -60,7 +60,7 @@ class MesaRepository:
             ativa=data.ativa
         )
         
-        logger.info(f"[Mesas] Objeto mesa criado - numero={nova.numero}, status={nova.status}")
+        logger.info(f"[Mesas] Objeto mesa criado - status={nova.status}")
         
         self.db.add(nova)
         try:

@@ -129,7 +129,7 @@ def criar_mesa(
     db: Session = Depends(get_db),
 ):
     """Cria uma nova mesa"""
-    logger.info(f"[Mesas Admin] Criando mesa - numero={body.numero}")
+    logger.info(f"[Mesas Admin] Criando mesa - capacidade={body.capacidade}")
     
     service = MesaService(db)
     try:
