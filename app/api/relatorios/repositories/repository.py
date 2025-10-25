@@ -16,7 +16,7 @@ from app.api.delivery.models.model_pedido_status_historico_dv import (
 )
 from app.api.delivery.models.model_entregador_dv import EntregadorDeliveryModel
 from app.api.mensura.models.cadprod_model import ProdutoModel
-from app.api.mesas.models.model_pedido_mesa import PedidoMesaModel
+from app.api.mesas.models.model_pedido_mesa import PedidoMesaModel, StatusPedidoMesa
 
 
 def _day_bounds(target_date: date) -> Tuple[datetime, datetime]:
@@ -129,7 +129,7 @@ class RelatorioRepository:
                 )
             )
             .filter(
-                PedidoMesaModel.status == "E",  # Status ENTREGUE
+                PedidoMesaModel.status == StatusPedidoMesa.ENTREGUE,  # Status ENTREGUE
                 PedidoMesaModel.created_at >= inicio,
                 PedidoMesaModel.created_at < fim,
             )
