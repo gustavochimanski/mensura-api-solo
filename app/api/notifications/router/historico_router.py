@@ -4,8 +4,8 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 import logging
 
-from ...database.db_connection import get_db
-from ...core.admin_dependencies import get_current_user
+from ....database.db_connection import get_db
+from ....core.admin_dependencies import get_current_user
 from ..services.historico_service import HistoricoService
 
 logger = logging.getLogger(__name__)

@@ -13,7 +13,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
 
 from app.api.notifications.core.rabbitmq_client import get_rabbitmq_client
 from app.api.notifications.channels.channel_factory import ChannelFactory
-from app.database.db_connection import get_db
+from ....database.db_connection import get_db
 from app.api.notifications.repositories.notification_repository import NotificationRepository
 
 logger = logging.getLogger(__name__)

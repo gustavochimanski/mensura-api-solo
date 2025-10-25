@@ -3,8 +3,8 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 import logging
 
-from ...database.db_connection import get_db
-from ...core.admin_dependencies import get_current_user
+from ....database.db_connection import get_db
+from ....core.admin_dependencies import get_current_user
 from ..services.subscription_service import SubscriptionService
 from ..repositories.subscription_repository import SubscriptionRepository
 from ..schemas.subscription_schemas import (

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from typing import Dict, Any, Optional
 import logging
 
-from ...core.admin_dependencies import get_current_user
+from ....core.admin_dependencies import get_current_user
 from ..services.pedido_notification_service import PedidoNotificationService
 
 logger = logging.getLogger(__name__)

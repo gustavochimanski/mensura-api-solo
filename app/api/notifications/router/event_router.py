@@ -3,10 +3,10 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 import logging
 
-from ...database.db_connection import get_db
-from ...core.admin_dependencies import get_current_user
-from ...core.event_publisher import EventPublisher
-from ...core.event_bus import event_bus
+from ....database.db_connection import get_db
+from ....core.admin_dependencies import get_current_user
+from ..core.event_publisher import EventPublisher
+from ..core.event_bus import event_bus
 from ..repositories.event_repository import EventRepository
 from ..schemas.event_schemas import (
     CreateEventRequest,

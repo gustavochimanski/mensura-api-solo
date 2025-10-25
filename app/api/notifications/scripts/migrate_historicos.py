@@ -389,7 +389,7 @@ async def executar_migracao(db: Session, remover_antigas: bool = False) -> Dict[
 # Script para executar via linha de comando
 if __name__ == "__main__":
     import sys
-    from app.database.db_connection import get_db
+    from ....database.db_connection import get_db
     
     async def main():
         db = next(get_db())

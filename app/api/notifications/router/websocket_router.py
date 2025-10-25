@@ -4,8 +4,8 @@ import json
 import logging
 from datetime import datetime
 
-from ...core.websocket_manager import websocket_manager
-from ...core.admin_dependencies import get_current_user
+from ..core.websocket_manager import websocket_manager
+from ....core.admin_dependencies import get_current_user
 
 logger = logging.getLogger(__name__)
 

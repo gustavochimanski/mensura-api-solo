@@ -3,8 +3,8 @@ from sqlalchemy.orm import Session
 from typing import Dict, Any, List, Optional
 import logging
 
-from ...database.db_connection import get_db
-from ...core.admin_dependencies import get_current_user
+from ....database.db_connection import get_db
+from ....core.admin_dependencies import get_current_user
 from ..services.rabbitmq_notification_service import RabbitMQNotificationService
 from ..repositories.notification_repository import NotificationRepository
 from ..repositories.subscription_repository import SubscriptionRepository
