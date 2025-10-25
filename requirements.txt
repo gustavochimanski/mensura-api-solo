@@ -42,7 +42,6 @@ celery==5.3.4                   # Task queue (opcional)
 
 # --- Dependências para Canais de Notificação ---
 aiohttp==3.9.1                  # HTTP client para webhooks e APIs externas
-smtplib                         # Email (built-in, mas documentando)
 twilio==8.10.0                  # WhatsApp via Twilio
 firebase-admin==6.4.0           # Push notifications via Firebase
 
