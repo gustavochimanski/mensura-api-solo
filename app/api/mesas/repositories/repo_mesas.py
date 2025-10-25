@@ -267,7 +267,6 @@ class MesaRepository:
         total = self.db.query(MesaModel).count()
         disponiveis = self.db.query(MesaModel).filter(MesaModel.status == StatusMesa.DISPONIVEL).count()
         ocupadas = self.db.query(MesaModel).filter(MesaModel.status == StatusMesa.OCUPADA).count()
-        livres = self.db.query(MesaModel).filter(MesaModel.status == StatusMesa.LIVRE).count()
         reservadas = self.db.query(MesaModel).filter(MesaModel.status == StatusMesa.RESERVADA).count()
         ativas = self.db.query(MesaModel).filter(MesaModel.ativa == "S").count()
         inativas = self.db.query(MesaModel).filter(MesaModel.ativa == "N").count()
@@ -276,7 +275,6 @@ class MesaRepository:
             "total": total,
             "disponiveis": disponiveis,
             "ocupadas": ocupadas,
-            "livres": livres,
             "reservadas": reservadas,
             "ativas": ativas,
             "inativas": inativas
@@ -295,9 +293,6 @@ class MesaRepository:
         """Reserva uma mesa (muda status para RESERVADA)"""
         return self.update_status(mesa_id, StatusMesa.RESERVADA)
 
-    def marcar_livre(self, mesa_id: int) -> MesaModel:
-        """Marca mesa como livre (muda status para LIVRE)"""
-        return self.update_status(mesa_id, StatusMesa.LIVRE)
     
     def associar_cliente(self, mesa_id: int, cliente_id: int) -> MesaModel:
         """Associa um cliente à mesa"""

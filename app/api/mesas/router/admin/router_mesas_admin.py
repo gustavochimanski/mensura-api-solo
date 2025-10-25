@@ -114,8 +114,7 @@ def get_mesa(
         label=mesa.label,
         is_ocupada=mesa.is_ocupada,
         is_disponivel=mesa.is_disponivel,
-        is_reservada=mesa.is_reservada,
-        is_livre=mesa.is_livre
+        is_reservada=mesa.is_reservada
     )
 
 # -------- CRIAR --------
@@ -154,8 +153,7 @@ def criar_mesa(
         label=mesa.label,
         is_ocupada=mesa.is_ocupada,
         is_disponivel=mesa.is_disponivel,
-        is_reservada=mesa.is_reservada,
-        is_livre=mesa.is_livre
+        is_reservada=mesa.is_reservada
     )
 
 # -------- ATUALIZAR --------
@@ -192,8 +190,7 @@ def atualizar_mesa(
         label=mesa.label,
         is_ocupada=mesa.is_ocupada,
         is_disponivel=mesa.is_disponivel,
-        is_reservada=mesa.is_reservada,
-        is_livre=mesa.is_livre
+        is_reservada=mesa.is_reservada
     )
 
 # -------- ATUALIZAR STATUS --------
@@ -230,8 +227,7 @@ def atualizar_status_mesa(
         label=mesa.label,
         is_ocupada=mesa.is_ocupada,
         is_disponivel=mesa.is_disponivel,
-        is_reservada=mesa.is_reservada,
-        is_livre=mesa.is_livre
+        is_reservada=mesa.is_reservada
     )
 
 # -------- DELETAR --------
@@ -292,8 +288,7 @@ def ocupar_mesa(
         label=mesa.label,
         is_ocupada=mesa.is_ocupada,
         is_disponivel=mesa.is_disponivel,
-        is_reservada=mesa.is_reservada,
-        is_livre=mesa.is_livre
+        is_reservada=mesa.is_reservada
     )
 
 @router.post(
@@ -328,8 +323,7 @@ def liberar_mesa(
         label=mesa.label,
         is_ocupada=mesa.is_ocupada,
         is_disponivel=mesa.is_disponivel,
-        is_reservada=mesa.is_reservada,
-        is_livre=mesa.is_livre
+        is_reservada=mesa.is_reservada
     )
 
 @router.post(
@@ -364,39 +358,6 @@ def reservar_mesa(
         label=mesa.label,
         is_ocupada=mesa.is_ocupada,
         is_disponivel=mesa.is_disponivel,
-        is_reservada=mesa.is_reservada,
-        is_livre=mesa.is_livre
+        is_reservada=mesa.is_reservada
     )
 
-@router.post(
-    "/{mesa_id}/marcar-livre",
-    response_model=MesaOut
-)
-def marcar_mesa_livre(
-    mesa_id: int = Path(..., title="ID da mesa"),
-    db: Session = Depends(get_db),
-):
-    """Marca mesa como livre"""
-    logger.info(f"[Mesas Admin] Marcando mesa como livre - id={mesa_id}")
-    
-    service = MesaService(db)
-    try:
-        mesa = service.marcar_livre(mesa_id)
-    except Exception as e:
-        logger.error(f"[Mesas Admin] Erro ao marcar mesa como livre: {e}")
-        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Erro ao marcar mesa como livre: {str(e)}")
-    
-    return MesaOut(
-        id=mesa.id,
-        numero=mesa.numero,
-        descricao=mesa.descricao,
-        capacidade=mesa.capacidade,
-        status=StatusMesaEnum(mesa.status.value),
-        status_descricao=mesa.status_descricao,
-        ativa=mesa.ativa,
-        label=mesa.label,
-        is_ocupada=mesa.is_ocupada,
-        is_disponivel=mesa.is_disponivel,
-        is_reservada=mesa.is_reservada,
-        is_livre=mesa.is_livre
-    )

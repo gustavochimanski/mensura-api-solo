@@ -13,7 +13,6 @@ class StatusMesa(enum.Enum):
     """Status possíveis para uma mesa"""
     DISPONIVEL = "D"  # Disponível
     OCUPADA = "O"     # Ocupada
-    LIVRE = "L"       # Livre
     RESERVADA = "R"   # Reservada
 
 
@@ -43,7 +42,6 @@ class MesaModel(Base):
         status_map = {
             StatusMesa.DISPONIVEL: "Disponível",
             StatusMesa.OCUPADA: "Ocupada", 
-            StatusMesa.LIVRE: "Livre",
             StatusMesa.RESERVADA: "Reservada"
         }
         return status_map.get(self.status, "Desconhecido")
@@ -54,7 +52,6 @@ class MesaModel(Base):
         cor_map = {
             StatusMesa.DISPONIVEL: "green",
             StatusMesa.OCUPADA: "red",
-            StatusMesa.LIVRE: "blue", 
             StatusMesa.RESERVADA: "orange"
         }
         return cor_map.get(self.status, "gray")
@@ -79,7 +76,3 @@ class MesaModel(Base):
         """Verifica se a mesa está reservada"""
         return self.status == StatusMesa.RESERVADA
 
-    @property
-    def is_livre(self) -> bool:
-        """Verifica se a mesa está livre"""
-        return self.status == StatusMesa.LIVRE

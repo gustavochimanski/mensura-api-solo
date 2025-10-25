@@ -9,7 +9,6 @@ class StatusMesaEnum(str, Enum):
     """Enum para status de mesa nos schemas"""
     DISPONIVEL = "D"
     OCUPADA = "O"
-    LIVRE = "L"
     RESERVADA = "R"
 
 
@@ -42,7 +41,6 @@ class MesaOut(BaseModel):
     is_ocupada: bool
     is_disponivel: bool
     is_reservada: bool
-    is_livre: bool
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -103,7 +101,6 @@ class MesaStatsOut(BaseModel):
     total: int
     disponiveis: int
     ocupadas: int
-    livres: int
     reservadas: int
     ativas: int
     inativas: int

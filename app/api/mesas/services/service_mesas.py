@@ -92,10 +92,6 @@ class MesaService:
         logger.info(f"[MesaService] Reservando mesa - id={mesa_id}")
         return self.repo.reservar_mesa(mesa_id)
 
-    def marcar_livre(self, mesa_id: int):
-        """Marca mesa como livre"""
-        logger.info(f"[MesaService] Marcando mesa como livre - id={mesa_id}")
-        return self.repo.marcar_livre(mesa_id)
 
     # -------- VALIDAÇÕES --------
     def validar_mesa_disponivel(self, mesa_id: int) -> bool:
@@ -104,9 +100,9 @@ class MesaService:
         return mesa.is_disponivel and mesa.ativa == "S"
 
     def validar_mesa_ocupavel(self, mesa_id: int) -> bool:
-        """Valida se a mesa pode ser ocupada (disponível ou livre)"""
+        """Valida se a mesa pode ser ocupada (disponível)"""
         mesa = self.get_by_id(mesa_id)
-        return (mesa.is_disponivel or mesa.is_livre) and mesa.ativa == "S"
+        return mesa.is_disponivel and mesa.ativa == "S"
 
     def validar_mesa_reservavel(self, mesa_id: int) -> bool:
         """Valida se a mesa pode ser reservada (disponível)"""

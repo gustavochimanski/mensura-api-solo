@@ -86,8 +86,7 @@ def get_mesa(
         label=mesa.label,
         is_ocupada=mesa.is_ocupada,
         is_disponivel=mesa.is_disponivel,
-        is_reservada=mesa.is_reservada,
-        is_livre=mesa.is_livre
+        is_reservada=mesa.is_reservada
     )
 
 # -------- BUSCAR MESA POR NÚMERO --------
@@ -115,8 +114,7 @@ def get_mesa_by_numero(
         label=mesa.label,
         is_ocupada=mesa.is_ocupada,
         is_disponivel=mesa.is_disponivel,
-        is_reservada=mesa.is_reservada,
-        is_livre=mesa.is_livre
+        is_reservada=mesa.is_reservada
     )
 
 # -------- MESAS DISPONÍVEIS --------
@@ -188,28 +186,6 @@ def list_mesas_reservadas(
         for m in mesas
     ]
 
-# -------- MESAS LIVRES --------
-@router.get("/livres", response_model=List[MesaListOut])
-def list_mesas_livres(
-    db: Session = Depends(get_db),
-):
-    """Lista todas as mesas livres"""
-    service = MesaService(db)
-    mesas = service.list_by_status(StatusMesa.LIVRE)
-    
-    return [
-        MesaListOut(
-            id=m.id,
-            numero=m.numero,
-            descricao=m.descricao,
-            capacidade=m.capacidade,
-            status=StatusMesaEnum(m.status.value),
-            status_descricao=m.status_descricao,
-            ativa=m.ativa,
-            label=m.label
-        )
-        for m in mesas
-    ]
 
 # -------- VALIDAR MESA DISPONÍVEL --------
 @router.get("/{mesa_id}/disponivel")
