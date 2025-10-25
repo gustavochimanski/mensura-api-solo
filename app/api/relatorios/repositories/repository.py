@@ -84,61 +84,66 @@ class RelatorioRepository:
         self, empresa_id: int, inicio: datetime, fim: datetime
     ) -> tuple[float, float]:
         # Calcular tempo médio para pedidos de delivery
-        finalizacao_subquery = (
-            self.db.query(
-                PedidoStatusHistoricoModel.pedido_id.label("pedido_id"),
-                func.max(PedidoStatusHistoricoModel.criado_em).label("finalizado_em"),
-            )
-            .filter(PedidoStatusHistoricoModel.status == "E")
-            .group_by(PedidoStatusHistoricoModel.pedido_id)
-            .subquery()
-        )
-
-        avg_seconds_delivery = (
-            self.db.query(
-                func.avg(
-                    func.extract(
-                        "epoch",
-                        finalizacao_subquery.c.finalizado_em
-                        - PedidoDeliveryModel.data_criacao,
-                    )
-                )
-            )
-            .select_from(PedidoDeliveryModel)
-            .join(
-                finalizacao_subquery,
-                finalizacao_subquery.c.pedido_id == PedidoDeliveryModel.id,
-            )
+        # Buscar pedidos entregues (status E) no período
+        pedidos_delivery_entregues = (
+            self.db.query(PedidoDeliveryModel)
             .filter(
                 PedidoDeliveryModel.empresa_id == empresa_id,
                 PedidoDeliveryModel.data_criacao >= inicio,
                 PedidoDeliveryModel.data_criacao < fim,
-                PedidoDeliveryModel.status != "C",  # Exclui apenas cancelados
+                PedidoDeliveryModel.status == "E",  # Apenas entregues
             )
-            .scalar()
+            .all()
         )
 
         # Calcular tempo médio para pedidos de mesa (entrega local)
-        avg_seconds_mesa = (
-            self.db.query(
-                func.avg(
-                    func.extract(
-                        "epoch",
-                        PedidoMesaModel.updated_at - PedidoMesaModel.created_at,
-                    )
-                )
-            )
+        pedidos_mesa_entregues = (
+            self.db.query(PedidoMesaModel)
             .filter(
                 PedidoMesaModel.status == StatusPedidoMesa.ENTREGUE,  # Status ENTREGUE
                 PedidoMesaModel.created_at >= inicio,
                 PedidoMesaModel.created_at < fim,
             )
-            .scalar()
+            .all()
         )
 
-        # Retornar tempos médios separados em minutos
-        tempo_delivery_minutos = round(float(avg_seconds_delivery) / 60.0, 2) if avg_seconds_delivery else 0.0
-        tempo_mesa_minutos = round(float(avg_seconds_mesa) / 60.0, 2) if avg_seconds_mesa else 0.0
+        # Calcular tempo médio para delivery
+        tempo_delivery_minutos = 0.0
+        if pedidos_delivery_entregues:
+            tempos_delivery = []
+            for pedido in pedidos_delivery_entregues:
+                # Buscar quando foi finalizado (status E no histórico)
+                finalizacao = (
+                    self.db.query(PedidoStatusHistoricoModel.criado_em)
+                    .filter(
+                        PedidoStatusHistoricoModel.pedido_id == pedido.id,
+                        PedidoStatusHistoricoModel.status == "E"
+                    )
+                    .order_by(PedidoStatusHistoricoModel.criado_em.desc())
+                    .first()
+                )
+                
+                if finalizacao:
+                    tempo_segundos = (finalizacao[0] - pedido.data_criacao).total_seconds()
+                    if tempo_segundos > 0:
+                        tempos_delivery.append(tempo_segundos)
+            
+            if tempos_delivery:
+                tempo_medio_segundos = sum(tempos_delivery) / len(tempos_delivery)
+                tempo_delivery_minutos = round(tempo_medio_segundos / 60.0, 2)
+
+        # Calcular tempo médio para mesa
+        tempo_mesa_minutos = 0.0
+        if pedidos_mesa_entregues:
+            tempos_mesa = []
+            for pedido in pedidos_mesa_entregues:
+                tempo_segundos = (pedido.updated_at - pedido.created_at).total_seconds()
+                if tempo_segundos > 0:
+                    tempos_mesa.append(tempo_segundos)
+            
+            if tempos_mesa:
+                tempo_medio_segundos = sum(tempos_mesa) / len(tempos_mesa)
+                tempo_mesa_minutos = round(tempo_medio_segundos / 60.0, 2)
         
         return tempo_delivery_minutos, tempo_mesa_minutos
 
