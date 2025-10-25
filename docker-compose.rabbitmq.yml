@@ -1,0 +1,78 @@
+version: '3.8'
+
+services:
+  rabbitmq:
+    image: rabbitmq:3.12-management
+    container_name: mensura_rabbitmq
+    hostname: rabbitmq
+    ports:
+      - "5672:5672"    # AMQP port
+      - "15672:15672"  # Management UI port
+    environment:
+      RABBITMQ_DEFAULT_USER: mensura
+      RABBITMQ_DEFAULT_PASS: mensura123
+      RABBITMQ_DEFAULT_VHOST: /mensura
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+      - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf
+      - ./rabbitmq/definitions.json:/etc/rabbitmq/definitions.json
+    networks:
+      - mensura_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Worker para processar notificações
+  notification_worker:
+    build: .
+    container_name: mensura_notification_worker
+    command: python -m app.api.notifications.workers.notification_worker
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USERNAME=mensura
+      - RABBITMQ_PASSWORD=mensura123
+      - RABBITMQ_VHOST=/mensura
+      - DB_HOST=postgres
+      - DB_NAME=mensura_db
+      - DB_USER=mensura_user
+      - DB_PASSWORD=mensura_password
+    depends_on:
+      - rabbitmq
+    networks:
+      - mensura_network
+    restart: unless-stopped
+    scale: 2  # Múltiplos workers para escalabilidade
+
+  # Worker para processar eventos
+  event_worker:
+    build: .
+    container_name: mensura_event_worker
+    command: python -m app.api.notifications.workers.event_worker
+    environment:
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=5672
+      - RABBITMQ_USERNAME=mensura
+      - RABBITMQ_PASSWORD=mensura123
+      - RABBITMQ_VHOST=/mensura
+      - DB_HOST=postgres
+      - DB_NAME=mensura_db
+      - DB_USER=mensura_user
+      - DB_PASSWORD=mensura_password
+    depends_on:
+      - rabbitmq
+    networks:
+      - mensura_network
+    restart: unless-stopped
+    scale: 1
+
+volumes:
+  rabbitmq_data:
+    driver: local
+
+networks:
+  mensura_network:
+    driver: bridge

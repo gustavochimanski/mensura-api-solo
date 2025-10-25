@@ -12,6 +12,7 @@ from app.api.delivery.router.router import api_delivery
 from app.api.mensura.router.router import mensura_router
 from app.api.mesas.router.router import api_mesas
 from app.api.relatorios.router.router import router as relatorios_router
+from app.api.notifications.router.router import router as notifications_router
 
 # ───────────────────────────
 # Diretórios
@@ -65,10 +66,22 @@ app.mount("/img", StaticFiles(directory=str(STATIC_IMG_DIR)), name="img")
 # Startup
 # ───────────────────────────
 @app.on_event("startup")
-def startup():
+async def startup():
     from app.database.init_db import inicializar_banco
+    from app.database.db_connection import get_db
+    from app.api.notifications.core.notification_system import initialize_notification_system
+    
     logger.info("Iniciando API e banco de dados...")
     inicializar_banco()
+    
+    # Inicializa sistema de notificações
+    try:
+        db = next(get_db())
+        await initialize_notification_system(db)
+        logger.info("Sistema de notificações inicializado com sucesso.")
+    except Exception as e:
+        logger.error(f"Erro ao inicializar sistema de notificações: {e}")
+    
     logger.info("API iniciada com sucesso.")
 
 # ───────────────────────────
@@ -79,3 +92,4 @@ app.include_router(api_delivery)
 app.include_router(mensura_router)
 app.include_router(api_mesas)
 app.include_router(relatorios_router)
+app.include_router(notifications_router)

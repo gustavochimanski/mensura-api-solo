@@ -1,0 +1,208 @@
+{
+  "rabbit_version": "3.12.0",
+  "rabbitmq_version": "3.12.0",
+  "product_name": "RabbitMQ",
+  "product_version": "3.12.0",
+  "users": [
+    {
+      "name": "mensura",
+      "password_hash": "2lmoth8l4H0DViLaK9Fxi6ON9n4=",
+      "hashing_algorithm": "rabbit_password_hashing_sha256",
+      "tags": "administrator"
+    }
+  ],
+  "vhosts": [
+    {
+      "name": "/mensura"
+    }
+  ],
+  "permissions": [
+    {
+      "user": "mensura",
+      "vhost": "/mensura",
+      "configure": ".*",
+      "write": ".*",
+      "read": ".*"
+    }
+  ],
+  "exchanges": [
+    {
+      "name": "notifications",
+      "vhost": "/mensura",
+      "type": "topic",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    },
+    {
+      "name": "events",
+      "vhost": "/mensura",
+      "type": "topic",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    },
+    {
+      "name": "dead_letter",
+      "vhost": "/mensura",
+      "type": "direct",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    }
+  ],
+  "queues": [
+    {
+      "name": "notifications.email",
+      "vhost": "/mensura",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-dead-letter-exchange": "dead_letter",
+        "x-dead-letter-routing-key": "failed",
+        "x-message-ttl": 3600000
+      }
+    },
+    {
+      "name": "notifications.whatsapp",
+      "vhost": "/mensura",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-dead-letter-exchange": "dead_letter",
+        "x-dead-letter-routing-key": "failed",
+        "x-message-ttl": 3600000
+      }
+    },
+    {
+      "name": "notifications.webhook",
+      "vhost": "/mensura",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-dead-letter-exchange": "dead_letter",
+        "x-dead-letter-routing-key": "failed",
+        "x-message-ttl": 3600000
+      }
+    },
+    {
+      "name": "notifications.push",
+      "vhost": "/mensura",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-dead-letter-exchange": "dead_letter",
+        "x-dead-letter-routing-key": "failed",
+        "x-message-ttl": 3600000
+      }
+    },
+    {
+      "name": "notifications.in_app",
+      "vhost": "/mensura",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-dead-letter-exchange": "dead_letter",
+        "x-dead-letter-routing-key": "failed",
+        "x-message-ttl": 3600000
+      }
+    },
+    {
+      "name": "events.processor",
+      "vhost": "/mensura",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    },
+    {
+      "name": "notifications.failed",
+      "vhost": "/mensura",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    }
+  ],
+  "bindings": [
+    {
+      "source": "notifications",
+      "vhost": "/mensura",
+      "destination": "notifications.email",
+      "destination_type": "queue",
+      "routing_key": "notification.email",
+      "arguments": {}
+    },
+    {
+      "source": "notifications",
+      "vhost": "/mensura",
+      "destination": "notifications.whatsapp",
+      "destination_type": "queue",
+      "routing_key": "notification.whatsapp",
+      "arguments": {}
+    },
+    {
+      "source": "notifications",
+      "vhost": "/mensura",
+      "destination": "notifications.webhook",
+      "destination_type": "queue",
+      "routing_key": "notification.webhook",
+      "arguments": {}
+    },
+    {
+      "source": "notifications",
+      "vhost": "/mensura",
+      "destination": "notifications.push",
+      "destination_type": "queue",
+      "routing_key": "notification.push",
+      "arguments": {}
+    },
+    {
+      "source": "notifications",
+      "vhost": "/mensura",
+      "destination": "notifications.in_app",
+      "destination_type": "queue",
+      "routing_key": "notification.in_app",
+      "arguments": {}
+    },
+    {
+      "source": "events",
+      "vhost": "/mensura",
+      "destination": "events.processor",
+      "destination_type": "queue",
+      "routing_key": "event.*",
+      "arguments": {}
+    },
+    {
+      "source": "dead_letter",
+      "vhost": "/mensura",
+      "destination": "notifications.failed",
+      "destination_type": "queue",
+      "routing_key": "failed",
+      "arguments": {}
+    }
+  ],
+  "policies": [
+    {
+      "vhost": "/mensura",
+      "name": "ha-policy",
+      "pattern": ".*",
+      "apply-to": "all",
+      "definition": {
+        "ha-mode": "all"
+      },
+      "priority": 0
+    },
+    {
+      "vhost": "/mensura",
+      "name": "ttl-policy",
+      "pattern": "notifications.*",
+      "apply-to": "queues",
+      "definition": {
+        "message-ttl": 3600000
+      },
+      "priority": 1
+    }
+  ]
+}
