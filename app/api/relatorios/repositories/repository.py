@@ -15,6 +15,7 @@ from app.api.delivery.models.model_pedido_status_historico_dv import (
 )
 from app.api.delivery.models.model_entregador_dv import EntregadorDeliveryModel
 from app.api.mensura.models.cadprod_model import ProdutoModel
+from app.api.mesas.models.model_pedido_mesa import PedidoMesaModel
 
 
 def _day_bounds(target_date: date) -> Tuple[datetime, datetime]:
@@ -81,6 +82,7 @@ class RelatorioRepository:
     def _media_tempo_entrega_minutos(
         self, empresa_id: int, inicio: datetime, fim: datetime
     ) -> float:
+        # Calcular tempo médio para pedidos de delivery
         finalizacao_subquery = (
             self.db.query(
                 PedidoStatusHistoricoModel.pedido_id.label("pedido_id"),
@@ -91,7 +93,7 @@ class RelatorioRepository:
             .subquery()
         )
 
-        avg_seconds = (
+        avg_seconds_delivery = (
             self.db.query(
                 func.avg(
                     func.extract(
@@ -115,7 +117,37 @@ class RelatorioRepository:
             .scalar()
         )
 
-        return round(float(avg_seconds) / 60.0, 2) if avg_seconds else 0.0
+        # Calcular tempo médio para pedidos de mesa (entrega local)
+        avg_seconds_mesa = (
+            self.db.query(
+                func.avg(
+                    func.extract(
+                        "epoch",
+                        PedidoMesaModel.updated_at - PedidoMesaModel.created_at,
+                    )
+                )
+            )
+            .filter(
+                PedidoMesaModel.status == "E",  # Status ENTREGUE
+                PedidoMesaModel.created_at >= inicio,
+                PedidoMesaModel.created_at < fim,
+            )
+            .scalar()
+        )
+
+        # Combinar os tempos médios (média ponderada)
+        tempos = []
+        if avg_seconds_delivery:
+            tempos.append(float(avg_seconds_delivery))
+        if avg_seconds_mesa:
+            tempos.append(float(avg_seconds_mesa))
+
+        if not tempos:
+            return 0.0
+
+        # Calcular média simples dos tempos
+        tempo_medio_segundos = sum(tempos) / len(tempos)
+        return round(tempo_medio_segundos / 60.0, 2)
 
     def _vendas_por_hora(
         self, empresa_id: int, inicio: datetime, fim: datetime
