@@ -55,7 +55,6 @@ def list_mesas_ativas(
             capacidade=m.capacidade,
             status=StatusMesaEnum(m.status.value),
             status_descricao=m.status_descricao,
-            status_cor=m.status_cor,
             ativa=m.ativa,
             label=m.label
         )
@@ -83,7 +82,6 @@ def get_mesa(
         capacidade=mesa.capacidade,
         status=StatusMesaEnum(mesa.status.value),
         status_descricao=mesa.status_descricao,
-        status_cor=mesa.status_cor,
         ativa=mesa.ativa,
         label=mesa.label,
         is_ocupada=mesa.is_ocupada,
@@ -113,7 +111,6 @@ def get_mesa_by_numero(
         capacidade=mesa.capacidade,
         status=StatusMesaEnum(mesa.status.value),
         status_descricao=mesa.status_descricao,
-        status_cor=mesa.status_cor,
         ativa=mesa.ativa,
         label=mesa.label,
         is_ocupada=mesa.is_ocupada,
@@ -139,7 +136,6 @@ def list_mesas_disponiveis(
             capacidade=m.capacidade,
             status=StatusMesaEnum(m.status.value),
             status_descricao=m.status_descricao,
-            status_cor=m.status_cor,
             ativa=m.ativa,
             label=m.label
         )
@@ -163,7 +159,6 @@ def list_mesas_ocupadas(
             capacidade=m.capacidade,
             status=StatusMesaEnum(m.status.value),
             status_descricao=m.status_descricao,
-            status_cor=m.status_cor,
             ativa=m.ativa,
             label=m.label
         )
@@ -187,7 +182,6 @@ def list_mesas_reservadas(
             capacidade=m.capacidade,
             status=StatusMesaEnum(m.status.value),
             status_descricao=m.status_descricao,
-            status_cor=m.status_cor,
             ativa=m.ativa,
             label=m.label
         )
@@ -211,7 +205,6 @@ def list_mesas_livres(
             capacidade=m.capacidade,
             status=StatusMesaEnum(m.status.value),
             status_descricao=m.status_descricao,
-            status_cor=m.status_cor,
             ativa=m.ativa,
             label=m.label
         )
@@ -265,7 +258,6 @@ def list_mesas_por_capacidade(
             capacidade=m.capacidade,
             status=StatusMesaEnum(m.status.value),
             status_descricao=m.status_descricao,
-            status_cor=m.status_cor,
             ativa=m.ativa,
             label=m.label
         )

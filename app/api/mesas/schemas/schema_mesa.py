@@ -38,7 +38,6 @@ class MesaOut(BaseModel):
     capacidade: int
     status: StatusMesaEnum
     status_descricao: str
-    status_cor: str
     ativa: str
     label: str
     is_ocupada: bool
@@ -94,7 +93,6 @@ class MesaListOut(BaseModel):
     capacidade: int
     status: StatusMesaEnum
     status_descricao: str
-    status_cor: str
     ativa: str
     label: str
 

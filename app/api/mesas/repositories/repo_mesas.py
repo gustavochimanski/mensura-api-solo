@@ -75,6 +75,7 @@ class MesaRepository:
         self.db.add(nova)
         try:
             self.db.commit()
+            
             self.db.refresh(nova)
             logger.info(f"[Mesas] Mesa salva no banco - id={nova.id}, numero={nova.numero}")
             
