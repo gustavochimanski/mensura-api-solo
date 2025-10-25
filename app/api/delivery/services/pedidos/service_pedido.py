@@ -1148,7 +1148,8 @@ class PedidoService:
         if not pedido:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado")
 
-        pedido.status = novo_status
+        # Atualizar status e criar histórico
+        self.repo.atualizar_status_pedido(pedido, novo_status.value)
         self.db.commit()
         self.db.refresh(pedido)
         return self._pedido_to_response(pedido)

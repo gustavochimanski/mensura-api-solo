@@ -98,8 +98,6 @@ class RelatorioRepository:
 
         )
         
-        print(f"DEBUG: Encontrados {len(pedidos_delivery_entregues)} pedidos de delivery entregues")
-
         # Calcular tempo médio para pedidos de mesa (entrega local)
         # Buscar pedidos de mesa que foram entregues no período
         pedidos_mesa_entregues = (
@@ -111,8 +109,6 @@ class RelatorioRepository:
             )
             .all()
         )
-        
-        print(f"DEBUG: Encontrados {len(pedidos_mesa_entregues)} pedidos de mesa entregues")
 
         # Calcular tempo médio para delivery
         tempo_delivery_minutos = 0.0
@@ -132,16 +128,17 @@ class RelatorioRepository:
                 
                 if finalizacao:
                     tempo_segundos = (finalizacao[0] - pedido.data_criacao).total_seconds()
-                    print(f"DEBUG: Pedido {pedido.id} - tempo: {tempo_segundos}s")
                     if tempo_segundos > 0:
                         tempos_delivery.append(tempo_segundos)
                 else:
-                    print(f"DEBUG: Pedido {pedido.id} - sem histórico de finalização")
+                    # Fallback: usar data_atualizacao se não encontrar no histórico
+                    tempo_segundos = (pedido.data_atualizacao - pedido.data_criacao).total_seconds()
+                    if tempo_segundos > 0:
+                        tempos_delivery.append(tempo_segundos)
             
             if tempos_delivery:
                 tempo_medio_segundos = sum(tempos_delivery) / len(tempos_delivery)
                 tempo_delivery_minutos = round(tempo_medio_segundos / 60.0, 2)
-                print(f"DEBUG: Tempo médio delivery: {tempo_delivery_minutos} minutos")
 
         # Calcular tempo médio para mesa (entrega local)
         tempo_mesa_minutos = 0.0
@@ -161,20 +158,17 @@ class RelatorioRepository:
                 
                 if finalizacao:
                     tempo_segundos = (finalizacao[0] - pedido.created_at).total_seconds()
-                    print(f"DEBUG: Pedido mesa {pedido.id} - tempo histórico: {tempo_segundos}s")
                     if tempo_segundos > 0:
                         tempos_mesa.append(tempo_segundos)
                 else:
                     # Fallback: usar updated_at se não encontrar no histórico
                     tempo_segundos = (pedido.updated_at - pedido.created_at).total_seconds()
-                    print(f"DEBUG: Pedido mesa {pedido.id} - tempo fallback: {tempo_segundos}s")
                     if tempo_segundos > 0:
                         tempos_mesa.append(tempo_segundos)
             
             if tempos_mesa:
                 tempo_medio_segundos = sum(tempos_mesa) / len(tempos_mesa)
                 tempo_mesa_minutos = round(tempo_medio_segundos / 60.0, 2)
-                print(f"DEBUG: Tempo médio mesa: {tempo_mesa_minutos} minutos")
         
         return tempo_delivery_minutos, tempo_mesa_minutos
 
