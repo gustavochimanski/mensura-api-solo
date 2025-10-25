@@ -19,8 +19,6 @@ class MesaIn(BaseModel):
     descricao: Optional[constr(max_length=100)] = None
     capacidade: Optional[int] = Field(default=4, ge=1, le=20)
     status: Optional[StatusMesaEnum] = StatusMesaEnum.DISPONIVEL
-    posicao_x: Optional[int] = Field(None, ge=0)
-    posicao_y: Optional[int] = Field(None, ge=0)
     ativa: Optional[constr(pattern="^[SN]$")] = "S"
 
     model_config = ConfigDict(from_attributes=True)
@@ -41,8 +39,6 @@ class MesaOut(BaseModel):
     status: StatusMesaEnum
     status_descricao: str
     status_cor: str
-    posicao_x: Optional[int] = None
-    posicao_y: Optional[int] = None
     ativa: str
     label: str
     is_ocupada: bool
@@ -59,8 +55,6 @@ class MesaUpdate(BaseModel):
     descricao: Optional[constr(max_length=100)] = None
     capacidade: Optional[int] = Field(None, ge=1, le=20)
     status: Optional[StatusMesaEnum] = None
-    posicao_x: Optional[int] = Field(None, ge=0)
-    posicao_y: Optional[int] = Field(None, ge=0)
     ativa: Optional[constr(pattern="^[SN]$")] = None
 
     model_config = ConfigDict(from_attributes=True)
@@ -87,8 +81,6 @@ class MesaSearchOut(BaseModel):
     capacidade: int
     status: StatusMesaEnum
     status_descricao: str
-    posicao_x: Optional[int] = None
-    posicao_y: Optional[int] = None
     ativa: str
 
     model_config = ConfigDict(from_attributes=True)

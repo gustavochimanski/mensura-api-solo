@@ -67,8 +67,6 @@ class MesaRepository:
             descricao=data.descricao,
             capacidade=data.capacidade,
             status=status_mesa,
-            posicao_x=data.posicao_x,
-            posicao_y=data.posicao_y,
             ativa=data.ativa
         )
         
