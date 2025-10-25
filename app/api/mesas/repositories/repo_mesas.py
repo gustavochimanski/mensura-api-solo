@@ -53,22 +53,25 @@ class MesaRepository:
         # Converte StatusMesaEnum para StatusMesa
         status_mesa = StatusMesa(data.status.value) if data.status else StatusMesa.DISPONIVEL
 
+        # Primeiro, obtém o próximo ID disponível
+        next_id = self.db.query(func.max(MesaModel.id)).scalar() or 0
+        next_id += 1
+        
+        # Gera o número baseado no próximo ID
+        numero_mesa = f"M{next_id:03d}"
+        
         nova = MesaModel(
+            numero=numero_mesa,
             descricao=data.descricao,
             capacidade=data.capacidade,
             status=status_mesa,
             ativa=data.ativa
         )
         
-        logger.info(f"[Mesas] Objeto mesa criado - status={nova.status}")
+        logger.info(f"[Mesas] Objeto mesa criado - numero={nova.numero}, status={nova.status}")
         
         self.db.add(nova)
         try:
-            self.db.commit()
-            self.db.refresh(nova)
-            
-            # Gera número automaticamente baseado no ID
-            nova.numero = f"M{nova.id:03d}"
             self.db.commit()
             self.db.refresh(nova)
             
