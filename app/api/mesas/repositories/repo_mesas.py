@@ -48,22 +48,12 @@ class MesaRepository:
     def create(self, data: MesaIn) -> MesaModel:
         from app.utils.logger import logger
         
-        logger.info(f"[Mesas] Criando mesa no repositório - numero={data.numero}, capacidade={data.capacidade}")
-        
-        # Verifica se já existe mesa com o mesmo número
-        existe = self.db.query(MesaModel).filter_by(numero=data.numero).first()
-        if existe:
-            logger.warning(f"[Mesas] Mesa com número já existe: {data.numero}")
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                "Já existe uma mesa com esse número."
-            )
+        logger.info(f"[Mesas] Criando mesa no repositório - capacidade={data.capacidade}")
 
         # Converte StatusMesaEnum para StatusMesa
         status_mesa = StatusMesa(data.status.value) if data.status else StatusMesa.DISPONIVEL
 
         nova = MesaModel(
-            numero=data.numero,
             descricao=data.descricao,
             capacidade=data.capacidade,
             status=status_mesa,
@@ -75,8 +65,13 @@ class MesaRepository:
         self.db.add(nova)
         try:
             self.db.commit()
-            
             self.db.refresh(nova)
+            
+            # Gera número automaticamente baseado no ID
+            nova.numero = f"M{nova.id:03d}"
+            self.db.commit()
+            self.db.refresh(nova)
+            
             logger.info(f"[Mesas] Mesa salva no banco - id={nova.id}, numero={nova.numero}")
             
             # Registra no histórico

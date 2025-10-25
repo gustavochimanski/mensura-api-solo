@@ -15,7 +15,6 @@ class StatusMesaEnum(str, Enum):
 
 class MesaIn(BaseModel):
     """Schema para criação de mesa"""
-    numero: constr(min_length=1, max_length=10)
     descricao: Optional[constr(max_length=100)] = None
     capacidade: Optional[int] = Field(default=4, ge=1, le=20)
     status: Optional[StatusMesaEnum] = StatusMesaEnum.DISPONIVEL

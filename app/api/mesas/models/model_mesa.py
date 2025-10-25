@@ -83,3 +83,9 @@ class MesaModel(Base):
     def is_livre(self) -> bool:
         """Verifica se a mesa está livre"""
         return self.status == StatusMesa.LIVRE
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # Gera número automaticamente se não fornecido
+        if not self.numero and self.id:
+            self.numero = f"M{self.id:03d}"
