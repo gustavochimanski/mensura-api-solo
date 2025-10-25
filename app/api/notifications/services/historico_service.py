@@ -34,7 +34,7 @@ class HistoricoService:
         status_novo: str,
         usuario_id: str,
         motivo: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        event_metadata: Optional[Dict[str, Any]] = None
     ) -> str:
         """Registra mudança de status de pedido"""
         try:
@@ -50,7 +50,7 @@ class HistoricoService:
                     "timestamp": datetime.utcnow().isoformat()
                 },
                 event_id=pedido_id,
-                metadata=metadata
+                event_metadata=event_metadata
             )
             
             logger.info(f"Histórico de mudança de status registrado: {pedido_id} - {status_anterior} → {status_novo}")
@@ -66,7 +66,7 @@ class HistoricoService:
         user_id: str,
         ip_address: Optional[str] = None,
         user_agent: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        event_metadata: Optional[Dict[str, Any]] = None
     ) -> str:
         """Registra login de usuário"""
         try:
@@ -80,7 +80,7 @@ class HistoricoService:
                     "timestamp": datetime.utcnow().isoformat()
                 },
                 event_id=user_id,
-                metadata=metadata
+                event_metadata=event_metadata
             )
             
             logger.info(f"Histórico de login registrado: {user_id}")
@@ -95,7 +95,7 @@ class HistoricoService:
         empresa_id: str,
         user_id: str,
         session_duration: Optional[int] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        event_metadata: Optional[Dict[str, Any]] = None
     ) -> str:
         """Registra logout de usuário"""
         try:
@@ -108,7 +108,7 @@ class HistoricoService:
                     "timestamp": datetime.utcnow().isoformat()
                 },
                 event_id=user_id,
-                metadata=metadata
+                event_metadata=event_metadata
             )
             
             logger.info(f"Histórico de logout registrado: {user_id}")
@@ -126,7 +126,7 @@ class HistoricoService:
         mensagem: str,
         erro: Optional[str] = None,
         stack_trace: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        event_metadata: Optional[Dict[str, Any]] = None
     ) -> str:
         """Registra log do sistema"""
         try:
@@ -150,7 +150,7 @@ class HistoricoService:
                     "stack_trace": stack_trace,
                     "timestamp": datetime.utcnow().isoformat()
                 },
-                metadata=metadata
+                event_metadata=event_metadata
             )
             
             logger.info(f"Log do sistema registrado: {modulo} - {nivel}")
@@ -170,7 +170,7 @@ class HistoricoService:
         dados_anteriores: Optional[Dict[str, Any]] = None,
         dados_novos: Optional[Dict[str, Any]] = None,
         ip_address: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        event_metadata: Optional[Dict[str, Any]] = None
     ) -> str:
         """Registra evento de auditoria"""
         try:
@@ -188,7 +188,7 @@ class HistoricoService:
                     "timestamp": datetime.utcnow().isoformat()
                 },
                 event_id=recurso_id,
-                metadata=metadata
+                event_metadata=event_metadata
             )
             
             logger.info(f"Auditoria registrada: {acao} em {recurso} {recurso_id}")

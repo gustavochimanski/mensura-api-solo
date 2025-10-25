@@ -41,7 +41,7 @@ class NotificationService:
                 "channel": request.channel,
                 "recipient": request.recipient,
                 "priority": request.priority,
-                "metadata": request.metadata,
+                "channel_metadata": request.channel_metadata,
                 "max_attempts": request.max_attempts
             }
             
@@ -108,7 +108,7 @@ class NotificationService:
                 recipient=notification.recipient,
                 title=notification.title,
                 message=notification.message,
-                metadata=notification.metadata
+                channel_metadata=notification.channel_metadata
             )
             
             if result.success:

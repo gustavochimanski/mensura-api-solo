@@ -17,7 +17,7 @@ class Event(Base):
     
     # Dados do evento
     data = Column(JSON, nullable=False)
-    metadata = Column(JSON, nullable=True)
+    event_metadata = Column(JSON, nullable=True)
     
     # Controle de processamento
     processed = Column(Boolean, default=False, index=True)

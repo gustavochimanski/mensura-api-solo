@@ -18,7 +18,7 @@ class EventPublisher:
         event_type: EventType,
         data: Dict[str, Any],
         event_id: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        event_metadata: Optional[Dict[str, Any]] = None
     ) -> str:
         """
         Publica um evento no sistema
@@ -39,7 +39,7 @@ class EventPublisher:
             event_type=event_type,
             event_id=event_id,
             data=data,
-            metadata=metadata or {},
+            event_metadata=event_metadata or {},
             created_at=datetime.utcnow()
         )
         
@@ -57,7 +57,7 @@ class EventPublisher:
         cliente_data: Dict[str, Any],
         itens: list,
         valor_total: float,
-        metadata: Optional[Dict[str, Any]] = None
+        event_metadata: Optional[Dict[str, Any]] = None
     ) -> str:
         """Publica evento de pedido criado"""
         data = {
@@ -72,7 +72,7 @@ class EventPublisher:
             event_type=EventType.PEDIDO_CRIADO,
             data=data,
             event_id=pedido_id,
-            metadata=metadata
+            event_metadata=event_metadata
         )
     
     async def publish_pedido_aprovado(
@@ -80,7 +80,7 @@ class EventPublisher:
         empresa_id: str,
         pedido_id: str,
         aprovado_por: str,
-        metadata: Optional[Dict[str, Any]] = None
+        event_metadata: Optional[Dict[str, Any]] = None
     ) -> str:
         """Publica evento de pedido aprovado"""
         data = {
@@ -93,7 +93,7 @@ class EventPublisher:
             event_type=EventType.PEDIDO_APROVADO,
             data=data,
             event_id=pedido_id,
-            metadata=metadata
+            event_metadata=event_metadata
         )
     
     async def publish_estoque_baixo(
@@ -103,7 +103,7 @@ class EventPublisher:
         produto_nome: str,
         quantidade_atual: int,
         quantidade_minima: int,
-        metadata: Optional[Dict[str, Any]] = None
+        event_metadata: Optional[Dict[str, Any]] = None
     ) -> str:
         """Publica evento de estoque baixo"""
         data = {
@@ -118,7 +118,7 @@ class EventPublisher:
             event_type=EventType.ESTOQUE_BAIXO,
             data=data,
             event_id=produto_id,
-            metadata=metadata
+            event_metadata=event_metadata
         )
     
     async def publish_pagamento_aprovado(
@@ -128,7 +128,7 @@ class EventPublisher:
         pedido_id: str,
         valor: float,
         metodo_pagamento: str,
-        metadata: Optional[Dict[str, Any]] = None
+        event_metadata: Optional[Dict[str, Any]] = None
     ) -> str:
         """Publica evento de pagamento aprovado"""
         data = {
@@ -143,7 +143,7 @@ class EventPublisher:
             event_type=EventType.PAGAMENTO_APROVADO,
             data=data,
             event_id=pagamento_id,
-            metadata=metadata
+            event_metadata=event_metadata
         )
     
     async def publish_sistema_erro(
@@ -152,7 +152,7 @@ class EventPublisher:
         erro: str,
         modulo: str,
         severidade: str = "error",
-        metadata: Optional[Dict[str, Any]] = None
+        event_metadata: Optional[Dict[str, Any]] = None
     ) -> str:
         """Publica evento de erro do sistema"""
         data = {
@@ -165,5 +165,5 @@ class EventPublisher:
             empresa_id=empresa_id,
             event_type=EventType.SISTEMA_ERRO,
             data=data,
-            metadata=metadata
+            event_metadata=event_metadata
         )

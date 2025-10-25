@@ -29,7 +29,7 @@ class PushChannel(BaseNotificationChannel):
         recipient: str,  # Device token do Firebase
         title: str,
         message: str,
-        metadata: Optional[Dict[str, Any]] = None
+        channel_metadata: Optional[Dict[str, Any]] = None
     ) -> NotificationResult:
         """Envia notificação push"""
         try:
@@ -42,7 +42,7 @@ class PushChannel(BaseNotificationChannel):
                     "sound": "default",
                     "badge": 1
                 },
-                "data": metadata or {},
+                "data": channel_metadata or {},
                 "priority": "high"
             }
             

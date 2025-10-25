@@ -122,7 +122,7 @@ class NotificationWorker:
                 recipient=notification.recipient,
                 title=notification.title,
                 message=notification.message,
-                metadata=notification.metadata
+                channel_metadata=notification.channel_metadata
             )
             
             if result.success:

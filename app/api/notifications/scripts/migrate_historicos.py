@@ -104,7 +104,7 @@ class MigracaoHistoricos:
                         status_novo=row.status_novo,
                         usuario_id=row.usuario_id,
                         motivo=row.motivo,
-                        metadata={
+                        event_metadata={
                             "migrado_de": "pedido_status_historico",
                             "id_original": row.id,
                             "data_original": row.created_at.isoformat()
@@ -175,7 +175,7 @@ class MigracaoHistoricos:
                             "timestamp": row.created_at.isoformat()
                         },
                         event_id=row.usuario_id,
-                        metadata={
+                        event_metadata={
                             "migrado_de": "usuario_historico",
                             "id_original": row.id,
                             "data_original": row.created_at.isoformat()
@@ -229,7 +229,7 @@ class MigracaoHistoricos:
                         mensagem=row.mensagem,
                         erro=row.erro,
                         stack_trace=row.stack_trace,
-                        metadata={
+                        event_metadata={
                             "migrado_de": "sistema_logs",
                             "id_original": row.id,
                             "data_original": row.created_at.isoformat()
@@ -287,7 +287,7 @@ class MigracaoHistoricos:
                         dados_anteriores=row.dados_anteriores,
                         dados_novos=row.dados_novos,
                         ip_address=row.ip_address,
-                        metadata={
+                        event_metadata={
                             "migrado_de": "auditoria",
                             "id_original": row.id,
                             "data_original": row.created_at.isoformat()
@@ -313,13 +313,13 @@ class MigracaoHistoricos:
             # Conta eventos migrados
             eventos_migrados = self.db.execute(text("""
                 SELECT COUNT(*) FROM events 
-                WHERE metadata->>'migrado_de' IS NOT NULL
+                WHERE event_metadata->>'migrado_de' IS NOT NULL
             """)).scalar()
             
             # Conta notificações relacionadas
             notificacoes_migradas = self.db.execute(text("""
                 SELECT COUNT(*) FROM notifications 
-                WHERE metadata->>'migrado_de' IS NOT NULL
+                WHERE event_metadata->>'migrado_de' IS NOT NULL
             """)).scalar()
             
             logger.info(f"Verificação de integridade:")

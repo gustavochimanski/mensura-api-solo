@@ -51,7 +51,7 @@ class Notification(Base):
     
     # Configurações de entrega
     recipient = Column(String, nullable=False)  # email, phone, webhook_url, etc.
-    metadata = Column(JSON, nullable=True)  # configurações específicas do canal
+    channel_metadata = Column(JSON, nullable=True)  # configurações específicas do canal
     
     # Controle de tentativas
     attempts = Column(Integer, default=0)

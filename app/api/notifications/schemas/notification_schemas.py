@@ -36,7 +36,7 @@ class CreateNotificationRequest(BaseModel):
     channel: NotificationChannel = Field(..., description="Canal de notificação")
     recipient: str = Field(..., description="Destinatário da notificação")
     priority: NotificationPriority = Field(NotificationPriority.NORMAL, description="Prioridade da notificação")
-    metadata: Optional[Dict[str, Any]] = Field(None, description="Metadados específicos do canal")
+    channel_metadata: Optional[Dict[str, Any]] = Field(None, description="Metadados específicos do canal")
     max_attempts: int = Field(3, ge=1, le=10, description="Número máximo de tentativas")
 
 class SendNotificationRequest(BaseModel):
@@ -63,7 +63,7 @@ class NotificationResponse(BaseModel):
     status: NotificationStatus
     priority: NotificationPriority
     recipient: str
-    metadata: Optional[Dict[str, Any]]
+    channel_metadata: Optional[Dict[str, Any]]
     attempts: int
     max_attempts: int
     last_attempt_at: Optional[datetime]

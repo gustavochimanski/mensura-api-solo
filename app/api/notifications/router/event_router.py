@@ -41,7 +41,7 @@ async def create_event(
             event_type=request.event_type,
             data=request.data,
             event_id=request.event_id,
-            metadata=request.metadata
+            event_metadata=request.event_metadata
         )
         
         return {"id": event_id, "message": "Evento criado com sucesso"}
@@ -56,7 +56,7 @@ async def publish_pedido_criado(
     cliente_data: dict,
     itens: list,
     valor_total: float,
-    metadata: Optional[dict] = None,
+    event_metadata: Optional[dict] = None,
     publisher: EventPublisher = Depends(get_event_publisher),
     current_user = Depends(get_current_user)
 ):
@@ -68,7 +68,7 @@ async def publish_pedido_criado(
             cliente_data=cliente_data,
             itens=itens,
             valor_total=valor_total,
-            metadata=metadata
+            event_metadata=event_metadata
         )
         
         return {"id": event_id, "message": "Evento de pedido criado publicado"}
@@ -81,7 +81,7 @@ async def publish_pedido_aprovado(
     empresa_id: str,
     pedido_id: str,
     aprovado_por: str,
-    metadata: Optional[dict] = None,
+    event_metadata: Optional[dict] = None,
     publisher: EventPublisher = Depends(get_event_publisher),
     current_user = Depends(get_current_user)
 ):
@@ -91,7 +91,7 @@ async def publish_pedido_aprovado(
             empresa_id=empresa_id,
             pedido_id=pedido_id,
             aprovado_por=aprovado_por,
-            metadata=metadata
+            event_metadata=event_metadata
         )
         
         return {"id": event_id, "message": "Evento de pedido aprovado publicado"}
@@ -106,7 +106,7 @@ async def publish_estoque_baixo(
     produto_nome: str,
     quantidade_atual: int,
     quantidade_minima: int,
-    metadata: Optional[dict] = None,
+    event_metadata: Optional[dict] = None,
     publisher: EventPublisher = Depends(get_event_publisher),
     current_user = Depends(get_current_user)
 ):
@@ -118,7 +118,7 @@ async def publish_estoque_baixo(
             produto_nome=produto_nome,
             quantidade_atual=quantidade_atual,
             quantidade_minima=quantidade_minima,
-            metadata=metadata
+            event_metadata=event_metadata
         )
         
         return {"id": event_id, "message": "Evento de estoque baixo publicado"}
@@ -133,7 +133,7 @@ async def publish_pagamento_aprovado(
     pedido_id: str,
     valor: float,
     metodo_pagamento: str,
-    metadata: Optional[dict] = None,
+    event_metadata: Optional[dict] = None,
     publisher: EventPublisher = Depends(get_event_publisher),
     current_user = Depends(get_current_user)
 ):
@@ -145,7 +145,7 @@ async def publish_pagamento_aprovado(
             pedido_id=pedido_id,
             valor=valor,
             metodo_pagamento=metodo_pagamento,
-            metadata=metadata
+            event_metadata=event_metadata
         )
         
         return {"id": event_id, "message": "Evento de pagamento aprovado publicado"}

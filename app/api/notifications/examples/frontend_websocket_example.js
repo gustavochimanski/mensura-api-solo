@@ -339,7 +339,7 @@ async function notificarNovoPedido(pedidoData) {
                 cliente_data: pedidoData.cliente,
                 itens: pedidoData.itens,
                 valor_total: pedidoData.valor_total,
-                metadata: {
+                channel_metadata: {
                     origem: 'frontend',
                     timestamp: new Date().toISOString()
                 }

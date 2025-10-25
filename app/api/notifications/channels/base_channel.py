@@ -34,7 +34,7 @@ class BaseNotificationChannel(ABC):
         recipient: str,
         title: str,
         message: str,
-        metadata: Optional[Dict[str, Any]] = None
+        channel_metadata: Optional[Dict[str, Any]] = None
     ) -> NotificationResult:
         """
         Envia uma notificação

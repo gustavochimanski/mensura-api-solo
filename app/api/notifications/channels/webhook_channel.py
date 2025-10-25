@@ -34,7 +34,7 @@ class WebhookChannel(BaseNotificationChannel):
         recipient: str,  # Neste caso, recipient é o webhook_url
         title: str,
         message: str,
-        metadata: Optional[Dict[str, Any]] = None
+        channel_metadata: Optional[Dict[str, Any]] = None
     ) -> NotificationResult:
         """Envia notificação via webhook"""
         try:
@@ -43,7 +43,7 @@ class WebhookChannel(BaseNotificationChannel):
                 "title": title,
                 "message": message,
                 "timestamp": self._get_timestamp(),
-                "metadata": metadata or {}
+                "channel_metadata": channel_metadata or {}
             }
             
             # Prepara headers

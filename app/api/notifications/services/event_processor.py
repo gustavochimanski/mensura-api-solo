@@ -83,7 +83,7 @@ class EventProcessor(EventHandler):
                 "channel": subscription.channel,
                 "recipient": recipient,
                 "priority": self._get_priority_from_event(event),
-                "metadata": {
+                "event_metadata": {
                     "subscription_id": subscription.id,
                     "event_id": event.id
                 }

@@ -107,7 +107,7 @@ class RabbitMQNotificationService:
                 recipient=notification.recipient,
                 title=notification.title,
                 message=notification.message,
-                metadata=notification.metadata
+                channel_metadata=notification.channel_metadata
             )
             
             if result.success:
@@ -146,7 +146,7 @@ class RabbitMQNotificationService:
         channel: str,
         recipient: str,
         priority: str = "normal",
-        metadata: Optional[Dict[str, Any]] = None
+        channel_metadata: Optional[Dict[str, Any]] = None
     ) -> str:
         """Envia notificação via RabbitMQ"""
         try:
@@ -163,7 +163,7 @@ class RabbitMQNotificationService:
                 "channel": channel,
                 "recipient": recipient,
                 "priority": priority,
-                "metadata": metadata or {}
+                "channel_metadata": channel_metadata or {}
             }
             
             notification = self.notification_repo.create(notification_data)
@@ -179,7 +179,7 @@ class RabbitMQNotificationService:
                 "channel": channel,
                 "recipient": recipient,
                 "priority": priority,
-                "metadata": metadata or {},
+                "channel_metadata": channel_metadata or {},
                 "created_at": notification.created_at.isoformat()
             }
             
@@ -209,7 +209,7 @@ class RabbitMQNotificationService:
         channels: List[str],
         recipients: Dict[str, str],
         priority: str = "normal",
-        metadata: Optional[Dict[str, Any]] = None
+        channel_metadata: Optional[Dict[str, Any]] = None
     ) -> List[str]:
         """Envia notificações em lote via RabbitMQ"""
         try:
@@ -230,7 +230,7 @@ class RabbitMQNotificationService:
                     channel=channel,
                     recipient=recipient,
                     priority=priority,
-                    metadata=metadata
+                    channel_metadata=channel_metadata
                 )
                 
                 if notification_id:
@@ -366,7 +366,7 @@ class RabbitMQNotificationService:
                         "channel": notification.channel,
                         "recipient": notification.recipient,
                         "priority": notification.priority,
-                        "metadata": notification.metadata,
+                        "channel_metadata": notification.channel_metadata,
                         "created_at": notification.created_at.isoformat()
                     }
                     

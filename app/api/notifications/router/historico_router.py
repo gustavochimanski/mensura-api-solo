@@ -364,12 +364,12 @@ async def status_migracao(
     try:
         # Conta eventos migrados
         eventos_migrados = service.db.execute(
-            "SELECT COUNT(*) FROM events WHERE metadata->>'migrado_de' IS NOT NULL"
+            "SELECT COUNT(*) FROM events WHERE event_metadata->>'migrado_de' IS NOT NULL"
         ).scalar()
         
         # Conta notificações migradas
         notificacoes_migradas = service.db.execute(
-            "SELECT COUNT(*) FROM notifications WHERE metadata->>'migrado_de' IS NOT NULL"
+            "SELECT COUNT(*) FROM notifications WHERE channel_metadata->>'migrado_de' IS NOT NULL"
         ).scalar()
         
         # Verifica tabelas antigas

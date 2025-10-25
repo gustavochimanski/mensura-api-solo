@@ -47,7 +47,7 @@ async def send_notification_rabbitmq(
     channel: str,
     recipient: str,
     priority: str = "normal",
-    metadata: Optional[Dict[str, Any]] = None,
+    channel_metadata: Optional[Dict[str, Any]] = None,
     service: RabbitMQNotificationService = Depends(get_rabbitmq_service),
     current_user = Depends(get_current_user)
 ):
@@ -62,7 +62,7 @@ async def send_notification_rabbitmq(
             channel=channel,
             recipient=recipient,
             priority=priority,
-            metadata=metadata
+            channel_metadata=channel_metadata
         )
         
         if notification_id:
@@ -87,7 +87,7 @@ async def send_bulk_notifications_rabbitmq(
     channels: List[str],
     recipients: Dict[str, str],
     priority: str = "normal",
-    metadata: Optional[Dict[str, Any]] = None,
+    channel_metadata: Optional[Dict[str, Any]] = None,
     service: RabbitMQNotificationService = Depends(get_rabbitmq_service),
     current_user = Depends(get_current_user)
 ):
@@ -101,7 +101,7 @@ async def send_bulk_notifications_rabbitmq(
             channels=channels,
             recipients=recipients,
             priority=priority,
-            metadata=metadata
+            channel_metadata=channel_metadata
         )
         
         return {
@@ -197,7 +197,7 @@ async def test_rabbitmq_connection(
             message="Esta é uma notificação de teste",
             channel="in_app",
             recipient="test",
-            metadata={"test": True}
+            channel_metadata={"test": True}
         )
         
         if test_notification_id:

@@ -99,7 +99,7 @@ class Event:
     event_type: EventType
     event_id: Optional[str]
     data: Dict[str, Any]
-    metadata: Optional[Dict[str, Any]]
+    event_metadata: Optional[Dict[str, Any]]
     created_at: datetime
     processed: bool = False
 
@@ -162,7 +162,7 @@ class EventBus:
                 "event_type": event.event_type,
                 "event_id": event.event_id,
                 "data": event.data,
-                "metadata": event.metadata,
+                "event_metadata": event.event_metadata,
                 "created_at": event.created_at.isoformat(),
                 "processed": event.processed
             }
@@ -216,7 +216,7 @@ class EventBus:
                 event_type=EventType(event_data["event_type"]),
                 event_id=event_data.get("event_id"),
                 data=event_data["data"],
-                metadata=event_data.get("metadata", {}),
+                event_metadata=event_data.get("event_metadata", {}),
                 created_at=datetime.fromisoformat(event_data["created_at"]),
                 processed=event_data.get("processed", False)
             )

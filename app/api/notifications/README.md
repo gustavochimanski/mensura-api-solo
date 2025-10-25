@@ -199,7 +199,7 @@ GET /api/notifications/{notification_id}/logs
 1. Crie classe em `channels/`:
 ```python
 class NovoChannel(BaseNotificationChannel):
-    async def send(self, recipient, title, message, metadata):
+    async def send(self, recipient, title, message, channel_metadata):
         # Implementar envio
         pass
 ```

@@ -32,7 +32,7 @@ class WhatsAppChannel(BaseNotificationChannel):
         recipient: str,  # Número do WhatsApp (ex: +5511999999999)
         title: str,
         message: str,
-        metadata: Optional[Dict[str, Any]] = None
+        channel_metadata: Optional[Dict[str, Any]] = None
     ) -> NotificationResult:
         """Envia mensagem via WhatsApp"""
         try:
@@ -40,9 +40,9 @@ class WhatsAppChannel(BaseNotificationChannel):
             full_message = f"*{title}*\n\n{message}"
             
             # Adiciona metadados se fornecidos
-            if metadata:
+            if channel_metadata:
                 full_message += f"\n\n_Dados adicionais:_\n"
-                for key, value in metadata.items():
+                for key, value in channel_metadata.items():
                     full_message += f"• {key}: {value}\n"
             
             # Prepara os dados para a API do Twilio

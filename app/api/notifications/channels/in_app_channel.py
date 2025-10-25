@@ -26,7 +26,7 @@ class InAppChannel(BaseNotificationChannel):
         recipient: str,  # user_id ou session_id
         title: str,
         message: str,
-        metadata: Optional[Dict[str, Any]] = None
+        channel_metadata: Optional[Dict[str, Any]] = None
     ) -> NotificationResult:
         """Envia notificação in-app via WebSocket"""
         try:
@@ -38,7 +38,7 @@ class InAppChannel(BaseNotificationChannel):
                 "type": "notification",
                 "title": title,
                 "message": message,
-                "metadata": metadata or {},
+                "channel_metadata": channel_metadata or {},
                 "timestamp": self._get_timestamp()
             }
             

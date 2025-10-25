@@ -21,7 +21,7 @@ class PedidoNotificationService:
         cliente_data: Dict[str, Any],
         itens: list,
         valor_total: float,
-        metadata: Optional[Dict[str, Any]] = None
+        channel_metadata: Optional[Dict[str, Any]] = None
     ) -> str:
         """
         Notifica sobre um novo pedido criado
@@ -45,7 +45,7 @@ class PedidoNotificationService:
                 cliente_data=cliente_data,
                 itens=itens,
                 valor_total=valor_total,
-                metadata=metadata
+                channel_metadata=channel_metadata
             )
             
             # Envia notificação em tempo real via WebSocket
@@ -75,7 +75,7 @@ class PedidoNotificationService:
         empresa_id: str,
         pedido_id: str,
         aprovado_por: str,
-        metadata: Optional[Dict[str, Any]] = None
+        channel_metadata: Optional[Dict[str, Any]] = None
     ) -> str:
         """Notifica sobre pedido aprovado"""
         try:
@@ -84,7 +84,7 @@ class PedidoNotificationService:
                 empresa_id=empresa_id,
                 pedido_id=pedido_id,
                 aprovado_por=aprovado_por,
-                metadata=metadata
+                channel_metadata=channel_metadata
             )
             
             # Envia notificação em tempo real
@@ -113,7 +113,7 @@ class PedidoNotificationService:
         pedido_id: str,
         motivo: str,
         cancelado_por: str,
-        metadata: Optional[Dict[str, Any]] = None
+        channel_metadata: Optional[Dict[str, Any]] = None
     ) -> str:
         """Notifica sobre pedido cancelado"""
         try:
@@ -128,7 +128,7 @@ class PedidoNotificationService:
                     "status": "cancelado"
                 },
                 event_id=pedido_id,
-                metadata=metadata
+                channel_metadata=channel_metadata
             )
             
             # Envia notificação em tempo real
@@ -157,7 +157,7 @@ class PedidoNotificationService:
         empresa_id: str,
         pedido_id: str,
         entregue_por: str,
-        metadata: Optional[Dict[str, Any]] = None
+        channel_metadata: Optional[Dict[str, Any]] = None
     ) -> str:
         """Notifica sobre pedido entregue"""
         try:
@@ -171,7 +171,7 @@ class PedidoNotificationService:
                     "status": "entregue"
                 },
                 event_id=pedido_id,
-                metadata=metadata
+                channel_metadata=channel_metadata
             )
             
             # Envia notificação em tempo real

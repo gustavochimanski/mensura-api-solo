@@ -36,7 +36,7 @@ class EmailChannel(BaseNotificationChannel):
         recipient: str,
         title: str,
         message: str,
-        metadata: Optional[Dict[str, Any]] = None
+        channel_metadata: Optional[Dict[str, Any]] = None
     ) -> NotificationResult:
         """Envia email"""
         try:
@@ -48,7 +48,7 @@ class EmailChannel(BaseNotificationChannel):
             
             # Adiciona o corpo da mensagem
             text_content = message
-            html_content = self._create_html_content(title, message, metadata)
+            html_content = self._create_html_content(title, message, channel_metadata)
             
             # Adiciona as partes da mensagem
             text_part = MIMEText(text_content, 'plain', 'utf-8')
@@ -72,7 +72,7 @@ class EmailChannel(BaseNotificationChannel):
             self._log_error(recipient, error_msg)
             return self._create_error_result(error_msg, {"exception": str(e)})
     
-    def _create_html_content(self, title: str, message: str, metadata: Optional[Dict[str, Any]] = None) -> str:
+    def _create_html_content(self, title: str, message: str, channel_metadata: Optional[Dict[str, Any]] = None) -> str:
         """Cria conteúdo HTML para o email"""
         html_template = """
         <!DOCTYPE html>

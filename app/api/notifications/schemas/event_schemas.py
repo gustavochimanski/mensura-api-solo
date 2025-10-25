@@ -8,7 +8,7 @@ class CreateEventRequest(BaseModel):
     event_type: str = Field(..., description="Tipo do evento")
     event_id: Optional[str] = Field(None, description="ID do recurso que gerou o evento")
     data: Dict[str, Any] = Field(..., description="Dados do evento")
-    metadata: Optional[Dict[str, Any]] = Field(None, description="Metadados adicionais")
+    event_metadata: Optional[Dict[str, Any]] = Field(None, description="Metadados adicionais")
 
 class ProcessEventRequest(BaseModel):
     event_id: str = Field(..., description="ID do evento a ser processado")
@@ -20,7 +20,7 @@ class EventResponse(BaseModel):
     event_type: str
     event_id: Optional[str]
     data: Dict[str, Any]
-    metadata: Optional[Dict[str, Any]]
+    event_metadata: Optional[Dict[str, Any]]
     processed: bool
     processed_at: Optional[datetime]
     created_at: datetime

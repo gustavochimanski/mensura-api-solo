@@ -20,7 +20,7 @@ async def notificar_novo_pedido(
     cliente_data: Dict[str, Any],
     itens: list,
     valor_total: float,
-    metadata: Optional[Dict[str, Any]] = None,
+    channel_metadata: Optional[Dict[str, Any]] = None,
     service: PedidoNotificationService = Depends(get_pedido_notification_service),
     current_user = Depends(get_current_user)
 ):
@@ -40,7 +40,7 @@ async def notificar_novo_pedido(
             cliente_data=cliente_data,
             itens=itens,
             valor_total=valor_total,
-            metadata=metadata
+            channel_metadata=channel_metadata
         )
         
         return {
@@ -59,7 +59,7 @@ async def notificar_pedido_aprovado(
     empresa_id: str,
     pedido_id: str,
     aprovado_por: str,
-    metadata: Optional[Dict[str, Any]] = None,
+    channel_metadata: Optional[Dict[str, Any]] = None,
     service: PedidoNotificationService = Depends(get_pedido_notification_service),
     current_user = Depends(get_current_user)
 ):
@@ -69,7 +69,7 @@ async def notificar_pedido_aprovado(
             empresa_id=empresa_id,
             pedido_id=pedido_id,
             aprovado_por=aprovado_por,
-            metadata=metadata
+            channel_metadata=channel_metadata
         )
         
         return {
@@ -89,7 +89,7 @@ async def notificar_pedido_cancelado(
     pedido_id: str,
     motivo: str,
     cancelado_por: str,
-    metadata: Optional[Dict[str, Any]] = None,
+    channel_metadata: Optional[Dict[str, Any]] = None,
     service: PedidoNotificationService = Depends(get_pedido_notification_service),
     current_user = Depends(get_current_user)
 ):
@@ -100,7 +100,7 @@ async def notificar_pedido_cancelado(
             pedido_id=pedido_id,
             motivo=motivo,
             cancelado_por=cancelado_por,
-            metadata=metadata
+            channel_metadata=channel_metadata
         )
         
         return {
@@ -119,7 +119,7 @@ async def notificar_pedido_entregue(
     empresa_id: str,
     pedido_id: str,
     entregue_por: str,
-    metadata: Optional[Dict[str, Any]] = None,
+    channel_metadata: Optional[Dict[str, Any]] = None,
     service: PedidoNotificationService = Depends(get_pedido_notification_service),
     current_user = Depends(get_current_user)
 ):
@@ -129,7 +129,7 @@ async def notificar_pedido_entregue(
             empresa_id=empresa_id,
             pedido_id=pedido_id,
             entregue_por=entregue_por,
-            metadata=metadata
+            channel_metadata=channel_metadata
         )
         
         return {
