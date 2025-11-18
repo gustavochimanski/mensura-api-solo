@@ -2,13 +2,9 @@ from typing import Optional, Tuple, List, Dict
 import httpx
 from app.config import settings
 from app.utils.logger import logger
-from app.api.localizacao.contracts.geolocalizacao_contract import (
-    IGeolocalizacaoProvider,
-    IDistanciaProvider
-)
 
 
-class GoogleMapsAdapter(IGeolocalizacaoProvider, IDistanciaProvider):
+class GoogleMapsAdapter:
     """Adapter para Google Maps API - implementa geocodificação e cálculo de distância."""
     
     BASE_URL = "https://maps.googleapis.com/maps/api/geocode/json"
@@ -49,11 +45,21 @@ class GoogleMapsAdapter(IGeolocalizacaoProvider, IDistanciaProvider):
             # Tratamento específico para diferentes status da API
             if status_code == "REQUEST_DENIED":
                 error_message = data.get("error_message", "Acesso negado")
-                logger.error(
-                    f"[GoogleMapsAdapter] Acesso negado pela API do Google Maps para '{endereco}'. "
-                    f"Verifique se a API key está correta e se a Geocoding API está habilitada. "
-                    f"Erro: {error_message}"
-                )
+                
+                # Detecta problema específico de restrições de referer
+                if "referer restrictions" in error_message.lower():
+                    logger.error(
+                        f"[GoogleMapsAdapter] Acesso negado pela API do Google Maps para '{endereco}'. "
+                        f"PROBLEMA: A API key tem restrições de referer (domínio/URL), mas a Geocoding API não aceita esse tipo de restrição. "
+                        f"SOLUÇÃO: No Google Cloud Console, altere as restrições da API key para 'Restrição de IP' ou remova as restrições. "
+                        f"Erro completo: {error_message}"
+                    )
+                else:
+                    logger.error(
+                        f"[GoogleMapsAdapter] Acesso negado pela API do Google Maps para '{endereco}'. "
+                        f"Verifique se a API key está correta e se a Geocoding API está habilitada. "
+                        f"Erro: {error_message}"
+                    )
                 return None
             elif status_code == "OVER_QUERY_LIMIT":
                 logger.error(
@@ -192,11 +198,21 @@ class GoogleMapsAdapter(IGeolocalizacaoProvider, IDistanciaProvider):
             # Tratamento específico para diferentes status da API
             if status_code == "REQUEST_DENIED":
                 error_message = data.get("error_message", "Acesso negado")
-                logger.error(
-                    f"[GoogleMapsAdapter] Acesso negado pela API do Google Maps para '{texto}'. "
-                    f"Verifique se a API key está correta e se a Geocoding API está habilitada. "
-                    f"Erro: {error_message}"
-                )
+                
+                # Detecta problema específico de restrições de referer
+                if "referer restrictions" in error_message.lower():
+                    logger.error(
+                        f"[GoogleMapsAdapter] Acesso negado pela API do Google Maps para '{texto}'. "
+                        f"PROBLEMA: A API key tem restrições de referer (domínio/URL), mas a Geocoding API não aceita esse tipo de restrição. "
+                        f"SOLUÇÃO: No Google Cloud Console, altere as restrições da API key para 'Restrição de IP' ou remova as restrições. "
+                        f"Erro completo: {error_message}"
+                    )
+                else:
+                    logger.error(
+                        f"[GoogleMapsAdapter] Acesso negado pela API do Google Maps para '{texto}'. "
+                        f"Verifique se a API key está correta e se a Geocoding API está habilitada. "
+                        f"Erro: {error_message}"
+                    )
                 return []
             elif status_code == "OVER_QUERY_LIMIT":
                 logger.error(
