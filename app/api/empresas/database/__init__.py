@@ -1,0 +1,2 @@
+"""Database do domínio Empresas"""
+
