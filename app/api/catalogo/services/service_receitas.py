@@ -4,6 +4,8 @@ from typing import Optional, List
 from app.api.catalogo.repositories.repo_receitas import ReceitasRepository
 from app.api.catalogo.schemas.schema_receitas import (
     ReceitaIngredienteIn,
+    ReceitaIngredienteDetalhadoOut,
+    ReceitaComIngredientesOut,
     AdicionalIn,
     ReceitaIn,
     ReceitaUpdate,
@@ -23,6 +25,45 @@ class ReceitasService:
 
     def list_receitas(self, empresa_id: Optional[int] = None, ativo: Optional[bool] = None):
         return self.repo.list_receitas(empresa_id=empresa_id, ativo=ativo)
+    
+    def list_receitas_com_ingredientes(self, empresa_id: Optional[int] = None, ativo: Optional[bool] = None) -> List[ReceitaComIngredientesOut]:
+        """Lista receitas com seus ingredientes incluídos"""
+        receitas = self.repo.list_receitas_com_ingredientes(empresa_id=empresa_id, ativo=ativo)
+        
+        resultado = []
+        for receita in receitas:
+            # Monta lista de ingredientes detalhados
+            ingredientes_detalhados = []
+            for ri in receita.ingredientes:
+                ingrediente_detalhado = ReceitaIngredienteDetalhadoOut(
+                    id=ri.id,
+                    receita_id=ri.receita_id,
+                    ingrediente_id=ri.ingrediente_id,
+                    quantidade=float(ri.quantidade) if ri.quantidade else None,
+                    ingrediente_nome=ri.ingrediente.nome if ri.ingrediente else None,
+                    ingrediente_descricao=ri.ingrediente.descricao if ri.ingrediente else None,
+                    ingrediente_unidade_medida=ri.ingrediente.unidade_medida if ri.ingrediente else None,
+                    ingrediente_custo=ri.ingrediente.custo if ri.ingrediente else None,
+                )
+                ingredientes_detalhados.append(ingrediente_detalhado)
+            
+            # Cria objeto de resposta com ingredientes
+            receita_com_ingredientes = ReceitaComIngredientesOut(
+                id=receita.id,
+                empresa_id=receita.empresa_id,
+                nome=receita.nome,
+                descricao=receita.descricao,
+                preco_venda=receita.preco_venda,
+                imagem=receita.imagem,
+                ativo=receita.ativo,
+                disponivel=receita.disponivel,
+                created_at=receita.created_at,
+                updated_at=receita.updated_at,
+                ingredientes=ingredientes_detalhados,
+            )
+            resultado.append(receita_com_ingredientes)
+        
+        return resultado
 
     def update_receita(self, receita_id: int, data: ReceitaUpdate):
         return self.repo.update_receita(receita_id, data)

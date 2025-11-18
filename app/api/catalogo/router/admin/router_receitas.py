@@ -9,6 +9,7 @@ from app.api.catalogo.schemas.schema_receitas import (
     ReceitaUpdate,
     ReceitaIngredienteIn,
     ReceitaIngredienteOut,
+    ReceitaComIngredientesOut,
     AdicionalIn,
     AdicionalOut,
 )
@@ -48,6 +49,17 @@ def list_receitas(
     """Lista todas as receitas, com filtros opcionais"""
     logger.info(f"[Receitas] Listar - empresa_id={empresa_id} ativo={ativo}")
     return ReceitasService(db).list_receitas(empresa_id=empresa_id, ativo=ativo)
+
+
+@router.get("/com-ingredientes", response_model=list[ReceitaComIngredientesOut])
+def list_receitas_com_ingredientes(
+    empresa_id: Optional[int] = Query(None, description="Filtrar por empresa"),
+    ativo: Optional[bool] = Query(None, description="Filtrar por status ativo"),
+    db: Session = Depends(get_db),
+):
+    """Lista todas as receitas com seus ingredientes incluídos, com filtros opcionais"""
+    logger.info(f"[Receitas] Listar com ingredientes - empresa_id={empresa_id} ativo={ativo}")
+    return ReceitasService(db).list_receitas_com_ingredientes(empresa_id=empresa_id, ativo=ativo)
 
 
 @router.get("/{receita_id}", response_model=ReceitaOut)

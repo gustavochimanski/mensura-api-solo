@@ -1,5 +1,5 @@
 from typing import List, Optional
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 from fastapi import HTTPException, status
 from decimal import Decimal
@@ -40,6 +40,21 @@ class ReceitasRepository:
 
     def list_receitas(self, empresa_id: Optional[int] = None, ativo: Optional[bool] = None) -> List[ReceitaModel]:
         query = self.db.query(ReceitaModel)
+        
+        if empresa_id is not None:
+            query = query.filter_by(empresa_id=empresa_id)
+        
+        if ativo is not None:
+            query = query.filter_by(ativo=ativo)
+        
+        return query.order_by(ReceitaModel.nome).all()
+    
+    def list_receitas_com_ingredientes(self, empresa_id: Optional[int] = None, ativo: Optional[bool] = None) -> List[ReceitaModel]:
+        """Lista receitas com seus ingredientes carregados"""
+        query = (
+            self.db.query(ReceitaModel)
+            .options(joinedload(ReceitaModel.ingredientes).joinedload(ReceitaIngredienteModel.ingrediente))
+        )
         
         if empresa_id is not None:
             query = query.filter_by(empresa_id=empresa_id)
@@ -120,6 +135,7 @@ class ReceitasRepository:
         
         return (
             self.db.query(ReceitaIngredienteModel)
+            .options(joinedload(ReceitaIngredienteModel.ingrediente))
             .filter(ReceitaIngredienteModel.receita_id == receita_id)
             .all()
         )
