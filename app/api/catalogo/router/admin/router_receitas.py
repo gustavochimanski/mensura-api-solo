@@ -12,6 +12,7 @@ from app.api.catalogo.schemas.schema_receitas import (
     AdicionalIn,
     AdicionalOut,
 )
+from app.api.catalogo.receitas.router import router_ingredientes
 from app.core.admin_dependencies import get_current_user
 from app.database.db_connection import get_db
 from app.utils.logger import logger
@@ -22,6 +23,9 @@ router = APIRouter(
     tags=["Admin - Catalogo - Receitas"],
     dependencies=[Depends(get_current_user)]
 )
+
+# Inclui router de ingredientes dentro de receitas
+router.include_router(router_ingredientes.router)
 
 
 # Receitas - CRUD completo
@@ -97,8 +101,8 @@ def add_ingrediente(
     """
     Adiciona um ingrediente a uma receita.
     
-    IMPORTANTE: Um ingrediente só pode estar vinculado a UMA receita (relacionamento 1:1).
-    Se o ingrediente já estiver vinculado a outra receita, retornará erro 400.
+    IMPORTANTE: Um ingrediente pode estar vinculado a VÁRIAS receitas (relacionamento N:N).
+    Se o ingrediente já estiver vinculado à mesma receita, retornará erro 400 (duplicata).
     """
     return ReceitasService(db).add_ingrediente(body)
 

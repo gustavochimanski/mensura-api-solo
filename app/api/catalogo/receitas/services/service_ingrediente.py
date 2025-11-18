@@ -1,10 +1,11 @@
 from typing import List, Optional
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
+from decimal import Decimal
 
-from app.api.catalogo.models.model_ingrediente import IngredienteModel
-from app.api.catalogo.repositories.repo_ingrediente import IngredienteRepository
-from app.api.catalogo.schemas.schema_ingrediente import (
+from app.api.catalogo.receitas.models.model_ingrediente import IngredienteModel
+from app.api.catalogo.receitas.repositories.repo_ingrediente import IngredienteRepository
+from app.api.catalogo.receitas.schemas.schema_ingrediente import (
     IngredienteResponse,
     CriarIngredienteRequest,
     AtualizarIngredienteRequest,
@@ -39,6 +40,7 @@ class IngredienteService:
             nome=req.nome,
             descricao=req.descricao,
             unidade_medida=req.unidade_medida,
+            custo=Decimal(str(req.custo)),
             ativo=req.ativo,
         )
         
@@ -70,6 +72,8 @@ class IngredienteService:
             update_data["descricao"] = req.descricao
         if req.unidade_medida is not None:
             update_data["unidade_medida"] = req.unidade_medida
+        if req.custo is not None:
+            update_data["custo"] = Decimal(str(req.custo))
         if req.ativo is not None:
             update_data["ativo"] = req.ativo
         

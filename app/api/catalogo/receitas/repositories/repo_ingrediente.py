@@ -1,8 +1,9 @@
 from typing import List, Optional
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
+from decimal import Decimal
 
-from app.api.catalogo.models.model_ingrediente import IngredienteModel
+from app.api.catalogo.receitas.models.model_ingrediente import IngredienteModel
 from app.api.catalogo.models.model_receita import ReceitaIngredienteModel
 
 
@@ -46,12 +47,12 @@ class IngredienteRepository:
         return ingrediente
 
     def deletar_ingrediente(self, ingrediente_id: int):
-        """Deleta um ingrediente."""
+        """Deleta um ingrediente. Só é possível deletar se não estiver vinculado a nenhuma receita."""
         ingrediente = self.buscar_por_id(ingrediente_id)
         if not ingrediente:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Ingrediente não encontrado")
         
-        # Verifica se o ingrediente está vinculado a uma receita
+        # Verifica se o ingrediente está vinculado a alguma receita
         receita_ingrediente = (
             self.db.query(ReceitaIngredienteModel)
             .filter_by(ingrediente_id=ingrediente_id)
@@ -60,14 +61,14 @@ class IngredienteRepository:
         if receita_ingrediente:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                "Não é possível deletar ingrediente que está vinculado a uma receita"
+                "Não é possível deletar ingrediente que está vinculado a uma ou mais receitas. Remova o ingrediente das receitas antes de deletar."
             )
         
         self.db.delete(ingrediente)
         self.db.commit()
 
     def ingrediente_esta_vinculado_receita(self, ingrediente_id: int) -> bool:
-        """Verifica se um ingrediente está vinculado a uma receita."""
+        """Verifica se um ingrediente está vinculado a alguma receita."""
         receita_ingrediente = (
             self.db.query(ReceitaIngredienteModel)
             .filter_by(ingrediente_id=ingrediente_id)

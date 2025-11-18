@@ -2,19 +2,19 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.catalogo.schemas.schema_ingrediente import (
+from app.api.catalogo.receitas.schemas.schema_ingrediente import (
     IngredienteResponse,
     CriarIngredienteRequest,
     AtualizarIngredienteRequest,
 )
-from app.api.catalogo.services.service_ingrediente import IngredienteService
+from app.api.catalogo.receitas.services.service_ingrediente import IngredienteService
 from app.core.admin_dependencies import get_current_user
 from app.database.db_connection import get_db
 from app.utils.logger import logger
 
 router = APIRouter(
-    prefix="/api/catalogo/admin/ingredientes",
-    tags=["Admin - Catalogo - Ingredientes"],
+    prefix="/api/catalogo/admin/receitas/ingredientes",
+    tags=["Admin - Catalogo - Receitas - Ingredientes"],
     dependencies=[Depends(get_current_user)]
 )
 
@@ -37,7 +37,7 @@ def criar_ingrediente(
     db: Session = Depends(get_db),
 ):
     """Cria um novo ingrediente."""
-    logger.info(f"[Ingredientes] Criar - empresa={req.empresa_id} nome={req.nome}")
+    logger.info(f"[Ingredientes] Criar - empresa={req.empresa_id} nome={req.nome} custo={req.custo}")
     service = IngredienteService(db)
     return service.criar_ingrediente(req)
 

@@ -38,8 +38,8 @@ from app.api.cardapio.models.model_pedido_status_historico_dv import PedidoStatu
 from app.api.cardapio.models.model_transacao_pagamento_dv import TransacaoPagamentoModel  # noqa: F401
 # Importar modelos do catálogo para garantir registro no SQLAlchemy
 from app.api.catalogo.models.model_produto import ProdutoModel  # noqa: F401
-from app.api.catalogo.models.model_ingrediente import IngredienteModel  # noqa: F401
 from app.api.catalogo.models.model_receita import ReceitaModel, ReceitaIngredienteModel, ReceitaAdicionalModel  # noqa: F401
+from app.api.catalogo.receitas.models.model_ingrediente import IngredienteModel  # noqa: F401
 
 from app.api.auth import auth_controller
 from app.api.cardapio.router.router import api_cardapio

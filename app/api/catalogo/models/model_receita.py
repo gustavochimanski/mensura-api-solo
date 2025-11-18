@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Numeric, ForeignKey, DateTime, UniqueConstraint, func, Boolean
+from sqlalchemy import Column, Integer, String, Numeric, ForeignKey, DateTime, func, Boolean
 from sqlalchemy.orm import relationship
 from decimal import Decimal
 
@@ -27,20 +27,19 @@ class ReceitaModel(Base):
 
 
 class ReceitaIngredienteModel(Base):
-    """Modelo de Ingrediente de Receita - Relacionamento 1:1 (ingrediente só pode estar em 1 receita)"""
+    """Modelo de Ingrediente de Receita - Relacionamento N:N (ingrediente pode estar em várias receitas)"""
     __tablename__ = "receita_ingrediente"
     __table_args__ = (
-        UniqueConstraint("ingrediente_id", name="uq_receita_ingrediente_ingrediente_id"),  # Garante 1:1
         {"schema": "catalogo"},
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     receita_id = Column(Integer, ForeignKey("catalogo.receitas.id", ondelete="CASCADE"), nullable=False)
-    ingrediente_id = Column(Integer, ForeignKey("catalogo.ingredientes.id", ondelete="RESTRICT"), nullable=False, unique=True)
+    ingrediente_id = Column(Integer, ForeignKey("catalogo.ingredientes.id", ondelete="RESTRICT"), nullable=False)
     quantidade = Column(Numeric(18, 4), nullable=True)
 
     receita = relationship("ReceitaModel", back_populates="ingredientes")
-    ingrediente = relationship("IngredienteModel", back_populates="receita_ingrediente")
+    ingrediente = relationship("IngredienteModel", back_populates="receitas_ingrediente")
 
 
 class ReceitaAdicionalModel(Base):

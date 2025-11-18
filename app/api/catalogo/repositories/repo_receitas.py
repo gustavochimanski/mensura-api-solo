@@ -5,7 +5,7 @@ from fastapi import HTTPException, status
 from decimal import Decimal
 
 from app.api.catalogo.models.model_produto import ProdutoModel
-from app.api.catalogo.models.model_ingrediente import IngredienteModel
+from app.api.catalogo.receitas.models.model_ingrediente import IngredienteModel
 from app.api.catalogo.models.model_receita import ReceitaIngredienteModel, ReceitaAdicionalModel, ReceitaModel
 from app.api.catalogo.schemas.schema_receitas import (
     ReceitaIngredienteIn,
@@ -81,7 +81,7 @@ class ReceitasRepository:
         self.db.commit()
 
     # Ingredientes - Usa ReceitaIngredienteModel (receita_ingrediente)
-    # Um ingrediente só pode estar em 1 receita (relacionamento 1:1)
+    # Relacionamento N:N (um ingrediente pode estar em várias receitas, uma receita pode ter vários ingredientes)
     def add_ingrediente(self, data: ReceitaIngredienteIn) -> ReceitaIngredienteModel:
         # Verifica se a receita existe
         receita = self.get_receita_by_id(data.receita_id)
@@ -93,19 +93,7 @@ class ReceitasRepository:
         if not ingrediente:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Ingrediente não encontrado")
 
-        # Verifica se o ingrediente já está vinculado a outra receita (1:1)
-        exists = (
-            self.db.query(ReceitaIngredienteModel)
-            .filter_by(ingrediente_id=data.ingrediente_id)
-            .first()
-        )
-        if exists:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                f"Ingrediente já está vinculado à receita ID {exists.receita_id}. Um ingrediente só pode pertencer a uma receita."
-            )
-
-        # Verifica se já existe na mesma receita (não deveria acontecer, mas melhor prevenir)
+        # Verifica se já existe na mesma receita (evita duplicatas)
         exists_mesma_receita = (
             self.db.query(ReceitaIngredienteModel)
             .filter_by(receita_id=data.receita_id, ingrediente_id=data.ingrediente_id)
