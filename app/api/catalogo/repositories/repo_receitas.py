@@ -5,6 +5,7 @@ from fastapi import HTTPException, status
 from decimal import Decimal
 
 from app.api.catalogo.models.model_produto import ProdutoModel
+from app.api.catalogo.models.model_produto_emp import ProdutoEmpModel
 from app.api.catalogo.receitas.models.model_ingrediente import IngredienteModel
 from app.api.catalogo.models.model_receita import ReceitaIngredienteModel, ReceitaAdicionalModel, ReceitaModel
 from app.api.catalogo.schemas.schema_receitas import (
@@ -165,10 +166,10 @@ class ReceitasRepository:
         if not receita:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Receita não encontrada")
         
-        # Verifica se o adicional existe
-        add = self.db.query(ProdutoModel).filter_by(cod_barras=data.adicional_cod_barras).first()
-        if not add:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Adicional inválido")
+        # Verifica se o adicional (produto) existe
+        produto = self.db.query(ProdutoModel).filter_by(cod_barras=data.adicional_cod_barras).first()
+        if not produto:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Produto adicional não encontrado")
 
         # Verifica se já existe
         exists = (
@@ -179,10 +180,24 @@ class ReceitasRepository:
         if exists:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Adicional já cadastrado nesta receita")
 
+        # Se preço não foi informado, busca o preço padrão do produto para a empresa
+        preco_final = data.preco
+        if preco_final is None:
+            produto_emp = (
+                self.db.query(ProdutoEmpModel)
+                .filter_by(empresa_id=receita.empresa_id, cod_barras=data.adicional_cod_barras)
+                .first()
+            )
+            if produto_emp and produto_emp.preco_venda is not None:
+                preco_final = produto_emp.preco_venda
+            else:
+                # Se não encontrou preço, usa 0 como padrão
+                preco_final = Decimal('0.00')
+
         obj = ReceitaAdicionalModel(
             receita_id=data.receita_id,
             adicional_cod_barras=data.adicional_cod_barras,
-            preco=data.preco,
+            preco=preco_final,
         )
         self.db.add(obj)
         self.db.commit()
@@ -201,10 +216,26 @@ class ReceitasRepository:
             .all()
         )
 
-    def update_adicional(self, adicional_id: int, preco) -> ReceitaAdicionalModel:
+    def update_adicional(self, adicional_id: int, preco: Decimal | None = None) -> ReceitaAdicionalModel:
         obj = self.db.query(ReceitaAdicionalModel).filter_by(id=adicional_id).first()
         if not obj:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Adicional não encontrado")
+        
+        # Se preço não foi informado, busca o preço padrão do produto para a empresa da receita
+        if preco is None:
+            receita = self.get_receita_by_id(obj.receita_id)
+            if receita:
+                produto_emp = (
+                    self.db.query(ProdutoEmpModel)
+                    .filter_by(empresa_id=receita.empresa_id, cod_barras=obj.adicional_cod_barras)
+                    .first()
+                )
+                if produto_emp and produto_emp.preco_venda is not None:
+                    preco = produto_emp.preco_venda
+                else:
+                    # Se não encontrou preço, usa 0 como padrão
+                    preco = Decimal('0.00')
+        
         obj.preco = preco
         self.db.add(obj)
         self.db.commit()
