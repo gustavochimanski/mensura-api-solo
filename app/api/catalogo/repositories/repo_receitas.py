@@ -227,3 +227,15 @@ class ReceitasRepository:
         )
         return count > 0 if count else False
 
+    def produto_tem_receita(self, produto_cod_barras: str) -> bool:
+        """
+        Verifica se um produto está associado a alguma receita.
+        Com a nova estrutura, isso verifica se o produto é usado como adicional em alguma receita.
+        """
+        count = (
+            self.db.query(func.count(ReceitaAdicionalModel.id))
+            .filter(ReceitaAdicionalModel.adicional_cod_barras == produto_cod_barras)
+            .scalar()
+        )
+        return count > 0 if count else False
+
