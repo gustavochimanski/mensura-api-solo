@@ -60,13 +60,7 @@ def buscar_endereco(
     
     resultados = google_adapter.buscar_enderecos(text, max_results=max_results)
     
-    if not resultados:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Nenhum endereço encontrado para: {text}. Verifique os logs para mais detalhes sobre possíveis problemas com a API key."
-        )
-    
-    # Retorna lista direta de resultados como o front-end espera
+    # Sempre retorna uma lista (array), mesmo que vazia, para o front renderizar
     return resultados
 
 

@@ -239,14 +239,7 @@ class GoogleMapsAdapter:
             
             resultados = []
             for result in data.get("results", [])[:max_results]:
-                location = result["geometry"]["location"]
-                endereco_info = {
-                    "endereco_completo": result.get("formatted_address", ""),
-                    "latitude": location.get("lat"),
-                    "longitude": location.get("lng"),
-                    "tipos": result.get("types", []),
-                    "place_id": result.get("place_id", "")
-                }
+                endereco_info = self._extrair_endereco_formatado(result)
                 resultados.append(endereco_info)
             
             return resultados
@@ -256,4 +249,135 @@ class GoogleMapsAdapter:
         except Exception as e:
             logger.error(f"[GoogleMapsAdapter] Erro ao buscar endereços para {texto}: {e}")
             return []
+    
+    def _extrair_endereco_formatado(self, result: Dict) -> Dict:
+        """
+        Extrai e formata os componentes do endereço do Google Maps para o formato esperado pelo front-end.
+        
+        Args:
+            result: Resultado do Google Maps Geocoding API
+            
+        Returns:
+            Dicionário com os campos formatados
+        """
+        location = result.get("geometry", {}).get("location", {})
+        address_components = result.get("address_components", [])
+        formatted_address = result.get("formatted_address", "")
+        
+        # Extrai componentes do endereço
+        componentes = {}
+        for component in address_components:
+            types = component.get("types", [])
+            long_name = component.get("long_name", "")
+            short_name = component.get("short_name", "")
+            
+            if "street_number" in types:
+                componentes["numero"] = long_name
+            elif ("route" in types or "street_address" in types) and "logradouro" not in componentes:
+                componentes["logradouro"] = long_name
+            elif ("sublocality_level_1" in types or "sublocality" in types or "neighborhood" in types) and "bairro" not in componentes:
+                componentes["bairro"] = long_name
+            elif "administrative_area_level_2" in types:
+                componentes["cidade"] = long_name
+            elif "administrative_area_level_1" in types:
+                componentes["estado"] = long_name
+                componentes["codigo_estado"] = short_name
+            elif "postal_code" in types:
+                cep = long_name.replace("-", "").replace(" ", "")
+                # Formata CEP com hífen: 01310100 -> 01310-100
+                if len(cep) == 8:
+                    componentes["cep"] = f"{cep[:5]}-{cep[5:]}"
+                else:
+                    componentes["cep"] = long_name
+            elif "country" in types:
+                componentes["pais"] = long_name
+        
+        # Formata o endereco_formatado
+        endereco_formatado = self._formatar_endereco(
+            logradouro=componentes.get("logradouro"),
+            numero=componentes.get("numero"),
+            bairro=componentes.get("bairro"),
+            cidade=componentes.get("cidade"),
+            estado=componentes.get("codigo_estado") or componentes.get("estado"),
+            cep=componentes.get("cep"),
+            formatted_address=formatted_address
+        )
+        
+        return {
+            "estado": componentes.get("estado"),
+            "codigo_estado": componentes.get("codigo_estado"),
+            "cidade": componentes.get("cidade"),
+            "bairro": componentes.get("bairro"),
+            "distrito": None,  # Google Maps não retorna distrito separadamente
+            "logradouro": componentes.get("logradouro"),
+            "numero": componentes.get("numero"),
+            "cep": componentes.get("cep"),
+            "pais": componentes.get("pais"),
+            "latitude": location.get("lat"),
+            "longitude": location.get("lng"),
+            "endereco_formatado": endereco_formatado
+        }
+    
+    def _formatar_endereco(
+        self,
+        logradouro: Optional[str],
+        numero: Optional[str],
+        bairro: Optional[str],
+        cidade: Optional[str],
+        estado: Optional[str],
+        cep: Optional[str],
+        formatted_address: str
+    ) -> str:
+        """
+        Formata o endereço no padrão: "Logradouro, Número - Bairro, Cidade - Estado, CEP"
+        
+        Se não conseguir montar, usa o formatted_address do Google Maps como fallback.
+        """
+        # Monta o endereço no formato: "Logradouro, Número - Bairro, Cidade - Estado, CEP"
+        # Exemplo: "Avenida Paulista, 1000 - Bela Vista, São Paulo - SP, 01310-100"
+        
+        partes = []
+        
+        # Primeira parte: Logradouro e número
+        if logradouro:
+            if numero:
+                partes.append(f"{logradouro}, {numero}")
+            else:
+                partes.append(logradouro)
+        
+        # Segunda parte: Bairro, Cidade - Estado
+        localizacao = []
+        if bairro:
+            localizacao.append(bairro)
+        
+        cidade_estado = []
+        if cidade:
+            cidade_estado.append(cidade)
+        if estado:
+            cidade_estado.append(estado)
+        
+        if cidade_estado:
+            localizacao.append(" - ".join(cidade_estado))
+        
+        if localizacao:
+            partes.append(", ".join(localizacao))
+        
+        # Terceira parte: CEP (separado por vírgula e espaço)
+        if cep:
+            partes.append(cep)
+        
+        # Junta tudo: "Parte1 - Parte2, Parte3"
+        if partes:
+            if len(partes) == 3:
+                # Formato completo: "Logradouro, Número - Bairro, Cidade - Estado, CEP"
+                return f"{partes[0]} - {partes[1]}, {partes[2]}"
+            elif len(partes) == 2:
+                # Sem CEP ou sem bairro: "Logradouro, Número - Bairro, Cidade - Estado" ou "Logradouro, Número - CEP"
+                return " - ".join(partes)
+            else:
+                # Apenas uma parte
+                return partes[0]
+        
+        # Fallback: usa o formatted_address do Google Maps
+        return formatted_address if formatted_address else "Endereço não disponível"
 
