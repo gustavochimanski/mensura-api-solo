@@ -87,13 +87,13 @@ class ReceitaComIngredientesOut(BaseModel):
 
 class AdicionalIn(BaseModel):
     receita_id: int
-    adicional_cod_barras: constr(min_length=1)
+    adicional_id: int
 
 
 class AdicionalOut(BaseModel):
     id: int
     receita_id: int
-    adicional_cod_barras: str
+    adicional_id: int
     preco: Optional[Decimal] = None
     model_config = ConfigDict(from_attributes=True)
 

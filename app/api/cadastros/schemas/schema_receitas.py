@@ -32,15 +32,14 @@ class IngredienteOut(BaseModel):
 
 
 class AdicionalIn(BaseModel):
-    produto_cod_barras: constr(min_length=1)
-    adicional_cod_barras: constr(min_length=1)
-    preco: Optional[Decimal] = None
+    produto_cod_barras: constr(min_length=1)  # receita_id como string para compatibilidade
+    adicional_id: int
 
 
 class AdicionalOut(BaseModel):
     id: int
-    produto_cod_barras: str
-    adicional_cod_barras: str
+    produto_cod_barras: str  # receita_id como string para compatibilidade
+    adicional_id: int
     preco: Optional[Decimal] = None
     model_config = ConfigDict(from_attributes=True)
 

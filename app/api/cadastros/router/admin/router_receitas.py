@@ -97,7 +97,7 @@ def list_adicionais(
         resultado.append(AdicionalOut(
             id=ra.id,
             produto_cod_barras=str(ra.receita_id),  # Compatibilidade: receita_id como string
-            adicional_cod_barras=ra.adicional_cod_barras,
+            adicional_id=ra.adicional_id,
             preco=ra.preco,
         ))
     

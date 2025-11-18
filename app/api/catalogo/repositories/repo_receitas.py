@@ -6,6 +6,7 @@ from decimal import Decimal
 
 from app.api.catalogo.models.model_produto import ProdutoModel
 from app.api.catalogo.models.model_produto_emp import ProdutoEmpModel
+from app.api.catalogo.models.model_adicional import AdicionalModel
 from app.api.catalogo.receitas.models.model_ingrediente import IngredienteModel
 from app.api.catalogo.models.model_receita import ReceitaIngredienteModel, ReceitaAdicionalModel, ReceitaModel
 from app.api.catalogo.schemas.schema_receitas import (
@@ -20,19 +21,19 @@ class ReceitasRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def _buscar_preco_adicional(self, empresa_id: int, cod_barras: str) -> Decimal:
+    def _buscar_preco_adicional(self, adicional_id: int) -> Decimal:
         """
-        Busca o preço do adicional do cadastro atual (ProdutoEmpModel).
+        Busca o preço do adicional do cadastro atual (AdicionalModel).
         Retorna 0.00 se não encontrar.
         """
-        produto_emp = (
-            self.db.query(ProdutoEmpModel)
-            .filter_by(empresa_id=empresa_id, cod_barras=cod_barras)
+        adicional = (
+            self.db.query(AdicionalModel)
+            .filter_by(id=adicional_id)
             .first()
         )
         
-        if produto_emp and produto_emp.preco_venda is not None:
-            return produto_emp.preco_venda
+        if adicional and adicional.preco is not None:
+            return adicional.preco
         return Decimal('0.00')
 
     # Receitas - CRUD completo
@@ -181,19 +182,27 @@ class ReceitasRepository:
         if not receita:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Receita não encontrada")
         
-        # Verifica se o adicional (produto) existe na tabela de produtos
-        produto = self.db.query(ProdutoModel).filter_by(cod_barras=data.adicional_cod_barras).first()
-        if not produto:
+        # Verifica se o adicional existe na tabela de adicionais
+        adicional = self.db.query(AdicionalModel).filter_by(id=data.adicional_id).first()
+        if not adicional:
             raise HTTPException(
                 status.HTTP_404_NOT_FOUND, 
-                f"Produto adicional não encontrado com código de barras: {data.adicional_cod_barras}. "
-                f"O produto deve estar cadastrado na tabela de produtos (catalogo.produtos) antes de ser vinculado à receita."
+                f"Adicional não encontrado com ID: {data.adicional_id}. "
+                f"O adicional deve estar cadastrado na tabela de adicionais (catalogo.adicional_produto) antes de ser vinculado à receita."
+            )
+        
+        # Verifica se o adicional pertence à mesma empresa da receita
+        if adicional.empresa_id != receita.empresa_id:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                f"O adicional pertence a uma empresa diferente da receita. "
+                f"Adicional empresa_id: {adicional.empresa_id}, Receita empresa_id: {receita.empresa_id}"
             )
 
         # Verifica se já existe
         exists = (
             self.db.query(ReceitaAdicionalModel)
-            .filter_by(receita_id=data.receita_id, adicional_cod_barras=data.adicional_cod_barras)
+            .filter_by(receita_id=data.receita_id, adicional_id=data.adicional_id)
             .first()
         )
         if exists:
@@ -202,7 +211,7 @@ class ReceitasRepository:
         # Cria o adicional (preço não é mais armazenado, sempre busca do cadastro)
         obj = ReceitaAdicionalModel(
             receita_id=data.receita_id,
-            adicional_cod_barras=data.adicional_cod_barras,
+            adicional_id=data.adicional_id,
         )
         self.db.add(obj)
         self.db.commit()
@@ -258,14 +267,11 @@ class ReceitasRepository:
     def produto_tem_receita(self, produto_cod_barras: str) -> bool:
         """
         Verifica se um produto está associado a alguma receita.
-        Com a nova estrutura, isso verifica se o produto é usado como adicional em alguma receita.
+        Nota: Este método verifica produtos, não adicionais. Adicionais agora usam adicional_id.
         """
-        count = (
-            self.db.query(func.count(ReceitaAdicionalModel.id))
-            .filter(ReceitaAdicionalModel.adicional_cod_barras == produto_cod_barras)
-            .scalar()
-        )
-        return count > 0 if count else False
+        # Este método não é mais relevante para adicionais, pois adicionais usam ID, não cod_barras
+        # Mantido para compatibilidade, mas sempre retorna False para adicionais
+        return False
 
     def calcular_custo_receita(self, receita_id: int) -> Decimal:
         """

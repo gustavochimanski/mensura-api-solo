@@ -35,18 +35,14 @@ class ReceitasService:
     def add_adicional(self, data: AdicionalIn):
         adicional = self.repo.add_adicional(data)
         # Busca o preço do cadastro para retornar
-        receita = self.repo.db.query(ReceitaModel).filter_by(id=adicional.receita_id).first()
-        if receita:
-            adicional.preco = self.repo._buscar_preco_adicional(receita.empresa_id, adicional.adicional_cod_barras)
+        adicional.preco = self.repo._buscar_preco_adicional(adicional.adicional_id)
         return adicional
 
     def list_adicionais(self, produto_cod_barras: str):
         adicionais = self.repo.list_adicionais(produto_cod_barras)
         # Busca o preço do cadastro para cada adicional
         for adicional in adicionais:
-            receita = self.repo.db.query(ReceitaModel).filter_by(id=adicional.receita_id).first()
-            if receita:
-                adicional.preco = self.repo._buscar_preco_adicional(receita.empresa_id, adicional.adicional_cod_barras)
+            adicional.preco = self.repo._buscar_preco_adicional(adicional.adicional_id)
         return adicionais
 
     def remove_adicional(self, adicional_id: int):
