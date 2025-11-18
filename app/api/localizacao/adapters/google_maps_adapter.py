@@ -34,7 +34,8 @@ class GoogleMapsAdapter:
                     params={
                         "address": endereco,
                         "key": self.api_key,
-                        "region": "br",  # Restringe busca ao Brasil
+                        "region": "br",  # Dá preferência ao Brasil
+                        "components": "country:br",  # Restringe busca APENAS ao Brasil
                         "language": "pt-BR"
                     }
                 )
@@ -187,7 +188,8 @@ class GoogleMapsAdapter:
                     params={
                         "address": texto,
                         "key": self.api_key,
-                        "region": "br",  # Restringe busca ao Brasil
+                        "region": "br",  # Dá preferência ao Brasil
+                        "components": "country:br",  # Restringe busca APENAS ao Brasil
                         "language": "pt-BR"
                     }
                 )

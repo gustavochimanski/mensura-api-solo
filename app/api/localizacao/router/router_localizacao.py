@@ -66,11 +66,8 @@ def buscar_endereco(
             detail=f"Nenhum endereço encontrado para: {text}. Verifique os logs para mais detalhes sobre possíveis problemas com a API key."
         )
     
-    return {
-        "query": text,
-        "total": len(resultados),
-        "resultados": resultados
-    }
+    # Retorna lista direta de resultados como o front-end espera
+    return resultados
 
 
 @router.post("/geocodificar", status_code=status.HTTP_200_OK)
