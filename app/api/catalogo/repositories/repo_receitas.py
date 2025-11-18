@@ -180,7 +180,11 @@ class ReceitasRepository:
         # Verifica se a receita existe
         receita = self.get_receita_by_id(data.receita_id)
         if not receita:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Receita não encontrada")
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND, 
+                f"Receita não encontrada com ID: {data.receita_id}. "
+                f"Verifique se o receita_id está correto e se a receita existe no banco de dados."
+            )
         
         # Verifica se o adicional existe na tabela de adicionais
         adicional = self.db.query(AdicionalModel).filter_by(id=data.adicional_id).first()
