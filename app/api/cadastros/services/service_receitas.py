@@ -7,6 +7,7 @@ from app.api.cadastros.schemas.schema_receitas import (
     IngredienteIn,
     AdicionalIn,
 )
+from app.api.catalogo.models.model_receita import ReceitaModel
 
 
 class ReceitasService:
@@ -32,7 +33,12 @@ class ReceitasService:
 
     # Adicionais
     def add_adicional(self, data: AdicionalIn):
-        return self.repo.add_adicional(data)
+        adicional = self.repo.add_adicional(data)
+        # Busca o preço do cadastro para retornar
+        receita = self.repo.db.query(ReceitaModel).filter_by(id=adicional.receita_id).first()
+        if receita:
+            adicional.preco = self.repo._buscar_preco_adicional(receita.empresa_id, adicional.adicional_cod_barras)
+        return adicional
 
     def list_adicionais(self, produto_cod_barras: str):
         adicionais = self.repo.list_adicionais(produto_cod_barras)
@@ -42,14 +48,6 @@ class ReceitasService:
             if receita:
                 adicional.preco = self.repo._buscar_preco_adicional(receita.empresa_id, adicional.adicional_cod_barras)
         return adicionais
-
-    def add_adicional(self, data: AdicionalIn):
-        adicional = self.repo.add_adicional(data)
-        # Busca o preço do cadastro para retornar
-        receita = self.repo.db.query(ReceitaModel).filter_by(id=adicional.receita_id).first()
-        if receita:
-            adicional.preco = self.repo._buscar_preco_adicional(receita.empresa_id, adicional.adicional_cod_barras)
-        return adicional
 
     def remove_adicional(self, adicional_id: int):
         return self.repo.remove_adicional(adicional_id)

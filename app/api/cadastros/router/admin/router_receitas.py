@@ -112,15 +112,6 @@ def add_adicional(
     return ReceitasService(db).add_adicional(body)
 
 
-@router.put("/adicionais/{adicional_id}", response_model=AdicionalOut)
-def update_adicional(
-    adicional_id: int,
-    preco: Optional[float] = Body(None),
-    db: Session = Depends(get_db),
-):
-    return ReceitasService(db).update_adicional(adicional_id, preco)
-
-
 @router.delete("/adicionais/{adicional_id}", status_code=status.HTTP_204_NO_CONTENT)
 def remove_adicional(
     adicional_id: int,
