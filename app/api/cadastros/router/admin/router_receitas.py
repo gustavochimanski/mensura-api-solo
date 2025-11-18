@@ -88,7 +88,20 @@ def list_adicionais(
     cod_barras: str,
     db: Session = Depends(get_db),
 ):
-    return ReceitasService(db).list_adicionais(cod_barras)
+    # Busca os adicionais
+    receita_adicionais = ReceitasService(db).list_adicionais(cod_barras)
+    
+    # Transforma para o schema de saída
+    resultado = []
+    for ra in receita_adicionais:
+        resultado.append(AdicionalOut(
+            id=ra.id,
+            produto_cod_barras=str(ra.receita_id),  # Compatibilidade: receita_id como string
+            adicional_cod_barras=ra.adicional_cod_barras,
+            preco=ra.preco,
+        ))
+    
+    return resultado
 
 
 @router.post("/adicionais", response_model=AdicionalOut, status_code=status.HTTP_201_CREATED)

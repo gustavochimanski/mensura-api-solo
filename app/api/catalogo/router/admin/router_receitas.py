@@ -140,15 +140,8 @@ def remove_ingrediente(
 
 
 # Adicionais
-@router.get("/{receita_id}/adicionais", response_model=list[AdicionalOut])
-def list_adicionais(
-    receita_id: int = Path(..., description="ID da receita"),
-    db: Session = Depends(get_db),
-):
-    """Lista todos os adicionais de uma receita"""
-    return ReceitasService(db).list_adicionais(receita_id)
-
-
+# IMPORTANTE: Rotas sem parâmetros de path devem vir ANTES das rotas com parâmetros
+# para evitar conflitos de roteamento (ex: /adicionais vs /{receita_id}/adicionais)
 @router.post("/adicionais", response_model=AdicionalOut, status_code=status.HTTP_201_CREATED)
 def add_adicional(
     body: AdicionalIn,
@@ -178,4 +171,13 @@ def remove_adicional(
     """Remove um adicional de uma receita"""
     ReceitasService(db).remove_adicional(adicional_id)
     return None
+
+
+@router.get("/{receita_id}/adicionais", response_model=list[AdicionalOut])
+def list_adicionais(
+    receita_id: int = Path(..., description="ID da receita"),
+    db: Session = Depends(get_db),
+):
+    """Lista todos os adicionais de uma receita"""
+    return ReceitasService(db).list_adicionais(receita_id)
 

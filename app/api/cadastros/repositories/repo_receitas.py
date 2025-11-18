@@ -2,6 +2,7 @@ from typing import List
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 from fastapi import HTTPException, status
+from decimal import Decimal
 
 from app.api.catalogo.models.model_produto import ProdutoModel
 from app.api.catalogo.models.model_receita import ReceitaIngredienteModel, ReceitaAdicionalModel, ReceitaModel
@@ -99,29 +100,50 @@ class ReceitasRepository:
     # Nota: Adicionais agora são vinculados a receitas, não diretamente a produtos
     def add_adicional(self, data: AdicionalIn) -> ReceitaAdicionalModel:
         from app.api.catalogo.models.model_receita import ReceitaModel
+        from app.api.catalogo.models.model_produto_emp import ProdutoEmpModel
         
-        # Busca a receita pelo produto (assumindo que produto_cod_barras identifica a receita)
-        # Nota: Esta lógica pode precisar ser ajustada conforme a estrutura real
-        receita = self.db.query(ReceitaModel).filter_by(empresa_id=1).first()  # Ajustar conforme necessário
+        # Tenta converter produto_cod_barras para receita_id (assumindo que cod_barras é o ID da receita)
+        try:
+            receita_id = int(data.produto_cod_barras)
+        except ValueError:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Código de barras do produto inválido (deve ser o ID da receita)")
+        
+        # Verifica se a receita existe
+        receita = self.db.query(ReceitaModel).filter_by(id=receita_id).first()
         if not receita:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Receita não encontrada para este produto")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Receita não encontrada")
         
+        # Verifica se o adicional (produto) existe
         add = self.db.query(ProdutoModel).filter_by(cod_barras=data.adicional_cod_barras).first()
         if not add:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Adicional inválido")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Produto adicional não encontrado")
 
+        # Verifica se já existe
         exists = (
             self.db.query(ReceitaAdicionalModel)
-            .filter_by(receita_id=receita.id, adicional_cod_barras=data.adicional_cod_barras)
+            .filter_by(receita_id=receita_id, adicional_cod_barras=data.adicional_cod_barras)
             .first()
         )
         if exists:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Adicional já cadastrado nesta receita")
 
+        # Busca o preço automaticamente do cadastro do produto para a empresa
+        produto_emp = (
+            self.db.query(ProdutoEmpModel)
+            .filter_by(empresa_id=receita.empresa_id, cod_barras=data.adicional_cod_barras)
+            .first()
+        )
+        
+        if produto_emp and produto_emp.preco_venda is not None:
+            preco_final = produto_emp.preco_venda
+        else:
+            # Se não encontrou preço, usa o preço enviado ou 0 como padrão
+            preco_final = data.preco if data.preco else Decimal('0.00')
+
         obj = ReceitaAdicionalModel(
-            receita_id=receita.id,
+            receita_id=receita_id,
             adicional_cod_barras=data.adicional_cod_barras,
-            preco=data.preco,
+            preco=preco_final,
         )
         self.db.add(obj)
         self.db.commit()
@@ -131,14 +153,23 @@ class ReceitasRepository:
     def list_adicionais(self, produto_cod_barras: str) -> List[ReceitaAdicionalModel]:
         from app.api.catalogo.models.model_receita import ReceitaModel
         
-        # Busca a receita pelo produto
-        receita = self.db.query(ReceitaModel).filter_by(empresa_id=1).first()  # Ajustar conforme necessário
+        # Tenta converter cod_barras para receita_id (assumindo que cod_barras é o ID da receita)
+        # Se não for numérico, retorna vazio
+        try:
+            receita_id = int(produto_cod_barras)
+        except ValueError:
+            # Se não for numérico, retorna vazio
+            return []
+        
+        # Verifica se a receita existe
+        receita = self.db.query(ReceitaModel).filter_by(id=receita_id).first()
         if not receita:
             return []
         
+        # Busca os adicionais da receita
         return (
             self.db.query(ReceitaAdicionalModel)
-            .filter(ReceitaAdicionalModel.receita_id == receita.id)
+            .filter(ReceitaAdicionalModel.receita_id == receita_id)
             .all()
         )
 
