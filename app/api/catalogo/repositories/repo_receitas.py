@@ -195,23 +195,10 @@ class ReceitasRepository:
         if exists:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Adicional já cadastrado nesta receita")
 
-        # Busca o preço automaticamente do cadastro do produto para a empresa
-        produto_emp = (
-            self.db.query(ProdutoEmpModel)
-            .filter_by(empresa_id=receita.empresa_id, cod_barras=data.adicional_cod_barras)
-            .first()
-        )
-        
-        if produto_emp and produto_emp.preco_venda is not None:
-            preco_final = produto_emp.preco_venda
-        else:
-            # Se não encontrou preço, usa 0 como padrão
-            preco_final = Decimal('0.00')
-
+        # Cria o adicional (preço não é mais armazenado, sempre busca do cadastro)
         obj = ReceitaAdicionalModel(
             receita_id=data.receita_id,
             adicional_cod_barras=data.adicional_cod_barras,
-            preco=preco_final,
         )
         self.db.add(obj)
         self.db.commit()
@@ -231,29 +218,16 @@ class ReceitasRepository:
         )
 
     def update_adicional(self, adicional_id: int) -> ReceitaAdicionalModel:
+        """
+        Atualiza um adicional de uma receita.
+        Nota: O preço não é mais armazenado, sempre busca do cadastro em tempo de execução.
+        Este método existe apenas para compatibilidade com a API.
+        """
         obj = self.db.query(ReceitaAdicionalModel).filter_by(id=adicional_id).first()
         if not obj:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Adicional não encontrado")
         
-        # Sempre busca o preço atualizado do cadastro do produto
-        receita = self.get_receita_by_id(obj.receita_id)
-        if receita:
-            produto_emp = (
-                self.db.query(ProdutoEmpModel)
-                .filter_by(empresa_id=receita.empresa_id, cod_barras=obj.adicional_cod_barras)
-                .first()
-            )
-            if produto_emp and produto_emp.preco_venda is not None:
-                preco = produto_emp.preco_venda
-            else:
-                # Se não encontrou preço, usa 0 como padrão
-                preco = Decimal('0.00')
-        else:
-            preco = Decimal('0.00')
-        
-        obj.preco = preco
-        self.db.add(obj)
-        self.db.commit()
+        # Não precisa fazer nada, o preço sempre é buscado dinamicamente
         self.db.refresh(obj)
         return obj
 

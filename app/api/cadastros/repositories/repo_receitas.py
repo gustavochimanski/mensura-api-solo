@@ -13,6 +13,23 @@ class ReceitasRepository:
     def __init__(self, db: Session):
         self.db = db
 
+    def _buscar_preco_adicional(self, empresa_id: int, cod_barras: str) -> Decimal:
+        """
+        Busca o preço do adicional do cadastro atual (ProdutoEmpModel).
+        Retorna 0.00 se não encontrar.
+        """
+        from app.api.catalogo.models.model_produto_emp import ProdutoEmpModel
+        
+        produto_emp = (
+            self.db.query(ProdutoEmpModel)
+            .filter_by(empresa_id=empresa_id, cod_barras=cod_barras)
+            .first()
+        )
+        
+        if produto_emp and produto_emp.preco_venda is not None:
+            return produto_emp.preco_venda
+        return Decimal('0.00')
+
     # Diretiva
     def set_diretiva(self, cod_barras: str, diretiva: str | None) -> ProdutoModel:
         prod = self.db.query(ProdutoModel).filter_by(cod_barras=cod_barras).first()
@@ -127,23 +144,10 @@ class ReceitasRepository:
         if exists:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Adicional já cadastrado nesta receita")
 
-        # Busca o preço automaticamente do cadastro do produto para a empresa
-        produto_emp = (
-            self.db.query(ProdutoEmpModel)
-            .filter_by(empresa_id=receita.empresa_id, cod_barras=data.adicional_cod_barras)
-            .first()
-        )
-        
-        if produto_emp and produto_emp.preco_venda is not None:
-            preco_final = produto_emp.preco_venda
-        else:
-            # Se não encontrou preço, usa o preço enviado ou 0 como padrão
-            preco_final = data.preco if data.preco else Decimal('0.00')
-
+        # Cria o adicional (preço não é mais armazenado, sempre busca do cadastro)
         obj = ReceitaAdicionalModel(
             receita_id=receita_id,
             adicional_cod_barras=data.adicional_cod_barras,
-            preco=preco_final,
         )
         self.db.add(obj)
         self.db.commit()
@@ -172,16 +176,6 @@ class ReceitasRepository:
             .filter(ReceitaAdicionalModel.receita_id == receita_id)
             .all()
         )
-
-    def update_adicional(self, adicional_id: int, preco) -> ReceitaAdicionalModel:
-        obj = self.db.query(ReceitaAdicionalModel).filter_by(id=adicional_id).first()
-        if not obj:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Adicional não encontrado")
-        obj.preco = preco
-        self.db.add(obj)
-        self.db.commit()
-        self.db.refresh(obj)
-        return obj
 
     def remove_adicional(self, adicional_id: int) -> None:
         obj = self.db.query(ReceitaAdicionalModel).filter_by(id=adicional_id).first()
