@@ -1,5 +1,5 @@
 from typing import List
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 from fastapi import HTTPException, status
 
@@ -56,14 +56,24 @@ class ReceitasRepository:
         return obj
 
     def list_ingredientes(self, produto_cod_barras: str) -> List[ReceitaIngredienteModel]:
-        # Busca a receita pelo produto
-        receita = self.db.query(ReceitaModel).filter_by(empresa_id=1).first()  # Ajustar conforme necessário
+        # Tenta converter cod_barras para receita_id (assumindo que cod_barras é o ID da receita)
+        # Se não for numérico, retorna vazio
+        try:
+            receita_id = int(produto_cod_barras)
+        except ValueError:
+            # Se não for numérico, retorna vazio
+            return []
+        
+        # Verifica se a receita existe
+        receita = self.db.query(ReceitaModel).filter_by(id=receita_id).first()
         if not receita:
             return []
         
+        # Busca os ingredientes da receita com eager loading do ingrediente
         return (
             self.db.query(ReceitaIngredienteModel)
-            .filter(ReceitaIngredienteModel.receita_id == receita.id)
+            .options(joinedload(ReceitaIngredienteModel.ingrediente))
+            .filter(ReceitaIngredienteModel.receita_id == receita_id)
             .all()
         )
 

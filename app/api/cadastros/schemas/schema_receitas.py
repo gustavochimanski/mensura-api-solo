@@ -16,10 +16,18 @@ class IngredienteIn(BaseModel):
 
 class IngredienteOut(BaseModel):
     id: int
-    produto_cod_barras: str
-    ingrediente_cod_barras: str
+    receita_id: int
+    ingrediente_id: int
     quantidade: Optional[float] = None
-    unidade: Optional[str] = None
+    # Dados do ingrediente
+    ingrediente_nome: Optional[str] = None
+    ingrediente_descricao: Optional[str] = None
+    ingrediente_unidade_medida: Optional[str] = None
+    ingrediente_custo: Optional[Decimal] = None
+    # Para compatibilidade com o schema antigo
+    produto_cod_barras: Optional[str] = None  # Será preenchido com o receita_id como string
+    ingrediente_cod_barras: Optional[str] = None  # Será preenchido com o ingrediente_id como string
+    unidade: Optional[str] = None  # Alias para ingrediente_unidade_medida
     model_config = ConfigDict(from_attributes=True)
 
 

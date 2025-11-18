@@ -23,10 +23,36 @@ router = APIRouter(
 # Ingredientes
 @router.get("/{cod_barras}/ingredientes", response_model=list[IngredienteOut])
 def list_ingredientes(
-    cod_barras: str = Path(..., description="Código de barras do produto"),
+    cod_barras: str = Path(..., description="ID da receita (passado como cod_barras para compatibilidade)"),
     db: Session = Depends(get_db),
 ):
-    return ReceitasService(db).list_ingredientes(cod_barras)
+    from app.api.catalogo.receitas.models.model_ingrediente import IngredienteModel
+    
+    # Busca os ingredientes
+    receita_ingredientes = ReceitasService(db).list_ingredientes(cod_barras)
+    
+    # Transforma para o schema de saída com dados do ingrediente
+    resultado = []
+    for ri in receita_ingredientes:
+        # Carrega o ingrediente se não estiver carregado
+        if not ri.ingrediente:
+            ri.ingrediente = db.query(IngredienteModel).filter_by(id=ri.ingrediente_id).first()
+        
+        resultado.append(IngredienteOut(
+            id=ri.id,
+            receita_id=ri.receita_id,
+            ingrediente_id=ri.ingrediente_id,
+            quantidade=float(ri.quantidade) if ri.quantidade else None,
+            ingrediente_nome=ri.ingrediente.nome if ri.ingrediente else None,
+            ingrediente_descricao=ri.ingrediente.descricao if ri.ingrediente else None,
+            ingrediente_unidade_medida=ri.ingrediente.unidade_medida if ri.ingrediente else None,
+            ingrediente_custo=ri.ingrediente.custo if ri.ingrediente else None,
+            produto_cod_barras=str(ri.receita_id),  # Compatibilidade
+            ingrediente_cod_barras=str(ri.ingrediente_id) if ri.ingrediente_id else None,  # Compatibilidade
+            unidade=ri.ingrediente.unidade_medida if ri.ingrediente else None,  # Compatibilidade
+        ))
+    
+    return resultado
 
 
 @router.post("/ingredientes", response_model=IngredienteOut, status_code=status.HTTP_201_CREATED)
