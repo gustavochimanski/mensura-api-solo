@@ -161,7 +161,7 @@ async def health():
 from app.api.monitoring.router import router as monitoring_router, router_public as monitoring_router_public
 app.include_router(monitoring_router_public)  # Métricas públicas (sem auth)
 app.include_router(monitoring_router)  # Logs com autenticação
-
+#
 # ───────────────────────────
 # Routers
 # ───────────────────────────
