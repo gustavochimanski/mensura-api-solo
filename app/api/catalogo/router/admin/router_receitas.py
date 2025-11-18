@@ -12,29 +12,37 @@ from app.api.catalogo.schemas.schema_receitas import (
     AdicionalIn,
     AdicionalOut,
 )
+from app.core.admin_dependencies import get_current_user
 from app.database.db_connection import get_db
+from app.utils.logger import logger
 
 
-router = APIRouter(prefix="/api/catalogo/admin/receitas", tags=["Admin - Catalogo - Receitas"])
+router = APIRouter(
+    prefix="/api/catalogo/admin/receitas",
+    tags=["Admin - Catalogo - Receitas"],
+    dependencies=[Depends(get_current_user)]
+)
 
 
 # Receitas - CRUD completo
-@router.post("", response_model=ReceitaOut, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=ReceitaOut, status_code=status.HTTP_201_CREATED)
 def create_receita(
     body: ReceitaIn,
     db: Session = Depends(get_db),
 ):
     """Cria uma nova receita"""
+    logger.info(f"[Receitas] Criar - empresa={body.empresa_id} nome={body.nome}")
     return ReceitasService(db).create_receita(body)
 
 
-@router.get("", response_model=list[ReceitaOut])
+@router.get("/", response_model=list[ReceitaOut])
 def list_receitas(
     empresa_id: Optional[int] = Query(None, description="Filtrar por empresa"),
     ativo: Optional[bool] = Query(None, description="Filtrar por status ativo"),
     db: Session = Depends(get_db),
 ):
     """Lista todas as receitas, com filtros opcionais"""
+    logger.info(f"[Receitas] Listar - empresa_id={empresa_id} ativo={ativo}")
     return ReceitasService(db).list_receitas(empresa_id=empresa_id, ativo=ativo)
 
 
