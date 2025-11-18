@@ -130,10 +130,14 @@ class ReceitasRepository:
         if not receita:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Receita não encontrada")
         
-        # Verifica se o adicional (produto) existe
+        # Verifica se o adicional (produto) existe na tabela de produtos
         add = self.db.query(ProdutoModel).filter_by(cod_barras=data.adicional_cod_barras).first()
         if not add:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Produto adicional não encontrado")
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND, 
+                f"Produto adicional não encontrado com código de barras: {data.adicional_cod_barras}. "
+                f"O produto deve estar cadastrado na tabela de produtos (catalogo.produtos) antes de ser vinculado à receita."
+            )
 
         # Verifica se já existe
         exists = (
