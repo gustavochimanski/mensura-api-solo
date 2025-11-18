@@ -1,11 +1,14 @@
-from fastapi import APIRouter, Depends, Body, Path, status
+from fastapi import APIRouter, Depends, Body, Path, Query, status
 from sqlalchemy.orm import Session
 from typing import Optional
 
 from app.api.catalogo.services.service_receitas import ReceitasService
 from app.api.catalogo.schemas.schema_receitas import (
-    IngredienteIn,
-    IngredienteOut,
+    ReceitaIn,
+    ReceitaOut,
+    ReceitaUpdate,
+    ReceitaIngredienteIn,
+    ReceitaIngredienteOut,
     AdicionalIn,
     AdicionalOut,
 )
@@ -15,49 +18,111 @@ from app.database.db_connection import get_db
 router = APIRouter(prefix="/api/catalogo/admin/receitas", tags=["Admin - Catalogo - Receitas"])
 
 
-# Ingredientes
-@router.get("/{cod_barras}/ingredientes", response_model=list[IngredienteOut])
+# Receitas - CRUD completo
+@router.post("", response_model=ReceitaOut, status_code=status.HTTP_201_CREATED)
+def create_receita(
+    body: ReceitaIn,
+    db: Session = Depends(get_db),
+):
+    """Cria uma nova receita"""
+    return ReceitasService(db).create_receita(body)
+
+
+@router.get("", response_model=list[ReceitaOut])
+def list_receitas(
+    empresa_id: Optional[int] = Query(None, description="Filtrar por empresa"),
+    ativo: Optional[bool] = Query(None, description="Filtrar por status ativo"),
+    db: Session = Depends(get_db),
+):
+    """Lista todas as receitas, com filtros opcionais"""
+    return ReceitasService(db).list_receitas(empresa_id=empresa_id, ativo=ativo)
+
+
+@router.get("/{receita_id}", response_model=ReceitaOut)
+def get_receita(
+    receita_id: int = Path(..., description="ID da receita"),
+    db: Session = Depends(get_db),
+):
+    """Busca uma receita por ID"""
+    receita = ReceitasService(db).get_receita(receita_id)
+    if not receita:
+        from fastapi import HTTPException
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Receita não encontrada")
+    return receita
+
+
+@router.put("/{receita_id}", response_model=ReceitaOut)
+def update_receita(
+    receita_id: int = Path(..., description="ID da receita"),
+    body: ReceitaUpdate = Body(...),
+    db: Session = Depends(get_db),
+):
+    """Atualiza uma receita"""
+    return ReceitasService(db).update_receita(receita_id, body)
+
+
+@router.delete("/{receita_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_receita(
+    receita_id: int = Path(..., description="ID da receita"),
+    db: Session = Depends(get_db),
+):
+    """Remove uma receita"""
+    ReceitasService(db).delete_receita(receita_id)
+    return None
+
+
+# Ingredientes (vinculação a receitas)
+@router.get("/{receita_id}/ingredientes", response_model=list[ReceitaIngredienteOut])
 def list_ingredientes(
-    cod_barras: str = Path(..., description="Código de barras do produto"),
+    receita_id: int = Path(..., description="ID da receita"),
     db: Session = Depends(get_db),
 ):
-    return ReceitasService(db).list_ingredientes(cod_barras)
+    """Lista todos os ingredientes de uma receita"""
+    return ReceitasService(db).list_ingredientes(receita_id)
 
 
-@router.post("/ingredientes", response_model=IngredienteOut, status_code=status.HTTP_201_CREATED)
+@router.post("/ingredientes", response_model=ReceitaIngredienteOut, status_code=status.HTTP_201_CREATED)
 def add_ingrediente(
-    body: IngredienteIn,
+    body: ReceitaIngredienteIn,
     db: Session = Depends(get_db),
 ):
+    """
+    Adiciona um ingrediente a uma receita.
+    
+    IMPORTANTE: Um ingrediente só pode estar vinculado a UMA receita (relacionamento 1:1).
+    Se o ingrediente já estiver vinculado a outra receita, retornará erro 400.
+    """
     return ReceitasService(db).add_ingrediente(body)
 
 
-@router.put("/ingredientes/{ingrediente_id}", response_model=IngredienteOut)
+@router.put("/ingredientes/{receita_ingrediente_id}", response_model=ReceitaIngredienteOut)
 def update_ingrediente(
-    ingrediente_id: int = Path(...),
-    quantidade: Optional[float] = Body(None),
-    unidade: Optional[str] = Body(None),
+    receita_ingrediente_id: int = Path(..., description="ID do vínculo ingrediente-receita"),
+    quantidade: Optional[float] = Body(None, description="Quantidade do ingrediente"),
     db: Session = Depends(get_db),
 ):
-    return ReceitasService(db).update_ingrediente(ingrediente_id, quantidade, unidade)
+    """Atualiza a quantidade de um ingrediente em uma receita"""
+    return ReceitasService(db).update_ingrediente(receita_ingrediente_id, quantidade)
 
 
-@router.delete("/ingredientes/{ingrediente_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/ingredientes/{receita_ingrediente_id}", status_code=status.HTTP_204_NO_CONTENT)
 def remove_ingrediente(
-    ingrediente_id: int,
+    receita_ingrediente_id: int = Path(..., description="ID do vínculo ingrediente-receita"),
     db: Session = Depends(get_db),
 ):
-    ReceitasService(db).remove_ingrediente(ingrediente_id)
-    return {"ok": True}
+    """Remove um ingrediente de uma receita (desvincula, mas não deleta o ingrediente)"""
+    ReceitasService(db).remove_ingrediente(receita_ingrediente_id)
+    return None
 
 
 # Adicionais
-@router.get("/{cod_barras}/adicionais", response_model=list[AdicionalOut])
+@router.get("/{receita_id}/adicionais", response_model=list[AdicionalOut])
 def list_adicionais(
-    cod_barras: str,
+    receita_id: int = Path(..., description="ID da receita"),
     db: Session = Depends(get_db),
 ):
-    return ReceitasService(db).list_adicionais(cod_barras)
+    """Lista todos os adicionais de uma receita"""
+    return ReceitasService(db).list_adicionais(receita_id)
 
 
 @router.post("/adicionais", response_model=AdicionalOut, status_code=status.HTTP_201_CREATED)
@@ -65,23 +130,26 @@ def add_adicional(
     body: AdicionalIn,
     db: Session = Depends(get_db),
 ):
+    """Adiciona um adicional a uma receita"""
     return ReceitasService(db).add_adicional(body)
 
 
 @router.put("/adicionais/{adicional_id}", response_model=AdicionalOut)
 def update_adicional(
-    adicional_id: int,
-    preco: Optional[float] = Body(None),
+    adicional_id: int = Path(..., description="ID do adicional"),
+    preco: Optional[float] = Body(None, description="Preço do adicional"),
     db: Session = Depends(get_db),
 ):
+    """Atualiza um adicional de uma receita"""
     return ReceitasService(db).update_adicional(adicional_id, preco)
 
 
 @router.delete("/adicionais/{adicional_id}", status_code=status.HTTP_204_NO_CONTENT)
 def remove_adicional(
-    adicional_id: int,
+    adicional_id: int = Path(..., description="ID do adicional"),
     db: Session = Depends(get_db),
 ):
+    """Remove um adicional de uma receita"""
     ReceitasService(db).remove_adicional(adicional_id)
-    return {"ok": True}
+    return None
 

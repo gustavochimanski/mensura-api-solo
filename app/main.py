@@ -48,6 +48,7 @@ from app.api.relatorios.router.router import router as relatorios_router
 from app.api.notifications.router.router import router as notifications_router
 from app.api.caixas.router.router import router as caixa_router
 from app.api.localizacao.router.router_localizacao import router as localizacao_router
+from app.api.catalogo.router.router import router as catalogo_router
 
 
 # ───────────────────────────
@@ -171,6 +172,7 @@ app.include_router(relatorios_router)
 app.include_router(notifications_router)
 app.include_router(caixa_router)
 app.include_router(localizacao_router)
+app.include_router(catalogo_router)
 
 # ───────────────────────────
 # OpenAPI: Segurança Bearer/JWT no Swagger
