@@ -50,7 +50,7 @@ class ReceitaAdicionalModel(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     receita_id = Column(Integer, ForeignKey("catalogo.receitas.id", ondelete="CASCADE"), nullable=False)
     adicional_cod_barras = Column(String, ForeignKey("catalogo.produtos.cod_barras", ondelete="RESTRICT"), nullable=False)
-    preco = Column(Numeric(18, 2), nullable=True)
+    # preco removido - sempre busca do ProdutoEmpModel em tempo de execução
 
     receita = relationship("ReceitaModel", back_populates="adicionais")
     adicional = relationship("ProdutoModel", foreign_keys=[adicional_cod_barras])

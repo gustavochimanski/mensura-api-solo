@@ -20,6 +20,21 @@ class ReceitasRepository:
     def __init__(self, db: Session):
         self.db = db
 
+    def _buscar_preco_adicional(self, empresa_id: int, cod_barras: str) -> Decimal:
+        """
+        Busca o preço do adicional do cadastro atual (ProdutoEmpModel).
+        Retorna 0.00 se não encontrar.
+        """
+        produto_emp = (
+            self.db.query(ProdutoEmpModel)
+            .filter_by(empresa_id=empresa_id, cod_barras=cod_barras)
+            .first()
+        )
+        
+        if produto_emp and produto_emp.preco_venda is not None:
+            return produto_emp.preco_venda
+        return Decimal('0.00')
+
     # Receitas - CRUD completo
     def create_receita(self, data: ReceitaIn) -> ReceitaModel:
         receita = ReceitaModel(
