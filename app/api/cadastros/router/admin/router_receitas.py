@@ -38,18 +38,24 @@ def list_ingredientes(
         if not ri.ingrediente:
             ri.ingrediente = db.query(IngredienteModel).filter_by(id=ri.ingrediente_id).first()
         
+        # Converte quantidade para float (None se não houver)
+        quantidade = float(ri.quantidade) if ri.quantidade is not None else None
+        
+        # Converte custo para Decimal (None se não houver)
+        ingrediente_custo = ri.ingrediente.custo if ri.ingrediente and ri.ingrediente.custo is not None else None
+        
         resultado.append(IngredienteOut(
             id=ri.id,
             receita_id=ri.receita_id,
             ingrediente_id=ri.ingrediente_id,
-            quantidade=float(ri.quantidade) if ri.quantidade else None,
+            quantidade=quantidade,
             ingrediente_nome=ri.ingrediente.nome if ri.ingrediente else None,
             ingrediente_descricao=ri.ingrediente.descricao if ri.ingrediente else None,
             ingrediente_unidade_medida=ri.ingrediente.unidade_medida if ri.ingrediente else None,
-            ingrediente_custo=ri.ingrediente.custo if ri.ingrediente else None,
-            produto_cod_barras=str(ri.receita_id),  # Compatibilidade
-            ingrediente_cod_barras=str(ri.ingrediente_id) if ri.ingrediente_id else None,  # Compatibilidade
-            unidade=ri.ingrediente.unidade_medida if ri.ingrediente else None,  # Compatibilidade
+            ingrediente_custo=ingrediente_custo,
+            produto_cod_barras=str(ri.receita_id),  # Compatibilidade: receita_id como string
+            ingrediente_cod_barras=str(ri.ingrediente_id) if ri.ingrediente_id else None,  # Compatibilidade: ingrediente_id como string
+            unidade=ri.ingrediente.unidade_medida if ri.ingrediente else None,  # Compatibilidade: alias para ingrediente_unidade_medida
         ))
     
     return resultado
