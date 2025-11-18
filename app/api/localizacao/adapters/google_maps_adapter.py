@@ -44,9 +44,36 @@ class GoogleMapsAdapter(IGeolocalizacaoProvider, IDistanciaProvider):
                 )
             response.raise_for_status()
             data = response.json()
+            status_code = data.get("status")
             
-            if data.get("status") != "OK" or not data.get("results"):
-                logger.warning(f"[GoogleMapsAdapter] Nenhum resultado encontrado para {endereco}: {data.get('status')}")
+            # Tratamento específico para diferentes status da API
+            if status_code == "REQUEST_DENIED":
+                error_message = data.get("error_message", "Acesso negado")
+                logger.error(
+                    f"[GoogleMapsAdapter] Acesso negado pela API do Google Maps para '{endereco}'. "
+                    f"Verifique se a API key está correta e se a Geocoding API está habilitada. "
+                    f"Erro: {error_message}"
+                )
+                return None
+            elif status_code == "OVER_QUERY_LIMIT":
+                logger.error(
+                    f"[GoogleMapsAdapter] Limite de requisições excedido para '{endereco}'. "
+                    f"Verifique a cota da API do Google Maps."
+                )
+                return None
+            elif status_code == "INVALID_REQUEST":
+                logger.warning(
+                    f"[GoogleMapsAdapter] Requisição inválida para '{endereco}': {data.get('error_message', '')}"
+                )
+                return None
+            elif status_code == "ZERO_RESULTS":
+                logger.info(f"[GoogleMapsAdapter] Nenhum resultado encontrado para '{endereco}'")
+                return None
+            elif status_code != "OK" or not data.get("results"):
+                logger.warning(
+                    f"[GoogleMapsAdapter] Status inesperado para '{endereco}': {status_code}. "
+                    f"Mensagem: {data.get('error_message', 'N/A')}"
+                )
                 return None
             
             location = data["results"][0]["geometry"]["location"]
@@ -160,9 +187,36 @@ class GoogleMapsAdapter(IGeolocalizacaoProvider, IDistanciaProvider):
                 )
             response.raise_for_status()
             data = response.json()
+            status_code = data.get("status")
             
-            if data.get("status") != "OK" or not data.get("results"):
-                logger.warning(f"[GoogleMapsAdapter] Nenhum resultado encontrado para {texto}: {data.get('status')}")
+            # Tratamento específico para diferentes status da API
+            if status_code == "REQUEST_DENIED":
+                error_message = data.get("error_message", "Acesso negado")
+                logger.error(
+                    f"[GoogleMapsAdapter] Acesso negado pela API do Google Maps para '{texto}'. "
+                    f"Verifique se a API key está correta e se a Geocoding API está habilitada. "
+                    f"Erro: {error_message}"
+                )
+                return []
+            elif status_code == "OVER_QUERY_LIMIT":
+                logger.error(
+                    f"[GoogleMapsAdapter] Limite de requisições excedido para '{texto}'. "
+                    f"Verifique a cota da API do Google Maps."
+                )
+                return []
+            elif status_code == "INVALID_REQUEST":
+                logger.warning(
+                    f"[GoogleMapsAdapter] Requisição inválida para '{texto}': {data.get('error_message', '')}"
+                )
+                return []
+            elif status_code == "ZERO_RESULTS":
+                logger.info(f"[GoogleMapsAdapter] Nenhum resultado encontrado para '{texto}'")
+                return []
+            elif status_code != "OK" or not data.get("results"):
+                logger.warning(
+                    f"[GoogleMapsAdapter] Status inesperado para '{texto}': {status_code}. "
+                    f"Mensagem: {data.get('error_message', 'N/A')}"
+                )
                 return []
             
             resultados = []

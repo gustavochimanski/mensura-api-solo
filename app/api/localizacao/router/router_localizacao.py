@@ -77,12 +77,19 @@ def buscar_endereco(
     """
     logger.info(f"[Localizacao] Buscando endereços para: {text}")
     
+    # Verifica se a API key está configurada
+    if not google_adapter.api_key:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Serviço de geolocalização não configurado. Verifique a configuração da API key do Google Maps."
+        )
+    
     resultados = google_adapter.buscar_enderecos(text, max_results=max_results)
     
     if not resultados:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Nenhum endereço encontrado para: {text}"
+            detail=f"Nenhum endereço encontrado para: {text}. Verifique os logs para mais detalhes sobre possíveis problemas com a API key."
         )
     
     return {
