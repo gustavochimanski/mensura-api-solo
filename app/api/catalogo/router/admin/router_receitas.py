@@ -25,7 +25,7 @@ router = APIRouter(
 )
 
 # Inclui router de ingredientes dentro de receitas
-router.include_router(router_ingredientes.router)
+router.include_router(router_ingredientes)
 
 
 # Receitas - CRUD completo
