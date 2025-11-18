@@ -1,4 +1,4 @@
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List, Dict
 import httpx
 from app.config import settings
 from app.utils.logger import logger
@@ -131,4 +131,57 @@ class GoogleMapsAdapter(IGeolocalizacaoProvider, IDistanciaProvider):
         except Exception as e:
             logger.error(f"[GoogleMapsAdapter] Erro ao calcular distância para {origins} -> {destinations}: {e}")
             return None
+    
+    def buscar_enderecos(self, texto: str, max_results: int = 5) -> List[Dict]:
+        """
+        Busca endereços usando Google Maps Geocoding API.
+        
+        Args:
+            texto: Texto para buscar (pode ser parcial)
+            max_results: Número máximo de resultados a retornar
+            
+        Returns:
+            Lista de dicionários com informações dos endereços encontrados
+        """
+        if not self.api_key:
+            logger.warning("[GoogleMapsAdapter] API key não configurada")
+            return []
+            
+        try:
+            with httpx.Client(timeout=10.0) as client:
+                response = client.get(
+                    self.BASE_URL,
+                    params={
+                        "address": texto,
+                        "key": self.api_key,
+                        "region": "br",  # Restringe busca ao Brasil
+                        "language": "pt-BR"
+                    }
+                )
+            response.raise_for_status()
+            data = response.json()
+            
+            if data.get("status") != "OK" or not data.get("results"):
+                logger.warning(f"[GoogleMapsAdapter] Nenhum resultado encontrado para {texto}: {data.get('status')}")
+                return []
+            
+            resultados = []
+            for result in data.get("results", [])[:max_results]:
+                location = result["geometry"]["location"]
+                endereco_info = {
+                    "endereco_completo": result.get("formatted_address", ""),
+                    "latitude": location.get("lat"),
+                    "longitude": location.get("lng"),
+                    "tipos": result.get("types", []),
+                    "place_id": result.get("place_id", "")
+                }
+                resultados.append(endereco_info)
+            
+            return resultados
+        except httpx.HTTPStatusError as e:
+            logger.error(f"[GoogleMapsAdapter] Erro HTTP ao buscar endereços para {texto}: Status {e.response.status_code}")
+            return []
+        except Exception as e:
+            logger.error(f"[GoogleMapsAdapter] Erro ao buscar endereços para {texto}: {e}")
+            return []
 

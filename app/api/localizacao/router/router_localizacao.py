@@ -50,6 +50,48 @@ def get_geolocalizacao_service() -> IGeolocalizacaoService:
     return _get_geolocalizacao_service_instance()
 
 
+@lru_cache(maxsize=1)
+def _get_google_maps_adapter_instance() -> GoogleMapsAdapter:
+    """Cria uma instância singleton do adapter do Google Maps."""
+    return GoogleMapsAdapter()
+
+
+def get_google_maps_adapter() -> GoogleMapsAdapter:
+    """Dependency para obter adapter do Google Maps (singleton)."""
+    return _get_google_maps_adapter_instance()
+
+
+@router.get("/buscar-endereco", status_code=status.HTTP_200_OK)
+def buscar_endereco(
+    text: str = Query(..., description="Texto para buscar endereços"),
+    max_results: int = Query(5, ge=1, le=10, description="Número máximo de resultados"),
+    google_adapter: GoogleMapsAdapter = Depends(get_google_maps_adapter),
+    _current_user = Depends(get_current_user),
+):
+    """
+    Busca endereços baseado em um texto de busca.
+    
+    Retorna uma lista de endereços encontrados com suas coordenadas.
+    
+    Requer autenticação de admin.
+    """
+    logger.info(f"[Localizacao] Buscando endereços para: {text}")
+    
+    resultados = google_adapter.buscar_enderecos(text, max_results=max_results)
+    
+    if not resultados:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Nenhum endereço encontrado para: {text}"
+        )
+    
+    return {
+        "query": text,
+        "total": len(resultados),
+        "resultados": resultados
+    }
+
+
 @router.post("/geocodificar", status_code=status.HTTP_200_OK)
 def geocodificar_endereco(
     payload: EnderecoGeocodificar = Body(...),
