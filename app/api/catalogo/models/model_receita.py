@@ -30,8 +30,8 @@ class ReceitaIngredienteModel(Base):
     """Modelo de Ingrediente de Receita - Relacionamento 1:1 (ingrediente só pode estar em 1 receita)"""
     __tablename__ = "receita_ingrediente"
     __table_args__ = (
-        {"schema": "catalogo"},
         UniqueConstraint("ingrediente_id", name="uq_receita_ingrediente_ingrediente_id"),  # Garante 1:1
+        {"schema": "catalogo"},
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
