@@ -9,6 +9,7 @@ from app.api.catalogo.schemas.schema_receitas import (
     AdicionalIn,
     ReceitaIn,
     ReceitaUpdate,
+    ReceitaOut,
 )
 
 
@@ -18,13 +19,27 @@ class ReceitasService:
 
     # Receitas - CRUD completo
     def create_receita(self, data: ReceitaIn):
-        return self.repo.create_receita(data)
+        receita = self.repo.create_receita(data)
+        # Calcula o custo após criar a receita
+        custo = self.repo.calcular_custo_receita(receita.id)
+        receita.custo = custo
+        return receita
 
     def get_receita(self, receita_id: int):
-        return self.repo.get_receita_by_id(receita_id)
+        receita = self.repo.get_receita_by_id(receita_id)
+        if receita:
+            # Calcula o custo da receita
+            custo = self.repo.calcular_custo_receita(receita_id)
+            receita.custo = custo
+        return receita
 
     def list_receitas(self, empresa_id: Optional[int] = None, ativo: Optional[bool] = None):
-        return self.repo.list_receitas(empresa_id=empresa_id, ativo=ativo)
+        receitas = self.repo.list_receitas(empresa_id=empresa_id, ativo=ativo)
+        # Calcula o custo para cada receita
+        for receita in receitas:
+            custo = self.repo.calcular_custo_receita(receita.id)
+            receita.custo = custo
+        return receitas
     
     def list_receitas_com_ingredientes(self, empresa_id: Optional[int] = None, ativo: Optional[bool] = None) -> List[ReceitaComIngredientesOut]:
         """Lista receitas com seus ingredientes incluídos"""
@@ -47,6 +62,9 @@ class ReceitasService:
                 )
                 ingredientes_detalhados.append(ingrediente_detalhado)
             
+            # Calcula o custo da receita
+            custo = self.repo.calcular_custo_receita(receita.id)
+            
             # Cria objeto de resposta com ingredientes
             receita_com_ingredientes = ReceitaComIngredientesOut(
                 id=receita.id,
@@ -54,6 +72,7 @@ class ReceitasService:
                 nome=receita.nome,
                 descricao=receita.descricao,
                 preco_venda=receita.preco_venda,
+                custo=custo,
                 imagem=receita.imagem,
                 ativo=receita.ativo,
                 disponivel=receita.disponivel,
@@ -66,7 +85,11 @@ class ReceitasService:
         return resultado
 
     def update_receita(self, receita_id: int, data: ReceitaUpdate):
-        return self.repo.update_receita(receita_id, data)
+        receita = self.repo.update_receita(receita_id, data)
+        # Calcula o custo após atualizar a receita
+        custo = self.repo.calcular_custo_receita(receita_id)
+        receita.custo = custo
+        return receita
 
     def delete_receita(self, receita_id: int):
         return self.repo.delete_receita(receita_id)
@@ -91,8 +114,8 @@ class ReceitasService:
     def list_adicionais(self, receita_id: int):
         return self.repo.list_adicionais(receita_id)
 
-    def update_adicional(self, adicional_id: int, preco):
-        return self.repo.update_adicional(adicional_id, preco)
+    def update_adicional(self, adicional_id: int):
+        return self.repo.update_adicional(adicional_id)
 
     def remove_adicional(self, adicional_id: int):
         return self.repo.remove_adicional(adicional_id)

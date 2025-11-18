@@ -20,6 +20,7 @@ class ReceitaOut(BaseModel):
     nome: str
     descricao: Optional[str] = None
     preco_venda: Decimal
+    custo: Decimal
     imagem: Optional[str] = None
     ativo: bool
     disponivel: bool
@@ -74,6 +75,7 @@ class ReceitaComIngredientesOut(BaseModel):
     nome: str
     descricao: Optional[str] = None
     preco_venda: Decimal
+    custo: Decimal
     imagem: Optional[str] = None
     ativo: bool
     disponivel: bool
@@ -86,7 +88,6 @@ class ReceitaComIngredientesOut(BaseModel):
 class AdicionalIn(BaseModel):
     receita_id: int
     adicional_cod_barras: constr(min_length=1)
-    preco: Optional[Decimal] = None
 
 
 class AdicionalOut(BaseModel):

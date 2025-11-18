@@ -180,19 +180,18 @@ class ReceitasRepository:
         if exists:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Adicional já cadastrado nesta receita")
 
-        # Se preço não foi informado, busca o preço padrão do produto para a empresa
-        preco_final = data.preco
-        if preco_final is None:
-            produto_emp = (
-                self.db.query(ProdutoEmpModel)
-                .filter_by(empresa_id=receita.empresa_id, cod_barras=data.adicional_cod_barras)
-                .first()
-            )
-            if produto_emp and produto_emp.preco_venda is not None:
-                preco_final = produto_emp.preco_venda
-            else:
-                # Se não encontrou preço, usa 0 como padrão
-                preco_final = Decimal('0.00')
+        # Busca o preço automaticamente do cadastro do produto para a empresa
+        produto_emp = (
+            self.db.query(ProdutoEmpModel)
+            .filter_by(empresa_id=receita.empresa_id, cod_barras=data.adicional_cod_barras)
+            .first()
+        )
+        
+        if produto_emp and produto_emp.preco_venda is not None:
+            preco_final = produto_emp.preco_venda
+        else:
+            # Se não encontrou preço, usa 0 como padrão
+            preco_final = Decimal('0.00')
 
         obj = ReceitaAdicionalModel(
             receita_id=data.receita_id,
@@ -216,25 +215,26 @@ class ReceitasRepository:
             .all()
         )
 
-    def update_adicional(self, adicional_id: int, preco: Decimal | None = None) -> ReceitaAdicionalModel:
+    def update_adicional(self, adicional_id: int) -> ReceitaAdicionalModel:
         obj = self.db.query(ReceitaAdicionalModel).filter_by(id=adicional_id).first()
         if not obj:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Adicional não encontrado")
         
-        # Se preço não foi informado, busca o preço padrão do produto para a empresa da receita
-        if preco is None:
-            receita = self.get_receita_by_id(obj.receita_id)
-            if receita:
-                produto_emp = (
-                    self.db.query(ProdutoEmpModel)
-                    .filter_by(empresa_id=receita.empresa_id, cod_barras=obj.adicional_cod_barras)
-                    .first()
-                )
-                if produto_emp and produto_emp.preco_venda is not None:
-                    preco = produto_emp.preco_venda
-                else:
-                    # Se não encontrou preço, usa 0 como padrão
-                    preco = Decimal('0.00')
+        # Sempre busca o preço atualizado do cadastro do produto
+        receita = self.get_receita_by_id(obj.receita_id)
+        if receita:
+            produto_emp = (
+                self.db.query(ProdutoEmpModel)
+                .filter_by(empresa_id=receita.empresa_id, cod_barras=obj.adicional_cod_barras)
+                .first()
+            )
+            if produto_emp and produto_emp.preco_venda is not None:
+                preco = produto_emp.preco_venda
+            else:
+                # Se não encontrou preço, usa 0 como padrão
+                preco = Decimal('0.00')
+        else:
+            preco = Decimal('0.00')
         
         obj.preco = preco
         self.db.add(obj)
@@ -273,4 +273,30 @@ class ReceitasRepository:
             .scalar()
         )
         return count > 0 if count else False
+
+    def calcular_custo_receita(self, receita_id: int) -> Decimal:
+        """
+        Calcula o custo total de uma receita baseado nos custos dos ingredientes vinculados.
+        O cálculo é: soma de (quantidade * custo) para cada ingrediente vinculado.
+        """
+        receita = self.get_receita_by_id(receita_id)
+        if not receita:
+            return Decimal('0.00')
+        
+        # Busca todos os ingredientes vinculados à receita com seus dados
+        ingredientes = (
+            self.db.query(ReceitaIngredienteModel)
+            .options(joinedload(ReceitaIngredienteModel.ingrediente))
+            .filter(ReceitaIngredienteModel.receita_id == receita_id)
+            .all()
+        )
+        
+        custo_total = Decimal('0.00')
+        for receita_ingrediente in ingredientes:
+            if receita_ingrediente.ingrediente:
+                quantidade = receita_ingrediente.quantidade if receita_ingrediente.quantidade else Decimal('0.00')
+                custo_ingrediente = receita_ingrediente.ingrediente.custo if receita_ingrediente.ingrediente.custo else Decimal('0.00')
+                custo_total += quantidade * custo_ingrediente
+        
+        return custo_total
 

@@ -161,11 +161,13 @@ def add_adicional(
 @router.put("/adicionais/{adicional_id}", response_model=AdicionalOut)
 def update_adicional(
     adicional_id: int = Path(..., description="ID do adicional"),
-    preco: Optional[float] = Body(None, description="Preço do adicional"),
     db: Session = Depends(get_db),
 ):
-    """Atualiza um adicional de uma receita"""
-    return ReceitasService(db).update_adicional(adicional_id, preco)
+    """
+    Atualiza um adicional de uma receita.
+    Sincroniza o preço com o cadastro atual do produto (sempre busca do ProdutoEmpModel).
+    """
+    return ReceitasService(db).update_adicional(adicional_id)
 
 
 @router.delete("/adicionais/{adicional_id}", status_code=status.HTTP_204_NO_CONTENT)
