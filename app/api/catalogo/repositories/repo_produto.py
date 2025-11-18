@@ -169,3 +169,49 @@ class ProdutoMensuraRepository:
             q = q.filter(ProdutoEmpModel.exibir_delivery.is_(True))
         return int(q.scalar() or 0)
 
+    def gerar_proximo_cod_barras(self) -> str:
+        """
+        Gera o próximo código de barras disponível.
+        Busca o maior código numérico e incrementa, ou gera um código baseado em timestamp.
+        """
+        # Busca todos os códigos de barras numéricos
+        try:
+            produtos = self.db.query(ProdutoModel.cod_barras).all()
+            codigos_numericos = []
+            
+            for produto in produtos:
+                cod = produto.cod_barras
+                # Verifica se é numérico
+                if cod and cod.isdigit():
+                    try:
+                        codigos_numericos.append(int(cod))
+                    except ValueError:
+                        continue
+            
+            if codigos_numericos:
+                # Encontra o maior e incrementa
+                max_cod = max(codigos_numericos)
+                novo_cod = str(max_cod + 1)
+                
+                # Verifica se já existe (caso raro de colisão)
+                if not self.buscar_por_cod_barras(novo_cod):
+                    return novo_cod
+        except Exception as e:
+            # Se falhar, continua com a lógica alternativa
+            pass
+        
+        # Se não encontrou códigos numéricos ou falhou, gera baseado em timestamp
+        import time
+        timestamp = int(time.time() * 1000)  # Usa milissegundos para mais precisão
+        # Usa os últimos 13 dígitos do timestamp (formato similar a código de barras EAN-13)
+        cod_barras = str(timestamp)[-13:] if len(str(timestamp)) >= 13 else str(timestamp).zfill(13)
+        
+        # Verifica se já existe, se sim, incrementa
+        contador = 0
+        while self.buscar_por_cod_barras(cod_barras) and contador < 100:
+            timestamp += 1
+            cod_barras = str(timestamp)[-13:] if len(str(timestamp)) >= 13 else str(timestamp).zfill(13)
+            contador += 1
+        
+        return cod_barras
+

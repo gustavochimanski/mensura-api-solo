@@ -67,7 +67,7 @@ def listar_delivery(
 @router.post("/", response_model=CriarNovoProdutoResponse)
 async def criar_produto(
   cod_empresa: int = Form(...),
-  cod_barras: str = Form(...),
+  cod_barras: Optional[str] = Form(None),
   descricao: str = Form(...),
   preco_venda: Decimal = Form(...),
   custo: Optional[Decimal] = Form(None),
@@ -75,7 +75,7 @@ async def criar_produto(
   imagem: Optional[UploadFile] = File(None),
   db: Session = Depends(get_db),
 ):
-  logger.info(f"[Produtos] Criar - {cod_barras} / empresa {cod_empresa}")
+  logger.info(f"[Produtos] Criar - cod_barras={'gerado automaticamente' if not cod_barras or not cod_barras.strip() else cod_barras} / empresa {cod_empresa}")
   imagem_url = None
   if imagem:
     if imagem.content_type not in {"image/jpeg","image/png","image/webp"}:
@@ -92,9 +92,10 @@ async def criar_produto(
     except ValueError:
       raise HTTPException(400, detail="data_cadastro inválida (use YYYY-MM-DD)")
 
+  # Se cod_barras não foi fornecido, será gerado automaticamente pelo service
   dto = CriarNovoProdutoRequest(
     empresa_id=cod_empresa,
-    cod_barras=cod_barras,
+    cod_barras=cod_barras if cod_barras and cod_barras.strip() else None,  # Será gerado se None
     descricao=descricao,
     preco_venda=preco_venda,
     custo=custo,

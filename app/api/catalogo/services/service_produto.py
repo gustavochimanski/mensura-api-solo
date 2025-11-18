@@ -34,6 +34,10 @@ class ProdutosMensuraService:
         # garante que a empresa existe antes de prosseguir
         self._empresa_or_404(empresa_id)
 
+        # Se cod_barras não foi fornecido ou está vazio, gera automaticamente
+        if not req.cod_barras or (isinstance(req.cod_barras, str) and req.cod_barras.strip() == ""):
+            req.cod_barras = self.repo.gerar_proximo_cod_barras()
+
         if self.repo.buscar_por_cod_barras(req.cod_barras):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Produto já existe.")
 

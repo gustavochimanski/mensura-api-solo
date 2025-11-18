@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, condecimal, constr
 # ------ Requests de criação/edição ------
 class CriarNovoProdutoRequest(BaseModel):
     # ProdutoDeliveryModel
-    cod_barras: constr(min_length=1)
+    cod_barras: Optional[constr(min_length=1)] = None  # Opcional - será gerado automaticamente se não fornecido
     descricao: constr(min_length=1, max_length=255)
     imagem: Optional[str] = None
     data_cadastro: Optional[date] = None
