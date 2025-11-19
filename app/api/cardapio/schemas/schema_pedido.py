@@ -171,6 +171,22 @@ class ComboPedidoRequest(BaseModel):
         description="Lista de adicionais aplicados ao combo (por ID, sem usar código de barras)",
     )
 
+
+class ProdutosPedidoRequest(BaseModel):
+    """Agrupa os produtos do checkout (itens, receitas e combos)."""
+    itens: List[ItemPedidoRequest] = Field(
+        default_factory=list,
+        description="Lista de itens (produtos com código de barras)",
+    )
+    receitas: Optional[List[ReceitaPedidoRequest]] = Field(
+        default=None,
+        description="Lista de receitas selecionadas no checkout",
+    )
+    combos: Optional[List[ComboPedidoRequest]] = Field(
+        default=None,
+        description="Lista de combos opcionais no checkout",
+    )
+
 class MeioPagamentoParcialRequest(BaseModel):
     """Define um meio de pagamento com valor parcial"""
     id: Optional[int] = Field(
@@ -219,12 +235,21 @@ class FinalizarPedidoRequest(BaseModel):
     observacao_geral: Optional[str] = None
     cupom_id: Optional[int] = None
     troco_para: Optional[condecimal(max_digits=18, decimal_places=2)] = None
-    itens: List[ItemPedidoRequest]
+    # Novo formato: produtos agrupados
+    produtos: Optional[ProdutosPedidoRequest] = Field(
+        default=None,
+        description="Objeto que agrupa itens, receitas e combos do checkout.",
+    )
+    # LEGADO: campos diretos na raiz (serão descontinuados)
+    itens: Optional[List[ItemPedidoRequest]] = None
     receitas: Optional[List[ReceitaPedidoRequest]] = Field(
         default=None,
-        description="Lista de receitas selecionadas no checkout",
+        description="(LEGADO) Lista de receitas selecionadas no checkout",
     )
-    combos: Optional[List[ComboPedidoRequest]] = Field(default=None, description="Lista de combos opcionais no checkout")
+    combos: Optional[List[ComboPedidoRequest]] = Field(
+        default=None,
+        description="(LEGADO) Lista de combos opcionais no checkout",
+    )
     mesa_codigo: Optional[str] = Field(
         default=None,
         description="Código numérico da mesa. Obrigatório quando tipo_pedido=MESA.",
@@ -247,6 +272,12 @@ class FinalizarPedidoRequest(BaseModel):
 
     @model_validator(mode="after")
     def _ajustar_tipo_e_validar(self):
+        # Garante que há pelo menos um item em produtos.itens ou em itens (legado)
+        itens_novos = (self.produtos.itens if self.produtos and self.produtos.itens is not None else []) if hasattr(self, "produtos") else []
+        itens_legados = self.itens or []
+        if not itens_novos and not itens_legados:
+            raise ValueError("É obrigatório informar ao menos um item em 'produtos.itens' ou em 'itens'.")
+
         if self.tipo_pedido in {TipoPedidoCheckoutEnum.MESA, TipoPedidoCheckoutEnum.BALCAO}:
             # Força tipo_entrega como RETIRADA para fluxos não delivery
             self.tipo_entrega = TipoEntregaEnum.RETIRADA

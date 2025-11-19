@@ -95,7 +95,10 @@ async def finalizar_checkout(
                     quantidade=item.quantidade,
                     observacao=item.observacao,
                 )
-                for item in payload.itens
+                for item in (
+                    (payload.produtos.itens if payload.produtos and payload.produtos.itens is not None else payload.itens)
+                    or []
+                )
             ],
         )
         return mesa_service.criar_pedido(mesa_payload)
@@ -120,7 +123,10 @@ async def finalizar_checkout(
                     quantidade=item.quantidade,
                     observacao=item.observacao,
                 )
-                for item in payload.itens
+                for item in (
+                    (payload.produtos.itens if payload.produtos and payload.produtos.itens is not None else payload.itens)
+                    or []
+                )
             ],
         )
         return balcao_service.criar_pedido(balcao_payload)
