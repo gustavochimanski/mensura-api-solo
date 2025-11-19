@@ -135,9 +135,41 @@ class ItemPedidoRequest(BaseModel):
     )
 
 
+class ReceitaPedidoRequest(BaseModel):
+    """
+    Item de receita no checkout.
+
+    Referencia apenas o ID da receita (não usa código de barras).
+    """
+    receita_id: int
+    quantidade: int
+    observacao: Optional[str] = None
+
+    adicionais: Optional[List[ItemAdicionalRequest]] = Field(
+        default=None,
+        description="Lista de adicionais vinculados à receita para este item",
+    )
+
+    # LEGADO / compat: permite também enviar apenas IDs
+    adicionais_ids: Optional[List[int]] = Field(
+        default=None,
+        description="(LEGADO) IDs de adicionais vinculados à receita; quantidade implícita = 1",
+    )
+
+
+class ComboItemAdicionalPedidoRequest(BaseModel):
+    """Mantido apenas para compatibilidade retroativa (NÃO USAR NO NOVO FLUXO)."""
+    produto_cod_barras: str
+    adicionais: List[ItemAdicionalRequest]
+
+
 class ComboPedidoRequest(BaseModel):
     combo_id: int
     quantidade: int = Field(ge=1, default=1)
+    adicionais: Optional[List[ItemAdicionalRequest]] = Field(
+        default=None,
+        description="Lista de adicionais aplicados ao combo (por ID, sem usar código de barras)",
+    )
 
 class MeioPagamentoParcialRequest(BaseModel):
     """Define um meio de pagamento com valor parcial"""
@@ -173,6 +205,10 @@ class FinalizarPedidoRequest(BaseModel):
     cupom_id: Optional[int] = None
     troco_para: Optional[condecimal(max_digits=18, decimal_places=2)] = None
     itens: List[ItemPedidoRequest]
+    receitas: Optional[List[ReceitaPedidoRequest]] = Field(
+        default=None,
+        description="Lista de receitas selecionadas no checkout",
+    )
     combos: Optional[List[ComboPedidoRequest]] = Field(default=None, description="Lista de combos opcionais no checkout")
     mesa_codigo: Optional[str] = Field(
         default=None,

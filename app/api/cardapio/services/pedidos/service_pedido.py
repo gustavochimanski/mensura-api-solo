@@ -54,6 +54,10 @@ from app.api.empresas.repositories.empresa_repo import EmpresaRepository
 from app.utils.logger import logger
 from app.utils.database_utils import now_trimmed
 
+from app.api.catalogo.models.model_receita import ReceitaModel
+from app.api.catalogo.models.model_combo import ComboModel
+from app.api.catalogo.models.model_adicional import AdicionalModel
+
 if TYPE_CHECKING:
     from app.api.cardapio.schemas.schema_pedido_cliente import PedidoClienteListItem
 
@@ -87,7 +91,7 @@ class PedidoService:
         self.combo_contract = combo_contract
         self.response_builder = PedidoResponseBuilder()
         self.kanban_service = KanbanService(
-            db, 
+            db,
             self.repo,
             mesa_contract=mesa_contract,
             balcao_contract=balcao_contract,
@@ -387,9 +391,12 @@ class PedidoService:
 
     # ---------------- Fluxos ----------------
     async def finalizar_pedido(self, payload: FinalizarPedidoRequest, cliente_id: int) -> PedidoResponse:
-        if not payload.itens:
+        itens_normais = payload.itens or []
+        receitas_req = getattr(payload, "receitas", None) or []
+
+        if not itens_normais and not receitas_req and not (payload.combos or []):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Pedido vazio")
-        if len(payload.itens) > QTD_MAX_ITENS:
+        if (len(itens_normais) + len(receitas_req)) > QTD_MAX_ITENS:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Itens demais no pedido")
 
         meios_pagamento_list = []
@@ -456,7 +463,11 @@ class PedidoService:
             empresa = None
             empresa_id = payload.empresa_id
             if payload.tipo_entrega == TipoEntregaEnum.DELIVERY:
-                empresa, _ = self._resolver_empresa_delivery(endereco=endereco, empresa_id=empresa_id, itens=payload.itens)
+                empresa, _ = self._resolver_empresa_delivery(
+                    endereco=endereco,
+                    empresa_id=empresa_id,
+                    itens=itens_normais,
+                )
                 empresa_id = empresa.id
                 payload.empresa_id = empresa_id
             else:
@@ -481,7 +492,9 @@ class PedidoService:
             logger.info(f"[finalizar_pedido] criado pedido_id={pedido.id} cliente_id={pedido.cliente_id}")
 
             subtotal = Decimal("0")
-            for it in payload.itens:
+
+            # Itens normais (produtos com código de barras)
+            for it in itens_normais:
                 if self.produto_contract is not None:
                     pe_dto = self.produto_contract.obter_produto_emp_por_cod(empresa_id, it.produto_cod_barras)
                     if not pe_dto:
@@ -522,13 +535,47 @@ class PedidoService:
                 # Soma adicionais ao subtotal (por unidade do item)
                 subtotal += self._calcular_total_adicionais_item(empresa_id, it)
 
-            # Combos opcionais: adiciona ao subtotal e cria itens proporcionais
+            # Receitas (sem produto_cod_barras no payload, usam apenas receita_id)
+            for rec in receitas_req:
+                receita = self.db.query(ReceitaModel).filter(ReceitaModel.id == rec.receita_id).first()
+                if not receita or not receita.ativo or not receita.disponivel:
+                    raise HTTPException(
+                        status.HTTP_404_NOT_FOUND,
+                        f"Receita {rec.receita_id} não encontrada ou inativa",
+                    )
+                if receita.empresa_id != empresa_id:
+                    raise HTTPException(
+                        status.HTTP_400_BAD_REQUEST,
+                        f"Receita {rec.receita_id} não pertence à empresa {empresa_id}",
+                    )
+
+                qtd_rec = max(int(getattr(rec, "quantidade", 1) or 1), 1)
+                preco_rec = _dec(receita.preco_venda)
+                subtotal += preco_rec * qtd_rec
+
+                # Adicionais da receita (por ID)
+                adicionais_rec = getattr(rec, "adicionais", None) or []
+                subtotal += self._calcular_total_adicionais_por_ids(
+                    empresa_id=receita.empresa_id,
+                    adicionais_req=adicionais_rec,
+                    qtd_item=qtd_rec,
+                )
+
+            # Combos opcionais: adiciona ao subtotal, cria itens proporcionais e aplica adicionais de combo (se existirem)
             for cb in (payload.combos or []):
                 combo = self.combo_contract.buscar_por_id(cb.combo_id) if self.combo_contract else None
                 if not combo or not combo.ativo:
                     raise HTTPException(status.HTTP_404_NOT_FOUND, f"Combo {cb.combo_id} não encontrado ou inativo")
-                # Atualiza subtotal pelo valor do combo
-                subtotal += _dec(combo.preco_total) * cb.quantidade
+                if combo.empresa_id != empresa_id:
+                    raise HTTPException(
+                        status.HTTP_400_BAD_REQUEST,
+                        f"Combo {cb.combo_id} não pertence à empresa {empresa_id}",
+                    )
+
+                # Atualiza subtotal pelo valor base do combo
+                qtd_combo = max(int(getattr(cb, "quantidade", 1) or 1), 1)
+                subtotal += _dec(combo.preco_total) * qtd_combo
+
                 # Distribui preço do combo igualmente pelos itens do combo
                 total_unidades = sum(i.quantidade for i in combo.itens) or 1
                 preco_unit_medio = _dec(combo.preco_total) / total_unidades
@@ -536,12 +583,20 @@ class PedidoService:
                     self.repo.adicionar_item(
                         pedido_id=pedido.id,
                         cod_barras=item.produto_cod_barras,
-                        quantidade=item.quantidade * cb.quantidade,
+                        quantidade=item.quantidade * qtd_combo,
                         preco_unitario=preco_unit_medio,
                         observacao=f"Combo #{combo.id} - {combo.titulo}",
                         produto_descricao_snapshot=None,
                         produto_imagem_snapshot=None,
                     )
+
+                # Adicionais do combo (por ID, aplicados ao combo inteiro)
+                adicionais_combo = getattr(cb, "adicionais", None) or []
+                subtotal += self._calcular_total_adicionais_por_ids(
+                    empresa_id=combo.empresa_id,
+                    adicionais_req=adicionais_combo,
+                    qtd_item=qtd_combo,
+                )
             desconto = self._aplicar_cupom(
                 cupom_id=payload.cupom_id,
                 subtotal=subtotal,
@@ -1285,9 +1340,12 @@ class PedidoService:
         cliente_id: Optional[int] = None,
     ) -> PreviewCheckoutResponse:
         """Calcula o preview do checkout sem criar o pedido no banco de dados."""
-        if not payload.itens:
+        itens_normais = payload.itens or []
+        receitas_req = getattr(payload, "receitas", None) or []
+
+        if not itens_normais and not receitas_req and not (payload.combos or []):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Pedido vazio")
-        if len(payload.itens) > QTD_MAX_ITENS:
+        if (len(itens_normais) + len(receitas_req)) > QTD_MAX_ITENS:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Itens demais no pedido")
 
         endereco = None
@@ -1305,7 +1363,11 @@ class PedidoService:
         empresa_id = payload.empresa_id
         empresa = None
         if payload.tipo_entrega == TipoEntregaEnum.DELIVERY:
-            empresa, _ = self._resolver_empresa_delivery(endereco=endereco, empresa_id=empresa_id, itens=payload.itens)
+            empresa, _ = self._resolver_empresa_delivery(
+                endereco=endereco,
+                empresa_id=empresa_id,
+                itens=itens_normais,
+            )
             empresa_id = empresa.id
             payload.empresa_id = empresa_id
         else:
@@ -1316,7 +1378,9 @@ class PedidoService:
                 raise HTTPException(status.HTTP_404_NOT_FOUND, "Empresa não encontrada")
 
         subtotal = Decimal("0")
-        for item in payload.itens:
+
+        # Itens normais (produtos com código de barras)
+        for item in itens_normais:
             if self.produto_contract is not None:
                 pe_dto = self.produto_contract.obter_produto_emp_por_cod(empresa_id, item.produto_cod_barras)
                 if not pe_dto:
@@ -1339,12 +1403,51 @@ class PedidoService:
                 subtotal += preco * item.quantidade
                 subtotal += self._calcular_total_adicionais_item(empresa_id, item)
 
-        # Combos opcionais no preview
+        # Receitas no preview
+        for rec in receitas_req:
+            receita = self.db.query(ReceitaModel).filter(ReceitaModel.id == rec.receita_id).first()
+            if not receita or not receita.ativo or not receita.disponivel:
+                raise HTTPException(
+                    status.HTTP_404_NOT_FOUND,
+                    f"Receita {rec.receita_id} não encontrada ou inativa",
+                )
+            if receita.empresa_id != empresa_id:
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    f"Receita {rec.receita_id} não pertence à empresa {empresa_id}",
+                )
+
+            qtd_rec = max(int(getattr(rec, "quantidade", 1) or 1), 1)
+            preco_rec = _dec(receita.preco_venda)
+            subtotal += preco_rec * qtd_rec
+
+            adicionais_rec = getattr(rec, "adicionais", None) or []
+            subtotal += self._calcular_total_adicionais_por_ids(
+                empresa_id=receita.empresa_id,
+                adicionais_req=adicionais_rec,
+                qtd_item=qtd_rec,
+            )
+
+        # Combos opcionais no preview (base + adicionais de combo, se existirem)
         for cb in (payload.combos or []):
             combo = self.combo_contract.buscar_por_id(cb.combo_id) if self.combo_contract else None
             if not combo or not combo.ativo:
                 raise HTTPException(status.HTTP_404_NOT_FOUND, f"Combo {cb.combo_id} não encontrado ou inativo")
-            subtotal += _dec(combo.preco_total) * cb.quantidade
+            if combo.empresa_id != empresa_id:
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    f"Combo {cb.combo_id} não pertence à empresa {empresa_id}",
+                )
+
+            qtd_combo = max(int(getattr(cb, "quantidade", 1) or 1), 1)
+            subtotal += _dec(combo.preco_total) * qtd_combo
+
+            adicionais_combo = getattr(cb, "adicionais", None) or []
+            subtotal += self._calcular_total_adicionais_por_ids(
+                empresa_id=combo.empresa_id,
+                adicionais_req=adicionais_combo,
+                qtd_item=qtd_combo,
+            )
 
         desconto = self._aplicar_cupom(
             cupom_id=payload.cupom_id,
@@ -1435,3 +1538,68 @@ class PedidoService:
 
         # preço dos adicionais multiplicado pela quantidade do item
         return total_por_unidade * max(int(getattr(item_req, "quantidade", 1) or 1), 1)
+
+    def _calcular_total_adicionais_por_ids(
+        self,
+        empresa_id: int,
+        adicionais_req,
+        qtd_item: int = 1,
+    ) -> Decimal:
+        """
+        Calcula o total de adicionais com base apenas em seus IDs e quantidades.
+
+        Usado para:
+        - receitas: adicionais vinculados à receita (sem código de barras)
+        - combos: adicionais aplicados ao combo inteiro
+        """
+        adicionais_req = adicionais_req or []
+        if not adicionais_req:
+            return Decimal("0")
+
+        adicional_ids: list[int] = []
+        for a in adicionais_req:
+            ad_id = getattr(a, "adicional_id", None)
+            if ad_id is not None:
+                adicional_ids.append(ad_id)
+
+        if not adicional_ids:
+            return Decimal("0")
+
+        adicionais_db = (
+            self.db.query(AdicionalModel)
+            .filter(
+                AdicionalModel.id.in_(adicional_ids),
+                AdicionalModel.empresa_id == empresa_id,
+                AdicionalModel.ativo.is_(True),
+            )
+            .all()
+        )
+
+        if not adicionais_db:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                f"Nenhum adicional encontrado para a empresa {empresa_id}.",
+            )
+
+        precos_por_id: dict[int, Decimal] = {a.id: _dec(a.preco) for a in adicionais_db}
+
+        total_por_unidade = Decimal("0")
+        for req in adicionais_req:
+            ad_id = getattr(req, "adicional_id", None)
+            if ad_id is None:
+                continue
+            if ad_id not in precos_por_id:
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    f"Adicional {ad_id} não encontrado ou não pertence à empresa {empresa_id}.",
+                )
+            try:
+                qtd = int(getattr(req, "quantidade", 1) or 1)
+            except (TypeError, ValueError):
+                qtd = 1
+            if qtd < 1:
+                qtd = 1
+            total_por_unidade += precos_por_id[ad_id] * qtd
+
+        qtd_item = max(int(qtd_item or 1), 1)
+        return total_por_unidade * qtd_item
