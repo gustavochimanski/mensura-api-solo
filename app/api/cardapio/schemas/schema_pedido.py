@@ -109,11 +109,30 @@ class ModoEdicaoRequest(BaseModel):
 # ======================================================================
 # ============================ CLIENTE =================================
 # ======================================================================
+
+
+class ItemAdicionalRequest(BaseModel):
+    """Adicional vinculado a um item do pedido, com quantidade."""
+    adicional_id: int
+    quantidade: int = Field(ge=1, default=1, description="Quantidade deste adicional para o item")
+
+
 class ItemPedidoRequest(BaseModel):
     produto_cod_barras: str
     quantidade: int
     observacao: Optional[str] = None
-    adicionais_ids: Optional[List[int]] = Field(default=None, description="IDs de adicionais vinculados ao produto")
+
+    # Novo formato: adicionais com quantidade
+    adicionais: Optional[List[ItemAdicionalRequest]] = Field(
+        default=None,
+        description="Lista de adicionais do item, com quantidade por adicional",
+    )
+
+    # LEGADO: manter por compatibilidade (apenas IDs, quantidade = 1 por adicional)
+    adicionais_ids: Optional[List[int]] = Field(
+        default=None,
+        description="(LEGADO) IDs de adicionais vinculados ao produto; quantidade implícita = 1",
+    )
 
 
 class ComboPedidoRequest(BaseModel):
@@ -146,7 +165,6 @@ class FinalizarPedidoRequest(BaseModel):
     empresa_id: Optional[int] = None
     cliente_id: Optional[str] = None  # agora será setado pelo token
     endereco_id: Optional[int] = None  # Opcional para permitir retirada
-    meio_pagamento_id: Optional[int] = None  # Opcional (mantido para compatibilidade)
     meios_pagamento: Optional[List[MeioPagamentoParcialRequest]] = None  # Lista de meios de pagamento
     tipo_entrega: TipoEntregaEnum = TipoEntregaEnum.DELIVERY
     tipo_pedido: TipoPedidoCheckoutEnum = TipoPedidoCheckoutEnum.DELIVERY

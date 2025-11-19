@@ -1375,19 +1375,63 @@ class PedidoService:
     # --------------- Itens auxiliares ---------------
     def _montar_observacao_item(self, item_req):
         obs = item_req.observacao or None
-        adicional_ids = getattr(item_req, "adicionais_ids", None)
+        # Suporta tanto o formato novo (adicionais com quantidade)
+        # quanto o legado (apenas lista de IDs).
+        adicionais_request = getattr(item_req, "adicionais", None)
+        adicional_ids = None
+        if adicionais_request:
+            # Novo formato: objetos com adicional_id
+            adicional_ids = [a.adicional_id for a in adicionais_request]
+        else:
+            # Formato legado: lista simples de IDs
+            adicional_ids = getattr(item_req, "adicionais_ids", None)
+
         if adicional_ids and self.adicional_contract:
-            adicionais = self.adicional_contract.buscar_por_ids_para_produto(item_req.produto_cod_barras, adicional_ids)
+            adicionais = self.adicional_contract.buscar_por_ids_para_produto(
+                item_req.produto_cod_barras,
+                adicional_ids,
+            )
             if adicionais:
                 nomes = ", ".join(a.nome for a in adicionais)
                 obs = (obs + " | " if obs else "") + f"Adicionais: {nomes}"
         return obs
 
     def _calcular_total_adicionais_item(self, empresa_id: int, item_req) -> Decimal:
-        adicional_ids = getattr(item_req, "adicionais_ids", None) or []
+        # Suporta tanto o formato novo (adicionais com quantidade)
+        # quanto o legado (apenas lista de IDs, quantidade = 1).
+        adicionais_request = getattr(item_req, "adicionais", None)
+        if adicionais_request:
+            adicional_ids = [a.adicional_id for a in adicionais_request]
+        else:
+            adicional_ids = getattr(item_req, "adicionais_ids", None) or []
+
         if not adicional_ids or not self.adicional_contract:
             return Decimal("0")
-        adicionais = self.adicional_contract.buscar_por_ids_para_produto(item_req.produto_cod_barras, adicional_ids)
-        total = sum(_dec(a.preco) for a in adicionais)
+        adicionais = self.adicional_contract.buscar_por_ids_para_produto(
+            item_req.produto_cod_barras,
+            adicional_ids,
+        )
+
+        # Mapa de quantidade por adicional (novo formato)
+        quantidades_por_id: dict[int, int] = {}
+        if adicionais_request:
+            for req in adicionais_request:
+                try:
+                    qtd = int(req.quantidade or 1)
+                except (TypeError, ValueError):
+                    qtd = 1
+                if qtd < 1:
+                    qtd = 1
+                quantidades_por_id[req.adicional_id] = qtd
+        else:
+            # Formato legado: cada adicional conta como 1
+            quantidades_por_id = {ad_id: 1 for ad_id in adicional_ids}
+
+        # Total por unidade do item (considerando quantidade de cada adicional)
+        total_por_unidade = Decimal("0")
+        for adicional in adicionais:
+            qtd = quantidades_por_id.get(getattr(adicional, "id", None), 1)
+            total_por_unidade += _dec(adicional.preco) * qtd
+
         # preço dos adicionais multiplicado pela quantidade do item
-        return total * max(int(getattr(item_req, "quantidade", 1) or 1), 1)
+        return total_por_unidade * max(int(getattr(item_req, "quantidade", 1) or 1), 1)

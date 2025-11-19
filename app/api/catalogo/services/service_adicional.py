@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from decimal import Decimal
 
 from app.api.catalogo.models.model_adicional import AdicionalModel
+from app.api.catalogo.models.model_receita import ReceitaModel
 from app.api.catalogo.repositories.repo_adicional import AdicionalRepository
 from app.api.catalogo.schemas.schema_adicional import (
     AdicionalResponse,
@@ -13,6 +14,7 @@ from app.api.catalogo.schemas.schema_adicional import (
 )
 from app.api.empresas.repositories.empresa_repo import EmpresaRepository
 from app.api.catalogo.repositories.repo_produto import ProdutoMensuraRepository
+from app.api.catalogo.repositories.repo_combo import ComboRepository
 
 
 class AdicionalService:
@@ -23,6 +25,7 @@ class AdicionalService:
         self.repo = AdicionalRepository(db)
         self.repo_empresa = EmpresaRepository(db)
         self.repo_produto = ProdutoMensuraRepository(db)
+        self.repo_combo = ComboRepository(db)
 
     def _empresa_or_404(self, empresa_id: int):
         """Valida se a empresa existe."""
@@ -157,4 +160,53 @@ class AdicionalService:
         
         adicionais = self.repo.listar_por_produto(cod_barras, apenas_ativos)
         return [AdicionalResponse.model_validate(a) for a in adicionais]
+
+    def listar_adicionais_combo(self, combo_id: int, apenas_ativos: bool = True) -> List[AdicionalResponse]:
+        """
+        Lista adicionais aplicáveis a um combo.
+
+        A regra atual é: agregamos os adicionais de todos os produtos
+        que compõem o combo e retornamos o conjunto único.
+        """
+        combo = self.repo_combo.get_by_id(combo_id)
+        if not combo or not combo.ativo:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Combo não encontrado."
+            )
+
+        adicionais_map: dict[int, AdicionalModel] = {}
+        for item in combo.itens:
+            if not item.produto_cod_barras:
+                continue
+            adicionais_produto = self.repo.listar_por_produto(
+                item.produto_cod_barras,
+                apenas_ativos=apenas_ativos,
+            )
+            for adicional in adicionais_produto:
+                adicionais_map[adicional.id] = adicional
+
+        return [AdicionalResponse.model_validate(a) for a in adicionais_map.values()]
+
+    def listar_adicionais_receita(self, receita_id: int, apenas_ativos: bool = True) -> List[AdicionalResponse]:
+        """
+        Lista adicionais vinculados a uma receita (ReceitaAdicionalModel -> AdicionalModel).
+        """
+        receita = self.db.query(ReceitaModel).filter(ReceitaModel.id == receita_id).first()
+        if not receita or not receita.ativo:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Receita não encontrada."
+            )
+
+        adicionais_models: dict[int, AdicionalModel] = {}
+        for vinculo in receita.adicionais:
+            adicional = vinculo.adicional
+            if not adicional:
+                continue
+            if apenas_ativos and not adicional.ativo:
+                continue
+            adicionais_models[adicional.id] = adicional
+
+        return [AdicionalResponse.model_validate(a) for a in adicionais_models.values()]
 
