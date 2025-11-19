@@ -272,11 +272,23 @@ class FinalizarPedidoRequest(BaseModel):
 
     @model_validator(mode="after")
     def _ajustar_tipo_e_validar(self):
-        # Garante que há pelo menos um item em produtos.itens ou em itens (legado)
-        itens_novos = (self.produtos.itens if self.produtos and self.produtos.itens is not None else []) if hasattr(self, "produtos") else []
+        # Garante que existe pelo menos UM produto (item normal, receita ou combo),
+        # mas não obriga que existam itens "normais". Pode ser só receita ou só combo.
+        produtos_payload = getattr(self, "produtos", None)
+        itens_novos = produtos_payload.itens if produtos_payload and produtos_payload.itens is not None else []
+        receitas_novas = produtos_payload.receitas if produtos_payload and produtos_payload.receitas is not None else []
+        combos_novos = produtos_payload.combos if produtos_payload and produtos_payload.combos is not None else []
+
         itens_legados = self.itens or []
-        if not itens_novos and not itens_legados:
-            raise ValueError("É obrigatório informar ao menos um item em 'produtos.itens' ou em 'itens'.")
+        receitas_legadas = self.receitas or []
+        combos_legados = self.combos or []
+
+        if not (itens_novos or receitas_novas or combos_novos or itens_legados or receitas_legadas or combos_legados):
+            raise ValueError(
+                "É obrigatório informar ao menos um produto em "
+                "'produtos.itens', 'produtos.receitas', 'produtos.combos' "
+                "ou nos campos legados 'itens', 'receitas', 'combos'."
+            )
 
         if self.tipo_pedido in {TipoPedidoCheckoutEnum.MESA, TipoPedidoCheckoutEnum.BALCAO}:
             # Força tipo_entrega como RETIRADA para fluxos não delivery
