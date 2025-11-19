@@ -3,19 +3,14 @@
 from fastapi import APIRouter, Depends
 
 from app.api.cadastros.router.admin import (
-    router_adicionais,
     router_categorias,
     router_clientes,
-    router_combos,
     router_entregadores,
     router_meio_pagamento,
     router_parceiros,
-    router_produtos,
     router_regiao_entrega,
-    router_receitas,
 )
 from app.api.cadastros.router.client import (
-    router_adicionais as router_adicionais_client,
     router_categorias as router_categorias_client,
     router_clientes as router_clientes_client,
     router_enderecos as router_enderecos_client,
@@ -34,21 +29,16 @@ api_cadastros = APIRouter(
 api_cadastros.include_router(router_parceiros_public)
 
 # Routers para clientes (usam super_token)
-api_cadastros.include_router(router_adicionais_client)
 api_cadastros.include_router(router_categorias_client)
 api_cadastros.include_router(router_clientes_client)
 api_cadastros.include_router(router_enderecos_client)
 api_cadastros.include_router(router_meio_pagamento_client)
 
 # Routers para admin (usam get_current_user)
-api_cadastros.include_router(router_adicionais)
 api_cadastros.include_router(router_categorias)
 api_cadastros.include_router(router_clientes)
-api_cadastros.include_router(router_combos)
 api_cadastros.include_router(router_entregadores)
 api_cadastros.include_router(router_meio_pagamento)
 api_cadastros.include_router(router_parceiros)
-api_cadastros.include_router(router_produtos)
 api_cadastros.include_router(router_regiao_entrega)
-api_cadastros.include_router(router_receitas)
 

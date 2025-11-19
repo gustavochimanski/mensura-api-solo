@@ -17,6 +17,26 @@ router = APIRouter(
 )
 
 
+@router.get("/produto/{cod_barras}", response_model=List[AdicionalResponse])
+def listar_adicionais_produto(
+    cod_barras: str,
+    apenas_ativos: bool = Query(True),
+    db: Session = Depends(get_db),
+    cliente: ClienteModel = Depends(get_cliente_by_super_token),
+):
+    """
+    Lista todos os adicionais disponíveis para um produto específico.
+
+    Equivalente à rota antiga de cadastros, mas exposta no contexto de catálogo.
+
+    Requer autenticação via header `X-Super-Token` do cliente.
+    Retorna apenas adicionais ativos (a menos que apenas_ativos=false).
+    """
+    logger.info(f"[Adicionais Catalogo Client] Listar por produto - produto={cod_barras} cliente={cliente.id}")
+    service = AdicionalService(db)
+    return service.listar_adicionais_produto(cod_barras, apenas_ativos)
+
+
 @router.get("/combo/{combo_id}", response_model=List[AdicionalResponse])
 def listar_adicionais_combo(
     combo_id: int,
