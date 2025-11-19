@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from functools import lru_cache
 
 from app.core.admin_dependencies import get_current_user
+from app.core.client_dependecies import get_cliente_by_super_token
 from app.api.localizacao.adapters.google_maps_adapter import GoogleMapsAdapter
 from app.utils.logger import logger
 
@@ -133,6 +134,40 @@ def calcular_distancia(
         "distancia_km": round(distancia_km, 3),
         "mode": payload.mode
     }
+
+
+# ──────────────────────────────────────────────────────────────
+# ENDPOINTS PARA CLIENTES (usam X-Super-Token)
+# ──────────────────────────────────────────────────────────────
+
+
+@router.get("/client/buscar-endereco", status_code=status.HTTP_200_OK)
+def buscar_endereco_client(
+    text: str = Query(..., description="Texto para buscar endereços"),
+    max_results: int = Query(5, ge=1, le=10, description="Número máximo de resultados"),
+    google_adapter: GoogleMapsAdapter = Depends(get_google_maps_adapter),
+    _cliente = Depends(get_cliente_by_super_token),
+):
+    """
+    Busca endereços baseado em um texto de busca.
+    
+    Retorna uma lista de endereços encontrados com suas coordenadas.
+    
+    Requer autenticação via header `X-Super-Token` do cliente.
+    """
+    logger.info(f"[Localizacao] [CLIENT] Buscando endereços para: {text}")
+    
+    # Verifica se a API key está configurada
+    if not google_adapter.api_key:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Serviço de geolocalização não configurado. Verifique a configuração da API key do Google Maps."
+        )
+    
+    resultados = google_adapter.buscar_enderecos(text, max_results=max_results)
+    
+    # Sempre retorna uma lista (array), mesmo que vazia, para o front renderizar
+    return resultados
 
 
 
