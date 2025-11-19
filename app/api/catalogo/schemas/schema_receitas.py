@@ -20,7 +20,7 @@ class ReceitaOut(BaseModel):
     nome: str
     descricao: Optional[str] = None
     preco_venda: Decimal
-    custo: Decimal
+    custo_total: Decimal
     imagem: Optional[str] = None
     ativo: bool
     disponivel: bool
@@ -75,7 +75,7 @@ class ReceitaComIngredientesOut(BaseModel):
     nome: str
     descricao: Optional[str] = None
     preco_venda: Decimal
-    custo: Decimal
+    custo_total: Decimal
     imagem: Optional[str] = None
     ativo: bool
     disponivel: bool

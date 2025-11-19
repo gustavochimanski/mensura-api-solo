@@ -20,25 +20,25 @@ class ReceitasService:
     # Receitas - CRUD completo
     def create_receita(self, data: ReceitaIn):
         receita = self.repo.create_receita(data)
-        # Calcula o custo após criar a receita
-        custo = self.repo.calcular_custo_receita(receita.id)
-        receita.custo = custo
+        # Calcula o custo_total após criar a receita baseado no custo dos ingredientes
+        custo_total = self.repo.calcular_custo_receita(receita.id)
+        receita.custo_total = custo_total
         return receita
 
     def get_receita(self, receita_id: int):
         receita = self.repo.get_receita_by_id(receita_id)
         if receita:
-            # Calcula o custo da receita
-            custo = self.repo.calcular_custo_receita(receita_id)
-            receita.custo = custo
+            # Calcula o custo_total da receita baseado no custo dos ingredientes
+            custo_total = self.repo.calcular_custo_receita(receita_id)
+            receita.custo_total = custo_total
         return receita
 
     def list_receitas(self, empresa_id: Optional[int] = None, ativo: Optional[bool] = None):
         receitas = self.repo.list_receitas(empresa_id=empresa_id, ativo=ativo)
-        # Calcula o custo para cada receita
+        # Calcula o custo_total para cada receita baseado no custo dos ingredientes
         for receita in receitas:
-            custo = self.repo.calcular_custo_receita(receita.id)
-            receita.custo = custo
+            custo_total = self.repo.calcular_custo_receita(receita.id)
+            receita.custo_total = custo_total
         return receitas
     
     def list_receitas_com_ingredientes(self, empresa_id: Optional[int] = None, ativo: Optional[bool] = None) -> List[ReceitaComIngredientesOut]:
@@ -62,8 +62,8 @@ class ReceitasService:
                 )
                 ingredientes_detalhados.append(ingrediente_detalhado)
             
-            # Calcula o custo da receita
-            custo = self.repo.calcular_custo_receita(receita.id)
+            # Calcula o custo_total da receita baseado no custo dos ingredientes
+            custo_total = self.repo.calcular_custo_receita(receita.id)
             
             # Cria objeto de resposta com ingredientes
             receita_com_ingredientes = ReceitaComIngredientesOut(
@@ -72,7 +72,7 @@ class ReceitasService:
                 nome=receita.nome,
                 descricao=receita.descricao,
                 preco_venda=receita.preco_venda,
-                custo=custo,
+                custo_total=custo_total,
                 imagem=receita.imagem,
                 ativo=receita.ativo,
                 disponivel=receita.disponivel,
@@ -86,9 +86,9 @@ class ReceitasService:
 
     def update_receita(self, receita_id: int, data: ReceitaUpdate):
         receita = self.repo.update_receita(receita_id, data)
-        # Calcula o custo após atualizar a receita
-        custo = self.repo.calcular_custo_receita(receita_id)
-        receita.custo = custo
+        # Calcula o custo_total após atualizar a receita baseado no custo dos ingredientes
+        custo_total = self.repo.calcular_custo_receita(receita_id)
+        receita.custo_total = custo_total
         return receita
 
     def delete_receita(self, receita_id: int):
