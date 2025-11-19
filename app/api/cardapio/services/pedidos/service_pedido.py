@@ -404,18 +404,19 @@ class PedidoService:
         
         if payload.meios_pagamento and len(payload.meios_pagamento) > 0:
             for mp in payload.meios_pagamento:
-                mp_obj = MeioPagamentoService(self.db).get(mp.meio_pagamento_id)
+                # Suporta tanto mp.id (novo) quanto mp.meio_pagamento_id (legado)
+                mp_id = getattr(mp, "id", None) or getattr(mp, "meio_pagamento_id", None)
+                if mp_id is None:
+                    raise HTTPException(400, "ID do meio de pagamento é obrigatório em 'meios_pagamento'.")
+                mp_obj = MeioPagamentoService(self.db).get(mp_id)
                 if not mp_obj or not mp_obj.ativo:
-                    raise HTTPException(400, f"Meio de pagamento {mp.meio_pagamento_id} inválido ou inativo")
+                    raise HTTPException(400, f"Meio de pagamento {mp_id} inválido ou inativo")
                 meios_pagamento_list.append({
                     'meio_pagamento': mp_obj,
                     'valor': mp.valor
                 })
+            # Para compatibilidade, considera o primeiro meio de pagamento como principal
             meio_pagamento = meios_pagamento_list[0]['meio_pagamento']
-        elif payload.meio_pagamento_id:
-            meio_pagamento = MeioPagamentoService(self.db).get(payload.meio_pagamento_id)
-            if not meio_pagamento or not meio_pagamento.ativo:
-                raise HTTPException(400, "Meio de pagamento inválido ou inativo")
 
         cliente = self.repo.get_cliente_by_id(cliente_id)
         if not cliente:
@@ -481,7 +482,7 @@ class PedidoService:
                 cliente_id=cliente.id,
                 empresa_id=empresa_id,
                 endereco_id=payload.endereco_id,
-                meio_pagamento_id=payload.meio_pagamento_id,
+                meio_pagamento_id=getattr(meio_pagamento, "id", None) if meio_pagamento is not None else None,
                 status=status_inicial,
                 tipo_entrega=payload.tipo_entrega.value if hasattr(payload.tipo_entrega, "value") else payload.tipo_entrega,
                 origem=payload.origem.value if hasattr(payload.origem, "value") else payload.origem,

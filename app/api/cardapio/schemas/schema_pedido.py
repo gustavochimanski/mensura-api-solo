@@ -173,8 +173,22 @@ class ComboPedidoRequest(BaseModel):
 
 class MeioPagamentoParcialRequest(BaseModel):
     """Define um meio de pagamento com valor parcial"""
-    meio_pagamento_id: int
+    id: Optional[int] = Field(
+        default=None,
+        description="ID do meio de pagamento (novo campo preferencial)",
+    )
+    meio_pagamento_id: Optional[int] = Field(
+        default=None,
+        description="(LEGADO) ID do meio de pagamento; será descontinuado",
+    )
     valor: condecimal(max_digits=18, decimal_places=2)
+
+    @model_validator(mode="after")
+    def _validar_ids(self):
+        # Garante que pelo menos um identificador foi enviado
+        if self.id is None and self.meio_pagamento_id is None:
+            raise ValueError("Informe 'id' ou 'meio_pagamento_id' para o meio de pagamento.")
+        return self
 
 class PreviewCheckoutResponse(BaseModel):
     """Schema de resposta para preview do checkout (sem criar pedido)"""
