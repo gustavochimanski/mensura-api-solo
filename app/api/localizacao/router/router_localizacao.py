@@ -144,18 +144,18 @@ def calcular_distancia(
 @router.get("/client/buscar-endereco", status_code=status.HTTP_200_OK)
 def buscar_endereco_client(
     text: str = Query(..., description="Texto para buscar endereços"),
-    max_results: int = Query(5, ge=1, le=10, description="Número máximo de resultados"),
+    max_results: int = Query(10, ge=1, le=10, description="Número máximo de resultados"),
     google_adapter: GoogleMapsAdapter = Depends(get_google_maps_adapter),
     _cliente = Depends(get_cliente_by_super_token),
 ):
     """
     Busca endereços baseado em um texto de busca.
     
-    Retorna uma lista de endereços encontrados com suas coordenadas.
+    Retorna uma lista de endereços encontrados com suas coordenadas (até 10 resultados por padrão).
     
     Requer autenticação via header `X-Super-Token` do cliente.
     """
-    logger.info(f"[Localizacao] [CLIENT] Buscando endereços para: {text}")
+    logger.info(f"[Localizacao] [CLIENT] Buscando endereços para: {text} max_results={max_results}")
     
     # Verifica se a API key está configurada
     if not google_adapter.api_key:
@@ -167,6 +167,7 @@ def buscar_endereco_client(
     resultados = google_adapter.buscar_enderecos(text, max_results=max_results)
     
     # Sempre retorna uma lista (array), mesmo que vazia, para o front renderizar
+    logger.info(f"[Localizacao] [CLIENT] Retornando {len(resultados)} resultado(s) para: {text}")
     return resultados
 
 
