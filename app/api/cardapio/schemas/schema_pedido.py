@@ -185,6 +185,7 @@ class PreviewCheckoutResponse(BaseModel):
     desconto: float
     distancia_km: Optional[float] = None
     empresa_id: Optional[int] = None
+    tempo_entrega_minutos: Optional[float] = None
 
 
 class TipoPedidoCheckoutEnum(str, Enum):

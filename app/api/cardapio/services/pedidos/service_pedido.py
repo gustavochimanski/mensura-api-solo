@@ -1465,6 +1465,14 @@ class PedidoService:
 
         valor_total = subtotal - desconto + taxa_entrega + taxa_servico
 
+        # Tempo estimado de entrega em minutos (baseado na configuração da empresa)
+        tempo_entrega_minutos = None
+        if empresa is not None and getattr(empresa, "tempo_entrega_maximo", None) is not None:
+            try:
+                tempo_entrega_minutos = float(empresa.tempo_entrega_maximo)
+            except (TypeError, ValueError):
+                tempo_entrega_minutos = None
+
         return PreviewCheckoutResponse(
             subtotal=float(subtotal),
             taxa_entrega=float(taxa_entrega),
@@ -1473,6 +1481,7 @@ class PedidoService:
             desconto=float(desconto),
             distancia_km=float(distancia_km) if distancia_km is not None else None,
             empresa_id=empresa_id,
+            tempo_entrega_minutos=tempo_entrega_minutos,
         )
 
     # --------------- Itens auxiliares ---------------
