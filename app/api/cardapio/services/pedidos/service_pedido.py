@@ -248,6 +248,16 @@ class PedidoService:
             if distancia is None:
                 continue
 
+            # Verifica se a distância calculada está dentro de uma faixa cadastrada
+            from decimal import Decimal
+            distancia_decimal = Decimal(str(distancia))
+            regiao_encontrada = self.taxa_service.regiao_contract.obter_regiao_por_distancia(
+                empresa.id, distancia_decimal
+            )
+            if not regiao_encontrada:
+                # Esta empresa não atende nesta distância, pula para a próxima
+                continue
+
             if menor_distancia is None or distancia < menor_distancia:
                 menor_distancia = distancia
                 melhor_empresa = empresa

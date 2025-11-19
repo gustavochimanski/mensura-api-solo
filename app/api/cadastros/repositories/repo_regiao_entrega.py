@@ -44,6 +44,8 @@ class RegiaoEntregaRepository:
                 RegiaoEntregaModel.ativo == True,
             )
             .filter(
+                # Verifica se a distância está dentro do intervalo da faixa
+                RegiaoEntregaModel.distancia_min_km <= distancia,
                 or_(
                     RegiaoEntregaModel.distancia_max_km.is_(None),
                     RegiaoEntregaModel.distancia_max_km >= distancia,
