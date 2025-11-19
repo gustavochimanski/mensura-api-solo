@@ -144,8 +144,8 @@ class PedidoService:
         subtotal: Decimal,
         endereco=None,
         empresa_id: int | None = None,
-    ) -> tuple[Decimal, Decimal, Optional[Decimal]]:
-        """Wrapper para manter compatibilidade com código existente."""
+    ) -> tuple[Decimal, Decimal, Optional[Decimal], Optional[int]]:
+        """Wrapper para cálculo de taxas e distância."""
         return self.taxa_service.calcular_taxas(
             tipo_entrega=tipo_entrega,
             subtotal=subtotal,
@@ -370,7 +370,7 @@ class PedidoService:
         )
 
         endereco = pedido.endereco
-        taxa_entrega, taxa_servico, distancia_km = self._calcular_taxas(
+        taxa_entrega, taxa_servico, distancia_km, _ = self._calcular_taxas(
             tipo_entrega=pedido.tipo_entrega if isinstance(pedido.tipo_entrega, TipoEntregaEnum)
                         else TipoEntregaEnum(pedido.tipo_entrega),
             subtotal=subtotal,
@@ -602,7 +602,7 @@ class PedidoService:
                 subtotal=subtotal,
                 empresa_id=empresa_id,
             )
-            taxa_entrega, taxa_servico, distancia_km = self._calcular_taxas(
+            taxa_entrega, taxa_servico, distancia_km, _ = self._calcular_taxas(
                 tipo_entrega=payload.tipo_entrega if isinstance(payload.tipo_entrega, TipoEntregaEnum)
                             else TipoEntregaEnum(payload.tipo_entrega),
                 subtotal=subtotal,
@@ -1071,7 +1071,7 @@ class PedidoService:
                 subtotal=subtotal,
                 empresa_id=pedido.empresa_id,
             )
-            taxa_entrega, taxa_servico, distancia_km = self._calcular_taxas(
+            taxa_entrega, taxa_servico, distancia_km, _ = self._calcular_taxas(
                 tipo_entrega=pedido.tipo_entrega if isinstance(pedido.tipo_entrega, TipoEntregaEnum)
                             else TipoEntregaEnum(pedido.tipo_entrega),
                 subtotal=subtotal,
@@ -1113,7 +1113,7 @@ class PedidoService:
             subtotal=subtotal,
             empresa_id=pedido.empresa_id,
         )
-        taxa_entrega, taxa_servico, distancia_km = self._calcular_taxas(
+        taxa_entrega, taxa_servico, distancia_km, _ = self._calcular_taxas(
             tipo_entrega=pedido.tipo_entrega if isinstance(pedido.tipo_entrega, TipoEntregaEnum)
                         else TipoEntregaEnum(pedido.tipo_entrega),
             subtotal=subtotal,
@@ -1455,7 +1455,7 @@ class PedidoService:
             empresa_id=empresa_id,
         )
 
-        taxa_entrega, taxa_servico, distancia_km = self._calcular_taxas(
+        taxa_entrega, taxa_servico, distancia_km, tempo_estimado_min = self._calcular_taxas(
             tipo_entrega=payload.tipo_entrega if isinstance(payload.tipo_entrega, TipoEntregaEnum)
                         else TipoEntregaEnum(payload.tipo_entrega),
             subtotal=subtotal,
@@ -1465,9 +1465,15 @@ class PedidoService:
 
         valor_total = subtotal - desconto + taxa_entrega + taxa_servico
 
-        # Tempo estimado de entrega em minutos (baseado na configuração da empresa)
+        # Tempo estimado de entrega em minutos, baseado na região de entrega (faixa).
+        # Fallback: se não houver tempo configurado na faixa, usa tempo_entrega_maximo da empresa (se existir).
         tempo_entrega_minutos = None
-        if empresa is not None and getattr(empresa, "tempo_entrega_maximo", None) is not None:
+        if tempo_estimado_min is not None:
+            try:
+                tempo_entrega_minutos = float(tempo_estimado_min)
+            except (TypeError, ValueError):
+                tempo_entrega_minutos = None
+        elif empresa is not None and getattr(empresa, "tempo_entrega_maximo", None) is not None:
             try:
                 tempo_entrega_minutos = float(empresa.tempo_entrega_maximo)
             except (TypeError, ValueError):

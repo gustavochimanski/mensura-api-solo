@@ -12,6 +12,7 @@ class RegiaoEntregaDTO(BaseModel):
     distancia_max_km: Optional[Decimal] = None
     taxa_entrega: Decimal
     ativo: bool
+    tempo_estimado_min: Optional[int] = None
 
 
 class IRegiaoEntregaContract(ABC):

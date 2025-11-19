@@ -24,6 +24,7 @@ class RegiaoEntregaAdapter(IRegiaoEntregaContract):
             distancia_max_km=r.distancia_max_km,
             taxa_entrega=r.taxa_entrega,
             ativo=bool(r.ativo),
+            tempo_estimado_min=getattr(r, "tempo_estimado_min", None),
         )
 
     def obter_regiao_por_distancia(self, empresa_id: int, distancia_km: Decimal) -> Optional[RegiaoEntregaDTO]:

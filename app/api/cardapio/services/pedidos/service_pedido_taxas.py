@@ -57,11 +57,12 @@ class TaxaService:
         subtotal: Decimal,
         endereco=None,
         empresa_id: int | None = None,
-    ) -> tuple[Decimal, Decimal, Optional[Decimal]]:
-        """Calcula taxa de entrega, taxa de serviço e distância em km."""
+    ) -> tuple[Decimal, Decimal, Optional[Decimal], Optional[int]]:
+        """Calcula taxa de entrega, taxa de serviço, distância em km e tempo estimado (minutos)."""
 
         taxa_entrega = _dec(0)
         distancia_km: Optional[Decimal] = None
+        tempo_estimado_min: Optional[int] = None
 
         if tipo_entrega == TipoEntregaEnum.DELIVERY:
             if not empresa_id:
@@ -97,9 +98,11 @@ class TaxaService:
                 )
 
             taxa_entrega = _dec(regiao_encontrada.taxa_entrega)
+            # Tempo estimado configurado na região (minutos)
+            tempo_estimado_min = getattr(regiao_encontrada, "tempo_estimado_min", None)
 
         taxa_servico = (subtotal * Decimal("0.01")).quantize(Decimal("0.01"))
-        return taxa_entrega, taxa_servico, distancia_km
+        return taxa_entrega, taxa_servico, distancia_km, tempo_estimado_min
 
     def _calcular_distancia_km(self, empresa_id: int, endereco) -> Optional[Decimal]:
         origem_coords = self._obter_coordenadas_empresa(empresa_id)
