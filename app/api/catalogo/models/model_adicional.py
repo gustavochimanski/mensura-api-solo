@@ -11,7 +11,7 @@ class AdicionalModel(Base):
     __table_args__ = {"schema": "catalogo"}
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    
+    #
     # Vinculado a uma empresa
     empresa_id = Column(Integer, nullable=False, index=True)  # Sem FK para evitar dependência circular
     
