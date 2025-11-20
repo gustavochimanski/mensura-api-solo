@@ -248,7 +248,7 @@ def criar_endereco_cliente(
     
     return EnderecoOut.model_validate(novo_endereco)
 
-@router.get("/{cliente_id}/update-endereco", response_model=List[EnderecoOut])
+@router.get("/{cliente_id}/enderecos", response_model=List[EnderecoOut])
 def get_enderecos_cliente(
     cliente_id: int = Path(..., description="ID do cliente para consultar endereços"),
     current_user = Depends(get_current_user),
