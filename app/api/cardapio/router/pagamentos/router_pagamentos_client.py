@@ -26,16 +26,16 @@ async def confirmar_pagamento(
     cliente: ClienteModel = Depends(get_cliente_by_super_token),
     svc: PedidoService = Depends(get_pedido_service),
 ):
-    logger.info(
-        f"[Pagamentos] Confirmar pagamento - pedido_id={pedido_id} metodo={metodo} gateway={gateway}"
-    )
-    pedido = svc.repo.get_pedido(pedido_id)
-    if not pedido:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
-    if pedido.cliente_id != cliente.id:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Pedido não pertence ao cliente")
+    """
+    [DESATIVADO] Confirma o pagamento de um pedido.
 
-    return await svc.confirmar_pagamento(pedido_id=pedido_id, metodo=metodo, gateway=gateway)
+    A confirmação de pagamento (que altera o status do pedido) agora
+    é permitida apenas via endpoints de admin / webhooks internos.
+    """
+    raise HTTPException(
+        status.HTTP_403_FORBIDDEN,
+        "Confirmação de pagamento que altera status de pedido é permitida apenas em endpoints de admin.",
+    )
 
 
 @router.post(

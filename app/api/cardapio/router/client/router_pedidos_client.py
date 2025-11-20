@@ -230,17 +230,16 @@ def alterar_modo_edicao(
     svc: PedidoService = Depends(get_pedido_service),
 ):
     """
-    Altera o modo de edição do pedido.
-    True = ativa modo edição (status X), False = finaliza edição (status D)
+    [DESATIVADO] Altera o modo de edição do pedido.
+
+    True = ativa modo edição (status X), False = finaliza edição (status D).
+
+    A partir de agora, alterações de status de pedido só são permitidas
+    em endpoints de admin.
     """
-    pedido = svc.repo.get_pedido(pedido_id)
-    if not pedido:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
-
-    if pedido.cliente_id != cliente.id:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Pedido não pertence ao cliente")
-
-    logger.info(f"[Pedidos] Alterar modo edição - pedido_id={pedido_id} modo_edicao={payload.modo_edicao}")
-    return svc.alterar_modo_edicao(pedido_id, payload.modo_edicao)
+    raise HTTPException(
+        status.HTTP_403_FORBIDDEN,
+        "Alteração de status de pedido é permitida apenas em endpoints de admin.",
+    )
 
 
