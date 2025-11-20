@@ -67,7 +67,7 @@ def listar_delivery(
 @router.post("/", response_model=CriarNovoProdutoResponse)
 async def criar_produto(
   cod_empresa: int = Form(...),
-  cod_barras: str = Form(...),
+  cod_barras: Optional[str] = Form(None),
   descricao: str = Form(...),
   preco_venda: Decimal = Form(...),
   custo: Optional[Decimal] = Form(None),
@@ -75,7 +75,7 @@ async def criar_produto(
   imagem: Optional[UploadFile] = File(None),
   db: Session = Depends(get_db),
 ):
-  logger.info(f"[Produtos] Criar - {cod_barras} / empresa {cod_empresa}")
+  logger.info(f"[Produtos] Criar - {cod_barras or '[AUTO]'} / empresa {cod_empresa}")
   imagem_url = None
   if imagem:
     if imagem.content_type not in {"image/jpeg","image/png","image/webp"}:
