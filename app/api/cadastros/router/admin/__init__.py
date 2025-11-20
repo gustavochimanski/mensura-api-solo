@@ -4,6 +4,8 @@ from .router_entregadores import router as router_entregadores
 from .router_meio_pagamento import router as router_meio_pagamento
 from .router_parceiros import router as router_parceiros
 from .router_regiao_entrega import router as router_regiao_entrega
+from .router_enderecos import router as router_enderecos
+
 __all__ = [
     "router_categorias",
     "router_clientes",
@@ -11,4 +13,5 @@ __all__ = [
     "router_meio_pagamento",
     "router_parceiros",
     "router_regiao_entrega",
+    "router_enderecos",
 ]
