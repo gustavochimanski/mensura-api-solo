@@ -18,6 +18,7 @@ class TransacaoPagamentoModel(Base):
     pedido_id = Column(Integer, ForeignKey("cardapio.pedidos_dv.id", ondelete="CASCADE"), nullable=False)
 
     gateway = Column(PagamentoGateway, nullable=False)
+    metodo = Column(PagamentoMetodo, nullable=False)
 
     meio_pagamento_id = Column(Integer, ForeignKey("cadastros.meios_pagamento.id"), nullable=False)
     meio_pagamento = relationship("MeioPagamentoModel")
