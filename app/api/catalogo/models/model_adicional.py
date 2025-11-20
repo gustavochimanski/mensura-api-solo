@@ -1,3 +1,4 @@
+
 from pydantic import ConfigDict
 from sqlalchemy import Column, Integer, String, Numeric, Boolean, DateTime, func
 from sqlalchemy.orm import relationship
@@ -18,6 +19,7 @@ class AdicionalModel(Base):
     nome = Column(String(100), nullable=False)
     descricao = Column(String(255), nullable=True)
     preco = Column(Numeric(18, 2), nullable=False, default=0)
+    custo = Column(Numeric(18, 2), nullable=False, default=0)  # Custo interno do adicional
     
     # Configurações
     ativo = Column(Boolean, nullable=False, default=True)

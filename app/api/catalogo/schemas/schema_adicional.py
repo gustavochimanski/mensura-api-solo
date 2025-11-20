@@ -9,6 +9,7 @@ class CriarAdicionalRequest(BaseModel):
     nome: str = Field(..., min_length=1, max_length=100)
     descricao: Optional[str] = Field(None, max_length=255)
     preco: condecimal(max_digits=18, decimal_places=2) = Field(default=0)
+    custo: condecimal(max_digits=18, decimal_places=2) = Field(default=0)
     ativo: bool = True
     obrigatorio: bool = False
     permite_multipla_escolha: bool = True
@@ -21,6 +22,7 @@ class AtualizarAdicionalRequest(BaseModel):
     nome: Optional[str] = Field(None, min_length=1, max_length=100)
     descricao: Optional[str] = Field(None, max_length=255)
     preco: Optional[condecimal(max_digits=18, decimal_places=2)] = None
+    custo: Optional[condecimal(max_digits=18, decimal_places=2)] = None
     ativo: Optional[bool] = None
     obrigatorio: Optional[bool] = None
     permite_multipla_escolha: Optional[bool] = None
@@ -36,6 +38,7 @@ class AdicionalResponse(BaseModel):
     nome: str
     descricao: Optional[str] = None
     preco: float
+    custo: float
     ativo: bool
     obrigatorio: bool
     permite_multipla_escolha: bool

@@ -46,6 +46,7 @@ class AdicionalService:
             nome=req.nome,
             descricao=req.descricao,
             preco=Decimal(str(req.preco)),
+            custo=Decimal(str(req.custo)),
             ativo=req.ativo,
             obrigatorio=req.obrigatorio,
             permite_multipla_escolha=req.permite_multipla_escolha,
@@ -90,6 +91,8 @@ class AdicionalService:
             update_data["descricao"] = req.descricao
         if req.preco is not None:
             update_data["preco"] = Decimal(str(req.preco))
+        if req.custo is not None:
+            update_data["custo"] = Decimal(str(req.custo))
         if req.ativo is not None:
             update_data["ativo"] = req.ativo
         if req.obrigatorio is not None:
