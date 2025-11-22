@@ -22,4 +22,4 @@ router.include_router(router_busca_global.router)
 
 # Rotas client (usam X-Super-Token)
 router.include_router(router_adicionais_client)
-router.include_router(router_busca_global_client.router)
+router.include_router(router_busca_global_client)
