@@ -12,6 +12,7 @@ from app.api.mesas.repositories.repo_pedidos_mesa import PedidoMesaRepository
 from app.api.mesas.models.model_mesa import StatusMesa
 from app.api.balcao.repositories.repo_pedidos_balcao import PedidoBalcaoRepository
 from app.api.catalogo.contracts.produto_contract import IProdutoContract
+from app.api.catalogo.contracts.adicional_contract import IAdicionalContract
 from app.api.balcao.models.model_pedido_balcao_historico import TipoOperacaoPedidoBalcao
 from app.api.balcao.schemas.schema_pedido_balcao import (
     PedidoBalcaoCreate,
@@ -29,7 +30,12 @@ from app.api.balcao.schemas.schema_pedido_balcao_historico import (
 
 
 class PedidoBalcaoService:
-    def __init__(self, db: Session, produto_contract: IProdutoContract | None = None):
+    def __init__(
+        self,
+        db: Session,
+        produto_contract: IProdutoContract | None = None,
+        adicional_contract: IAdicionalContract | None = None,
+    ):
         self.db = db
         self.repo_mesa = MesaRepository(db)
         self.repo_mesa_pedidos = PedidoMesaRepository(db, produto_contract=produto_contract)

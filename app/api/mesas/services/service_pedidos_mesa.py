@@ -12,6 +12,7 @@ from app.api.mesas.repositories.repo_mesas import MesaRepository
 from app.api.mesas.repositories.repo_pedidos_mesa import PedidoMesaRepository
 from app.api.balcao.repositories.repo_pedidos_balcao import PedidoBalcaoRepository
 from app.api.catalogo.contracts.produto_contract import IProdutoContract
+from app.api.catalogo.contracts.adicional_contract import IAdicionalContract
 from app.api.mesas.schemas.schema_pedido_mesa import (
     PedidoMesaCreate,
     PedidoMesaOut,
@@ -27,7 +28,12 @@ from app.utils.logger import logger
 
 
 class PedidoMesaService:
-    def __init__(self, db: Session, produto_contract: IProdutoContract | None = None):
+    def __init__(
+        self,
+        db: Session,
+        produto_contract: IProdutoContract | None = None,
+        adicional_contract: IAdicionalContract | None = None,
+    ):
         self.db = db
         self.repo_mesa = MesaRepository(db)
         self.repo = PedidoMesaRepository(db, produto_contract=produto_contract)
