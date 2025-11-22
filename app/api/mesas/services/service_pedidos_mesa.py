@@ -13,17 +13,25 @@ from app.api.mesas.repositories.repo_pedidos_mesa import PedidoMesaRepository
 from app.api.balcao.repositories.repo_pedidos_balcao import PedidoBalcaoRepository
 from app.api.catalogo.contracts.produto_contract import IProdutoContract
 from app.api.catalogo.contracts.adicional_contract import IAdicionalContract
+from app.api.catalogo.contracts.combo_contract import IComboContract
 from app.api.mesas.schemas.schema_pedido_mesa import (
     PedidoMesaCreate,
     PedidoMesaOut,
     PedidoMesaItemIn,
     AdicionarItemRequest,
+    AdicionarProdutoGenericoRequest,
     RemoverItemResponse,
     StatusPedidoMesaEnum,
     FecharContaMesaRequest,
     AtualizarObservacoesRequest,
     AtualizarStatusPedidoRequest,
 )
+from app.api.catalogo.models.model_receita import ReceitaModel
+from app.api.catalogo.models.model_combo import ComboModel
+from app.api.catalogo.models.model_adicional import AdicionalModel
+from app.api.mesas.models.model_pedido_mesa_item import PedidoMesaItemModel
+from app.api.pedidos.utils.adicionais import resolve_produto_adicionais
+from app.api.cardapio.services.pedidos.service_pedido_helpers import _dec
 from app.utils.logger import logger
 
 
@@ -33,11 +41,15 @@ class PedidoMesaService:
         db: Session,
         produto_contract: IProdutoContract | None = None,
         adicional_contract: IAdicionalContract | None = None,
+        combo_contract: IComboContract | None = None,
     ):
         self.db = db
         self.repo_mesa = MesaRepository(db)
         self.repo = PedidoMesaRepository(db, produto_contract=produto_contract)
         self.repo_balcao = PedidoBalcaoRepository(db, produto_contract=produto_contract)
+        self.produto_contract = produto_contract
+        self.adicional_contract = adicional_contract
+        self.combo_contract = combo_contract
 
     # -------- Pedido --------
     def criar_pedido(self, payload: PedidoMesaCreate) -> PedidoMesaOut:
@@ -101,6 +113,224 @@ class PedidoMesaService:
             quantidade=body.quantidade,
             observacao=body.observacao,
         )
+        return PedidoMesaOut.model_validate(pedido)
+
+    def adicionar_produto_generico(
+        self, 
+        pedido_id: int, 
+        body: AdicionarProdutoGenericoRequest
+    ) -> PedidoMesaOut:
+        """
+        Adiciona um produto genérico ao pedido (produto normal, receita ou combo).
+        Identifica automaticamente o tipo baseado nos campos preenchidos.
+        """
+        pedido = self.repo.get(pedido_id)
+        if pedido.status in ("C", "E"):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Pedido fechado/cancelado")
+        
+        empresa_id = pedido.empresa_id
+        qtd = max(int(body.quantidade or 1), 1)
+        
+        # Identifica e processa o tipo de produto
+        if body.produto_cod_barras:
+            # Item normal (produto com código de barras)
+            adicionais_total, adicionais_snapshot = resolve_produto_adicionais(
+                adicional_contract=self.adicional_contract,
+                produto_cod_barras=body.produto_cod_barras,
+                adicionais_request=body.adicionais,
+                adicionais_ids=body.adicionais_ids,
+                quantidade_item=qtd,
+            )
+            
+            pedido = self.repo.add_item(
+                pedido_id,
+                produto_cod_barras=body.produto_cod_barras,
+                quantidade=qtd,
+                observacao=body.observacao,
+                adicionais_snapshot=adicionais_snapshot,
+            )
+            
+        elif body.receita_id:
+            # Receita - mesma lógica do balcão
+            receita = self.db.query(ReceitaModel).filter(ReceitaModel.id == body.receita_id).first()
+            if not receita or not receita.ativo or not receita.disponivel:
+                raise HTTPException(
+                    status.HTTP_404_NOT_FOUND,
+                    f"Receita {body.receita_id} não encontrada ou inativa"
+                )
+            if receita.empresa_id != empresa_id:
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    f"Receita {body.receita_id} não pertence à empresa {empresa_id}"
+                )
+            
+            preco_rec = _dec(receita.preco_venda)
+            
+            # Processa adicionais da receita
+            adicionais_req = body.adicionais or []
+            if body.adicionais_ids:
+                from types import SimpleNamespace
+                adicionais_req = [
+                    SimpleNamespace(adicional_id=ad_id, quantidade=1) 
+                    for ad_id in body.adicionais_ids
+                ]
+            
+            # Calcula total de adicionais
+            adicionais_total = Decimal("0")
+            adicionais_snapshot = []
+            if adicionais_req:
+                adicionais_db = (
+                    self.db.query(AdicionalModel)
+                    .filter(
+                        AdicionalModel.id.in_([a.adicional_id for a in adicionais_req if hasattr(a, 'adicional_id')]),
+                        AdicionalModel.empresa_id == empresa_id,
+                        AdicionalModel.ativo.is_(True),
+                    )
+                    .all()
+                )
+                
+                for req in adicionais_req:
+                    ad_id = getattr(req, "adicional_id", None)
+                    if not ad_id:
+                        continue
+                    qtd_adicional = max(int(getattr(req, "quantidade", 1) or 1), 1)
+                    adicional = next((a for a in adicionais_db if a.id == ad_id), None)
+                    if not adicional:
+                        continue
+                    preco_adicional = _dec(adicional.preco)
+                    total_adicional = preco_adicional * qtd_adicional * qtd
+                    adicionais_total += total_adicional
+                    adicionais_snapshot.append({
+                        "adicional_id": ad_id,
+                        "nome": adicional.nome,
+                        "quantidade": qtd_adicional,
+                        "preco_unitario": float(preco_adicional),
+                        "total": float(total_adicional),
+                    })
+            
+            observacao_completa = f"Receita #{receita.id} - {receita.nome}"
+            if body.observacao:
+                observacao_completa += f" | {body.observacao}"
+            
+            preco_total_item = preco_rec + (adicionais_total / qtd)
+            pedido = self.repo.add_item(
+                pedido_id,
+                produto_cod_barras=f"RECEITA_{receita.id}",
+                quantidade=qtd,
+                observacao=observacao_completa,
+                adicionais_snapshot=adicionais_snapshot if adicionais_snapshot else None,
+            )
+            
+            item_criado = (
+                self.db.query(PedidoMesaItemModel)
+                .filter(
+                    PedidoMesaItemModel.pedido_id == pedido_id,
+                    PedidoMesaItemModel.produto_cod_barras == f"RECEITA_{receita.id}"
+                )
+                .order_by(PedidoMesaItemModel.id.desc())
+                .first()
+            )
+            if item_criado:
+                item_criado.preco_unitario = preco_total_item
+                self.db.commit()
+            
+        elif body.combo_id:
+            # Combo - mesma lógica do balcão
+            combo = self.combo_contract.buscar_por_id(body.combo_id) if self.combo_contract else None
+            if not combo or not combo.ativo:
+                raise HTTPException(
+                    status.HTTP_404_NOT_FOUND,
+                    f"Combo {body.combo_id} não encontrado ou inativo"
+                )
+            if combo.empresa_id != empresa_id:
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    f"Combo {body.combo_id} não pertence à empresa {empresa_id}"
+                )
+            
+            preco_combo = _dec(combo.preco_total)
+            
+            # Processa adicionais do combo
+            adicionais_req = body.adicionais or []
+            if body.adicionais_ids:
+                from types import SimpleNamespace
+                adicionais_req = [
+                    SimpleNamespace(adicional_id=ad_id, quantidade=1) 
+                    for ad_id in body.adicionais_ids
+                ]
+            
+            # Calcula total de adicionais
+            adicionais_total = Decimal("0")
+            adicionais_snapshot = []
+            if adicionais_req:
+                adicionais_db = (
+                    self.db.query(AdicionalModel)
+                    .filter(
+                        AdicionalModel.id.in_([a.adicional_id for a in adicionais_req if hasattr(a, 'adicional_id')]),
+                        AdicionalModel.empresa_id == empresa_id,
+                        AdicionalModel.ativo.is_(True),
+                    )
+                    .all()
+                )
+                
+                for req in adicionais_req:
+                    ad_id = getattr(req, "adicional_id", None)
+                    if not ad_id:
+                        continue
+                    qtd_adicional = max(int(getattr(req, "quantidade", 1) or 1), 1)
+                    adicional = next((a for a in adicionais_db if a.id == ad_id), None)
+                    if not adicional:
+                        continue
+                    preco_adicional = _dec(adicional.preco)
+                    total_adicional = preco_adicional * qtd_adicional * qtd
+                    adicionais_total += total_adicional
+                    adicionais_snapshot.append({
+                        "adicional_id": ad_id,
+                        "nome": adicional.nome,
+                        "quantidade": qtd_adicional,
+                        "preco_unitario": float(preco_adicional),
+                        "total": float(total_adicional),
+                    })
+            
+            # Distribui preço do combo igualmente pelos itens do combo
+            total_unidades = sum(i.quantidade for i in combo.itens) or 1
+            preco_unit_medio = preco_combo / total_unidades
+            
+            # Cria itens do combo
+            for item_combo in combo.itens:
+                observacao_completa = f"Combo #{combo.id} - {combo.titulo or combo.descricao}"
+                if body.observacao:
+                    observacao_completa += f" | {body.observacao}"
+                
+                pedido = self.repo.add_item(
+                    pedido_id,
+                    produto_cod_barras=item_combo.produto_cod_barras,
+                    quantidade=item_combo.quantidade * qtd,
+                    observacao=observacao_completa,
+                    adicionais_snapshot=adicionais_snapshot if adicionais_snapshot and item_combo == combo.itens[0] else None,
+                )
+                
+                if item_combo == combo.itens[0]:
+                    item_criado = (
+                        self.db.query(PedidoMesaItemModel)
+                        .filter(
+                            PedidoMesaItemModel.pedido_id == pedido_id,
+                            PedidoMesaItemModel.produto_cod_barras == item_combo.produto_cod_barras
+                        )
+                        .order_by(PedidoMesaItemModel.id.desc())
+                        .first()
+                    )
+                    if item_criado:
+                        adicionais_por_item = adicionais_total / len(combo.itens) / (item_combo.quantidade * qtd) if combo.itens else Decimal("0")
+                        item_criado.preco_unitario = preco_unit_medio + adicionais_por_item
+                        self.db.commit()
+        
+        else:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "É obrigatório informar 'produto_cod_barras', 'receita_id' ou 'combo_id'"
+            )
+        
         return PedidoMesaOut.model_validate(pedido)
 
     def remover_item(self, pedido_id: int, item_id: int) -> RemoverItemResponse:

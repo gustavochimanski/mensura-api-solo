@@ -4,7 +4,7 @@ from enum import Enum
 from typing import Optional, List
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field, constr
+from pydantic import BaseModel, ConfigDict, Field, constr, model_validator
 
 from app.api.cardapio.schemas.schema_pedido import (
     ItemAdicionalRequest,
@@ -123,6 +123,112 @@ class PedidoMesaOut(BaseModel):
 
 class AdicionarItemRequest(PedidoMesaItemIn):
     pass
+
+
+class AdicionarProdutoGenericoRequest(BaseModel):
+    """
+    Schema genérico para adicionar qualquer tipo de produto (item normal, receita ou combo).
+    O sistema identifica automaticamente o tipo baseado nos campos preenchidos.
+    
+    **Regras de identificação:**
+    - Se `produto_cod_barras` estiver presente → Item normal (produto)
+    - Se `receita_id` estiver presente → Receita
+    - Se `combo_id` estiver presente → Combo
+    
+    **Validação:** Apenas um dos campos (produto_cod_barras, receita_id, combo_id) deve ser informado.
+    """
+    # Item normal (produto com código de barras)
+    produto_cod_barras: Optional[constr(min_length=1)] = Field(
+        default=None,
+        description="Código de barras do produto (para itens normais)"
+    )
+    
+    # Receita
+    receita_id: Optional[int] = Field(
+        default=None,
+        description="ID da receita (para receitas)"
+    )
+    
+    # Combo
+    combo_id: Optional[int] = Field(
+        default=None,
+        description="ID do combo (para combos)"
+    )
+    
+    # Campos comuns
+    quantidade: int = Field(ge=1, default=1, description="Quantidade do item")
+    observacao: Optional[constr(max_length=255)] = Field(
+        default=None,
+        description="Observação específica do item"
+    )
+    adicionais: Optional[List[ItemAdicionalRequest]] = Field(
+        default=None,
+        description="Lista de adicionais do item (com quantidade por adicional)"
+    )
+    adicionais_ids: Optional[List[int]] = Field(
+        default=None,
+        description="(LEGADO) IDs de adicionais vinculados; quantidade implícita = 1"
+    )
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "summary": "Adicionar produto normal",
+                    "value": {
+                        "produto_cod_barras": "7891234567890",
+                        "quantidade": 2,
+                        "observacao": "Bem passado",
+                        "adicionais": [
+                            {"adicional_id": 10, "quantidade": 1}
+                        ]
+                    }
+                },
+                {
+                    "summary": "Adicionar receita",
+                    "value": {
+                        "receita_id": 5,
+                        "quantidade": 1,
+                        "observacao": "Sem pimenta",
+                        "adicionais": [
+                            {"adicional_id": 20, "quantidade": 2}
+                        ]
+                    }
+                },
+                {
+                    "summary": "Adicionar combo",
+                    "value": {
+                        "combo_id": 3,
+                        "quantidade": 2,
+                        "adicionais": [
+                            {"adicional_id": 25, "quantidade": 1}
+                        ]
+                    }
+                }
+            ]
+        }
+    )
+    
+    @model_validator(mode="after")
+    def _validar_tipo_produto(self):
+        """Valida que exatamente um tipo de produto foi informado"""
+        tipos_informados = sum([
+            self.produto_cod_barras is not None,
+            self.receita_id is not None,
+            self.combo_id is not None,
+        ])
+        
+        if tipos_informados == 0:
+            raise ValueError(
+                "É obrigatório informar um dos campos: 'produto_cod_barras', 'receita_id' ou 'combo_id'"
+            )
+        
+        if tipos_informados > 1:
+            raise ValueError(
+                "Informe apenas um tipo de produto: 'produto_cod_barras', 'receita_id' ou 'combo_id'"
+            )
+        
+        return self
 
 
 class RemoverItemResponse(BaseModel):

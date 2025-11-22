@@ -8,6 +8,7 @@ from app.api.mesas.schemas.schema_pedido_mesa import (
     PedidoMesaCreate,
     PedidoMesaOut,
     AdicionarItemRequest,
+    AdicionarProdutoGenericoRequest,
     RemoverItemResponse,
     FecharContaMesaRequest,
     AtualizarObservacoesRequest,
@@ -36,7 +37,42 @@ def adicionar_item(
     db: Session = Depends(get_db),
     svc: PedidoMesaService = Depends(get_pedido_mesa_service),
 ):
+    """⚠️ LEGADO: Use o endpoint /produtos que aceita produtos, receitas e combos"""
     return svc.adicionar_item(pedido_id, body)
+
+
+@router.post(
+    "/{pedido_id}/produtos",
+    response_model=PedidoMesaOut,
+    summary="Adicionar produto genérico ao pedido",
+    description="""
+    Adiciona qualquer tipo de produto ao pedido de mesa (produto normal, receita ou combo).
+    O sistema identifica automaticamente o tipo baseado nos campos preenchidos.
+    
+    **Regras de identificação:**
+    - Se `produto_cod_barras` estiver presente → Item normal (produto)
+    - Se `receita_id` estiver presente → Receita
+    - Se `combo_id` estiver presente → Combo
+    
+    **Validações:**
+    - Pedido deve estar aberto (não pode ser CANCELADO ou ENTREGUE)
+    - Apenas um tipo de produto deve ser informado
+    - Produto/Receita/Combo deve existir e estar disponível
+    - Deve pertencer à empresa do pedido
+    - Quantidade deve ser maior que zero
+    """,
+)
+def adicionar_produto_generico(
+    pedido_id: int = Path(..., description="ID do pedido", gt=0),
+    body: AdicionarProdutoGenericoRequest = Body(
+        ...,
+        description="Dados do produto a ser adicionado (produto, receita ou combo)"
+    ),
+    db: Session = Depends(get_db),
+    svc: PedidoMesaService = Depends(get_pedido_mesa_service),
+):
+    """Adiciona um produto genérico (produto, receita ou combo) ao pedido de mesa"""
+    return svc.adicionar_produto_generico(pedido_id, body)
 
 
 @router.delete("/{pedido_id}/itens/{item_id}", response_model=RemoverItemResponse)

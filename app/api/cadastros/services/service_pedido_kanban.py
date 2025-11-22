@@ -159,14 +159,22 @@ class KanbanService:
                 # Busca pedidos abertos
                 pedidos_abertos = self.mesa_contract.listar_abertos(empresa_id=empresa_id)
                 
+                # Filtra pedidos abertos pela data de criação
+                start_dt = dt.combine(date_filter, dt.min.time())
+                end_dt = start_dt + timedelta(days=1)
+                pedidos_abertos_filtrados = [
+                    p for p in pedidos_abertos
+                    if p.created_at >= start_dt and p.created_at < end_dt
+                ]
+                
                 # Busca pedidos finalizados
                 pedidos_finalizados = self.mesa_contract.listar_finalizados(
                     empresa_id=empresa_id, 
                     date_filter=date_filter
                 )
                 
-                # Combina abertos e finalizados
-                todos_mesa = pedidos_abertos + pedidos_finalizados
+                # Combina abertos filtrados e finalizados
+                todos_mesa = pedidos_abertos_filtrados + pedidos_finalizados
                 
                 # Remove duplicados e ordena
                 from app.api.mesas.contracts.pedidos_mesa_contract import MesaPedidoDTO
@@ -278,14 +286,22 @@ class KanbanService:
                 # Busca pedidos abertos
                 pedidos_abertos = self.balcao_contract.listar_abertos(empresa_id=empresa_id)
                 
+                # Filtra pedidos abertos pela data de criação
+                start_dt = dt.combine(date_filter, dt.min.time())
+                end_dt = start_dt + timedelta(days=1)
+                pedidos_abertos_filtrados = [
+                    p for p in pedidos_abertos
+                    if p.created_at >= start_dt and p.created_at < end_dt
+                ]
+                
                 # Busca pedidos finalizados
                 pedidos_finalizados = self.balcao_contract.listar_finalizados(
                     empresa_id=empresa_id, 
                     date_filter=date_filter
                 )
                 
-                # Combina abertos e finalizados
-                todos_balcao = pedidos_abertos + pedidos_finalizados
+                # Combina abertos filtrados e finalizados
+                todos_balcao = pedidos_abertos_filtrados + pedidos_finalizados
                 
                 # Remove duplicados e ordena
                 from app.api.balcao.contracts.pedidos_balcao_contract import BalcaoPedidoDTO
