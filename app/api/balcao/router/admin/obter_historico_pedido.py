@@ -9,6 +9,7 @@ from app.api.balcao.services.dependencies import get_pedido_balcao_service
 
 
 router = APIRouter(
+    prefix="/api/balcao/admin/pedidos",
     tags=["Admin - Balcão - Pedidos"],
     dependencies=[Depends(get_current_user)],
 )
