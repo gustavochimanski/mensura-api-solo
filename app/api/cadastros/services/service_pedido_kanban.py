@@ -162,9 +162,21 @@ class KanbanService:
                 # Filtra pedidos abertos pela data de criação
                 start_dt = dt.combine(date_filter, dt.min.time())
                 end_dt = start_dt + timedelta(days=1)
+                
+                # Normaliza created_at para naive datetime se for timezone-aware
+                def normalize_datetime(dt_obj):
+                    if dt_obj is None:
+                        return None
+                    if dt_obj.tzinfo is not None:
+                        # Remove timezone info convertendo para UTC e depois removendo
+                        return dt_obj.replace(tzinfo=None)
+                    return dt_obj
+                
                 pedidos_abertos_filtrados = [
                     p for p in pedidos_abertos
-                    if p.created_at >= start_dt and p.created_at < end_dt
+                    if normalize_datetime(p.created_at) is not None
+                    and normalize_datetime(p.created_at) >= start_dt 
+                    and normalize_datetime(p.created_at) < end_dt
                 ]
                 
                 # Busca pedidos finalizados
@@ -289,9 +301,21 @@ class KanbanService:
                 # Filtra pedidos abertos pela data de criação
                 start_dt = dt.combine(date_filter, dt.min.time())
                 end_dt = start_dt + timedelta(days=1)
+                
+                # Normaliza created_at para naive datetime se for timezone-aware
+                def normalize_datetime(dt_obj):
+                    if dt_obj is None:
+                        return None
+                    if dt_obj.tzinfo is not None:
+                        # Remove timezone info convertendo para UTC e depois removendo
+                        return dt_obj.replace(tzinfo=None)
+                    return dt_obj
+                
                 pedidos_abertos_filtrados = [
                     p for p in pedidos_abertos
-                    if p.created_at >= start_dt and p.created_at < end_dt
+                    if normalize_datetime(p.created_at) is not None
+                    and normalize_datetime(p.created_at) >= start_dt 
+                    and normalize_datetime(p.created_at) < end_dt
                 ]
                 
                 # Busca pedidos finalizados
