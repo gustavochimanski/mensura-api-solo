@@ -46,8 +46,25 @@ class BalcaoPedidosAdapter(IBalcaoPedidosContract):
         return [self._to_dto(p) for p in pedidos]
 
     def listar_pendentes_impressao(self, *, empresa_id: int) -> List[BalcaoPedidoDTO]:
+        from sqlalchemy.orm import load_only
+        # Carrega apenas os campos necessários, evitando campos novos que podem não existir no banco ainda
         query = (
             self.db.query(PedidoBalcaoModel)
+            .options(
+                load_only(
+                    PedidoBalcaoModel.id,
+                    PedidoBalcaoModel.empresa_id,
+                    PedidoBalcaoModel.mesa_id,
+                    PedidoBalcaoModel.cliente_id,
+                    PedidoBalcaoModel.numero_pedido,
+                    PedidoBalcaoModel.status,
+                    PedidoBalcaoModel.observacoes,
+                    PedidoBalcaoModel.produtos_snapshot,
+                    PedidoBalcaoModel.valor_total,
+                    PedidoBalcaoModel.created_at,
+                    PedidoBalcaoModel.updated_at,
+                )
+            )
             .filter(PedidoBalcaoModel.empresa_id == empresa_id)
             .filter(PedidoBalcaoModel.status == StatusPedidoBalcao.IMPRESSAO.value)
             .order_by(PedidoBalcaoModel.created_at.desc())

@@ -91,6 +91,7 @@ class PrinterService:
     ) -> List[PedidoPendenteImpressaoResponse]:
         try:
             from sqlalchemy import and_
+            from sqlalchemy.orm import defer
             query = (
                 self.db.query(PedidoMesaModel)
                 .options(
@@ -98,6 +99,9 @@ class PrinterService:
                     joinedload(PedidoMesaModel.cliente),
                     joinedload(PedidoMesaModel.mesa),
                     joinedload(PedidoMesaModel.empresa),
+                    # Adia carregamento dos novos campos que podem não existir no banco ainda
+                    defer(PedidoMesaModel.meio_pagamento_id),
+                    defer(PedidoMesaModel.troco_para),
                 )
                 .filter(
                     and_(
@@ -130,6 +134,7 @@ class PrinterService:
     ) -> List[PedidoPendenteImpressaoResponse]:
         try:
             from sqlalchemy import and_
+            from sqlalchemy.orm import defer
             query = (
                 self.db.query(PedidoBalcaoModel)
                 .options(
@@ -137,6 +142,9 @@ class PrinterService:
                     joinedload(PedidoBalcaoModel.cliente),
                     joinedload(PedidoBalcaoModel.mesa),
                     joinedload(PedidoBalcaoModel.empresa),
+                    # Adia carregamento dos novos campos que podem não existir no banco ainda
+                    defer(PedidoBalcaoModel.meio_pagamento_id),
+                    defer(PedidoBalcaoModel.troco_para),
                 )
                 .filter(
                     and_(
