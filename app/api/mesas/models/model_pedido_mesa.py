@@ -75,6 +75,9 @@ class PedidoMesaModel(Base):
     cliente_id = Column(Integer, ForeignKey("cadastros.clientes.id", ondelete="SET NULL"), nullable=True)
     cliente = relationship("ClienteModel", lazy="select")
     
+    meio_pagamento_id = Column(Integer, ForeignKey("cadastros.meios_pagamento.id", ondelete="SET NULL"), nullable=True)
+    meio_pagamento = relationship("MeioPagamentoModel", lazy="select")
+    
     # Dados do pedido
     numero_pedido = Column(String(20), nullable=False, unique=True)
     status = Column(StatusPedidoMesaEnum, nullable=False, default="P")
@@ -84,6 +87,7 @@ class PedidoMesaModel(Base):
     
     # Valores
     valor_total = Column(Numeric(18, 2), nullable=False, default=0)
+    troco_para = Column(Numeric(18, 2), nullable=True)
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), default=now_trimmed, nullable=False)

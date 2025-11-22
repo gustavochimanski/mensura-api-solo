@@ -460,16 +460,12 @@ class PedidoBalcaoService:
         status_anterior = self._status_value(pedido_antes.status)
         mesa_id = pedido_antes.mesa_id  # Guarda mesa_id antes de fechar
         
-        # Se receber payload, anexa dados de pagamento em observacoes
+        # Se receber payload, salva dados de pagamento nos campos diretos
         if payload is not None:
             if payload.troco_para is not None:
-                obs = (pedido_antes.observacoes or "").strip()
-                complemento = f"Troco para: {payload.troco_para}"
-                pedido_antes.observacoes = f"{obs} | {complemento}" if obs else complemento
+                pedido_antes.troco_para = payload.troco_para
             if payload.meio_pagamento_id is not None:
-                obs = (pedido_antes.observacoes or "").strip()
-                complemento = f"Meio pagamento ID: {payload.meio_pagamento_id}"
-                pedido_antes.observacoes = f"{obs} | {complemento}" if obs else complemento
+                pedido_antes.meio_pagamento_id = payload.meio_pagamento_id
             self.db.commit()
             self.db.refresh(pedido_antes)
 

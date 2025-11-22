@@ -46,6 +46,7 @@ class KanbanService:
         except Exception:
             pass
         return None
+    
 
     def list_all_kanban(
         self, date_filter: date, empresa_id: int = 1, limit: int = 500
@@ -218,15 +219,27 @@ class KanbanService:
             status_mesa = p_mesa.status
             status_delivery = status_mapa_mesa.get(status_mesa, PedidoStatusEnum.P.value)
             
-            # Busca pedido completo do banco para obter numero_pedido e mesa_id
+            # Busca pedido completo do banco para obter numero_pedido, mesa_id, meio_pagamento e troco_para
             numero_pedido = None
             mesa_id = None
+            observacoes_completas = p_mesa.observacoes
+            meio_pagamento_out = None
+            troco_para = None
             try:
                 from app.api.mesas.models.model_pedido_mesa import PedidoMesaModel
                 pedido_completo = self.db.query(PedidoMesaModel).filter_by(id=p_mesa.id).first()
                 if pedido_completo:
                     numero_pedido = pedido_completo.numero_pedido
                     mesa_id = pedido_completo.mesa_id
+                    troco_para = float(pedido_completo.troco_para) if pedido_completo.troco_para is not None else None
+                    # Usa observações do banco se disponível (mais completo que o DTO)
+                    if pedido_completo.observacoes:
+                        observacoes_completas = pedido_completo.observacoes
+                    # Busca meio de pagamento do relacionamento
+                    if pedido_completo.meio_pagamento:
+                        meio_pagamento_out = MeioPagamentoKanbanResponse.model_validate(
+                            pedido_completo.meio_pagamento, from_attributes=True
+                        )
             except Exception:
                 pass
             
@@ -273,13 +286,13 @@ class KanbanService:
                     valor_total=float(p_mesa.valor_total or 0),
                     data_criacao=p_mesa.created_at,
                     endereco=endereco_str,
-                    observacao_geral=p_mesa.observacoes or f"Pedido de mesa",
-                    meio_pagamento=None,  # Mesa não tem meio de pagamento no modelo
+                    observacao_geral=observacoes_completas or f"Pedido de mesa",
+                    meio_pagamento=meio_pagamento_out,
                     entregador=None,  # Mesa não tem entregador
                     pagamento=None,  # Mesa não tem pagamento separado
                     acertado_entregador=None,
                     tempo_entrega_minutos=tempo_entrega_minutos,
-                    troco_para=None,
+                    troco_para=troco_para,
                     tipo_pedido="MESA",
                     numero_pedido=numero_pedido,
                     mesa_id=mesa_id,
@@ -357,15 +370,27 @@ class KanbanService:
             status_balcao = p_balcao.status
             status_delivery = status_mapa_balcao.get(status_balcao, PedidoStatusEnum.P.value)
             
-            # Busca pedido completo do banco para obter numero_pedido e mesa_id
+            # Busca pedido completo do banco para obter numero_pedido, mesa_id, meio_pagamento e troco_para
             numero_pedido = None
             mesa_id = None
+            observacoes_completas = p_balcao.observacoes
+            meio_pagamento_out = None
+            troco_para = None
             try:
                 from app.api.balcao.models.model_pedido_balcao import PedidoBalcaoModel
                 pedido_completo = self.db.query(PedidoBalcaoModel).filter_by(id=p_balcao.id).first()
                 if pedido_completo:
                     numero_pedido = pedido_completo.numero_pedido
                     mesa_id = pedido_completo.mesa_id
+                    troco_para = float(pedido_completo.troco_para) if pedido_completo.troco_para is not None else None
+                    # Usa observações do banco se disponível (mais completo que o DTO)
+                    if pedido_completo.observacoes:
+                        observacoes_completas = pedido_completo.observacoes
+                    # Busca meio de pagamento do relacionamento
+                    if pedido_completo.meio_pagamento:
+                        meio_pagamento_out = MeioPagamentoKanbanResponse.model_validate(
+                            pedido_completo.meio_pagamento, from_attributes=True
+                        )
             except Exception:
                 pass
             
@@ -412,13 +437,13 @@ class KanbanService:
                     valor_total=float(p_balcao.valor_total or 0),
                     data_criacao=p_balcao.created_at,
                     endereco=endereco_str,
-                    observacao_geral=p_balcao.observacoes or f"Pedido de balcão",
-                    meio_pagamento=None,  # Balcão não tem meio de pagamento no modelo
+                    observacao_geral=observacoes_completas or f"Pedido de balcão",
+                    meio_pagamento=meio_pagamento_out,
                     entregador=None,  # Balcão não tem entregador
                     pagamento=None,  # Balcão não tem pagamento separado
                     acertado_entregador=None,
                     tempo_entrega_minutos=tempo_entrega_minutos,
-                    troco_para=None,
+                    troco_para=troco_para,
                     tipo_pedido="BALCAO",
                     numero_pedido=numero_pedido,
                     mesa_id=mesa_id,

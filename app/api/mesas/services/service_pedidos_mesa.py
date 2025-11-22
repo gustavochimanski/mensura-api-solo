@@ -398,16 +398,12 @@ class PedidoMesaService:
         pedido_antes = self.repo.get(pedido_id)
         mesa_id = pedido_antes.mesa_id
         
-        # Se receber payload, anexa dados de pagamento em observacoes (modelo não tem colunas próprias)
+        # Se receber payload, salva dados de pagamento nos campos diretos
         if payload is not None:
             if payload.troco_para is not None:
-                obs = (pedido_antes.observacoes or "").strip()
-                complemento = f"Troco para: {payload.troco_para}"
-                pedido_antes.observacoes = f"{obs} | {complemento}" if obs else complemento
+                pedido_antes.troco_para = payload.troco_para
             if payload.meio_pagamento_id is not None:
-                obs = (pedido_antes.observacoes or "").strip()
-                complemento = f"Meio pagamento ID: {payload.meio_pagamento_id}"
-                pedido_antes.observacoes = f"{obs} | {complemento}" if obs else complemento
+                pedido_antes.meio_pagamento_id = payload.meio_pagamento_id
             self.db.commit()
             self.db.refresh(pedido_antes)
 
@@ -456,18 +452,11 @@ class PedidoMesaService:
         if pedido.cliente_id and pedido.cliente_id != cliente_id:
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Pedido não pertence ao cliente")
 
-        # Aplica informações simples de pagamento no pedido (campos disponíveis no modelo atual)
+        # Salva dados de pagamento nos campos diretos
         if payload.troco_para is not None:
-            # Append/define observação com troco
-            obs = (pedido.observacoes or "").strip()
-            complemento = f"Troco para: {payload.troco_para}"
-            pedido.observacoes = f"{obs} | {complemento}" if obs else complemento
-
-        # Observação com meio_pagamento_id (sem coluna específica no modelo de mesas)
+            pedido.troco_para = payload.troco_para
         if payload.meio_pagamento_id is not None:
-            obs = (pedido.observacoes or "").strip()
-            complemento = f"Meio pagamento ID: {payload.meio_pagamento_id}"
-            pedido.observacoes = f"{obs} | {complemento}" if obs else complemento
+            pedido.meio_pagamento_id = payload.meio_pagamento_id
 
         self.db.commit()
         self.db.refresh(pedido)
