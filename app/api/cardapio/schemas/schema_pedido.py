@@ -312,6 +312,50 @@ class ItemPedidoResponse(BaseModel):
     produto_imagem_snapshot: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
 
+
+class ProdutoPedidoAdicionalOut(BaseModel):
+    adicional_id: Optional[int] = None
+    nome: Optional[str] = None
+    quantidade: int = 1
+    preco_unitario: float = 0.0
+    total: float = 0.0
+
+
+class ProdutoPedidoItemOut(BaseModel):
+    item_id: Optional[int] = None
+    produto_cod_barras: Optional[str] = None
+    descricao: Optional[str] = None
+    imagem: Optional[str] = None
+    quantidade: int
+    preco_unitario: float
+    observacao: Optional[str] = None
+    adicionais: List[ProdutoPedidoAdicionalOut] = Field(default_factory=list)
+
+
+class ReceitaPedidoOut(BaseModel):
+    item_id: Optional[int] = None
+    receita_id: int
+    nome: Optional[str] = None
+    quantidade: int
+    preco_unitario: float
+    observacao: Optional[str] = None
+    adicionais: List[ProdutoPedidoAdicionalOut] = Field(default_factory=list)
+
+
+class ComboPedidoOut(BaseModel):
+    combo_id: int
+    nome: Optional[str] = None
+    quantidade: int
+    preco_unitario: float
+    observacao: Optional[str] = None
+    adicionais: List[ProdutoPedidoAdicionalOut] = Field(default_factory=list)
+
+
+class ProdutosPedidoOut(BaseModel):
+    itens: List[ProdutoPedidoItemOut] = Field(default_factory=list)
+    receitas: List[ReceitaPedidoOut] = Field(default_factory=list)
+    combos: List[ComboPedidoOut] = Field(default_factory=list)
+
 class PedidoResponse(BaseModel):
     id: int
     status: PedidoStatusEnum
@@ -341,6 +385,7 @@ class PedidoResponse(BaseModel):
     transacao: Optional[TransacaoResponse] = None
     pagamento: PedidoPagamentoResumo | None = None
     acertado_entregador: bool | None = None
+    produtos: ProdutosPedidoOut = Field(default_factory=ProdutosPedidoOut)
     model_config = ConfigDict(from_attributes=True)
 
 class PedidoResponseCompleto(BaseModel):
@@ -369,6 +414,7 @@ class PedidoResponseCompleto(BaseModel):
     data_atualizacao: datetime
     itens: List[ItemPedidoResponse]
     pagamento: PedidoPagamentoResumo | None = None
+    produtos: ProdutosPedidoOut = Field(default_factory=ProdutosPedidoOut)
     model_config = ConfigDict(from_attributes=True)
 
 class PedidoResponseCompletoComEndereco(BaseModel):
@@ -397,6 +443,7 @@ class PedidoResponseCompletoComEndereco(BaseModel):
     data_atualizacao: datetime
     itens: List[ItemPedidoResponse]
     pagamento: PedidoPagamentoResumo | None = None
+    produtos: ProdutosPedidoOut = Field(default_factory=ProdutosPedidoOut)
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -428,6 +475,7 @@ class PedidoResponseCompletoTotal(BaseModel):
     data_atualizacao: datetime
     itens: List[ItemPedidoResponse]
     pagamento: PedidoPagamentoResumo | None = None
+    produtos: ProdutosPedidoOut = Field(default_factory=ProdutosPedidoOut)
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -451,4 +499,5 @@ class PedidoResponseSimplificado(BaseModel):
     itens: List[ItemPedidoResponse]
     meio_pagamento_nome: Optional[str] = None
     pagamento: PedidoPagamentoResumo | None = None
+    produtos: ProdutosPedidoOut = Field(default_factory=ProdutosPedidoOut)
     model_config = ConfigDict(from_attributes=True)

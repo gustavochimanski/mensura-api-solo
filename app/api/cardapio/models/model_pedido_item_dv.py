@@ -1,5 +1,5 @@
 from pydantic import ConfigDict
-from sqlalchemy import Column, Integer, ForeignKey, String, Numeric
+from sqlalchemy import Column, Integer, ForeignKey, String, Numeric, JSON
 from sqlalchemy.orm import relationship
 from app.database.db_connection import Base
 
@@ -18,6 +18,7 @@ class PedidoItemModel(Base):
     # snapshots para não “mudar o passado” se o produto for atualizado
     produto_descricao_snapshot = Column(String(255), nullable=True)
     produto_imagem_snapshot = Column(String(255), nullable=True)
+    adicionais_snapshot = Column(JSON, nullable=True)
 
     pedido = relationship("PedidoDeliveryModel", back_populates="itens")
     produto = relationship("ProdutoModel")

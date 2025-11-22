@@ -1,6 +1,17 @@
 # app/api/balcao/models/model_pedido_balcao.py
 from typing import Optional
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Numeric, Enum as SAEnum, UniqueConstraint, Index
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    DateTime,
+    ForeignKey,
+    Numeric,
+    Enum as SAEnum,
+    UniqueConstraint,
+    Index,
+    JSON,
+)
 from sqlalchemy.orm import relationship
 import enum
 
@@ -66,6 +77,7 @@ class PedidoBalcaoModel(Base):
     numero_pedido = Column(String(20), nullable=False, unique=True)
     status = Column(StatusPedidoBalcaoEnum, nullable=False, default="P")
     observacoes = Column(String(500), nullable=True)
+    produtos_snapshot = Column(JSON, nullable=True)
     
     # Valores
     valor_total = Column(Numeric(18, 2), nullable=False, default=0)

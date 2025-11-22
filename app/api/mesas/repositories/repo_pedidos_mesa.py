@@ -28,8 +28,26 @@ class PedidoMesaRepository:
         self.produto_contract = produto_contract
 
     # ------------ Helpers ------------
+    def _calc_item_total(self, item: PedidoMesaItemModel) -> Decimal:
+        total = (item.preco_unitario or Decimal("0")) * (item.quantidade or 0)
+        adicionais_snapshot = getattr(item, "adicionais_snapshot", None) or []
+        for adicional in adicionais_snapshot:
+            try:
+                adicional_total = (
+                    adicional.get("total")
+                    if isinstance(adicional, dict)
+                    else getattr(adicional, "total", 0)
+                )
+            except AttributeError:
+                adicional_total = 0
+            total += Decimal(str(adicional_total or 0))
+        return total
+
     def _calc_total(self, pedido: PedidoMesaModel) -> Decimal:
-        return sum((item.preco_unitario or Decimal("0")) * (item.quantidade or 0) for item in pedido.itens) or Decimal("0")
+        return (
+            sum(self._calc_item_total(item) for item in pedido.itens)
+            or Decimal("0")
+        )
 
     def _refresh_total(self, pedido: PedidoMesaModel) -> PedidoMesaModel:
         pedido.valor_total = self._calc_total(pedido)
@@ -196,6 +214,7 @@ class PedidoMesaRepository:
         produto_cod_barras: str,
         quantidade: int,
         observacao: Optional[str],
+        adicionais_snapshot: list | None = None,
     ) -> PedidoMesaModel:
         pedido = self.get(pedido_id)
 
@@ -226,6 +245,8 @@ class PedidoMesaRepository:
             produto_descricao_snapshot=descricao_snapshot,
             produto_imagem_snapshot=imagem_snapshot,
         )
+        if adicionais_snapshot:
+            item.adicionais_snapshot = adicionais_snapshot
         self.db.add(item)
         self.db.commit()
         self.db.refresh(item)

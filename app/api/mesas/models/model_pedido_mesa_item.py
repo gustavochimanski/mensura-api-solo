@@ -1,5 +1,5 @@
 # app/api/mesas/models/model_pedido_mesa_item.py
-from sqlalchemy import Column, Integer, String, ForeignKey, Numeric
+from sqlalchemy import Column, Integer, String, ForeignKey, Numeric, JSON
 from sqlalchemy.orm import relationship
 from app.database.db_connection import Base
 
@@ -19,6 +19,7 @@ class PedidoMesaItemModel(Base):
     # Snapshots para não "mudar o passado" se o produto for atualizado
     produto_descricao_snapshot = Column(String(255), nullable=True)
     produto_imagem_snapshot = Column(String(255), nullable=True)
+    adicionais_snapshot = Column(JSON, nullable=True)
     
     # Relacionamentos
     pedido = relationship("PedidoMesaModel", back_populates="itens")

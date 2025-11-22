@@ -9,7 +9,6 @@ from app.api.cadastros.schemas.schema_meio_pagamento import MeioPagamentoRespons
 from app.api.cardapio.schemas.schema_pedido import (
     EnderecoPedidoDetalhe,
     ItemPedidoResponse,
-    PedidoKanbanResponse,
     PedidoResponse,
     PedidoResponseCompleto,
     PedidoResponseCompletoComEndereco,
@@ -24,11 +23,17 @@ from app.api.cadastros.schemas.schema_shared_enums import (
 )
 from app.api.cardapio.schemas.schema_transacao_pagamento import TransacaoResponse
 from app.api.cardapio.services.pedidos.service_pedido_helpers import build_pagamento_resumo
+from app.api.pedidos.utils.produtos_builder import build_produtos_out_from_items
 from app.api.empresas.schemas.schema_empresa import EmpresaResponse
 
 
 class PedidoResponseBuilder:
     """Classe responsável por converter modelos de pedido em diferentes tipos de responses."""
+
+    @staticmethod
+    def _build_produtos(pedido: PedidoDeliveryModel):
+        snapshot = getattr(pedido, "produtos_snapshot", None)
+        return build_produtos_out_from_items(pedido.itens, snapshot)
 
     @staticmethod
     def pedido_to_response(pedido: PedidoDeliveryModel) -> PedidoResponse:
@@ -76,6 +81,7 @@ class PedidoResponseBuilder:
             transacao=TransacaoResponse.model_validate(pedido.transacao) if pedido.transacao else None,
             pagamento=pagamento,
             acertado_entregador=getattr(pedido, "acertado_entregador", None),
+            produtos=PedidoResponseBuilder._build_produtos(pedido),
         )
 
     @staticmethod
@@ -121,6 +127,7 @@ class PedidoResponseBuilder:
                 for it in pedido.itens
             ],
             pagamento=pagamento,
+            produtos=PedidoResponseBuilder._build_produtos(pedido),
         )
 
     @staticmethod
@@ -166,6 +173,7 @@ class PedidoResponseBuilder:
                 for it in pedido.itens
             ],
             pagamento=pagamento,
+            produtos=PedidoResponseBuilder._build_produtos(pedido),
         )
 
     @staticmethod
@@ -274,6 +282,7 @@ class PedidoResponseBuilder:
                 for it in pedido.itens
             ],
             pagamento=pagamento,
+            produtos=PedidoResponseBuilder._build_produtos(pedido),
         )
 
     @staticmethod
@@ -314,5 +323,6 @@ class PedidoResponseBuilder:
             ],
             meio_pagamento_nome=meio_pagamento_nome,
             pagamento=pagamento,
+            produtos=PedidoResponseBuilder._build_produtos(pedido),
         )
 

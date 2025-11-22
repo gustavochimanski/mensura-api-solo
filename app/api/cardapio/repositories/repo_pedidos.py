@@ -335,6 +335,7 @@ class PedidoRepository:
         observacao: str | None,
         produto_descricao_snapshot: str | None,
         produto_imagem_snapshot: str | None,
+        adicionais_snapshot: list | None = None,
     ) -> PedidoItemModel:
         # ⚠️ Evitar passar o objeto pedido E o pedido_id juntos.
         item = PedidoItemModel(
@@ -346,6 +347,8 @@ class PedidoRepository:
             produto_descricao_snapshot=produto_descricao_snapshot,
             produto_imagem_snapshot=produto_imagem_snapshot,
         )
+        if adicionais_snapshot:
+            item.adicionais_snapshot = adicionais_snapshot
         self.db.add(item)
         self.db.flush()
         return item

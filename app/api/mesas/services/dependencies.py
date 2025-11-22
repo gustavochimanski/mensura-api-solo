@@ -6,7 +6,8 @@ from app.api.mesas.services.service_pedidos_mesa import PedidoMesaService
 from app.api.mesas.contracts.pedidos_mesa_contract import IMesaPedidosContract
 from app.api.mesas.adapters.pedidos_mesa_adapter import MesaPedidosAdapter
 from app.api.catalogo.contracts.produto_contract import IProdutoContract
-from app.api.cadastros.contracts.dependencies import get_produto_contract
+from app.api.catalogo.contracts.adicional_contract import IAdicionalContract
+from app.api.cadastros.contracts.dependencies import get_produto_contract, get_adicional_contract
 
 
 def get_mesa_pedidos_contract(db: Session = Depends(get_db)) -> IMesaPedidosContract:
@@ -17,7 +18,12 @@ def get_mesa_pedidos_contract(db: Session = Depends(get_db)) -> IMesaPedidosCont
 def get_pedido_mesa_service(
     db: Session = Depends(get_db),
     produto_contract: IProdutoContract = Depends(get_produto_contract),
+    adicional_contract: IAdicionalContract = Depends(get_adicional_contract),
 ) -> PedidoMesaService:
-    return PedidoMesaService(db, produto_contract=produto_contract)
+    return PedidoMesaService(
+        db,
+        produto_contract=produto_contract,
+        adicional_contract=adicional_contract,
+    )
 
 

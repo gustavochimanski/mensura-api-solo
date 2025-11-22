@@ -6,6 +6,12 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, constr
 
+from app.api.cardapio.schemas.schema_pedido import (
+    ItemAdicionalRequest,
+    ProdutosPedidoRequest,
+    ProdutosPedidoOut,
+)
+
 
 class StatusPedidoBalcaoEnum(str, Enum):
     """Status de pedidos de balcão alinhados ao fluxo de delivery (sem o status 'S')."""
@@ -24,6 +30,14 @@ class PedidoBalcaoItemIn(BaseModel):
     produto_cod_barras: constr(min_length=1)
     quantidade: int = Field(ge=1, default=1)
     observacao: Optional[constr(max_length=255)] = None
+    adicionais: Optional[List[ItemAdicionalRequest]] = Field(
+        default=None,
+        description="Lista de adicionais do item",
+    )
+    adicionais_ids: Optional[List[int]] = Field(
+        default=None,
+        description="(LEGADO) IDs de adicionais vinculados ao produto",
+    )
 
 
 class PedidoBalcaoCreate(BaseModel):
@@ -38,6 +52,10 @@ class PedidoBalcaoCreate(BaseModel):
     cliente_id: Optional[int] = None
     observacoes: Optional[constr(max_length=500)] = None
     itens: Optional[List[PedidoBalcaoItemIn]] = None
+    produtos: Optional[ProdutosPedidoRequest] = Field(
+        default=None,
+        description="Objeto estruturado de produtos (itens/receitas/combos)",
+    )
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -92,6 +110,7 @@ class PedidoBalcaoOut(BaseModel):
     itens: List[PedidoBalcaoItemOut] = []
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    produtos: ProdutosPedidoOut = Field(default_factory=ProdutosPedidoOut)
 
     model_config = ConfigDict(from_attributes=True)
 

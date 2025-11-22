@@ -43,6 +43,7 @@ from app.api.cardapio.services.pedidos.service_pedido_helpers import (
     is_pix_online_meio_pagamento,
 )
 from app.api.cardapio.services.pedidos.service_pedido_responses import PedidoResponseBuilder
+from app.api.pedidos.utils.adicionais import resolve_produto_adicionais
 from app.api.cardapio.services.pedidos.service_pedido_taxas import TaxaService
 from app.api.empresas.contracts.empresa_contract import IEmpresaContract
 from app.api.cadastros.contracts.regiao_entrega_contract import IRegiaoEntregaContract
@@ -501,6 +502,7 @@ class PedidoService:
             logger.info(f"[finalizar_pedido] criado pedido_id={pedido.id} cliente_id={pedido.cliente_id}")
 
             subtotal = Decimal("0")
+            produtos_snapshot_data: dict[str, list] = {"receitas": [], "combos": []}
 
             # Itens normais (produtos com código de barras)
             for it in itens_normais:
@@ -521,6 +523,7 @@ class PedidoService:
                         observacao=self._montar_observacao_item(it),
                         produto_descricao_snapshot=(pe_dto.produto.descricao if pe_dto.produto else None),
                         produto_imagem_snapshot=None,
+                        adicionais_snapshot=self._resolver_adicionais_item_snapshot(it)[1],
                     )
                 else:
                     pe = self.repo.get_produto_emp(empresa_id, it.produto_cod_barras)
@@ -539,10 +542,11 @@ class PedidoService:
                         observacao=self._montar_observacao_item(it),
                         produto_descricao_snapshot=pe.produto.descricao if pe.produto else None,
                         produto_imagem_snapshot=pe.produto.imagem if pe.produto else None,
+                        adicionais_snapshot=self._resolver_adicionais_item_snapshot(it)[1],
                     )
 
-                # Soma adicionais ao subtotal (por unidade do item)
-                subtotal += self._calcular_total_adicionais_item(empresa_id, it)
+                adicionais_total, _adicionais_snapshot = self._resolver_adicionais_item_snapshot(it)
+                subtotal += adicionais_total
 
             # Receitas (sem produto_cod_barras no payload, usam apenas receita_id)
             for rec in receitas_req:
@@ -1531,52 +1535,25 @@ class PedidoService:
                 obs = (obs + " | " if obs else "") + f"Adicionais: {nomes}"
         return obs
 
-    def _calcular_total_adicionais_item(self, empresa_id: int, item_req) -> Decimal:
-        # Suporta tanto o formato novo (adicionais com quantidade)
-        # quanto o legado (apenas lista de IDs, quantidade = 1).
-        adicionais_request = getattr(item_req, "adicionais", None)
-        if adicionais_request:
-            adicional_ids = [a.adicional_id for a in adicionais_request]
-        else:
-            adicional_ids = getattr(item_req, "adicionais_ids", None) or []
-
-        if not adicional_ids or not self.adicional_contract:
-            return Decimal("0")
-        adicionais = self.adicional_contract.buscar_por_ids_para_produto(
-            item_req.produto_cod_barras,
-            adicional_ids,
+    def _resolver_adicionais_item_snapshot(self, item_req):
+        return resolve_produto_adicionais(
+            adicional_contract=self.adicional_contract,
+            produto_cod_barras=getattr(item_req, "produto_cod_barras", None),
+            adicionais_request=getattr(item_req, "adicionais", None),
+            adicionais_ids=getattr(item_req, "adicionais_ids", None),
+            quantidade_item=getattr(item_req, "quantidade", 1),
         )
 
-        # Mapa de quantidade por adicional (novo formato)
-        quantidades_por_id: dict[int, int] = {}
-        if adicionais_request:
-            for req in adicionais_request:
-                try:
-                    qtd = int(req.quantidade or 1)
-                except (TypeError, ValueError):
-                    qtd = 1
-                if qtd < 1:
-                    qtd = 1
-                quantidades_por_id[req.adicional_id] = qtd
-        else:
-            # Formato legado: cada adicional conta como 1
-            quantidades_por_id = {ad_id: 1 for ad_id in adicional_ids}
+    def _calcular_total_adicionais_item(self, empresa_id: int, item_req) -> Decimal:
+        total, _ = self._resolver_adicionais_item_snapshot(item_req)
+        return total
 
-        # Total por unidade do item (considerando quantidade de cada adicional)
-        total_por_unidade = Decimal("0")
-        for adicional in adicionais:
-            qtd = quantidades_por_id.get(getattr(adicional, "id", None), 1)
-            total_por_unidade += _dec(adicional.preco) * qtd
-
-        # preço dos adicionais multiplicado pela quantidade do item
-        return total_por_unidade * max(int(getattr(item_req, "quantidade", 1) or 1), 1)
-
-    def _calcular_total_adicionais_por_ids(
+    def _calcular_total_e_snapshot_adicionais_por_ids(
         self,
         empresa_id: int,
         adicionais_req,
         qtd_item: int = 1,
-    ) -> Decimal:
+    ) -> tuple[Decimal, list[dict]]:
         """
         Calcula o total de adicionais com base apenas em seus IDs e quantidades.
 
@@ -1586,7 +1563,7 @@ class PedidoService:
         """
         adicionais_req = adicionais_req or []
         if not adicionais_req:
-            return Decimal("0")
+            return Decimal("0"), []
 
         adicional_ids: list[int] = []
         for a in adicionais_req:
@@ -1595,7 +1572,7 @@ class PedidoService:
                 adicional_ids.append(ad_id)
 
         if not adicional_ids:
-            return Decimal("0")
+            return Decimal("0"), []
 
         adicionais_db = (
             self.db.query(AdicionalModel)
@@ -1616,6 +1593,7 @@ class PedidoService:
         precos_por_id: dict[int, Decimal] = {a.id: _dec(a.preco) for a in adicionais_db}
 
         total_por_unidade = Decimal("0")
+        snapshot: list[dict] = []
         for req in adicionais_req:
             ad_id = getattr(req, "adicional_id", None)
             if ad_id is None:
@@ -1631,7 +1609,30 @@ class PedidoService:
                 qtd = 1
             if qtd < 1:
                 qtd = 1
-            total_por_unidade += precos_por_id[ad_id] * qtd
+            preco_un = precos_por_id[ad_id]
+            total_por_unidade += preco_un * qtd
+            snapshot.append(
+                {
+                    "adicional_id": ad_id,
+                    "nome": next((a.nome for a in adicionais_db if a.id == ad_id), None),
+                    "quantidade": qtd,
+                    "preco_unitario": float(preco_un),
+                    "total": float((preco_un * qtd) * max(int(qtd_item or 1), 1)),
+                }
+            )
 
         qtd_item = max(int(qtd_item or 1), 1)
-        return total_por_unidade * qtd_item
+        return total_por_unidade * qtd_item, snapshot
+
+    def _calcular_total_adicionais_por_ids(
+        self,
+        empresa_id: int,
+        adicionais_req,
+        qtd_item: int = 1,
+    ) -> Decimal:
+        total, _ = self._calcular_total_e_snapshot_adicionais_por_ids(
+            empresa_id,
+            adicionais_req,
+            qtd_item,
+        )
+        return total

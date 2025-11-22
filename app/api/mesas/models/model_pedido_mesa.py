@@ -1,6 +1,18 @@
 # app/api/mesas/models/model_pedido_mesa.py
 from typing import Optional
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Numeric, Enum as SAEnum, func, UniqueConstraint, Index
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    DateTime,
+    ForeignKey,
+    Numeric,
+    Enum as SAEnum,
+    func,
+    UniqueConstraint,
+    Index,
+    JSON,
+)
 from sqlalchemy.orm import relationship
 import enum
 
@@ -68,6 +80,7 @@ class PedidoMesaModel(Base):
     status = Column(StatusPedidoMesaEnum, nullable=False, default="P")
     observacoes = Column(String(500), nullable=True)
     num_pessoas = Column(Integer, nullable=True)
+    produtos_snapshot = Column(JSON, nullable=True)
     
     # Valores
     valor_total = Column(Numeric(18, 2), nullable=False, default=0)

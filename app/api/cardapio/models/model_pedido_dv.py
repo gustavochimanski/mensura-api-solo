@@ -81,6 +81,7 @@ class PedidoDeliveryModel(Base):
 
     # SNAPSHOT DO ENDEREÇO - dados congelados no momento da criação do pedido
     endereco_snapshot = Column(JSONB, nullable=True)  # Dados completos do endereço no momento do pedido (opcional para retirada)
+    produtos_snapshot = Column(JSONB, nullable=True)  # Snapshot dos produtos (itens/receitas/combos) enviado no checkout
     endereco_geo = Column(Geography(geometry_type="POINT", srid=4326), nullable=True)  # Ponto geográfico para consultas avançadas
     
     data_criacao = Column(DateTime(timezone=True), default=now_trimmed, nullable=False)
