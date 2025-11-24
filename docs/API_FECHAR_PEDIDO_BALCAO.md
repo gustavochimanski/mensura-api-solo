@@ -376,3 +376,18 @@ Para dúvidas ou problemas, consulte:
 - Schema de request: `app/api/balcao/schemas/schema_pedido_balcao.py` (classe `FecharContaBalcaoRequest`)
 - Endpoint: `app/api/balcao/router/admin/fechar_conta_pedido.py`
 
+---
+
+## Documentação Relacionada
+
+Para documentação completa sobre **fechamento e reabertura de pedidos**, incluindo exemplos de implementação em React e fluxos recomendados, consulte:
+
+📄 **[API_BALCAO_FECHAMENTO_REABERTURA.md](./API_BALCAO_FECHAMENTO_REABERTURA.md)**
+
+A documentação completa inclui:
+- Fechamento de conta (detalhado)
+- Reabertura de pedidos
+- Exemplos de código TypeScript/React
+- Fluxos recomendados
+- Casos de teste
+
