@@ -114,7 +114,7 @@ def deletar_cliente(
         raise HTTPException(status_code=404, detail="Cliente não encontrado")
     
     # Verificar se cliente tem pedidos
-    from app.api.cardapio.repositories.repo_pedidos import PedidoRepository
+    from app.api.pedidos.repositories.repo_pedidos import PedidoRepository
     pedido_repo = PedidoRepository(db)
     pedidos = pedido_repo.get_by_cliente_id(cliente_id)
     if pedidos:

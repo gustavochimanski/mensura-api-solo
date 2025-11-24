@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Path, Body
 from sqlalchemy.orm import Session
 
-from app.api.cardapio.schemas.schema_pedido import PedidoResponse
+from app.api.pedidos.schemas.schema_pedido import PedidoResponse
 from app.api.cardapio.schemas.schema_transacao_pagamento import TransacaoStatusUpdateRequest
-from app.api.cardapio.services.pedidos.service_pedido import PedidoService
-from app.api.cardapio.services.pedidos.dependencies import get_pedido_service
+from app.api.pedidos.services.service_pedido import PedidoService
+from app.api.pedidos.services.dependencies import get_pedido_service
 from app.core.admin_dependencies import get_current_user
 from app.database.db_connection import get_db
 from app.utils.logger import logger

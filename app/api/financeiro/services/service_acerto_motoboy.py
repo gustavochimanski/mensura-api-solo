@@ -13,7 +13,7 @@ from app.api.financeiro.schemas.schema_acerto_motoboy import (
     ResumoAcertoEntregador,
     AcertosPassadosResponse,
 )
-from app.api.cardapio.models.model_pedido_dv import PedidoDeliveryModel
+from app.api.pedidos.models.model_pedido_unificado import PedidoUnificadoModel, TipoPedido
 from app.api.cadastros.models.model_entregador_dv import EntregadorDeliveryModel
 from decimal import Decimal
 from app.utils.database_utils import now_trimmed
@@ -49,19 +49,20 @@ class AcertoEntregadoresService:
     def listar_pendentes(self, *, empresa_id: int, inicio, fim, entregador_id: int | None = None) -> list[PedidoPendenteAcertoOut]:
         inicio, fim_exclusive = self._normalize_period(inicio, fim)
         q = (
-            self.db.query(PedidoDeliveryModel)
+            self.db.query(PedidoUnificadoModel)
             .filter(
-                PedidoDeliveryModel.empresa_id == empresa_id,
-                PedidoDeliveryModel.entregador_id.isnot(None),
-                PedidoDeliveryModel.status == "E",
-                PedidoDeliveryModel.acertado_entregador == False,
-                PedidoDeliveryModel.data_criacao >= inicio,
-                PedidoDeliveryModel.data_criacao < fim_exclusive,
+                PedidoUnificadoModel.empresa_id == empresa_id,
+                PedidoUnificadoModel.tipo_pedido == TipoPedido.DELIVERY.value,
+                PedidoUnificadoModel.entregador_id.isnot(None),
+                PedidoUnificadoModel.status == "E",
+                PedidoUnificadoModel.acertado_entregador == False,
+                PedidoUnificadoModel.created_at >= inicio,
+                PedidoUnificadoModel.created_at < fim_exclusive,
             )
         )
         if entregador_id is not None:
-            q = q.filter(PedidoDeliveryModel.entregador_id == entregador_id)
-        pedidos = q.order_by(PedidoDeliveryModel.data_criacao.asc()).all()
+            q = q.filter(PedidoUnificadoModel.entregador_id == entregador_id)
+        pedidos = q.order_by(PedidoUnificadoModel.created_at.asc()).all()
         return [PedidoPendenteAcertoOut.model_validate(p) for p in pedidos]
 
     # --------- Fechamento direto (sem criar acerto) ---------
@@ -75,18 +76,19 @@ class AcertoEntregadoresService:
 
         # Seleciona os pedidos via ORM
         q = (
-            self.db.query(PedidoDeliveryModel)
+            self.db.query(PedidoUnificadoModel)
             .filter(
-                PedidoDeliveryModel.empresa_id == empresa_id,
-                PedidoDeliveryModel.entregador_id.isnot(None),
-                PedidoDeliveryModel.status == "E",
-                PedidoDeliveryModel.acertado_entregador == False,
-                PedidoDeliveryModel.data_criacao >= inicio,
-                PedidoDeliveryModel.data_criacao < fim_exclusive,
+                PedidoUnificadoModel.empresa_id == empresa_id,
+                PedidoUnificadoModel.tipo_pedido == TipoPedido.DELIVERY.value,
+                PedidoUnificadoModel.entregador_id.isnot(None),
+                PedidoUnificadoModel.status == "E",
+                PedidoUnificadoModel.acertado_entregador == False,
+                PedidoUnificadoModel.created_at >= inicio,
+                PedidoUnificadoModel.created_at < fim_exclusive,
             )
         )
         if entregador_id is not None:
-            q = q.filter(PedidoDeliveryModel.entregador_id == entregador_id)
+            q = q.filter(PedidoUnificadoModel.entregador_id == entregador_id)
         pedidos = q.all()
 
         if not pedidos:
@@ -155,18 +157,19 @@ class AcertoEntregadoresService:
     def preview_acerto(self, *, empresa_id: int, inicio, fim, entregador_id: int | None = None) -> PreviewAcertoResponse:
         inicio, fim_exclusive = self._normalize_period(inicio, fim)
         q = (
-            self.db.query(PedidoDeliveryModel)
+            self.db.query(PedidoUnificadoModel)
             .filter(
-                PedidoDeliveryModel.empresa_id == empresa_id,
-                PedidoDeliveryModel.entregador_id.isnot(None),
-                PedidoDeliveryModel.status == "E",
-                PedidoDeliveryModel.acertado_entregador == False,
-                PedidoDeliveryModel.data_criacao >= inicio,
-                PedidoDeliveryModel.data_criacao < fim_exclusive,
+                PedidoUnificadoModel.empresa_id == empresa_id,
+                PedidoUnificadoModel.tipo_pedido == TipoPedido.DELIVERY.value,
+                PedidoUnificadoModel.entregador_id.isnot(None),
+                PedidoUnificadoModel.status == "E",
+                PedidoUnificadoModel.acertado_entregador == False,
+                PedidoUnificadoModel.created_at >= inicio,
+                PedidoUnificadoModel.created_at < fim_exclusive,
             )
         )
         if entregador_id is not None:
-            q = q.filter(PedidoDeliveryModel.entregador_id == entregador_id)
+            q = q.filter(PedidoUnificadoModel.entregador_id == entregador_id)
         pedidos = q.all()
 
         # Agrupar por entregador e por dia (data de criação do pedido)
@@ -176,7 +179,7 @@ class AcertoEntregadoresService:
             if not ent_id:
                 continue
             try:
-                dia = p.data_criacao.date()
+                dia = p.created_at.date() if hasattr(p, 'created_at') else p.data_criacao.date()
             except Exception:
                 # fallback: sem data, ignora
                 continue
@@ -242,17 +245,18 @@ class AcertoEntregadoresService:
     def acertos_passados(self, *, empresa_id: int, inicio, fim, entregador_id: int | None = None) -> AcertosPassadosResponse:
         inicio, fim_exclusive = self._normalize_period(inicio, fim)
         q = (
-            self.db.query(PedidoDeliveryModel)
+            self.db.query(PedidoUnificadoModel)
             .filter(
-                PedidoDeliveryModel.empresa_id == empresa_id,
-                PedidoDeliveryModel.entregador_id.isnot(None),
-                PedidoDeliveryModel.acertado_entregador == True,
-                PedidoDeliveryModel.acertado_entregador_em >= inicio,
-                PedidoDeliveryModel.acertado_entregador_em < fim_exclusive,
+                PedidoUnificadoModel.empresa_id == empresa_id,
+                PedidoUnificadoModel.tipo_pedido == TipoPedido.DELIVERY.value,
+                PedidoUnificadoModel.entregador_id.isnot(None),
+                PedidoUnificadoModel.acertado_entregador == True,
+                PedidoUnificadoModel.acertado_entregador_em >= inicio,
+                PedidoUnificadoModel.acertado_entregador_em < fim_exclusive,
             )
         )
         if entregador_id is not None:
-            q = q.filter(PedidoDeliveryModel.entregador_id == entregador_id)
+            q = q.filter(PedidoUnificadoModel.entregador_id == entregador_id)
         pedidos = q.all()
 
         # Agrupar por entregador e por dia (data de criação do pedido)
@@ -262,7 +266,7 @@ class AcertoEntregadoresService:
             if not ent_id:
                 continue
             try:
-                dia = p.data_criacao.date()
+                dia = p.created_at.date() if hasattr(p, 'created_at') else p.data_criacao.date()
             except Exception:
                 continue
             key = (ent_id, dia)

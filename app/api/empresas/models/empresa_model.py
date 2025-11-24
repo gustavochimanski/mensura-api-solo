@@ -42,7 +42,7 @@ class EmpresaModel(Base):
         back_populates="empresa"
     )
     pedidos = relationship(
-        "PedidoDeliveryModel",
+        "PedidoUnificadoModel",
         back_populates="empresa",
         cascade="all, delete-orphan"
     )

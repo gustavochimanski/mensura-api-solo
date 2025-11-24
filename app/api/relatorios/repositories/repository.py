@@ -11,11 +11,15 @@ from sqlalchemy import func, cast, String, literal
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import ProgrammingError
 
-from app.api.cardapio.models.model_pedido_dv import PedidoDeliveryModel
-from app.api.cardapio.models.model_pedido_item_dv import PedidoItemModel
-from app.api.cardapio.models.model_pedido_status_historico_dv import (
-    PedidoStatusHistoricoModel,
+from app.api.pedidos.models.model_pedido_unificado import (
+    PedidoUnificadoModel,
+    TipoPedido,
 )
+from app.api.pedidos.models.model_pedido_item_unificado import PedidoItemUnificadoModel
+from app.api.pedidos.models.model_pedido_historico_unificado import (
+    PedidoHistoricoUnificadoModel,
+)
+# Modelos antigos foram removidos - usar apenas modelos unificados
 from app.api.cadastros.models.model_entregador_dv import EntregadorDeliveryModel
 from app.api.cadastros.models.model_endereco_dv import EnderecoModel
 from app.api.catalogo.models.model_produto import ProdutoModel
@@ -85,18 +89,19 @@ class RelatorioRepository:
         quantidade_total = 0
         faturamento_total = Decimal("0")
 
-        # Delivery
+        # Delivery (usando modelo unificado)
         try:
             qtd_delivery, fatur_delivery = (
                 self.db.query(
-                    func.count(PedidoDeliveryModel.id),
-                    func.coalesce(func.sum(PedidoDeliveryModel.valor_total), 0),
+                    func.count(PedidoUnificadoModel.id),
+                    func.coalesce(func.sum(PedidoUnificadoModel.valor_total), 0),
                 )
                 .filter(
-                    PedidoDeliveryModel.empresa_id == empresa_id,
-                    PedidoDeliveryModel.data_criacao >= inicio,
-                    PedidoDeliveryModel.data_criacao < fim,
-                    PedidoDeliveryModel.status != "C",
+                    PedidoUnificadoModel.empresa_id == empresa_id,
+                    PedidoUnificadoModel.tipo_pedido == TipoPedido.DELIVERY.value,
+                    PedidoUnificadoModel.created_at >= inicio,
+                    PedidoUnificadoModel.created_at < fim,
+                    PedidoUnificadoModel.status != "C",
                 )
                 .first()
                 or (0, 0)
@@ -164,12 +169,13 @@ class RelatorioRepository:
 
         try:
             cancelados_delivery = (
-                self.db.query(func.count(PedidoDeliveryModel.id))
+                self.db.query(func.count(PedidoUnificadoModel.id))
                 .filter(
-                    PedidoDeliveryModel.empresa_id == empresa_id,
-                    PedidoDeliveryModel.data_criacao >= inicio,
-                    PedidoDeliveryModel.data_criacao < fim,
-                    PedidoDeliveryModel.status == "C",
+                    PedidoUnificadoModel.empresa_id == empresa_id,
+                    PedidoUnificadoModel.tipo_pedido == TipoPedido.DELIVERY.value,
+                    PedidoUnificadoModel.created_at >= inicio,
+                    PedidoUnificadoModel.created_at < fim,
+                    PedidoUnificadoModel.status == "C",
                 )
                 .scalar()
             )
@@ -219,12 +225,13 @@ class RelatorioRepository:
         # Buscar pedidos entregues (status E) no período
         try:
             pedidos_delivery_entregues = (
-                self.db.query(PedidoDeliveryModel)
+                self.db.query(PedidoUnificadoModel)
                 .filter(
-                    PedidoDeliveryModel.empresa_id == empresa_id,
-                    PedidoDeliveryModel.data_criacao >= inicio,
-                    PedidoDeliveryModel.data_criacao < fim,
-                    PedidoDeliveryModel.status == "E",  # Apenas entregues
+                    PedidoUnificadoModel.empresa_id == empresa_id,
+                    PedidoUnificadoModel.tipo_pedido == TipoPedido.DELIVERY.value,
+                    PedidoUnificadoModel.created_at >= inicio,
+                    PedidoUnificadoModel.created_at < fim,
+                    PedidoUnificadoModel.status == "E",  # Apenas entregues
                 )
                 .all()
             )
@@ -265,23 +272,24 @@ class RelatorioRepository:
             tempos_delivery = []
             for pedido in pedidos_delivery_entregues:
                 # Buscar quando foi finalizado (status E no histórico)
+                # Tenta primeiro com modelo unificado, depois com modelo antigo
                 finalizacao = (
-                    self.db.query(PedidoStatusHistoricoModel.criado_em)
+                    self.db.query(PedidoHistoricoUnificadoModel.created_at)
                     .filter(
-                        PedidoStatusHistoricoModel.pedido_id == pedido.id,
-                        PedidoStatusHistoricoModel.status == "E"
+                        PedidoHistoricoUnificadoModel.pedido_id == pedido.id,
+                        PedidoHistoricoUnificadoModel.status_novo == "E"
                     )
-                    .order_by(PedidoStatusHistoricoModel.criado_em.desc())
+                    .order_by(PedidoHistoricoUnificadoModel.created_at.desc())
                     .first()
                 )
                 
                 if finalizacao:
-                    tempo_segundos = (finalizacao[0] - pedido.data_criacao).total_seconds()
+                    tempo_segundos = (finalizacao[0] - pedido.created_at).total_seconds()
                     if tempo_segundos > 0:
                         tempos_delivery.append(tempo_segundos)
                 else:
-                    # Fallback: usar data_atualizacao se não encontrar no histórico
-                    tempo_segundos = (pedido.data_atualizacao - pedido.data_criacao).total_seconds()
+                    # Fallback: usar updated_at se não encontrar no histórico
+                    tempo_segundos = (pedido.updated_at - pedido.created_at).total_seconds()
                     if tempo_segundos > 0:
                         tempos_delivery.append(tempo_segundos)
             
@@ -318,15 +326,16 @@ class RelatorioRepository:
         def _rows_delivery():
             return (
                 self.db.query(
-                    func.date_part("hour", func.timezone('America/Sao_Paulo', PedidoDeliveryModel.data_criacao)).label("hora"),
-                    func.count(PedidoDeliveryModel.id).label("quantidade"),
-                    func.coalesce(func.sum(PedidoDeliveryModel.valor_total), 0).label("faturamento"),
+                    func.date_part("hour", func.timezone('America/Sao_Paulo', PedidoUnificadoModel.created_at)).label("hora"),
+                    func.count(PedidoUnificadoModel.id).label("quantidade"),
+                    func.coalesce(func.sum(PedidoUnificadoModel.valor_total), 0).label("faturamento"),
                 )
                 .filter(
-                    PedidoDeliveryModel.empresa_id == empresa_id,
-                    PedidoDeliveryModel.data_criacao >= inicio,
-                    PedidoDeliveryModel.data_criacao < fim,
-                    PedidoDeliveryModel.status != "C",
+                    PedidoUnificadoModel.empresa_id == empresa_id,
+                    PedidoUnificadoModel.tipo_pedido == TipoPedido.DELIVERY.value,
+                    PedidoUnificadoModel.created_at >= inicio,
+                    PedidoUnificadoModel.created_at < fim,
+                    PedidoUnificadoModel.status != "C",
                 )
                 .group_by("hora")
                 .all()
@@ -408,18 +417,19 @@ class RelatorioRepository:
                 self.db.query(
                     func.date_trunc(
                         "day",
-                        func.timezone('America/Sao_Paulo', PedidoDeliveryModel.data_criacao),
+                        func.timezone('America/Sao_Paulo', PedidoUnificadoModel.created_at),
                     ).label("dia"),
-                    func.count(PedidoDeliveryModel.id).label("quantidade"),
-                    func.coalesce(func.sum(PedidoDeliveryModel.valor_total), 0).label(
+                    func.count(PedidoUnificadoModel.id).label("quantidade"),
+                    func.coalesce(func.sum(PedidoUnificadoModel.valor_total), 0).label(
                         "faturamento"
                     ),
                 )
                 .filter(
-                    PedidoDeliveryModel.empresa_id == empresa_id,
-                    PedidoDeliveryModel.data_criacao >= inicio,
-                    PedidoDeliveryModel.data_criacao < fim,
-                    PedidoDeliveryModel.status != "C",
+                    PedidoUnificadoModel.empresa_id == empresa_id,
+                    PedidoUnificadoModel.tipo_pedido == TipoPedido.DELIVERY.value,
+                    PedidoUnificadoModel.created_at >= inicio,
+                    PedidoUnificadoModel.created_at < fim,
+                    PedidoUnificadoModel.status != "C",
                 )
                 .group_by("dia")
                 .order_by("dia")
@@ -484,11 +494,31 @@ class RelatorioRepository:
         rows_balcao = []
 
         try:
-            rows_delivery = _query_itens(
-                PedidoItemModel,
-                PedidoDeliveryModel,
-                PedidoDeliveryModel.data_criacao,
-                "C",
+            # Query específica para delivery usando modelo unificado
+            descricao_expr_delivery = func.coalesce(
+                PedidoItemUnificadoModel.produto_descricao_snapshot,
+                ProdutoModel.descricao,
+                PedidoItemUnificadoModel.produto_cod_barras,
+            )
+            rows_delivery = (
+                self.db.query(
+                    descricao_expr_delivery.label("descricao"),
+                    func.sum(PedidoItemUnificadoModel.quantidade).label("quantidade"),
+                    func.coalesce(
+                        func.sum(PedidoItemUnificadoModel.quantidade * PedidoItemUnificadoModel.preco_unitario), 0
+                    ).label("faturamento"),
+                )
+                .join(PedidoUnificadoModel, PedidoUnificadoModel.id == PedidoItemUnificadoModel.pedido_id)
+                .outerjoin(ProdutoModel, ProdutoModel.cod_barras == PedidoItemUnificadoModel.produto_cod_barras)
+                .filter(
+                    PedidoUnificadoModel.empresa_id == empresa_id,
+                    PedidoUnificadoModel.tipo_pedido == TipoPedido.DELIVERY.value,
+                    PedidoUnificadoModel.created_at >= inicio,
+                    PedidoUnificadoModel.created_at < fim,
+                    PedidoUnificadoModel.status != "C",
+                )
+                .group_by(descricao_expr_delivery)
+                .all()
             )
         except ProgrammingError as e:
             if "does not exist" not in str(e):
@@ -550,29 +580,30 @@ class RelatorioRepository:
                 self.db.query(
                     EntregadorDeliveryModel.nome.label("nome"),
                     EntregadorDeliveryModel.telefone.label("telefone"),
-                    func.count(PedidoDeliveryModel.id).label("quantidade_pedidos"),
+                    func.count(PedidoUnificadoModel.id).label("quantidade_pedidos"),
                     func.coalesce(
-                        func.sum(PedidoDeliveryModel.valor_total),
+                        func.sum(PedidoUnificadoModel.valor_total),
                         0,
                     ).label("faturamento_total"),
                 )
                 .join(
-                    PedidoDeliveryModel,
-                    PedidoDeliveryModel.entregador_id == EntregadorDeliveryModel.id,
+                    PedidoUnificadoModel,
+                    PedidoUnificadoModel.entregador_id == EntregadorDeliveryModel.id,
                 )
                 .filter(
-                    PedidoDeliveryModel.empresa_id == empresa_id,
-                    PedidoDeliveryModel.data_criacao >= inicio,
-                    PedidoDeliveryModel.data_criacao < fim,
-                    PedidoDeliveryModel.status != "C",  # Exclui apenas cancelados
-                    PedidoDeliveryModel.entregador_id.isnot(None),  # Apenas pedidos com entregador
+                    PedidoUnificadoModel.empresa_id == empresa_id,
+                    PedidoUnificadoModel.tipo_pedido == TipoPedido.DELIVERY.value,
+                    PedidoUnificadoModel.created_at >= inicio,
+                    PedidoUnificadoModel.created_at < fim,
+                    PedidoUnificadoModel.status != "C",  # Exclui apenas cancelados
+                    PedidoUnificadoModel.entregador_id.isnot(None),  # Apenas pedidos com entregador
                 )
                 .group_by(
                     EntregadorDeliveryModel.id,
                     EntregadorDeliveryModel.nome,
                     EntregadorDeliveryModel.telefone,
                 )
-                .order_by(func.count(PedidoDeliveryModel.id).desc())
+                .order_by(func.count(PedidoUnificadoModel.id).desc())
                 .limit(limite)
                 .all()
             )
@@ -754,7 +785,7 @@ class RelatorioRepository:
         fim_dt = datetime.combine(fim + timedelta(days=1), time.min)
 
         bairro_expr = func.coalesce(
-            cast(PedidoDeliveryModel.endereco_snapshot['bairro'].astext, String),
+            cast(PedidoUnificadoModel.endereco_snapshot['bairro'].astext, String),
             EnderecoModel.bairro,
             literal("Não informado"),
         )
@@ -763,21 +794,22 @@ class RelatorioRepository:
             rows = (
                 self.db.query(
                     bairro_expr.label("bairro"),
-                    func.count(PedidoDeliveryModel.id).label("quantidade"),
-                    func.coalesce(func.sum(PedidoDeliveryModel.valor_total), 0).label("faturamento"),
+                    func.count(PedidoUnificadoModel.id).label("quantidade"),
+                    func.coalesce(func.sum(PedidoUnificadoModel.valor_total), 0).label("faturamento"),
                 )
                 .outerjoin(
                     EnderecoModel,
-                    EnderecoModel.id == PedidoDeliveryModel.endereco_id,
+                    EnderecoModel.id == PedidoUnificadoModel.endereco_id,
                 )
                 .filter(
-                    PedidoDeliveryModel.empresa_id == empresa_id,
-                    PedidoDeliveryModel.data_criacao >= inicio_dt,
-                    PedidoDeliveryModel.data_criacao < fim_dt,
-                    PedidoDeliveryModel.status != "C",
+                    PedidoUnificadoModel.empresa_id == empresa_id,
+                    PedidoUnificadoModel.tipo_pedido == TipoPedido.DELIVERY.value,
+                    PedidoUnificadoModel.created_at >= inicio_dt,
+                    PedidoUnificadoModel.created_at < fim_dt,
+                    PedidoUnificadoModel.status != "C",
                 )
                 .group_by(bairro_expr)
-                .order_by(func.coalesce(func.sum(PedidoDeliveryModel.valor_total), 0).desc())
+                .order_by(func.coalesce(func.sum(PedidoUnificadoModel.valor_total), 0).desc())
                 .limit(limite)
                 .all()
             )

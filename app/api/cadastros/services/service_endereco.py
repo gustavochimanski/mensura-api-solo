@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.api.cadastros.models.model_cliente_dv import ClienteModel
 from app.api.cadastros.repositories.repo_endereco import EnderecoRepository
 from app.api.cardapio.schemas.schema_endereco import EnderecoOut, EnderecoCreate, EnderecoUpdate
-from app.api.cardapio.services.pedidos.service_pedido import PedidoService
+from app.api.pedidos.services.service_pedido import PedidoService
 
 class EnderecosService:
     def __init__(self, db: Session):
@@ -134,15 +134,15 @@ class EnderecosService:
         """
         Atualiza o snapshot do endereço em pedidos que ainda não foram entregues.
         """
-        from app.api.cardapio.models.model_pedido_dv import PedidoDeliveryModel
+        from app.api.pedidos.models.model_pedido_unificado import PedidoUnificadoModel
         from geoalchemy2 import WKTElement
         
         # Busca pedidos ativos que usam este endereço
         pedidos_ativos = (
-            self.db.query(PedidoDeliveryModel)
+            self.db.query(PedidoUnificadoModel)
             .filter(
-                PedidoDeliveryModel.endereco_id == endereco_id,
-                PedidoDeliveryModel.status.in_(["P", "I", "R", "S", "D"])  # Pendente, Pendente Impressão, Em preparo, Saiu para entrega, Em edição
+                PedidoUnificadoModel.endereco_id == endereco_id,
+                PedidoUnificadoModel.status.in_(["P", "I", "R", "S", "D"])  # Pendente, Pendente Impressão, Em preparo, Saiu para entrega, Em edição
             )
             .all()
         )

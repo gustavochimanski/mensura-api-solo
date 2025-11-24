@@ -11,11 +11,10 @@ from app.database.db_connection import engine, Base
 
 # Importar models do domínio
 from app.api.cardapio.models.model_transacao_pagamento_dv import TransacaoPagamentoModel
-from app.api.cardapio.models.model_pedido_dv import PedidoDeliveryModel
-from app.api.cardapio.models.model_pedido_item_dv import PedidoItemModel
-from app.api.cardapio.models.model_pedido_status_historico_dv import PedidoStatusHistoricoModel
 from app.api.cardapio.models.model_categoria_dv import CategoriaDeliveryModel
 from app.api.cardapio.models.model_vitrine import VitrinesModel
+# Modelos de pedidos foram movidos para app/api/pedidos/models/
+# Não importar mais os modelos antigos de pedidos aqui
 
 logger = logging.getLogger(__name__)
 
@@ -32,10 +31,8 @@ class CardapioInitializer(DomainInitializer):
     def initialize_tables(self) -> None:
         """Cria as tabelas do domínio Cardápio com ordem específica."""
         # Prioriza criação das tabelas principais primeiro
+        # Modelos de pedidos foram movidos para o domínio pedidos
         cardapio_tables = [
-            PedidoDeliveryModel.__table__,
-            PedidoItemModel.__table__,
-            PedidoStatusHistoricoModel.__table__,
             TransacaoPagamentoModel.__table__
         ]
         
@@ -77,10 +74,8 @@ class CardapioInitializer(DomainInitializer):
         """Valida se as tabelas principais do cardápio foram criadas."""
         try:
             with engine.connect() as conn:
+                # Tabelas de pedidos foram movidas para o schema pedidos
                 tabelas_cardapio = [
-                    "pedidos_dv",
-                    "pedido_itens_dv",
-                    "pedido_status_historico_dv",
                     "transacoes_pagamento_dv"
                 ]
                 

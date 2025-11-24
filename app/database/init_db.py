@@ -247,9 +247,10 @@ def importar_models():
     from app.api.caixas.models.model_caixa import CaixaModel
     # ─── Models Cardápio ───────────────────────────────────────────
     from app.api.cardapio.models.model_transacao_pagamento_dv import TransacaoPagamentoModel
-    from app.api.cardapio.models.model_pedido_dv import PedidoDeliveryModel
-    from app.api.cardapio.models.model_pedido_item_dv import PedidoItemModel
-    from app.api.cardapio.models.model_pedido_status_historico_dv import PedidoStatusHistoricoModel
+    # Modelos unificados (modelos antigos foram removidos)
+    from app.api.pedidos.models.model_pedido_unificado import PedidoUnificadoModel
+    from app.api.pedidos.models.model_pedido_item_unificado import PedidoItemUnificadoModel
+    from app.api.pedidos.models.model_pedido_historico_unificado import PedidoHistoricoUnificadoModel
     from app.api.cadastros.models.model_cupom import CupomDescontoModel
     from app.api.cadastros.models.model_cliente_dv import ClienteModel
     from app.api.cadastros.models.model_endereco_dv import EnderecoModel
@@ -316,18 +317,49 @@ def criar_tabelas_cardapio_antes():
         importar_models()
         
         from app.api.cardapio.models.model_transacao_pagamento_dv import TransacaoPagamentoModel
-        from app.api.cardapio.models.model_pedido_dv import PedidoDeliveryModel
-        from app.api.cardapio.models.model_pedido_item_dv import PedidoItemModel
-        from app.api.cardapio.models.model_pedido_status_historico_dv import PedidoStatusHistoricoModel
+        # Modelos unificados (modelos antigos foram removidos)
+        from app.api.pedidos.models.model_pedido_unificado import PedidoUnificadoModel
+        from app.api.pedidos.models.model_pedido_item_unificado import PedidoItemUnificadoModel
+        from app.api.pedidos.models.model_pedido_historico_unificado import PedidoHistoricoUnificadoModel
         
+        # Tabelas de pedidos foram movidas para o schema pedidos
         cardapio_tables = [
-            PedidoDeliveryModel.__table__,
-            PedidoItemModel.__table__,
-            PedidoStatusHistoricoModel.__table__,
             TransacaoPagamentoModel.__table__
         ]
         
+        # Tabelas do schema pedidos (modelos unificados)
+        pedidos_tables = [
+            PedidoUnificadoModel.__table__,
+            PedidoItemUnificadoModel.__table__,
+            PedidoHistoricoUnificadoModel.__table__,
+        ]
+        
+        # Criar tabelas do schema cardapio (modelos antigos)
         for table in cardapio_tables:
+            try:
+                with engine.begin() as conn:
+                    result = conn.execute(text("""
+                        SELECT 1 FROM information_schema.tables 
+                        WHERE table_schema = :schema 
+                        AND table_name = :table_name
+                    """), {"schema": table.schema, "table_name": table.name})
+                    existe = result.scalar()
+                
+                if not existe:
+                    with engine.begin() as conn:
+                        table.create(engine, checkfirst=False)
+                    logger.info(f"✅ Tabela {table.schema}.{table.name} criada com sucesso")
+                else:
+                    logger.info(f"ℹ️ Tabela {table.schema}.{table.name} já existe")
+            except Exception as table_err:
+                error_msg = str(table_err)
+                if "already exists" in error_msg.lower():
+                    logger.info(f"ℹ️ Tabela {table.schema}.{table.name} já existe")
+                else:
+                    logger.error(f"❌ Erro ao criar tabela {table.schema}.{table.name}: {table_err}", exc_info=True)
+        
+        # Criar tabelas do schema pedidos (modelos unificados)
+        for table in pedidos_tables:
             try:
                 with engine.begin() as conn:
                     result = conn.execute(text("""
@@ -417,20 +449,40 @@ def criar_tabelas():
             # Tenta criar todas as tabelas do cardapio usando create_all
             try:
                 from app.api.cardapio.models.model_transacao_pagamento_dv import TransacaoPagamentoModel
-                from app.api.cardapio.models.model_pedido_dv import PedidoDeliveryModel
-                from app.api.cardapio.models.model_pedido_item_dv import PedidoItemModel
-                from app.api.cardapio.models.model_pedido_status_historico_dv import PedidoStatusHistoricoModel
+                # Modelos unificados (modelos antigos foram removidos)
+                from app.api.pedidos.models.model_pedido_unificado import PedidoUnificadoModel
+                from app.api.pedidos.models.model_pedido_item_unificado import PedidoItemUnificadoModel
+                from app.api.pedidos.models.model_pedido_historico_unificado import PedidoHistoricoUnificadoModel
                 
                 # Garante que os modelos estão registrados no Base
+                # Tabelas de pedidos foram movidas para o schema pedidos
                 cardapio_tables = [
-                    PedidoDeliveryModel.__table__,
-                    PedidoItemModel.__table__,
-                    PedidoStatusHistoricoModel.__table__,
                     TransacaoPagamentoModel.__table__
                 ]
                 
+                # Tabelas do schema pedidos (modelos unificados)
+                pedidos_tables = [
+                    PedidoUnificadoModel.__table__,
+                    PedidoItemUnificadoModel.__table__,
+                    PedidoHistoricoUnificadoModel.__table__,
+                ]
+                
                 # Cria cada tabela individualmente para melhor controle de erros
+                # Criar tabelas do schema cardapio (modelos antigos)
                 for table in cardapio_tables:
+                    try:
+                        with engine.begin() as conn:
+                            table.create(engine, checkfirst=True)
+                        logger.info(f"✅ Tabela {table.schema}.{table.name} criada/verificada")
+                    except Exception as table_err:
+                        error_msg = str(table_err)
+                        if "already exists" in error_msg.lower():
+                            logger.info(f"ℹ️ Tabela {table.schema}.{table.name} já existe")
+                        else:
+                            logger.error(f"❌ Erro ao criar tabela {table.schema}.{table.name}: {table_err}", exc_info=True)
+                
+                # Criar tabelas do schema pedidos (modelos unificados)
+                for table in pedidos_tables:
                     try:
                         with engine.begin() as conn:
                             table.create(engine, checkfirst=True)

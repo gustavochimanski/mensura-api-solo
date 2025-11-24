@@ -15,7 +15,7 @@ class TransacaoPagamentoModel(Base):
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    pedido_id = Column(Integer, ForeignKey("cardapio.pedidos_dv.id", ondelete="CASCADE"), nullable=False)
+    pedido_id = Column(Integer, ForeignKey("pedidos.pedidos.id", ondelete="CASCADE"), nullable=False)
 
     gateway = Column(PagamentoGateway, nullable=False)
     metodo = Column(PagamentoMetodo, nullable=False)
@@ -43,5 +43,5 @@ class TransacaoPagamentoModel(Base):
     created_at = Column(DateTime, default=now_trimmed, nullable=False)
     updated_at = Column(DateTime, default=now_trimmed, onupdate=now_trimmed,  nullable=False)
 
-    pedido = relationship("PedidoDeliveryModel", back_populates="transacao", overlaps="pedido_multi")
-    pedido_multi = relationship("PedidoDeliveryModel", foreign_keys=[pedido_id], back_populates="transacoes", overlaps="pedido")
+    pedido = relationship("PedidoUnificadoModel", back_populates="transacao", overlaps="pedido_multi")
+    pedido_multi = relationship("PedidoUnificadoModel", foreign_keys=[pedido_id], back_populates="transacoes", overlaps="pedido")

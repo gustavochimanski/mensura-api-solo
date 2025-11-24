@@ -46,7 +46,7 @@ class CupomDescontoModel(Base):
     updated_at = Column(DateTime, default=now_trimmed, onupdate=now_trimmed, nullable=False)
 
     pedidos = relationship(
-        "PedidoDeliveryModel",
+        "PedidoUnificadoModel",
         back_populates="cupom",
         cascade="all, delete-orphan",
     )

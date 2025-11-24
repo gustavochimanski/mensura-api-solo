@@ -9,8 +9,8 @@ from pydantic import BaseModel, ConfigDict
 
 from app.api.cadastros.schemas.schema_shared_enums import PagamentoGatewayEnum
 from app.api.cardapio.schemas.schema_transacao_pagamento import TransacaoStatusUpdateRequest
-from app.api.cardapio.services.pedidos.service_pedido import PedidoService
-from app.api.cardapio.services.pedidos.dependencies import get_pedido_service
+from app.api.pedidos.services.service_pedido import PedidoService
+from app.api.pedidos.services.dependencies import get_pedido_service
 from app.database.db_connection import get_db
 from app.utils.logger import logger
 

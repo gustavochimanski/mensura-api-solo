@@ -17,7 +17,7 @@ from app.utils.minio_client import upload_file_to_minio, remover_arquivo_minio, 
 
 from app.api.cadastros.models.association_tables import entregador_empresa, usuario_empresa
 from app.api.catalogo.models.model_produto_emp import ProdutoEmpModel
-from app.api.cardapio.models.model_pedido_dv import PedidoDeliveryModel
+from app.api.pedidos.models.model_pedido_unificado import PedidoUnificadoModel, TipoPedido
 
 class EmpresaService:
     def __init__(self, db: Session):
@@ -180,8 +180,8 @@ class EmpresaService:
         produtos_qtd = self.db.query(func.count(ProdutoEmpModel.cod_barras))\
             .filter(ProdutoEmpModel.empresa_id == empresa_id).scalar() or 0
 
-        pedidos_qtd = self.db.query(func.count(PedidoDeliveryModel.id))\
-            .filter(PedidoDeliveryModel.empresa_id == empresa_id).scalar() or 0
+        pedidos_qtd = self.db.query(func.count(PedidoUnificadoModel.id))\
+            .filter(PedidoUnificadoModel.empresa_id == empresa_id).scalar() or 0
 
         regioes_qtd = self.db.query(func.count(RegiaoEntregaModel.id))\
             .filter(RegiaoEntregaModel.empresa_id == empresa_id).scalar() or 0

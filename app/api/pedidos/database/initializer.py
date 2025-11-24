@@ -7,10 +7,10 @@ import logging
 from app.database.domain.base import DomainInitializer
 from app.database.domain.registry import register_domain
 
-# Importar models do domínio
-from app.api.pedidos.models.model_pedido import PedidoModel
-from app.api.pedidos.models.model_pedido_item import PedidoUnificadoItemModel
-from app.api.pedidos.models.model_pedido_historico import PedidoHistoricoModel
+# Importar models do domínio (modelos unificados)
+from app.api.pedidos.models.model_pedido_unificado import PedidoUnificadoModel
+from app.api.pedidos.models.model_pedido_item_unificado import PedidoItemUnificadoModel
+from app.api.pedidos.models.model_pedido_historico_unificado import PedidoHistoricoUnificadoModel
 
 logger = logging.getLogger(__name__)
 

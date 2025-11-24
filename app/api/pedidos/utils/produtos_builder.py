@@ -5,7 +5,7 @@ from typing import Iterable, Any
 
 from pydantic import ValidationError
 
-from app.api.cardapio.schemas.schema_pedido import (
+from app.api.pedidos.schemas.schema_pedido import (
     ProdutosPedidoOut,
     ProdutoPedidoItemOut,
     ProdutoPedidoAdicionalOut,

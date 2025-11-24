@@ -24,4 +24,4 @@ class EntregadorDeliveryModel(Base):
     updated_at = Column(DateTime, default=now_trimmed, onupdate=now_trimmed,  nullable=False)
 
     empresas = relationship("EmpresaModel", secondary=entregador_empresa, back_populates="entregadores")
-    pedidos = relationship("PedidoDeliveryModel", back_populates="entregador")
+    pedidos = relationship("PedidoUnificadoModel", back_populates="entregador")

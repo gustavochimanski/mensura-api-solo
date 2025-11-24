@@ -38,10 +38,10 @@ class ClienteModel(Base):
 
     # Relacionamentos usando cliente_id como FK
     pedidos = relationship(
-        "PedidoDeliveryModel",
+        "PedidoUnificadoModel",
         back_populates="cliente",
         cascade="all, delete-orphan",
-        foreign_keys="PedidoDeliveryModel.cliente_id"  # agora referencia id, não telefone
+        foreign_keys="PedidoUnificadoModel.cliente_id"  # referencia id do cliente
     )
 
     enderecos = relationship(

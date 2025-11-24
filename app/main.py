@@ -22,31 +22,11 @@ from app.config.settings import CORS_ORIGINS, CORS_ALLOW_ALL, BASE_URL as SETTIN
 # Garante que todos os modelos estejam registrados no SQLAlchemy
 # antes de qualquer query ser executada
 # ───────────────────────────
-from app.api.financeiro.models.model_caixa_conferencia import CaixaConferenciaModel  # noqa: F401
-from app.api.caixas.models.model_caixa import CaixaModel  # noqa: F401
-from app.api.balcao.models.model_pedido_balcao import PedidoBalcaoModel  # noqa: F401
-from app.api.balcao.models.model_pedido_balcao_item import PedidoBalcaoItemModel  # noqa: F401
-from app.api.balcao.models.model_pedido_balcao_historico import PedidoBalcaoHistoricoModel  # noqa: F401
-# Importar modelos do cardápio para garantir registro no SQLAlchemy
-from app.api.cardapio.models.model_pedido_dv import PedidoDeliveryModel  # noqa: F401
-# Importar modelos do bounded context de pedidos unificados
-from app.api.pedidos.models.model_pedido import PedidoModel  # noqa: F401
-from app.api.pedidos.models.model_pedido_item import PedidoUnificadoItemModel  # noqa: F401
-from app.api.pedidos.models.model_pedido_historico import PedidoHistoricoModel  # noqa: F401
-from app.api.cardapio.models.model_pedido_item_dv import PedidoItemModel  # noqa: F401
-from app.api.cardapio.models.model_pedido_status_historico_dv import PedidoStatusHistoricoModel  # noqa: F401
-from app.api.cardapio.models.model_transacao_pagamento_dv import TransacaoPagamentoModel  # noqa: F401
-# Importar modelos do catálogo para garantir registro no SQLAlchemy
-from app.api.catalogo.models.model_produto import ProdutoModel  # noqa: F401
-from app.api.catalogo.models.model_receita import ReceitaModel, ReceitaIngredienteModel, ReceitaAdicionalModel  # noqa: F401
-from app.api.catalogo.receitas.models.model_ingrediente import IngredienteModel  # noqa: F401
 
 from app.api.auth import auth_controller
 from app.api.cardapio.router.router import api_cardapio
 from app.api.cadastros.router.router import api_cadastros
 from app.api.empresas.router.router import api_empresas
-from app.api.mesas.router.router import api_mesas
-from app.api.balcao.router.router import api_balcao
 from app.api.pedidos.router.router import api_pedidos
 from app.api.relatorios.router.router import router as relatorios_router
 from app.api.notifications.router.router import router as notifications_router

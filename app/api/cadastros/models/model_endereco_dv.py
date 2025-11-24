@@ -33,6 +33,6 @@ class EnderecoModel(Base):
 
     # relacionamentos
     cliente = relationship("ClienteModel", back_populates="enderecos")
-    pedidos = relationship("PedidoDeliveryModel", back_populates="endereco", cascade="all, delete-orphan")
+    pedidos = relationship("PedidoUnificadoModel", back_populates="endereco", cascade="all, delete-orphan")
 
     model_config = ConfigDict(from_attributes=True)

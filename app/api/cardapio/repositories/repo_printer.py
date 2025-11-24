@@ -6,7 +6,11 @@ from typing import List, Optional
 from sqlalchemy import and_
 from sqlalchemy.orm import Session, joinedload
 
-from app.api.cardapio.models.model_pedido_dv import PedidoDeliveryModel
+from app.api.pedidos.models.model_pedido_unificado import (
+    PedidoUnificadoModel,
+    TipoPedido,
+    StatusPedido,
+)
 from app.api.empresas.models.empresa_model import EmpresaModel
 from app.api.cadastros.schemas.schema_shared_enums import PedidoStatusEnum
 from app.api.cardapio.schemas.schema_printer import (
@@ -14,11 +18,7 @@ from app.api.cardapio.schemas.schema_printer import (
     PedidoParaImpressao,
     TipoPedidoPrinterEnum,
 )
-from app.api.mesas.models.model_pedido_mesa import PedidoMesaModel, StatusPedidoMesa
-from app.api.mesas.repositories.repo_pedidos_mesa import PedidoMesaRepository
-from app.api.balcao.models.model_pedido_balcao import PedidoBalcaoModel, StatusPedidoBalcao
-from app.api.balcao.models.model_pedido_balcao_historico import TipoOperacaoPedidoBalcao
-from app.api.balcao.repositories.repo_pedidos_balcao import PedidoBalcaoRepository
+from app.api.pedidos.repositories.repo_pedidos import PedidoRepository
 from app.utils.logger import logger
 
 
@@ -28,7 +28,7 @@ class PrinterRepository:
     def __init__(self, db: Session):
         self.db = db
     
-    def get_pedidos_pendentes_impressao(self, empresa_id: int, limite: Optional[int] = None) -> List[PedidoDeliveryModel]:
+    def get_pedidos_pendentes_impressao(self, empresa_id: int, limite: Optional[int] = None) -> List[PedidoUnificadoModel]:
         """
         Busca pedidos pendentes de impressão (status 'I' e 'D') de uma empresa
         Exclui pedidos ENTREGUE e CANCELADO
@@ -41,22 +41,23 @@ class PrinterRepository:
             Lista de pedidos pendentes de impressão
         """
         query = (
-            self.db.query(PedidoDeliveryModel)
+            self.db.query(PedidoUnificadoModel)
             .options(
-                joinedload(PedidoDeliveryModel.empresa),
-                joinedload(PedidoDeliveryModel.cliente),
-                joinedload(PedidoDeliveryModel.itens),
-                joinedload(PedidoDeliveryModel.meio_pagamento)
+                joinedload(PedidoUnificadoModel.empresa),
+                joinedload(PedidoUnificadoModel.cliente),
+                joinedload(PedidoUnificadoModel.itens),
+                joinedload(PedidoUnificadoModel.meio_pagamento)
             )
             .filter(
                 and_(
-                    PedidoDeliveryModel.empresa_id == empresa_id,
-                    PedidoDeliveryModel.status == PedidoStatusEnum.I.value,
-                    PedidoDeliveryModel.status != PedidoStatusEnum.E.value,  # Exclui ENTREGUE
-                    PedidoDeliveryModel.status != PedidoStatusEnum.C.value,   # Exclui CANCELADO
+                    PedidoUnificadoModel.tipo_pedido == TipoPedido.DELIVERY.value,
+                    PedidoUnificadoModel.empresa_id == empresa_id,
+                    PedidoUnificadoModel.status == PedidoStatusEnum.I.value,
+                    PedidoUnificadoModel.status != PedidoStatusEnum.E.value,  # Exclui ENTREGUE
+                    PedidoUnificadoModel.status != PedidoStatusEnum.C.value,   # Exclui CANCELADO
                 )
             )
-            .order_by(PedidoDeliveryModel.data_criacao.asc())
+            .order_by(PedidoUnificadoModel.created_at.asc())
         )
         
         if limite:
@@ -64,7 +65,7 @@ class PrinterRepository:
             
         return query.all()
     
-    def get_pedido_para_impressao(self, pedido_id: int) -> Optional[PedidoDeliveryModel]:
+    def get_pedido_para_impressao(self, pedido_id: int) -> Optional[PedidoUnificadoModel]:
         """
         Busca um pedido específico para impressão
         
@@ -77,13 +78,14 @@ class PrinterRepository:
         from sqlalchemy import or_
         
         return (
-            self.db.query(PedidoDeliveryModel)
+            self.db.query(PedidoUnificadoModel)
             .filter(
                 and_(
-                    PedidoDeliveryModel.id == pedido_id,
+                    PedidoUnificadoModel.id == pedido_id,
+                    PedidoUnificadoModel.tipo_pedido == TipoPedido.DELIVERY.value,
                     or_(
-                        PedidoDeliveryModel.status == PedidoStatusEnum.I.value,
-                        PedidoDeliveryModel.status == PedidoStatusEnum.D.value
+                        PedidoUnificadoModel.status == PedidoStatusEnum.I.value,
+                        PedidoUnificadoModel.status == PedidoStatusEnum.D.value
                     )
                 )
             )
@@ -106,7 +108,7 @@ class PrinterRepository:
         """
         try:
             if tipo_pedido == TipoPedidoPrinterEnum.DELIVERY:
-                from app.api.cardapio.repositories.repo_pedidos import PedidoRepository
+                from app.api.pedidos.repositories.repo_pedidos import PedidoRepository
 
                 pedido = self.get_pedido_para_impressao(pedido_id)
                 if not pedido:
@@ -124,10 +126,8 @@ class PrinterRepository:
                 return True
 
             if tipo_pedido == TipoPedidoPrinterEnum.MESA:
-                mesa_repo = PedidoMesaRepository(self.db)
-                pedido: Optional[PedidoMesaModel] = (
-                    self.db.query(PedidoMesaModel).filter(PedidoMesaModel.id == pedido_id).first()
-                )
+                pedido_repo = PedidoRepository(self.db)
+                pedido = pedido_repo.get_pedido(pedido_id, TipoPedido.MESA)
                 if not pedido:
                     logger.warning(f"[PrinterRepository] Pedido mesa {pedido_id} não encontrado")
                     return False
@@ -138,23 +138,22 @@ class PrinterRepository:
                     else getattr(pedido.status, "value", str(pedido.status))
                 )
                 if status_atual not in {
-                    StatusPedidoMesa.IMPRESSAO.value,
-                    StatusPedidoMesa.PENDENTE.value,
+                    StatusPedido.IMPRESSAO.value,
+                    StatusPedido.PENDENTE.value,
                 }:
                     logger.warning(
                         f"[PrinterRepository] Pedido mesa {pedido_id} com status {status_atual} não pode ser marcado como impresso"
                     )
                     return False
 
-                mesa_repo.atualizar_status(pedido_id, StatusPedidoMesa.PREPARANDO.value)
+                pedido_repo.atualizar_status(pedido_id, StatusPedido.PREPARANDO.value)
+                self.db.commit()
                 logger.info(f"[PrinterRepository] Pedido mesa {pedido_id} marcado como impresso → PREPARANDO")
                 return True
 
             if tipo_pedido == TipoPedidoPrinterEnum.BALCAO:
-                balcao_repo = PedidoBalcaoRepository(self.db)
-                pedido: Optional[PedidoBalcaoModel] = (
-                    self.db.query(PedidoBalcaoModel).filter(PedidoBalcaoModel.id == pedido_id).first()
-                )
+                pedido_repo = PedidoRepository(self.db)
+                pedido = pedido_repo.get_pedido(pedido_id, TipoPedido.BALCAO)
                 if not pedido:
                     logger.warning(f"[PrinterRepository] Pedido balcão {pedido_id} não encontrado")
                     return False
@@ -165,24 +164,25 @@ class PrinterRepository:
                     else getattr(pedido.status, "value", str(pedido.status))
                 )
                 if status_atual not in {
-                    StatusPedidoBalcao.IMPRESSAO.value,
-                    StatusPedidoBalcao.PENDENTE.value,
+                    StatusPedido.IMPRESSAO.value,
+                    StatusPedido.PENDENTE.value,
                 }:
                     logger.warning(
                         f"[PrinterRepository] Pedido balcão {pedido_id} com status {status_atual} não pode ser marcado como impresso"
                     )
                     return False
 
-                novo_status = StatusPedidoBalcao.PREPARANDO.value
-                balcao_repo.atualizar_status(pedido_id, novo_status)
-                balcao_repo.add_historico(
+                novo_status = StatusPedido.PREPARANDO.value
+                pedido_repo.atualizar_status(pedido_id, novo_status)
+                from app.api.pedidos.models.model_pedido_historico_unificado import TipoOperacaoPedido
+                pedido_repo.add_historico(
                     pedido_id=pedido_id,
-                    tipo_operacao=TipoOperacaoPedidoBalcao.STATUS_ALTERADO,
+                    tipo_operacao=TipoOperacaoPedido.STATUS_ALTERADO,
                     status_anterior=status_atual,
                     status_novo=novo_status,
                     descricao="Pedido marcado como impresso",
                 )
-                balcao_repo.commit()
+                pedido_repo.commit()
                 logger.info(f"[PrinterRepository] Pedido balcão {pedido_id} marcado como impresso → PREPARANDO")
                 return True
 
@@ -194,7 +194,7 @@ class PrinterRepository:
             logger.error(f"[PrinterRepository] Erro ao marcar pedido {pedido_id} como impresso: {str(e)}")
             return False
     
-    def converter_pedido_para_impressao(self, pedido: PedidoDeliveryModel) -> PedidoParaImpressao:
+    def converter_pedido_para_impressao(self, pedido: PedidoUnificadoModel) -> PedidoParaImpressao:
         """
         Converte um pedido do banco para formato de impressão
         
@@ -243,7 +243,7 @@ class PrinterRepository:
             cliente_nome=pedido.cliente.nome if pedido.cliente else "Cliente não informado",
             cliente_telefone=pedido.cliente.telefone if pedido.cliente else None,
             valor_total=float(pedido.valor_total or 0),
-            data_criacao=pedido.data_criacao,
+            data_criacao=pedido.created_at,
             endereco=endereco_str,
             meio_pagamento_descricao=pedido.meio_pagamento.display() if pedido.meio_pagamento else None,
             observacao_geral=pedido.observacao_geral,
@@ -270,13 +270,14 @@ class PrinterRepository:
         from sqlalchemy import or_
         
         stats['pendentes_impressao'] = (
-            self.db.query(PedidoDeliveryModel)
+            self.db.query(PedidoUnificadoModel)
             .filter(
                 and_(
-                    PedidoDeliveryModel.empresa_id == empresa_id,
+                    PedidoUnificadoModel.tipo_pedido == TipoPedido.DELIVERY.value,
+                    PedidoUnificadoModel.empresa_id == empresa_id,
                     or_(
-                        PedidoDeliveryModel.status == PedidoStatusEnum.I.value,
-                        PedidoDeliveryModel.status == PedidoStatusEnum.D.value
+                        PedidoUnificadoModel.status == PedidoStatusEnum.I.value,
+                        PedidoUnificadoModel.status == PedidoStatusEnum.D.value
                     )
                 )
             )
@@ -285,12 +286,13 @@ class PrinterRepository:
         
         # Total de pedidos impressos hoje
         stats['impressos_hoje'] = (
-            self.db.query(PedidoDeliveryModel)
+            self.db.query(PedidoUnificadoModel)
             .filter(
                 and_(
-                    PedidoDeliveryModel.empresa_id == empresa_id,
-                    PedidoDeliveryModel.status == PedidoStatusEnum.R.value,
-                    func.date(PedidoDeliveryModel.data_atualizacao) == hoje
+                    PedidoUnificadoModel.tipo_pedido == TipoPedido.DELIVERY.value,
+                    PedidoUnificadoModel.empresa_id == empresa_id,
+                    PedidoUnificadoModel.status == PedidoStatusEnum.R.value,
+                    func.date(PedidoUnificadoModel.updated_at) == hoje
                 )
             )
             .count()
@@ -298,11 +300,12 @@ class PrinterRepository:
         
         # Total de pedidos do dia
         stats['total_hoje'] = (
-            self.db.query(PedidoDeliveryModel)
+            self.db.query(PedidoUnificadoModel)
             .filter(
                 and_(
-                    PedidoDeliveryModel.empresa_id == empresa_id,
-                    func.date(PedidoDeliveryModel.data_criacao) == hoje
+                    PedidoUnificadoModel.tipo_pedido == TipoPedido.DELIVERY.value,
+                    PedidoUnificadoModel.empresa_id == empresa_id,
+                    func.date(PedidoUnificadoModel.created_at) == hoje
                 )
             )
             .count()

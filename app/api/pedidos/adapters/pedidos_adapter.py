@@ -15,7 +15,7 @@ from app.api.pedidos.contracts.pedidos_contract import (
     StatusPedidoDTO,
 )
 from app.api.pedidos.repositories.repo_pedidos import PedidoRepository
-from app.api.pedidos.models.model_pedido import PedidoModel, TipoPedido, StatusPedido
+from app.api.pedidos.models.model_pedido_unificado import PedidoUnificadoModel, TipoPedido, StatusPedido
 from app.api.pedidos.utils.helpers import enum_value
 
 
@@ -26,7 +26,7 @@ class PedidosAdapter(IPedidosContract):
         self.db = db
         self.repo = PedidoRepository(db)
 
-    def _to_pedido_min_dto(self, pedido: PedidoModel) -> PedidoMinDTO:
+    def _to_pedido_min_dto(self, pedido: PedidoUnificadoModel) -> PedidoMinDTO:
         """Converte modelo de pedido para DTO mínimo."""
         # Cliente
         cliente_min = None
