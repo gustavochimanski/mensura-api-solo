@@ -15,15 +15,7 @@ from app.api.cadastros.contracts.dependencies import (
 )
 from app.api.catalogo.contracts.adicional_contract import IAdicionalContract
 from app.api.catalogo.contracts.combo_contract import IComboContract
-from app.api.mesas.contracts.pedidos_mesa_contract import IMesaPedidosContract
-from app.api.mesas.services.dependencies import get_mesa_pedidos_contract
-from app.api.balcao.contracts.pedidos_balcao_contract import IBalcaoPedidosContract
-from app.api.balcao.adapters.pedidos_balcao_adapter import BalcaoPedidosAdapter
-
-
-def get_balcao_pedidos_contract(db: Session = Depends(get_db)) -> IBalcaoPedidosContract:
-    """Dependency para obter o contrato de pedidos de balcão"""
-    return BalcaoPedidosAdapter(db)
+# Migrado para modelos unificados - contratos de mesa e balcão não são mais necessários
 
 
 def get_pedido_service(
@@ -33,8 +25,6 @@ def get_pedido_service(
     produto_contract: IProdutoContract = Depends(get_produto_contract),
     adicional_contract: IAdicionalContract = Depends(get_adicional_contract),
     combo_contract: IComboContract = Depends(get_combo_contract),
-    mesa_contract: IMesaPedidosContract = Depends(get_mesa_pedidos_contract),
-    balcao_contract: IBalcaoPedidosContract = Depends(get_balcao_pedidos_contract),
 ) -> PedidoService:
     return PedidoService(
         db,
@@ -43,8 +33,6 @@ def get_pedido_service(
         produto_contract=produto_contract,
         adicional_contract=adicional_contract,
         combo_contract=combo_contract,
-        mesa_contract=mesa_contract,
-        balcao_contract=balcao_contract,
     )
 
 

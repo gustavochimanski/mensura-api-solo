@@ -53,8 +53,7 @@ from app.api.empresas.contracts.empresa_contract import IEmpresaContract
 from app.api.cadastros.contracts.regiao_entrega_contract import IRegiaoEntregaContract
 from app.api.catalogo.contracts.produto_contract import IProdutoContract, ProdutoEmpDTO
 from app.api.pedidos.services.service_pedido_kanban import KanbanService
-from app.api.mesas.contracts.pedidos_mesa_contract import IMesaPedidosContract
-from app.api.balcao.contracts.pedidos_balcao_contract import IBalcaoPedidosContract
+# Migrado para modelos unificados - contratos não são mais necessários
 from app.api.empresas.repositories.empresa_repo import EmpresaRepository
 from app.utils.logger import logger
 from app.utils.database_utils import now_trimmed
@@ -78,8 +77,6 @@ class PedidoService:
         produto_contract: IProdutoContract | None = None,
         adicional_contract=None,
         combo_contract=None,
-        mesa_contract: IMesaPedidosContract | None = None,
-        balcao_contract: IBalcaoPedidosContract | None = None,
     ):
         self.db = db
         self.repo = PedidoRepository(db)
@@ -98,8 +95,6 @@ class PedidoService:
         self.kanban_service = KanbanService(
             db,
             self.repo,
-            mesa_contract=mesa_contract,
-            balcao_contract=balcao_contract,
         )
 
     # ---------------- Helpers ---------------- 
