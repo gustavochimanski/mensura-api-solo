@@ -52,7 +52,7 @@ from app.api.pedidos.services.service_pedido_taxas import TaxaService
 from app.api.empresas.contracts.empresa_contract import IEmpresaContract
 from app.api.cadastros.contracts.regiao_entrega_contract import IRegiaoEntregaContract
 from app.api.catalogo.contracts.produto_contract import IProdutoContract, ProdutoEmpDTO
-from app.api.cadastros.services.service_pedido_kanban import KanbanService
+from app.api.pedidos.services.service_pedido_kanban import KanbanService
 from app.api.mesas.contracts.pedidos_mesa_contract import IMesaPedidosContract
 from app.api.balcao.contracts.pedidos_balcao_contract import IBalcaoPedidosContract
 from app.api.empresas.repositories.empresa_repo import EmpresaRepository
