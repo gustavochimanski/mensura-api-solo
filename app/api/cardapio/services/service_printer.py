@@ -12,18 +12,9 @@ from app.api.cardapio.schemas.schema_printer import (
     RespostaImpressaoPrinter,
     TipoPedidoPrinterEnum,
 )
-# TODO: Migrar para modelos unificados (PedidoUnificadoModel)
-# Temporariamente desabilitado - módulos mesas e balcao não existem mais
-# Criando stubs para permitir que o código funcione
-class StatusPedidoMesa:
-    IMPRESSAO = type('Enum', (), {'value': 'I'})()
-
-class StatusPedidoBalcao:
-    IMPRESSAO = type('Enum', (), {'value': 'I'})()
-
-# Stubs vazios - as funções retornarão listas vazias
-PedidoMesaModel = None
-PedidoBalcaoModel = None
+from app.api.pedidos.models.model_pedido_unificado import PedidoUnificadoModel, TipoPedido, StatusPedido
+from sqlalchemy import and_
+from datetime import datetime, timedelta
 from app.utils.logger import logger
 
 
@@ -33,8 +24,8 @@ class PrinterService:
         self.repo = PrinterRepository(db)
 
     STATUS_IMPRESSAO = "I"
-    MESA_STATUS_PENDENTES = {StatusPedidoMesa.IMPRESSAO.value}
-    BALCAO_STATUS_PENDENTES = {StatusPedidoBalcao.IMPRESSAO.value}
+    MESA_STATUS_PENDENTES = {StatusPedido.IMPRESSAO.value}
+    BALCAO_STATUS_PENDENTES = {StatusPedido.IMPRESSAO.value}
 
     def get_pedidos_pendentes_para_impressao(
         self,
@@ -88,7 +79,7 @@ class PrinterService:
             troco=troco,
             observacao_geral=pedido.observacao_geral,
             endereco=endereco,
-            data_criacao=pedido.data_criacao,
+            data_criacao=pedido.created_at,
             empresa=self._build_empresa_data(pedido.empresa),
             tipo_pedido=TipoPedidoPrinterEnum.DELIVERY,
         )
@@ -99,10 +90,33 @@ class PrinterService:
         empresa_id: int,
         limite: int | None,
     ) -> List[PedidoPendenteImpressaoResponse]:
-        # TODO: Migrar para usar PedidoUnificadoModel com tipo_pedido='MESA'
-        # Temporariamente retorna lista vazia até migração completa
-        logger.warning("[Printer] Funcionalidade de pedidos de mesa temporariamente desabilitada - aguardando migração para modelos unificados")
-        return []
+        """Lista pedidos de mesa pendentes de impressão usando modelo unificado."""
+        try:
+            query = (
+                self.db.query(PedidoUnificadoModel)
+                .options(
+                    joinedload(PedidoUnificadoModel.itens),
+                    joinedload(PedidoUnificadoModel.cliente),
+                    joinedload(PedidoUnificadoModel.mesa),
+                    joinedload(PedidoUnificadoModel.empresa),
+                    joinedload(PedidoUnificadoModel.meio_pagamento),
+                )
+                .filter(
+                    and_(
+                        PedidoUnificadoModel.empresa_id == empresa_id,
+                        PedidoUnificadoModel.tipo_pedido == TipoPedido.MESA.value,
+                        PedidoUnificadoModel.status == StatusPedido.IMPRESSAO.value,
+                    )
+                )
+                .order_by(PedidoUnificadoModel.created_at.asc())
+            )
+            if limite:
+                query = query.limit(limite)
+            pedidos = query.all()
+            return [self._converter_pedido_mesa_unificado(p) for p in pedidos]
+        except Exception as exc:
+            logger.warning(f"[Printer] Falha ao buscar pedidos de mesa pendentes: {exc}")
+            return []
 
     def _listar_pedidos_balcao_pendentes(
         self,
@@ -110,16 +124,39 @@ class PrinterService:
         empresa_id: int,
         limite: int | None,
     ) -> List[PedidoPendenteImpressaoResponse]:
-        # TODO: Migrar para usar PedidoUnificadoModel com tipo_pedido='BALCAO'
-        # Temporariamente retorna lista vazia até migração completa
-        logger.warning("[Printer] Funcionalidade de pedidos de balcão temporariamente desabilitada - aguardando migração para modelos unificados")
-        return []
+        """Lista pedidos de balcão pendentes de impressão usando modelo unificado."""
+        try:
+            query = (
+                self.db.query(PedidoUnificadoModel)
+                .options(
+                    joinedload(PedidoUnificadoModel.itens),
+                    joinedload(PedidoUnificadoModel.cliente),
+                    joinedload(PedidoUnificadoModel.mesa),
+                    joinedload(PedidoUnificadoModel.empresa),
+                    joinedload(PedidoUnificadoModel.meio_pagamento),
+                )
+                .filter(
+                    and_(
+                        PedidoUnificadoModel.empresa_id == empresa_id,
+                        PedidoUnificadoModel.tipo_pedido == TipoPedido.BALCAO.value,
+                        PedidoUnificadoModel.status == StatusPedido.IMPRESSAO.value,
+                    )
+                )
+                .order_by(PedidoUnificadoModel.created_at.asc())
+            )
+            if limite:
+                query = query.limit(limite)
+            pedidos = query.all()
+            return [self._converter_pedido_balcao_unificado(p) for p in pedidos]
+        except Exception as exc:
+            logger.warning(f"[Printer] Falha ao buscar pedidos de balcão pendentes: {exc}")
+            return []
 
-    def _converter_pedido_mesa(self, pedido: PedidoMesaModel) -> PedidoPendenteImpressaoResponse:
+    def _converter_pedido_mesa_unificado(self, pedido: PedidoUnificadoModel) -> PedidoPendenteImpressaoResponse:
         itens = self._converter_itens(pedido.itens)
         subtotal = self._calcular_subtotal(itens, pedido.valor_total)
 
-        observacao = pedido.observacoes or ""
+        observacao = pedido.observacoes or pedido.observacao_geral or ""
         if pedido.numero_pedido:
             observacao = (
                 f"{pedido.numero_pedido}" + (f" - {observacao}" if observacao else "")
@@ -140,8 +177,8 @@ class PrinterService:
             taxa_entrega=0.0,
             taxa_servico=0.0,
             total=float(pedido.valor_total or subtotal),
-            tipo_pagamento="Mesa",
-            troco=None,
+            tipo_pagamento=pedido.meio_pagamento.display() if pedido.meio_pagamento else "Mesa",
+            troco=float(pedido.troco_para) if getattr(pedido, "troco_para", None) is not None else None,
             observacao_geral=observacao or None,
             endereco=endereco,
             data_criacao=pedido.created_at,
@@ -149,11 +186,11 @@ class PrinterService:
             tipo_pedido=TipoPedidoPrinterEnum.MESA,
         )
 
-    def _converter_pedido_balcao(self, pedido: PedidoBalcaoModel) -> PedidoPendenteImpressaoResponse:
+    def _converter_pedido_balcao_unificado(self, pedido: PedidoUnificadoModel) -> PedidoPendenteImpressaoResponse:
         itens = self._converter_itens(pedido.itens)
         subtotal = self._calcular_subtotal(itens, pedido.valor_total)
 
-        observacao = pedido.observacoes or ""
+        observacao = pedido.observacoes or pedido.observacao_geral or ""
         if pedido.numero_pedido:
             observacao = (
                 f"{pedido.numero_pedido}" + (f" - {observacao}" if observacao else "")
@@ -185,7 +222,7 @@ class PrinterService:
             taxa_entrega=0.0,
             taxa_servico=0.0,
             total=float(pedido.valor_total or subtotal),
-            tipo_pagamento="Balcão",
+            tipo_pagamento=pedido.meio_pagamento.display() if pedido.meio_pagamento else "Balcão",
             troco=troco,
             observacao_geral=observacao or None,
             endereco=endereco,

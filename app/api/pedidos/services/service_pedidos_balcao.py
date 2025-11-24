@@ -9,35 +9,34 @@ from sqlalchemy.orm import Session
 
 from app.api.pedidos.repositories.repo_pedidos import PedidoRepository
 from app.api.cadastros.models.model_mesa import StatusMesa
-# TODO: Verificar se MesaRepository existe em cadastros ou precisa ser criado
-# from app.api.cadastros.repositories.repo_mesas import MesaRepository
-# Temporariamente desabilitado até verificar
-MesaRepository = None
+from app.api.cadastros.repositories.repo_mesas import MesaRepository
 from app.api.pedidos.models.model_pedido_unificado import TipoPedido
 from app.api.catalogo.contracts.produto_contract import IProdutoContract
 from app.api.catalogo.contracts.adicional_contract import IAdicionalContract
 from app.api.catalogo.contracts.combo_contract import IComboContract
 from app.api.pedidos.models.model_pedido_historico_unificado import TipoOperacaoPedido
 from app.api.pedidos.models.model_pedido_item_unificado import PedidoItemUnificadoModel
-from app.api.balcao.schemas.schema_pedido_balcao import (
-    PedidoBalcaoCreate,
-    PedidoBalcaoOut,
-    AdicionarItemRequest,
-    AdicionarProdutoGenericoRequest,
-    RemoverItemResponse,
-    StatusPedidoBalcaoEnum,
-    FecharContaBalcaoRequest,
-    AtualizarStatusPedidoRequest,
-)
+# TODO: Migrar schemas para pedidos unificados
+# from app.api.balcao.schemas.schema_pedido_balcao import (...)
+# from app.api.balcao.schemas.schema_pedido_balcao_historico import (...)
+# Stubs temporários até migração completa
+from typing import Any
+PedidoBalcaoCreate = Any
+PedidoBalcaoOut = Any
+AdicionarItemRequest = Any
+AdicionarProdutoGenericoRequest = Any
+RemoverItemResponse = Any
+StatusPedidoBalcaoEnum = Any
+FecharContaBalcaoRequest = Any
+AtualizarStatusPedidoRequest = Any
+PedidoBalcaoHistoricoOut = Any
+HistoricoPedidoBalcaoResponse = Any
+
 from app.api.catalogo.models.model_receita import ReceitaModel
 from app.api.catalogo.models.model_combo import ComboModel
 from app.api.catalogo.models.model_adicional import AdicionalModel
 from app.api.pedidos.utils.adicionais import resolve_produto_adicionais
 from app.api.pedidos.services.service_pedido_helpers import _dec
-from app.api.balcao.schemas.schema_pedido_balcao_historico import (
-    PedidoBalcaoHistoricoOut,
-    HistoricoPedidoBalcaoResponse,
-)
 
 
 class PedidoBalcaoService:

@@ -8,27 +8,37 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.cadastros.models.model_mesa import StatusMesa
-#  Verificar se MesaRepository existe em cadastros ou precisa ser criado
-# from app.api.cadastros.repositories.repo_mesas import MesaRepository
-# Temporariamente desabilitado até verificar
-MesaRepository = None
+from app.api.cadastros.repositories.repo_mesas import MesaRepository
 from app.api.pedidos.repositories.repo_pedidos import PedidoRepository
 from app.api.pedidos.models.model_pedido_unificado import TipoPedido
 from app.api.catalogo.contracts.produto_contract import IProdutoContract
 from app.api.catalogo.contracts.adicional_contract import IAdicionalContract
 from app.api.catalogo.contracts.combo_contract import IComboContract
-from app.api.mesas.schemas.schema_pedido_mesa import (
-    PedidoMesaCreate,
-    PedidoMesaOut,
-    PedidoMesaItemIn,
-    AdicionarItemRequest,
-    AdicionarProdutoGenericoRequest,
-    RemoverItemResponse,
-    StatusPedidoMesaEnum,
-    FecharContaMesaRequest,
-    AtualizarObservacoesRequest,
-    AtualizarStatusPedidoRequest,
-)
+# TODO: Migrar schemas para pedidos unificados
+# from app.api.mesas.schemas.schema_pedido_mesa import (
+#     PedidoMesaCreate,
+#     PedidoMesaOut,
+#     PedidoMesaItemIn,
+#     AdicionarItemRequest,
+#     AdicionarProdutoGenericoRequest,
+#     RemoverItemResponse,
+#     StatusPedidoMesaEnum,
+#     FecharContaMesaRequest,
+#     AtualizarObservacoesRequest,
+#     AtualizarStatusPedidoRequest,
+# )
+# Stubs temporários até migração completa
+from typing import Any
+PedidoMesaCreate = Any
+PedidoMesaOut = Any
+PedidoMesaItemIn = Any
+AdicionarItemRequest = Any
+AdicionarProdutoGenericoRequest = Any
+RemoverItemResponse = Any
+StatusPedidoMesaEnum = Any
+FecharContaMesaRequest = Any
+AtualizarObservacoesRequest = Any
+AtualizarStatusPedidoRequest = Any
 from app.api.catalogo.models.model_receita import ReceitaModel
 from app.api.catalogo.models.model_combo import ComboModel
 from app.api.catalogo.models.model_adicional import AdicionalModel

@@ -20,17 +20,17 @@ from app.core.client_dependecies import get_cliente_by_super_token
 from app.database.db_connection import get_db
 from app.utils.logger import logger
 from app.api.pedidos.services.service_pedidos_mesa import PedidoMesaService
-from app.api.mesas.schemas.schema_pedido_mesa import (
-    PedidoMesaCreate,
-    PedidoMesaItemIn,
-    PedidoMesaOut,
-)
-from app.api.pedidos.services.service_pedidos_balcao import PedidoBalcaoService
-from app.api.balcao.schemas.schema_pedido_balcao import (
-    PedidoBalcaoCreate,
-    PedidoBalcaoItemIn,
-    PedidoBalcaoOut,
-)
+# TODO: Migrar schemas para pedidos unificados
+# from app.api.mesas.schemas.schema_pedido_mesa import (...)
+# from app.api.balcao.schemas.schema_pedido_balcao import (...)
+# Stubs temporários até migração completa
+from typing import Any
+PedidoMesaCreate = Any
+PedidoMesaItemIn = Any
+PedidoMesaOut = Any
+PedidoBalcaoCreate = Any
+PedidoBalcaoItemIn = Any
+PedidoBalcaoOut = Any
 from app.api.catalogo.contracts.produto_contract import IProdutoContract
 from app.api.cadastros.contracts.dependencies import get_produto_contract
 

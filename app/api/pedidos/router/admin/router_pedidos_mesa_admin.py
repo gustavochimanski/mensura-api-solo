@@ -5,17 +5,19 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status, Path, Body
 from sqlalchemy.orm import Session
 
 from app.api.pedidos.services.service_pedidos_mesa import PedidoMesaService
-from app.api.mesas.schemas.schema_pedido_mesa import (
-    PedidoMesaCreate,
-    PedidoMesaOut,
-    AdicionarItemRequest,
-    AdicionarProdutoGenericoRequest,
-    RemoverItemResponse,
-    StatusPedidoMesaEnum,
-    FecharContaMesaRequest,
-    AtualizarObservacoesRequest,
-    AtualizarStatusPedidoRequest,
-)
+# TODO: Migrar schemas para pedidos unificados
+# from app.api.mesas.schemas.schema_pedido_mesa import (...)
+# Stubs temporários até migração completa
+from typing import Any
+PedidoMesaCreate = Any
+PedidoMesaOut = Any
+AdicionarItemRequest = Any
+AdicionarProdutoGenericoRequest = Any
+RemoverItemResponse = Any
+StatusPedidoMesaEnum = Any
+FecharContaMesaRequest = Any
+AtualizarObservacoesRequest = Any
+AtualizarStatusPedidoRequest = Any
 from app.api.catalogo.contracts.produto_contract import IProdutoContract
 from app.api.catalogo.contracts.adicional_contract import IAdicionalContract
 from app.api.catalogo.contracts.combo_contract import IComboContract
