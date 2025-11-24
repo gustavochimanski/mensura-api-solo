@@ -7,7 +7,7 @@ from decimal import Decimal
 from app.api.catalogo.models.model_produto import ProdutoModel
 from app.api.catalogo.models.model_produto_emp import ProdutoEmpModel
 from app.api.catalogo.models.model_adicional import AdicionalModel
-from app.api.catalogo.model_ingrediente import IngredienteModel
+from app.api.catalogo.models.model_ingrediente import IngredienteModel
 from app.api.catalogo.models.model_receita import ReceitaIngredienteModel, ReceitaAdicionalModel, ReceitaModel
 from app.api.catalogo.schemas.schema_receitas import (
     ReceitaIngredienteIn,
