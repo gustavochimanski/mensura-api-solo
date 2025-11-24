@@ -517,14 +517,14 @@ class PedidoMesaService:
         pedido = self.repo.get(pedido_id, TipoPedido.MESA)
         return PedidoResponseBuilder.pedido_to_response_completo(pedido)
 
-    def list_pedidos_abertos(self, empresa_id: int, mesa_id: Optional[int] = None) -> list[PedidoMesaOut]:
+    def list_pedidos_abertos(self, empresa_id: int, mesa_id: Optional[int] = None) -> list[PedidoResponseCompleto]:
         if mesa_id is not None:
             pedidos = self.repo.list_abertos_by_mesa(mesa_id, TipoPedido.MESA, empresa_id=empresa_id)
         else:
             pedidos = self.repo.list_abertos_all(TipoPedido.MESA, empresa_id=empresa_id)
         return [PedidoResponseBuilder.pedido_to_response_completo(p) for p in pedidos]
 
-    def list_pedidos_finalizados(self, mesa_id: int, data_filtro: Optional[date] = None, *, empresa_id: int) -> list[PedidoMesaOut]:
+    def list_pedidos_finalizados(self, mesa_id: int, data_filtro: Optional[date] = None, *, empresa_id: int) -> list[PedidoResponseCompleto]:
         """Retorna todos os pedidos finalizados (ENTREGUE) de uma mesa, opcionalmente filtrando por data"""
         # Valida se a mesa existe
         self.repo_mesa.get_by_id(mesa_id, empresa_id=empresa_id)
