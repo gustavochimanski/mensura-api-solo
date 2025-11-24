@@ -370,6 +370,7 @@ class KanbanService:
             observacoes_completas = p_mesa.observacoes
             meio_pagamento_out = None
             troco_para = None
+            pedido_completo = None
             try:
                 from app.api.mesas.models.model_pedido_mesa import PedidoMesaModel
                 pedido_completo = (
@@ -390,8 +391,9 @@ class KanbanService:
                         meio_pagamento_out = MeioPagamentoKanbanResponse.model_validate(
                             pedido_completo.meio_pagamento, from_attributes=True
                         )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"[Kanban] Erro ao buscar pedido completo de mesa {p_mesa.id}: {e}")
+                pedido_completo = None
             
             # Para mesa, endereço pode ser a mesa ou "Retirada"
             endereco_str = None
@@ -432,10 +434,17 @@ class KanbanService:
             valor_total_mesa = float(p_mesa.valor_total or 0)
             if pedido_completo:
                 try:
-                    valor_total_mesa = self._calcular_valor_total_mesa_balcao_com_receitas_combos(pedido_completo)
-                except Exception:
-                    # Em caso de erro, usa o valor do DTO como fallback
+                    # Sempre recalcula para garantir que receitas, combos e adicionais sejam incluídos
+                    valor_total_calculado = self._calcular_valor_total_mesa_balcao_com_receitas_combos(pedido_completo)
+                    # Sempre usa o valor recalculado quando temos o pedido_completo
+                    valor_total_mesa = valor_total_calculado
+                except Exception as e:
+                    logger.warning(f"[Kanban] Erro ao recalcular valor total do pedido de mesa {p_mesa.id}: {e}. Usando valor do DTO: {valor_total_mesa}")
+                    # Em caso de erro, mantém o valor do DTO
                     pass
+            else:
+                # Se não encontrou pedido_completo, tenta buscar novamente ou usa o valor do DTO
+                logger.debug(f"[Kanban] Pedido completo de mesa {p_mesa.id} não encontrado na primeira tentativa. Usando valor do DTO: {valor_total_mesa}")
             
             pedidos_mesas_list.append(
                 PedidoKanbanResponse(
@@ -535,6 +544,7 @@ class KanbanService:
             observacoes_completas = p_balcao.observacoes
             meio_pagamento_out = None
             troco_para = None
+            pedido_completo = None
             try:
                 from app.api.balcao.models.model_pedido_balcao import PedidoBalcaoModel
                 pedido_completo = (
@@ -555,8 +565,9 @@ class KanbanService:
                         meio_pagamento_out = MeioPagamentoKanbanResponse.model_validate(
                             pedido_completo.meio_pagamento, from_attributes=True
                         )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"[Kanban] Erro ao buscar pedido completo de balcão {p_balcao.id}: {e}")
+                pedido_completo = None
             
             # Para balcão, endereço pode ser a mesa associada ou "Balcão"
             endereco_str = None
@@ -597,10 +608,17 @@ class KanbanService:
             valor_total_balcao = float(p_balcao.valor_total or 0)
             if pedido_completo:
                 try:
-                    valor_total_balcao = self._calcular_valor_total_mesa_balcao_com_receitas_combos(pedido_completo)
-                except Exception:
-                    # Em caso de erro, usa o valor do DTO como fallback
+                    # Sempre recalcula para garantir que receitas, combos e adicionais sejam incluídos
+                    valor_total_calculado = self._calcular_valor_total_mesa_balcao_com_receitas_combos(pedido_completo)
+                    # Sempre usa o valor recalculado quando temos o pedido_completo
+                    valor_total_balcao = valor_total_calculado
+                except Exception as e:
+                    logger.warning(f"[Kanban] Erro ao recalcular valor total do pedido de balcão {p_balcao.id}: {e}. Usando valor do DTO: {valor_total_balcao}")
+                    # Em caso de erro, mantém o valor do DTO
                     pass
+            else:
+                # Se não encontrou pedido_completo, tenta usar o valor do DTO (pode estar desatualizado)
+                logger.debug(f"[Kanban] Pedido completo de balcão {p_balcao.id} não encontrado na primeira tentativa. Usando valor do DTO: {valor_total_balcao}")
             
             pedidos_balcao_list.append(
                 PedidoKanbanResponse(
