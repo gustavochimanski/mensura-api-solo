@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from datetime import date, datetime as dt, timedelta
+from decimal import Decimal
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.api.cardapio.repositories.repo_pedidos import PedidoRepository
 from app.api.cardapio.schemas.schema_pedido import (
@@ -46,6 +47,147 @@ class KanbanService:
         except Exception:
             pass
         return None
+    
+    def _calcular_valor_total_delivery_com_receitas_combos(self, pedido) -> float:
+        """
+        Recalcula o valor total do pedido de delivery incluindo receitas, combos e adicionais.
+        
+        Inclui:
+        - Itens normais e seus adicionais
+        - Receitas do produtos_snapshot e seus adicionais
+        - Combos do produtos_snapshot e seus adicionais
+        - Desconto, taxas de entrega e serviço
+        """
+        from decimal import Decimal as Dec
+        
+        subtotal = Dec("0")
+        
+        # Soma itens normais e seus adicionais
+        for item in pedido.itens or []:
+            item_total = (item.preco_unitario or Dec("0")) * (item.quantidade or 0)
+            
+            # Adiciona adicionais do item
+            adicionais_snapshot = getattr(item, "adicionais_snapshot", None) or []
+            if adicionais_snapshot:
+                for adicional in adicionais_snapshot:
+                    try:
+                        if isinstance(adicional, dict):
+                            adicional_total = adicional.get("total", 0) or 0
+                        else:
+                            adicional_total = getattr(adicional, "total", 0) or 0
+                        item_total += Dec(str(adicional_total))
+                    except (AttributeError, ValueError, TypeError):
+                        pass
+            
+            subtotal += item_total
+        
+        # Soma receitas e combos do produtos_snapshot
+        produtos_snapshot = getattr(pedido, "produtos_snapshot", None)
+        if produtos_snapshot and isinstance(produtos_snapshot, dict):
+            # Receitas
+            receitas = produtos_snapshot.get("receitas", [])
+            for receita in receitas:
+                if isinstance(receita, dict):
+                    preco_unit = Dec(str(receita.get("preco_unitario", 0) or 0))
+                    quantidade = Dec(str(receita.get("quantidade", 0) or 0))
+                    subtotal += preco_unit * quantidade
+                    
+                    # Adiciona adicionais da receita
+                    adicionais = receita.get("adicionais", [])
+                    for adicional in adicionais:
+                        try:
+                            adicional_total = Dec(str(adicional.get("total", 0) or 0))
+                            subtotal += adicional_total
+                        except (ValueError, TypeError):
+                            pass
+            
+            # Combos
+            combos = produtos_snapshot.get("combos", [])
+            for combo in combos:
+                if isinstance(combo, dict):
+                    preco_unit = Dec(str(combo.get("preco_unitario", 0) or 0))
+                    quantidade = Dec(str(combo.get("quantidade", 0) or 0))
+                    subtotal += preco_unit * quantidade
+                    
+                    # Adiciona adicionais do combo
+                    adicionais = combo.get("adicionais", [])
+                    for adicional in adicionais:
+                        try:
+                            adicional_total = Dec(str(adicional.get("total", 0) or 0))
+                            subtotal += adicional_total
+                        except (ValueError, TypeError):
+                            pass
+        
+        # Calcula valor total final (subtotal - desconto + taxas)
+        desconto = Dec(str(pedido.desconto or 0))
+        taxa_entrega = Dec(str(pedido.taxa_entrega or 0))
+        taxa_servico = Dec(str(pedido.taxa_servico or 0))
+        
+        valor_total = subtotal - desconto + taxa_entrega + taxa_servico
+        if valor_total < 0:
+            valor_total = Dec("0")
+        
+        return float(valor_total)
+    
+    def _calcular_valor_total_mesa_balcao_com_receitas_combos(self, pedido_completo) -> float:
+        """
+        Recalcula o valor total do pedido de mesa/balcão incluindo receitas, combos e adicionais.
+        Usa a mesma lógica dos repositórios de mesa e balcão.
+        """
+        from decimal import Decimal as Dec
+        
+        # Soma itens e seus adicionais
+        total = Dec("0")
+        for item in pedido_completo.itens or []:
+            item_total = (item.preco_unitario or Dec("0")) * (item.quantidade or 0)
+            
+            # Adiciona adicionais do item
+            adicionais_snapshot = getattr(item, "adicionais_snapshot", None) or []
+            for adicional in adicionais_snapshot:
+                try:
+                    if isinstance(adicional, dict):
+                        adicional_total = adicional.get("total", 0) or 0
+                    else:
+                        adicional_total = getattr(adicional, "total", 0) or 0
+                    item_total += Dec(str(adicional_total))
+                except (AttributeError, ValueError, TypeError):
+                    pass
+            
+            total += item_total
+        
+        # Soma receitas e combos do produtos_snapshot
+        produtos_snapshot = getattr(pedido_completo, "produtos_snapshot", None)
+        if produtos_snapshot and isinstance(produtos_snapshot, dict):
+            # Receitas
+            receitas = produtos_snapshot.get("receitas", [])
+            for receita in receitas:
+                preco_unit = Dec(str(receita.get("preco_unitario", 0) or 0))
+                quantidade = Dec(str(receita.get("quantidade", 0) or 0))
+                total += preco_unit * quantidade
+                
+                # Adiciona adicionais da receita
+                adicionais = receita.get("adicionais", [])
+                for adicional in adicionais:
+                    adicional_total = Dec(str(adicional.get("total", 0) or 0))
+                    total += adicional_total
+            
+            # Combos
+            combos = produtos_snapshot.get("combos", [])
+            for combo in combos:
+                preco_unit = Dec(str(combo.get("preco_unitario", 0) or 0))
+                quantidade = Dec(str(combo.get("quantidade", 0) or 0))
+                total += preco_unit * quantidade
+                
+                # Adiciona adicionais do combo
+                adicionais = combo.get("adicionais", [])
+                for adicional in adicionais:
+                    adicional_total = Dec(str(adicional.get("total", 0) or 0))
+                    total += adicional_total
+        
+        if total < 0:
+            total = Dec("0")
+        
+        return float(total)
     
 
     def list_all_kanban(
@@ -131,12 +273,15 @@ class KanbanService:
                 nome_cliente = cliente.nome
                 telefone_cliente = cliente.telefone
             
+            # Recalcula valor total incluindo receitas, combos e adicionais
+            valor_total_calculado = self._calcular_valor_total_delivery_com_receitas_combos(p)
+            
             pedidos_delivery_list.append(
                 PedidoKanbanResponse(
                     id=p.id,
                     status=p.status,
                     cliente=ClienteOut.model_validate(cliente) if cliente else None,
-                    valor_total=float(p.valor_total or 0),
+                    valor_total=valor_total_calculado,
                     data_criacao=p.data_criacao,
                     endereco=endereco_str,
                     observacao_geral=p.observacao_geral,
@@ -227,7 +372,12 @@ class KanbanService:
             troco_para = None
             try:
                 from app.api.mesas.models.model_pedido_mesa import PedidoMesaModel
-                pedido_completo = self.db.query(PedidoMesaModel).filter_by(id=p_mesa.id).first()
+                pedido_completo = (
+                    self.db.query(PedidoMesaModel)
+                    .options(joinedload(PedidoMesaModel.itens))
+                    .filter_by(id=p_mesa.id)
+                    .first()
+                )
                 if pedido_completo:
                     numero_pedido = pedido_completo.numero_pedido
                     mesa_id = pedido_completo.mesa_id
@@ -278,12 +428,21 @@ class KanbanService:
             if mesa_id:
                 mesa_obj = {"id": mesa_id}
             
+            # Recalcula valor total incluindo receitas, combos e adicionais
+            valor_total_mesa = float(p_mesa.valor_total or 0)
+            if pedido_completo:
+                try:
+                    valor_total_mesa = self._calcular_valor_total_mesa_balcao_com_receitas_combos(pedido_completo)
+                except Exception:
+                    # Em caso de erro, usa o valor do DTO como fallback
+                    pass
+            
             pedidos_mesas_list.append(
                 PedidoKanbanResponse(
                     id=p_mesa.id,
                     status=PedidoStatusEnum(status_delivery),
                     cliente=cliente_out,
-                    valor_total=float(p_mesa.valor_total or 0),
+                    valor_total=valor_total_mesa,
                     data_criacao=p_mesa.created_at,
                     endereco=endereco_str,
                     observacao_geral=observacoes_completas or f"Pedido de mesa",
@@ -378,7 +537,12 @@ class KanbanService:
             troco_para = None
             try:
                 from app.api.balcao.models.model_pedido_balcao import PedidoBalcaoModel
-                pedido_completo = self.db.query(PedidoBalcaoModel).filter_by(id=p_balcao.id).first()
+                pedido_completo = (
+                    self.db.query(PedidoBalcaoModel)
+                    .options(joinedload(PedidoBalcaoModel.itens))
+                    .filter_by(id=p_balcao.id)
+                    .first()
+                )
                 if pedido_completo:
                     numero_pedido = pedido_completo.numero_pedido
                     mesa_id = pedido_completo.mesa_id
@@ -429,12 +593,21 @@ class KanbanService:
             if mesa_id:
                 mesa_obj = {"id": mesa_id}
             
+            # Recalcula valor total incluindo receitas, combos e adicionais
+            valor_total_balcao = float(p_balcao.valor_total or 0)
+            if pedido_completo:
+                try:
+                    valor_total_balcao = self._calcular_valor_total_mesa_balcao_com_receitas_combos(pedido_completo)
+                except Exception:
+                    # Em caso de erro, usa o valor do DTO como fallback
+                    pass
+            
             pedidos_balcao_list.append(
                 PedidoKanbanResponse(
                     id=p_balcao.id,
                     status=PedidoStatusEnum(status_delivery),
                     cliente=cliente_out,
-                    valor_total=float(p_balcao.valor_total or 0),
+                    valor_total=valor_total_balcao,
                     data_criacao=p_balcao.created_at,
                     endereco=endereco_str,
                     observacao_geral=observacoes_completas or f"Pedido de balcão",
