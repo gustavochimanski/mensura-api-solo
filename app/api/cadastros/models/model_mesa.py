@@ -88,10 +88,11 @@ class MesaModel(Base):
     empresa = relationship("EmpresaModel", lazy="select")
 
     # Relacionamentos
-    pedidos = relationship("PedidoMesaModel", back_populates="mesa", cascade="all, delete-orphan")
+    # Migrado para modelos unificados - pedidos agora usam PedidoUnificadoModel
+    # pedidos = relationship("PedidoMesaModel", back_populates="mesa", cascade="all, delete-orphan")
     cliente_atual_id = Column(Integer, ForeignKey("cadastros.clientes.id", ondelete="SET NULL"), nullable=True)
     cliente_atual = relationship("ClienteModel", lazy="select")
-    historico = relationship("MesaHistoricoModel", back_populates="mesa", cascade="all, delete-orphan")
+    # historico = relationship("MesaHistoricoModel", back_populates="mesa", cascade="all, delete-orphan")
     
     created_at = Column(DateTime, default=now_trimmed, nullable=False)
     updated_at = Column(DateTime, default=now_trimmed, onupdate=now_trimmed, nullable=False)

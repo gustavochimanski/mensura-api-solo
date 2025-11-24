@@ -23,9 +23,8 @@ from app.api.pedidos.models.model_pedido_historico_unificado import (
 from app.api.cadastros.models.model_entregador_dv import EntregadorDeliveryModel
 from app.api.cadastros.models.model_endereco_dv import EnderecoModel
 from app.api.catalogo.models.model_produto import ProdutoModel
-from app.api.mesas.models.model_pedido_mesa import PedidoMesaModel, StatusPedidoMesa
-from app.api.balcao.models.model_pedido_balcao import PedidoBalcaoModel, StatusPedidoBalcao
-from app.api.mesas.models.model_mesa_historico import MesaHistoricoModel, TipoOperacaoMesa
+# Migrado para modelos unificados - usar PedidoUnificadoModel
+from app.api.pedidos.models.model_pedido_unificado import StatusPedido
 
 
 def _day_bounds(target_date: date) -> Tuple[datetime, datetime]:
@@ -112,18 +111,19 @@ class RelatorioRepository:
             if "does not exist" not in str(e):
                 raise
 
-        # Mesa
+        # Mesa - usando modelo unificado
         try:
             qtd_mesa, fatur_mesa = (
                 self.db.query(
-                    func.count(PedidoMesaModel.id),
-                    func.coalesce(func.sum(PedidoMesaModel.valor_total), 0),
+                    func.count(PedidoUnificadoModel.id),
+                    func.coalesce(func.sum(PedidoUnificadoModel.valor_total), 0),
                 )
                 .filter(
-                    PedidoMesaModel.empresa_id == empresa_id,
-                    PedidoMesaModel.created_at >= inicio,
-                    PedidoMesaModel.created_at < fim,
-                    PedidoMesaModel.status != StatusPedidoMesa.CANCELADO.value,
+                    PedidoUnificadoModel.empresa_id == empresa_id,
+                    PedidoUnificadoModel.tipo_pedido == TipoPedido.MESA.value,
+                    PedidoUnificadoModel.created_at >= inicio,
+                    PedidoUnificadoModel.created_at < fim,
+                    PedidoUnificadoModel.status != StatusPedido.CANCELADO.value,
                 )
                 .first()
                 or (0, 0)
@@ -134,18 +134,19 @@ class RelatorioRepository:
             if "does not exist" not in str(e):
                 raise
 
-        # Balcão
+        # Balcão - usando modelo unificado
         try:
             qtd_balcao, fatur_balcao = (
                 self.db.query(
-                    func.count(PedidoBalcaoModel.id),
-                    func.coalesce(func.sum(PedidoBalcaoModel.valor_total), 0),
+                    func.count(PedidoUnificadoModel.id),
+                    func.coalesce(func.sum(PedidoUnificadoModel.valor_total), 0),
                 )
                 .filter(
-                    PedidoBalcaoModel.empresa_id == empresa_id,
-                    PedidoBalcaoModel.created_at >= inicio,
-                    PedidoBalcaoModel.created_at < fim,
-                    PedidoBalcaoModel.status != StatusPedidoBalcao.CANCELADO.value,
+                    PedidoUnificadoModel.empresa_id == empresa_id,
+                    PedidoUnificadoModel.tipo_pedido == TipoPedido.BALCAO.value,
+                    PedidoUnificadoModel.created_at >= inicio,
+                    PedidoUnificadoModel.created_at < fim,
+                    PedidoUnificadoModel.status != StatusPedido.CANCELADO.value,
                 )
                 .first()
                 or (0, 0)
@@ -186,12 +187,13 @@ class RelatorioRepository:
 
         try:
             cancelados_mesa = (
-                self.db.query(func.count(PedidoMesaModel.id))
+                self.db.query(func.count(PedidoUnificadoModel.id))
                 .filter(
-                    PedidoMesaModel.empresa_id == empresa_id,
-                    PedidoMesaModel.created_at >= inicio,
-                    PedidoMesaModel.created_at < fim,
-                    PedidoMesaModel.status == StatusPedidoMesa.CANCELADO.value,
+                    PedidoUnificadoModel.empresa_id == empresa_id,
+                    PedidoUnificadoModel.tipo_pedido == TipoPedido.MESA.value,
+                    PedidoUnificadoModel.created_at >= inicio,
+                    PedidoUnificadoModel.created_at < fim,
+                    PedidoUnificadoModel.status == StatusPedido.CANCELADO.value,
                 )
                 .scalar()
             )
@@ -202,12 +204,13 @@ class RelatorioRepository:
 
         try:
             cancelados_balcao = (
-                self.db.query(func.count(PedidoBalcaoModel.id))
+                self.db.query(func.count(PedidoUnificadoModel.id))
                 .filter(
-                    PedidoBalcaoModel.empresa_id == empresa_id,
-                    PedidoBalcaoModel.created_at >= inicio,
-                    PedidoBalcaoModel.created_at < fim,
-                    PedidoBalcaoModel.status == StatusPedidoBalcao.CANCELADO.value,
+                    PedidoUnificadoModel.empresa_id == empresa_id,
+                    PedidoUnificadoModel.tipo_pedido == TipoPedido.BALCAO.value,
+                    PedidoUnificadoModel.created_at >= inicio,
+                    PedidoUnificadoModel.created_at < fim,
+                    PedidoUnificadoModel.status == StatusPedido.CANCELADO.value,
                 )
                 .scalar()
             )
@@ -243,28 +246,42 @@ class RelatorioRepository:
         
         # Calcular tempo médio para pedidos de mesa (entrega local)
         # Buscar pedidos de mesa que foram entregues no período
-        pedidos_mesa_entregues = (
-            self.db.query(PedidoMesaModel)
-            .filter(
-                PedidoMesaModel.empresa_id == empresa_id,
-                PedidoMesaModel.status == StatusPedidoMesa.ENTREGUE.value,
-                PedidoMesaModel.mesa_id.isnot(None),
-                PedidoMesaModel.created_at >= inicio,
-                PedidoMesaModel.created_at < fim,
+        try:
+            pedidos_mesa_entregues = (
+                self.db.query(PedidoUnificadoModel)
+                .filter(
+                    PedidoUnificadoModel.empresa_id == empresa_id,
+                    PedidoUnificadoModel.tipo_pedido == TipoPedido.MESA.value,
+                    PedidoUnificadoModel.status == StatusPedido.ENTREGUE.value,
+                    PedidoUnificadoModel.mesa_id.isnot(None),
+                    PedidoUnificadoModel.created_at >= inicio,
+                    PedidoUnificadoModel.created_at < fim,
+                )
+                .all()
             )
-            .all()
-        )
+        except ProgrammingError as e:
+            if "does not exist" in str(e):
+                pedidos_mesa_entregues = []
+            else:
+                raise
 
-        pedidos_balcao_entregues = (
-            self.db.query(PedidoBalcaoModel)
-            .filter(
-                PedidoBalcaoModel.empresa_id == empresa_id,
-                PedidoBalcaoModel.status == StatusPedidoBalcao.ENTREGUE.value,
-                PedidoBalcaoModel.created_at >= inicio,
-                PedidoBalcaoModel.created_at < fim,
+        try:
+            pedidos_balcao_entregues = (
+                self.db.query(PedidoUnificadoModel)
+                .filter(
+                    PedidoUnificadoModel.empresa_id == empresa_id,
+                    PedidoUnificadoModel.tipo_pedido == TipoPedido.BALCAO.value,
+                    PedidoUnificadoModel.status == StatusPedido.ENTREGUE.value,
+                    PedidoUnificadoModel.created_at >= inicio,
+                    PedidoUnificadoModel.created_at < fim,
+                )
+                .all()
             )
-            .all()
-        )
+        except ProgrammingError as e:
+            if "does not exist" in str(e):
+                pedidos_balcao_entregues = []
+            else:
+                raise
 
         # Calcular tempo médio para delivery
         tempo_delivery_minutos = 0.0
@@ -344,15 +361,16 @@ class RelatorioRepository:
         def _rows_mesa():
             return (
                 self.db.query(
-                    func.date_part("hour", func.timezone('America/Sao_Paulo', PedidoMesaModel.created_at)).label("hora"),
-                    func.count(PedidoMesaModel.id).label("quantidade"),
-                    func.coalesce(func.sum(PedidoMesaModel.valor_total), 0).label("faturamento"),
+                    func.date_part("hour", func.timezone('America/Sao_Paulo', PedidoUnificadoModel.created_at)).label("hora"),
+                    func.count(PedidoUnificadoModel.id).label("quantidade"),
+                    func.coalesce(func.sum(PedidoUnificadoModel.valor_total), 0).label("faturamento"),
                 )
                 .filter(
-                    PedidoMesaModel.empresa_id == empresa_id,
-                    PedidoMesaModel.created_at >= inicio,
-                    PedidoMesaModel.created_at < fim,
-                    PedidoMesaModel.status != StatusPedidoMesa.CANCELADO.value,
+                    PedidoUnificadoModel.empresa_id == empresa_id,
+                    PedidoUnificadoModel.tipo_pedido == TipoPedido.MESA.value,
+                    PedidoUnificadoModel.created_at >= inicio,
+                    PedidoUnificadoModel.created_at < fim,
+                    PedidoUnificadoModel.status != StatusPedido.CANCELADO.value,
                 )
                 .group_by("hora")
                 .all()
@@ -361,15 +379,16 @@ class RelatorioRepository:
         def _rows_balcao():
             return (
                 self.db.query(
-                    func.date_part("hour", func.timezone('America/Sao_Paulo', PedidoBalcaoModel.created_at)).label("hora"),
-                    func.count(PedidoBalcaoModel.id).label("quantidade"),
-                    func.coalesce(func.sum(PedidoBalcaoModel.valor_total), 0).label("faturamento"),
+                    func.date_part("hour", func.timezone('America/Sao_Paulo', PedidoUnificadoModel.created_at)).label("hora"),
+                    func.count(PedidoUnificadoModel.id).label("quantidade"),
+                    func.coalesce(func.sum(PedidoUnificadoModel.valor_total), 0).label("faturamento"),
                 )
                 .filter(
-                    PedidoBalcaoModel.empresa_id == empresa_id,
-                    PedidoBalcaoModel.created_at >= inicio,
-                    PedidoBalcaoModel.created_at < fim,
-                    PedidoBalcaoModel.status != StatusPedidoBalcao.CANCELADO.value,
+                    PedidoUnificadoModel.empresa_id == empresa_id,
+                    PedidoUnificadoModel.tipo_pedido == TipoPedido.BALCAO.value,
+                    PedidoUnificadoModel.created_at >= inicio,
+                    PedidoUnificadoModel.created_at < fim,
+                    PedidoUnificadoModel.status != StatusPedido.CANCELADO.value,
                 )
                 .group_by("hora")
                 .all()
@@ -525,30 +544,68 @@ class RelatorioRepository:
                 raise
 
         try:
-            from app.api.mesas.models.model_pedido_mesa_item import PedidoMesaItemModel
-
-            rows_mesa = _query_itens(
-                PedidoMesaItemModel,
-                PedidoMesaModel,
-                PedidoMesaModel.created_at,
-                StatusPedidoMesa.CANCELADO.value,
+            # Query para mesa usando modelo unificado
+            descricao_expr_mesa = func.coalesce(
+                PedidoItemUnificadoModel.produto_descricao_snapshot,
+                ProdutoModel.descricao,
+                PedidoItemUnificadoModel.produto_cod_barras,
+            )
+            rows_mesa = (
+                self.db.query(
+                    descricao_expr_mesa.label("descricao"),
+                    func.sum(PedidoItemUnificadoModel.quantidade).label("quantidade"),
+                    func.coalesce(
+                        func.sum(PedidoItemUnificadoModel.quantidade * PedidoItemUnificadoModel.preco_unitario), 0
+                    ).label("faturamento"),
+                )
+                .join(PedidoUnificadoModel, PedidoUnificadoModel.id == PedidoItemUnificadoModel.pedido_id)
+                .outerjoin(ProdutoModel, ProdutoModel.cod_barras == PedidoItemUnificadoModel.produto_cod_barras)
+                .filter(
+                    PedidoUnificadoModel.empresa_id == empresa_id,
+                    PedidoUnificadoModel.tipo_pedido == TipoPedido.MESA.value,
+                    PedidoUnificadoModel.created_at >= inicio,
+                    PedidoUnificadoModel.created_at < fim,
+                    PedidoUnificadoModel.status != StatusPedido.CANCELADO.value,
+                )
+                .group_by(descricao_expr_mesa)
+                .all()
             )
         except ProgrammingError as e:
             if "does not exist" not in str(e):
                 raise
+            rows_mesa = []
 
         try:
-            from app.api.balcao.models.model_pedido_balcao_item import PedidoBalcaoItemModel
-
-            rows_balcao = _query_itens(
-                PedidoBalcaoItemModel,
-                PedidoBalcaoModel,
-                PedidoBalcaoModel.created_at,
-                StatusPedidoBalcao.CANCELADO.value,
+            # Query para balcão usando modelo unificado
+            descricao_expr_balcao = func.coalesce(
+                PedidoItemUnificadoModel.produto_descricao_snapshot,
+                ProdutoModel.descricao,
+                PedidoItemUnificadoModel.produto_cod_barras,
+            )
+            rows_balcao = (
+                self.db.query(
+                    descricao_expr_balcao.label("descricao"),
+                    func.sum(PedidoItemUnificadoModel.quantidade).label("quantidade"),
+                    func.coalesce(
+                        func.sum(PedidoItemUnificadoModel.quantidade * PedidoItemUnificadoModel.preco_unitario), 0
+                    ).label("faturamento"),
+                )
+                .join(PedidoUnificadoModel, PedidoUnificadoModel.id == PedidoItemUnificadoModel.pedido_id)
+                .outerjoin(ProdutoModel, ProdutoModel.cod_barras == PedidoItemUnificadoModel.produto_cod_barras)
+                .filter(
+                    PedidoUnificadoModel.empresa_id == empresa_id,
+                    PedidoUnificadoModel.tipo_pedido == TipoPedido.BALCAO.value,
+                    PedidoUnificadoModel.created_at >= inicio,
+                    PedidoUnificadoModel.created_at < fim,
+                    PedidoUnificadoModel.status != StatusPedido.CANCELADO.value,
+                )
+                .group_by(descricao_expr_balcao)
+                .all()
             )
         except ProgrammingError as e:
             if "does not exist" not in str(e):
                 raise
+            rows_balcao = []
 
         acumulado: dict[str, dict[str, float | int | str]] = {}
 

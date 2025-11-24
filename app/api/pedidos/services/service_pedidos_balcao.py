@@ -7,9 +7,12 @@ from datetime import date
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.mesas.repositories.repo_mesas import MesaRepository
 from app.api.pedidos.repositories.repo_pedidos import PedidoRepository
-from app.api.mesas.models.model_mesa import StatusMesa
+from app.api.cadastros.models.model_mesa import StatusMesa
+# TODO: Verificar se MesaRepository existe em cadastros ou precisa ser criado
+# from app.api.cadastros.repositories.repo_mesas import MesaRepository
+# Temporariamente desabilitado até verificar
+MesaRepository = None
 from app.api.pedidos.models.model_pedido_unificado import TipoPedido
 from app.api.catalogo.contracts.produto_contract import IProdutoContract
 from app.api.catalogo.contracts.adicional_contract import IAdicionalContract
