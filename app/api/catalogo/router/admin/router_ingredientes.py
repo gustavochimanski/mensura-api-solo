@@ -13,7 +13,7 @@ from app.database.db_connection import get_db
 from app.utils.logger import logger
 
 router = APIRouter(
-    prefix="/api/admin/ingredientes",
+    prefix="/ingredientes",
     tags=["Admin - Catalogo - Receitas - Ingredientes"],
     dependencies=[Depends(get_current_user)]
 )

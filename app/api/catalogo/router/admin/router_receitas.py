@@ -13,7 +13,7 @@ from app.api.catalogo.schemas.schema_receitas import (
     AdicionalIn,
     AdicionalOut,
 )
-from app.api.catalogo.receitas.router import router_ingredientes
+from app.api.catalogo.router.admin.router_ingredientes import router as router_ingredientes
 from app.core.admin_dependencies import get_current_user
 from app.database.db_connection import get_db
 from app.utils.logger import logger
