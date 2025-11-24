@@ -12,8 +12,18 @@ from app.api.cardapio.schemas.schema_printer import (
     RespostaImpressaoPrinter,
     TipoPedidoPrinterEnum,
 )
-from app.api.mesas.models.model_pedido_mesa import PedidoMesaModel, StatusPedidoMesa
-from app.api.balcao.models.model_pedido_balcao import PedidoBalcaoModel, StatusPedidoBalcao
+# TODO: Migrar para modelos unificados (PedidoUnificadoModel)
+# Temporariamente desabilitado - módulos mesas e balcao não existem mais
+# Criando stubs para permitir que o código funcione
+class StatusPedidoMesa:
+    IMPRESSAO = type('Enum', (), {'value': 'I'})()
+
+class StatusPedidoBalcao:
+    IMPRESSAO = type('Enum', (), {'value': 'I'})()
+
+# Stubs vazios - as funções retornarão listas vazias
+PedidoMesaModel = None
+PedidoBalcaoModel = None
 from app.utils.logger import logger
 
 
@@ -89,38 +99,10 @@ class PrinterService:
         empresa_id: int,
         limite: int | None,
     ) -> List[PedidoPendenteImpressaoResponse]:
-        try:
-            from sqlalchemy import and_
-            query = (
-                self.db.query(PedidoMesaModel)
-                .options(
-                    joinedload(PedidoMesaModel.itens),
-                    joinedload(PedidoMesaModel.cliente),
-                    joinedload(PedidoMesaModel.mesa),
-                    joinedload(PedidoMesaModel.empresa),
-                )
-                .filter(
-                    and_(
-                        PedidoMesaModel.empresa_id == empresa_id,
-                        # filtro estrito: somente status IMPRESSAO
-                        PedidoMesaModel.status == StatusPedidoMesa.IMPRESSAO.value,
-                    )
-                )
-                .order_by(PedidoMesaModel.created_at.asc())
-            )
-            if limite:
-                query = query.limit(limite)
-            pedidos = query.all()
-        except Exception as exc:
-            logger.warning(f"[Printer] Falha ao buscar pedidos de mesa pendentes: {exc}")
-            return []
-
-        # garantia extra: mantém apenas status IMPRESSAO
-        filtrados = [
-            p for p in pedidos
-            if self._status_to_str(getattr(p, "status", None)) == StatusPedidoMesa.IMPRESSAO.value
-        ]
-        return [self._converter_pedido_mesa(pedido) for pedido in filtrados]
+        # TODO: Migrar para usar PedidoUnificadoModel com tipo_pedido='MESA'
+        # Temporariamente retorna lista vazia até migração completa
+        logger.warning("[Printer] Funcionalidade de pedidos de mesa temporariamente desabilitada - aguardando migração para modelos unificados")
+        return []
 
     def _listar_pedidos_balcao_pendentes(
         self,
@@ -128,38 +110,10 @@ class PrinterService:
         empresa_id: int,
         limite: int | None,
     ) -> List[PedidoPendenteImpressaoResponse]:
-        try:
-            from sqlalchemy import and_
-            query = (
-                self.db.query(PedidoBalcaoModel)
-                .options(
-                    joinedload(PedidoBalcaoModel.itens),
-                    joinedload(PedidoBalcaoModel.cliente),
-                    joinedload(PedidoBalcaoModel.mesa),
-                    joinedload(PedidoBalcaoModel.empresa),
-                )
-                .filter(
-                    and_(
-                        PedidoBalcaoModel.empresa_id == empresa_id,
-                        # filtro estrito: somente status IMPRESSAO
-                        PedidoBalcaoModel.status == StatusPedidoBalcao.IMPRESSAO.value,
-                    )
-                )
-                .order_by(PedidoBalcaoModel.created_at.asc())
-            )
-            if limite:
-                query = query.limit(limite)
-            pedidos = query.all()
-        except Exception as exc:
-            logger.warning(f"[Printer] Falha ao buscar pedidos de balcão pendentes: {exc}")
-            return []
-
-        # garantia extra: mantém apenas status IMPRESSAO
-        filtrados = [
-            p for p in pedidos
-            if self._status_to_str(getattr(p, "status", None)) == StatusPedidoBalcao.IMPRESSAO.value
-        ]
-        return [self._converter_pedido_balcao(pedido) for pedido in filtrados]
+        # TODO: Migrar para usar PedidoUnificadoModel com tipo_pedido='BALCAO'
+        # Temporariamente retorna lista vazia até migração completa
+        logger.warning("[Printer] Funcionalidade de pedidos de balcão temporariamente desabilitada - aguardando migração para modelos unificados")
+        return []
 
     def _converter_pedido_mesa(self, pedido: PedidoMesaModel) -> PedidoPendenteImpressaoResponse:
         itens = self._converter_itens(pedido.itens)
