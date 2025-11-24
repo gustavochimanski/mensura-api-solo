@@ -43,4 +43,3 @@ class IngredienteModel(Base):
     def __repr__(self):
         return f"<Ingrediente(id={self.id}, nome='{self.nome}', empresa={self.empresa_id}, custo={self.custo})>"
 
-

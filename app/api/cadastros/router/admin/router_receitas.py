@@ -26,7 +26,7 @@ def list_ingredientes(
     cod_barras: str = Path(..., description="ID da receita (passado como cod_barras para compatibilidade)"),
     db: Session = Depends(get_db),
 ):
-    from app.api.catalogo.receitas.models.model_ingrediente import IngredienteModel
+    from app.api.catalogo.model_ingrediente import IngredienteModel
     
     # Busca os ingredientes
     receita_ingredientes = ReceitasService(db).list_ingredientes(cod_barras)
