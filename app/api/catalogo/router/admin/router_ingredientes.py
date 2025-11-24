@@ -2,12 +2,12 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.catalogo.receitas.schemas.schema_ingrediente import (
+from app.api.catalogo.schemas.schema_ingrediente import (
     IngredienteResponse,
     CriarIngredienteRequest,
     AtualizarIngredienteRequest,
 )
-from app.api.catalogo.receitas.services.service_ingrediente import IngredienteService
+from app.api.catalogo.services.service_ingrediente import IngredienteService
 from app.core.admin_dependencies import get_current_user
 from app.database.db_connection import get_db
 from app.utils.logger import logger

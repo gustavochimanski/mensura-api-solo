@@ -9,7 +9,8 @@ import logging
 # Importa os inicializadores de domínios para garantir registro automático
 from app.api.cadastros.database import CadastrosInitializer  # noqa: F401
 from app.api.cardapio.database import CardapioInitializer  # noqa: F401
-from app.api.mesas.database import MesasInitializer  # noqa: F401
+# TODO: Migrado - módulo mesas não existe mais, mesas agora estão em cadastros
+# from app.api.mesas.database import MesasInitializer  # noqa: F401
 
 # Importa o orquestrador
 from app.database.domain.orchestrator import DatabaseOrchestrator, inicializar_banco
