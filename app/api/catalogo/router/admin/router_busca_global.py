@@ -32,10 +32,11 @@ router = APIRouter(
     
     **Filtros:**
     - `empresa_id`: ID da empresa (obrigatório)
-    - `termo`: Termo de busca (obrigatório)
+    - `termo`: Termo de busca (opcional - se vazio, retorna primeiros itens)
     - `apenas_disponiveis`: Filtrar apenas itens disponíveis (padrão: true)
     - `apenas_ativos`: Filtrar apenas itens ativos (padrão: true)
     - `limit`: Limite de resultados por tipo (padrão: 50, máximo: 200)
+    - `page`: Número da página para paginação (padrão: 1, mínimo: 1)
     
     **Retorno:**
     - `produtos`: Lista de produtos encontrados
@@ -46,6 +47,7 @@ router = APIRouter(
     **Exemplo de uso:**
     ```
     GET /api/catalogo/admin/busca/global?empresa_id=1&termo=pizza
+    GET /api/catalogo/admin/busca/global?empresa_id=1&page=1&limit=50
     ```
     """,
     responses={
@@ -55,7 +57,7 @@ router = APIRouter(
 )
 def buscar_global(
     empresa_id: int = Query(..., gt=0, description="ID da empresa"),
-    termo: str = Query(..., min_length=1, description="Termo de busca"),
+    termo: str = Query("", description="Termo de busca (opcional - se vazio, retorna primeiros itens)"),
     apenas_disponiveis: bool = Query(
         True,
         description="Filtrar apenas itens disponíveis (produtos/receitas)"
@@ -70,6 +72,11 @@ def buscar_global(
         le=200,
         description="Limite de resultados por tipo"
     ),
+    page: int = Query(
+        1,
+        ge=1,
+        description="Número da página para paginação"
+    ),
     db: Session = Depends(get_db),
 ):
     """
@@ -82,5 +89,6 @@ def buscar_global(
         apenas_disponiveis=apenas_disponiveis,
         apenas_ativos=apenas_ativos,
         limit=limit,
+        page=page,
     )
 
