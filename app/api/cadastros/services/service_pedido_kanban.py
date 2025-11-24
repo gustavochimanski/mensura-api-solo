@@ -344,7 +344,7 @@ class KanbanService:
                 logger.warning(f"[Kanban] Erro ao buscar pedidos de mesa via contrato: {e}. Continuando sem pedidos de mesa.")
                 pedidos_mesa_dtos = []
         
-        # Mapeamento de status Mesa → Delivery (suporta valores legados e novos)
+        # Mapeamento de status Mesa → Delivery
         status_mapa_mesa = {
             "P": PedidoStatusEnum.P.value,
             "I": PedidoStatusEnum.I.value,
@@ -354,9 +354,6 @@ class KanbanService:
             "D": PedidoStatusEnum.D.value,
             "X": PedidoStatusEnum.X.value,
             "A": PedidoStatusEnum.A.value,
-            # Legados
-            "O": PedidoStatusEnum.I.value,  # Confirmado (antigo) → Impressão
-            "T": PedidoStatusEnum.R.value,  # Pronto (antigo) → Em preparo (fluxo interno)
         }
         
         for p_mesa in pedidos_mesa_dtos:
@@ -518,7 +515,7 @@ class KanbanService:
                 logger.warning(f"[Kanban] Erro ao buscar pedidos de balcão via contrato: {e}. Continuando sem pedidos de balcão.")
                 pedidos_balcao_dtos = []
         
-        # Mapeamento de status Balcão → Delivery (suporta valores legados e novos)
+        # Mapeamento de status Balcão → Delivery
         status_mapa_balcao = {
             "P": PedidoStatusEnum.P.value,
             "I": PedidoStatusEnum.I.value,
@@ -528,9 +525,6 @@ class KanbanService:
             "D": PedidoStatusEnum.D.value,
             "X": PedidoStatusEnum.X.value,
             "A": PedidoStatusEnum.A.value,
-            # Legados
-            "O": PedidoStatusEnum.I.value,
-            "T": PedidoStatusEnum.R.value,
         }
         
         for p_balcao in pedidos_balcao_dtos:

@@ -523,8 +523,53 @@ class PedidoBalcaoService:
 
     # -------- Consultas --------
     def get_pedido(self, pedido_id: int) -> PedidoBalcaoOut:
+        """
+        Busca um pedido de balcão e retorna no formato padronizado.
+        
+        Segue o padrão definido em PADRAO_RETORNO_PEDIDOS.md:
+        - Constrói o campo 'produtos' com itens, receitas e combos
+        - Recalcula 'valor_total' incluindo receitas, combos e adicionais
+        """
+        from app.api.pedidos.utils.produtos_builder import build_produtos_out_from_items
+        
+        # Busca pedido (o repositório já carrega os itens via joinedload)
         pedido = self.repo.get(pedido_id)
-        return PedidoBalcaoOut.model_validate(pedido)
+        
+        # Constrói o campo produtos usando a função utilitária
+        produtos_snapshot = getattr(pedido, "produtos_snapshot", None)
+        produtos = build_produtos_out_from_items(pedido.itens, produtos_snapshot)
+        
+        # Recalcula valor_total incluindo receitas, combos e adicionais
+        # Usa a mesma lógica do repositório
+        valor_total_calculado = float(self.repo._calc_total(pedido))
+        
+        # Constrói a resposta manualmente para garantir que produtos e valor_total estejam corretos
+        # O model_validate não constrói corretamente produtos e não recalcula valor_total
+        
+        # Normaliza status para o enum do schema
+        status_str = str(pedido.status) if not isinstance(pedido.status, str) else pedido.status
+        status_enum = StatusPedidoBalcaoEnum(status_str) if status_str in [e.value for e in StatusPedidoBalcaoEnum] else StatusPedidoBalcaoEnum.PENDENTE
+        
+        # Usa a propriedade status_descricao do modelo
+        status_descricao = getattr(pedido, "status_descricao", status_str)
+        
+        pedido_dict = {
+            "id": pedido.id,
+            "empresa_id": pedido.empresa_id,
+            "numero_pedido": pedido.numero_pedido,
+            "mesa_id": pedido.mesa_id,
+            "cliente_id": pedido.cliente_id,
+            "status": status_enum,
+            "status_descricao": status_descricao,
+            "observacoes": pedido.observacoes,
+            "valor_total": valor_total_calculado,  # Valor recalculado
+            "itens": pedido.itens or [],
+            "created_at": pedido.created_at,
+            "updated_at": getattr(pedido, "updated_at", None),
+            "produtos": produtos,  # Produtos construídos corretamente
+        }
+        
+        return PedidoBalcaoOut(**pedido_dict)
 
     def list_pedidos_abertos(self, *, empresa_id: Optional[int] = None) -> list[PedidoBalcaoOut]:
         pedidos = self.repo.list_abertos_all(empresa_id=empresa_id)
