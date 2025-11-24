@@ -44,10 +44,38 @@ class PedidoMesaRepository:
         return total
 
     def _calc_total(self, pedido: PedidoMesaModel) -> Decimal:
-        return (
-            sum(self._calc_item_total(item) for item in pedido.itens)
-            or Decimal("0")
-        )
+        """Calcula o total do pedido somando todos os itens e seus adicionais."""
+        total = sum(self._calc_item_total(item) for item in pedido.itens) or Decimal("0")
+        
+        # Se houver produtos_snapshot (receitas e combos), também calcula o total deles
+        if pedido.produtos_snapshot:
+            produtos = pedido.produtos_snapshot
+            if isinstance(produtos, dict):
+                # Calcula total de receitas
+                receitas = produtos.get("receitas", [])
+                for receita in receitas:
+                    preco_unit = Decimal(str(receita.get("preco_unitario", 0) or 0))
+                    quantidade = Decimal(str(receita.get("quantidade", 0) or 0))
+                    total += preco_unit * quantidade
+                    # Adiciona adicionais da receita
+                    adicionais = receita.get("adicionais", [])
+                    for adicional in adicionais:
+                        adicional_total = Decimal(str(adicional.get("total", 0) or 0))
+                        total += adicional_total
+                
+                # Calcula total de combos
+                combos = produtos.get("combos", [])
+                for combo in combos:
+                    preco_unit = Decimal(str(combo.get("preco_unitario", 0) or 0))
+                    quantidade = Decimal(str(combo.get("quantidade", 0) or 0))
+                    total += preco_unit * quantidade
+                    # Adiciona adicionais do combo
+                    adicionais = combo.get("adicionais", [])
+                    for adicional in adicionais:
+                        adicional_total = Decimal(str(adicional.get("total", 0) or 0))
+                        total += adicional_total
+        
+        return total
 
     def _refresh_total(self, pedido: PedidoMesaModel) -> PedidoMesaModel:
         pedido.valor_total = self._calc_total(pedido)
