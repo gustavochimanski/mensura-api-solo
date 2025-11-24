@@ -14,31 +14,63 @@ from app.api.pedidos.models.model_pedido_unificado import TipoPedido
 from app.api.catalogo.contracts.produto_contract import IProdutoContract
 from app.api.catalogo.contracts.adicional_contract import IAdicionalContract
 from app.api.catalogo.contracts.combo_contract import IComboContract
-# TODO: Migrar schemas para pedidos unificados
-# from app.api.mesas.schemas.schema_pedido_mesa import (
-#     PedidoMesaCreate,
-#     PedidoMesaOut,
-#     PedidoMesaItemIn,
-#     AdicionarItemRequest,
-#     AdicionarProdutoGenericoRequest,
-#     RemoverItemResponse,
-#     StatusPedidoMesaEnum,
-#     FecharContaMesaRequest,
-#     AtualizarObservacoesRequest,
-#     AtualizarStatusPedidoRequest,
-# )
-# Stubs temporários até migração completa
-from typing import Any
-PedidoMesaCreate = Any
-PedidoMesaOut = Any
-PedidoMesaItemIn = Any
-AdicionarItemRequest = Any
-AdicionarProdutoGenericoRequest = Any
-RemoverItemResponse = Any
-StatusPedidoMesaEnum = Any
-FecharContaMesaRequest = Any
-AtualizarObservacoesRequest = Any
-AtualizarStatusPedidoRequest = Any
+from app.api.pedidos.schemas.schema_pedido import (
+    ItemPedidoRequest,
+    ReceitaPedidoRequest,
+    ComboPedidoRequest,
+    PedidoResponseCompleto,
+    ItemAdicionalRequest,
+)
+from app.api.pedidos.services.service_pedido_responses import PedidoResponseBuilder
+from app.api.cadastros.schemas.schema_shared_enums import PedidoStatusEnum
+from app.api.pedidos.models.model_pedido_unificado import StatusPedido
+from pydantic import BaseModel, Field
+from typing import Optional, List
+from decimal import Decimal as PyDecimal
+
+
+# Schemas de request para pedidos de mesa
+class PedidoMesaCreate(BaseModel):
+    empresa_id: int
+    mesa_id: int  # Código da mesa
+    cliente_id: Optional[int] = None
+    observacoes: Optional[str] = None
+    num_pessoas: Optional[int] = None
+    itens: Optional[List[ItemPedidoRequest]] = None
+
+
+class AdicionarItemRequest(BaseModel):
+    produto_cod_barras: str
+    quantidade: int
+    observacao: Optional[str] = None
+
+
+class AdicionarProdutoGenericoRequest(BaseModel):
+    produto_cod_barras: Optional[str] = None
+    receita_id: Optional[int] = None
+    combo_id: Optional[int] = None
+    quantidade: int = 1
+    observacao: Optional[str] = None
+    adicionais: Optional[List[ItemAdicionalRequest]] = None
+    adicionais_ids: Optional[List[int]] = None
+
+
+class RemoverItemResponse(BaseModel):
+    sucesso: bool
+    mensagem: str
+
+
+class FecharContaMesaRequest(BaseModel):
+    meio_pagamento_id: Optional[int] = None
+    troco_para: Optional[float] = None
+
+
+class AtualizarObservacoesRequest(BaseModel):
+    observacoes: str
+
+
+class AtualizarStatusPedidoRequest(BaseModel):
+    status: PedidoStatusEnum
 from app.api.catalogo.models.model_receita import ReceitaModel
 from app.api.catalogo.models.model_combo import ComboModel
 from app.api.catalogo.models.model_adicional import AdicionalModel
@@ -64,7 +96,7 @@ class PedidoMesaService:
         self.combo_contract = combo_contract
 
     # -------- Pedido --------
-    def criar_pedido(self, payload: PedidoMesaCreate) -> PedidoMesaOut:
+    def criar_pedido(self, payload: PedidoMesaCreate) -> PedidoResponseCompleto:
         # Busca mesa pelo código ao invés do ID
         # payload.mesa_id agora representa o código da mesa
         from decimal import Decimal
@@ -113,9 +145,9 @@ class PedidoMesaService:
                 )
             pedido = self.repo.get(pedido.id, TipoPedido.MESA)
 
-        return PedidoMesaOut.model_validate(pedido)
+        return PedidoResponseBuilder.pedido_to_response_completo(pedido)
 
-    def adicionar_item(self, pedido_id: int, body: AdicionarItemRequest) -> PedidoMesaOut:
+    def adicionar_item(self, pedido_id: int, body: AdicionarItemRequest) -> PedidoResponseCompleto:
         pedido = self.repo.get(pedido_id, TipoPedido.MESA)
         if pedido.status in ("C", "E"):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Pedido fechado/cancelado")
@@ -125,7 +157,7 @@ class PedidoMesaService:
             quantidade=body.quantidade,
             observacao=body.observacao,
         )
-        return PedidoMesaOut.model_validate(pedido)
+        return PedidoResponseBuilder.pedido_to_response_completo(pedido)
 
     def adicionar_produto_generico(
         self, 
@@ -316,7 +348,7 @@ class PedidoMesaService:
                 "É obrigatório informar 'produto_cod_barras', 'receita_id' ou 'combo_id'"
             )
         
-        return PedidoMesaOut.model_validate(pedido)
+        return PedidoResponseBuilder.pedido_to_response_completo(pedido)
 
     def remover_item(self, pedido_id: int, item_id: int) -> RemoverItemResponse:
         pedido = self.repo.get(pedido_id, TipoPedido.MESA)
@@ -325,7 +357,7 @@ class PedidoMesaService:
         pedido = self.repo.remove_item(pedido_id, item_id)
         return RemoverItemResponse(ok=True, pedido_id=pedido.id, valor_total=float(pedido.valor_total or 0))
 
-    def cancelar(self, pedido_id: int) -> PedidoMesaOut:
+    def cancelar(self, pedido_id: int) -> PedidoResponseCompleto:
         # Obtém o pedido antes de cancelar para pegar o mesa_id
         pedido_antes = self.repo.get(pedido_id, TipoPedido.MESA)
         mesa_id = pedido_antes.mesa_id
@@ -361,24 +393,24 @@ class PedidoMesaService:
                 f"(ainda há {len(pedidos_mesa_abertos)} pedidos de mesa e {len(pedidos_balcao_abertos)} de balcão abertos)"
             )
         
-        return PedidoMesaOut.model_validate(pedido)
+        return PedidoResponseBuilder.pedido_to_response_completo(pedido)
 
-    def confirmar(self, pedido_id: int) -> PedidoMesaOut:
+    def confirmar(self, pedido_id: int) -> PedidoResponseCompleto:
         pedido = self.repo.confirmar(pedido_id)
-        return PedidoMesaOut.model_validate(pedido)
+        return PedidoResponseBuilder.pedido_to_response_completo(pedido)
 
-    def atualizar_status(self, pedido_id: int, payload: AtualizarStatusPedidoRequest) -> PedidoMesaOut:
+    def atualizar_status(self, pedido_id: int, payload: AtualizarStatusPedidoRequest) -> PedidoResponseCompleto:
         novo_status = payload.status
-        if novo_status == StatusPedidoMesaEnum.CANCELADO:
+        if novo_status == PedidoStatusEnum.CANCELADO:
             return self.cancelar(pedido_id)
-        if novo_status == StatusPedidoMesaEnum.ENTREGUE:
+        if novo_status == PedidoStatusEnum.ENTREGUE:
             return self.fechar_conta(pedido_id, None)
-        if novo_status == StatusPedidoMesaEnum.IMPRESSAO:
+        if novo_status == PedidoStatusEnum.IMPRESSAO:
             return self.confirmar(pedido_id)
         pedido = self.repo.atualizar_status(pedido_id, novo_status)
-        return PedidoMesaOut.model_validate(pedido)
+        return PedidoResponseBuilder.pedido_to_response_completo(pedido)
 
-    def fechar_conta(self, pedido_id: int, payload: FecharContaMesaRequest | None = None) -> PedidoMesaOut:
+    def fechar_conta(self, pedido_id: int, payload: FecharContaMesaRequest | None = None) -> PedidoResponseCompleto:
         # Obtém o pedido antes de fechar para pegar o mesa_id
         pedido_antes = self.repo.get(pedido_id, TipoPedido.MESA)
         mesa_id = pedido_antes.mesa_id
@@ -422,17 +454,17 @@ class PedidoMesaService:
                 f"(ainda há {len(pedidos_mesa_abertos)} pedidos de mesa e {len(pedidos_balcao_abertos)} de balcão abertos)"
             )
         
-        return PedidoMesaOut.model_validate(pedido)
+        return PedidoResponseBuilder.pedido_to_response_completo(pedido)
 
-    def reabrir(self, pedido_id: int) -> PedidoMesaOut:
+    def reabrir(self, pedido_id: int) -> PedidoResponseCompleto:
         pedido = self.repo.reabrir(pedido_id)
         logger.info(f"[Pedidos Mesa] Reabrindo pedido - pedido_id={pedido_id}, novo_status=PENDENTE, mesa_id={pedido.mesa_id}")
         # Ao reabrir o pedido, garantir que a mesa vinculada esteja marcada como OCUPADA
         self.repo_mesa.ocupar_mesa(pedido.mesa_id, empresa_id=pedido.empresa_id)
-        return PedidoMesaOut.model_validate(pedido)
+        return PedidoResponseBuilder.pedido_to_response_completo(pedido)
 
     # Fluxo cliente
-    def fechar_conta_cliente(self, pedido_id: int, cliente_id: int, payload: FecharContaMesaRequest) -> PedidoMesaOut:
+    def fechar_conta_cliente(self, pedido_id: int, cliente_id: int, payload: FecharContaMesaRequest) -> PedidoResponseCompleto:
         pedido = self.repo.get(pedido_id, TipoPedido.MESA)
         if pedido.cliente_id and pedido.cliente_id != cliente_id:
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Pedido não pertence ao cliente")
@@ -478,31 +510,31 @@ class PedidoMesaService:
                 f"(ainda há {len(pedidos_mesa_abertos)} pedidos de mesa e {len(pedidos_balcao_abertos)} de balcão abertos)"
             )
         
-        return PedidoMesaOut.model_validate(pedido)
+        return PedidoResponseBuilder.pedido_to_response_completo(pedido)
 
     # -------- Consultas --------
-    def get_pedido(self, pedido_id: int) -> PedidoMesaOut:
+    def get_pedido(self, pedido_id: int) -> PedidoResponseCompleto:
         pedido = self.repo.get(pedido_id, TipoPedido.MESA)
-        return PedidoMesaOut.model_validate(pedido)
+        return PedidoResponseBuilder.pedido_to_response_completo(pedido)
 
     def list_pedidos_abertos(self, empresa_id: int, mesa_id: Optional[int] = None) -> list[PedidoMesaOut]:
         if mesa_id is not None:
             pedidos = self.repo.list_abertos_by_mesa(mesa_id, TipoPedido.MESA, empresa_id=empresa_id)
         else:
             pedidos = self.repo.list_abertos_all(TipoPedido.MESA, empresa_id=empresa_id)
-        return [PedidoMesaOut.model_validate(p) for p in pedidos]
+        return [PedidoResponseBuilder.pedido_to_response_completo(p) for p in pedidos]
 
     def list_pedidos_finalizados(self, mesa_id: int, data_filtro: Optional[date] = None, *, empresa_id: int) -> list[PedidoMesaOut]:
         """Retorna todos os pedidos finalizados (ENTREGUE) de uma mesa, opcionalmente filtrando por data"""
         # Valida se a mesa existe
         self.repo_mesa.get_by_id(mesa_id, empresa_id=empresa_id)
         pedidos = self.repo.list_finalizados(TipoPedido.MESA, data_filtro, empresa_id=empresa_id, mesa_id=mesa_id)
-        return [PedidoMesaOut.model_validate(p) for p in pedidos]
+        return [PedidoResponseBuilder.pedido_to_response_completo(p) for p in pedidos]
 
     def list_pedidos_by_cliente(self, cliente_id: int, *, empresa_id: int, skip: int = 0, limit: int = 50) -> list[PedidoMesaOut]:
         """Lista todos os pedidos de mesa/balcão de um cliente específico"""
         pedidos = self.repo.list_by_cliente_id(cliente_id, skip=skip, limit=limit, empresa_id=empresa_id)
-        return [PedidoMesaOut.model_validate(p) for p in pedidos]
+        return [PedidoResponseBuilder.pedido_to_response_completo(p) for p in pedidos]
 
     def atualizar_observacoes(self, pedido_id: int, payload: AtualizarObservacoesRequest) -> PedidoMesaOut:
         """Atualiza as observações de um pedido"""
@@ -510,6 +542,6 @@ class PedidoMesaService:
         pedido.observacoes = payload.observacoes
         self.db.commit()
         self.db.refresh(pedido)
-        return PedidoMesaOut.model_validate(pedido)
+        return PedidoResponseBuilder.pedido_to_response_completo(pedido)
 
 
