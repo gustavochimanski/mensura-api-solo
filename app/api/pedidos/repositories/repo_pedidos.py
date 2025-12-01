@@ -257,7 +257,7 @@ class PedidoRepository:
         return pedido
 
     def criar_pedido_balcao(
-        self,
+        self,#
         *,
         empresa_id: int,
         mesa_id: Optional[int],
