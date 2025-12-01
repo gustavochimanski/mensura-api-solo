@@ -239,10 +239,8 @@ class RelatorioRepository:
     def _media_tempo_entrega_minutos(
         self, empresa_id: int, inicio: datetime, fim: datetime
     ) -> tuple[float, float]:
-        # Calcular tempo médio para pedidos de delivery
-        # Buscar pedidos entregues (status E) no período
-        try:
-            pedidos_delivery_entregues = (
+        def _query_delivery():
+            return (
                 self.db.query(PedidoUnificadoModel)
                 .filter(
                     PedidoUnificadoModel.empresa_id == empresa_id,
@@ -253,16 +251,9 @@ class RelatorioRepository:
                 )
                 .all()
             )
-        except ProgrammingError as e:
-            # Se a tabela não existir, retorna valores padrão
-            if "does not exist" in str(e):
-                return 0.0, 0.0
-            raise
-        
-        # Calcular tempo médio para pedidos de mesa (entrega local)
-        # Buscar pedidos de mesa que foram entregues no período
-        try:
-            pedidos_mesa_entregues = (
+
+        def _query_mesa():
+            return (
                 self.db.query(PedidoUnificadoModel)
                 .filter(
                     PedidoUnificadoModel.empresa_id == empresa_id,
@@ -274,14 +265,9 @@ class RelatorioRepository:
                 )
                 .all()
             )
-        except ProgrammingError as e:
-            if "does not exist" in str(e):
-                pedidos_mesa_entregues = []
-            else:
-                raise
 
-        try:
-            pedidos_balcao_entregues = (
+        def _query_balcao():
+            return (
                 self.db.query(PedidoUnificadoModel)
                 .filter(
                     PedidoUnificadoModel.empresa_id == empresa_id,
@@ -292,11 +278,17 @@ class RelatorioRepository:
                 )
                 .all()
             )
-        except ProgrammingError as e:
-            if "does not exist" in str(e):
-                pedidos_balcao_entregues = []
-            else:
-                raise
+
+        # Calcular tempo médio para pedidos de delivery
+        # Buscar pedidos entregues (status E) no período
+        pedidos_delivery_entregues = self._handle_db_error(_query_delivery, default_return=[])
+        if pedidos_delivery_entregues is None:
+            return 0.0, 0.0
+        
+        # Calcular tempo médio para pedidos de mesa (entrega local)
+        # Buscar pedidos de mesa que foram entregues no período
+        pedidos_mesa_entregues = self._handle_db_error(_query_mesa, default_return=[])
+        pedidos_balcao_entregues = self._handle_db_error(_query_balcao, default_return=[])
 
         # Calcular tempo médio para delivery
         tempo_delivery_minutos = 0.0
@@ -438,8 +430,8 @@ class RelatorioRepository:
         self, empresa_id: int, inicio: datetime, fim: datetime
     ) -> List[Dict[str, float | int | str]]:
         """Agrega por dia (timezone America/Sao_Paulo) retornando lista ordenada por dia."""
-        try:
-            rows = (
+        def _query():
+            return (
                 self.db.query(
                     func.date_trunc(
                         "day",
@@ -461,11 +453,8 @@ class RelatorioRepository:
                 .order_by("dia")
                 .all()
             )
-        except ProgrammingError as e:
-            # Se a tabela não existir, retorna lista vazia
-            if "does not exist" in str(e):
-                return []
-            raise
+        
+        rows = self._handle_db_error(_query, default_return=[])
 
         resultados: List[Dict[str, float | int | str]] = []
         for row in rows:

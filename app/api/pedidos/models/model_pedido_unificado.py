@@ -169,7 +169,6 @@ class PedidoUnificadoModel(Base):
     # Snapshots (dados congelados no momento da criação do pedido)
     endereco_snapshot = Column(JSONB, nullable=True)  # Para delivery
     endereco_geo = Column(Geography(geometry_type="POINT", srid=4326), nullable=True)  # Para delivery
-    produtos_snapshot = Column(JSONB, nullable=True)  # Legado, pode ser removido após migração
     
     # Acerto com entregadores (apenas para delivery)
     acertado_entregador = Column(Boolean, nullable=False, default=False)
