@@ -42,8 +42,15 @@ class ClienteRepository:
 
     def update(self, db_obj: ClienteModel, **data) -> ClienteModel:
         for k, v in data.items():
+            # Garante que CPF vazio seja convertido para None para evitar violação de constraint única
+            if k == 'cpf' and isinstance(v, str) and v.strip() == "":
+                v = None
             setattr(db_obj, k, v)
-        self.db.commit()
+        try:
+            self.db.commit()
+        except IntegrityError:
+            self.db.rollback()
+            raise
         self.db.refresh(db_obj)
         return db_obj
 

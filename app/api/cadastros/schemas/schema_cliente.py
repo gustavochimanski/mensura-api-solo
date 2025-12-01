@@ -71,6 +71,18 @@ class ClienteUpdate(BaseModel):
     data_nascimento: Optional[date] = None
     ativo: Optional[bool] = None
 
+    @field_validator('cpf', mode='before')
+    @classmethod
+    def validate_cpf(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, str):
+            sanitized = v.strip()
+            if sanitized == "" or sanitized.lower() in {"null", "none", "undefined"}:
+                return None
+            return sanitized
+        return v
+
     @field_validator('email', mode='before')
     @classmethod
     def validate_email(cls, v):
@@ -116,6 +128,18 @@ class ClienteAdminUpdate(BaseModel):
     data_nascimento: Optional[date] = None
     ativo: Optional[bool] = None
     endereco: Optional[EnderecoUpdateAdmin] = None
+
+    @field_validator('cpf', mode='before')
+    @classmethod
+    def validate_cpf(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, str):
+            sanitized = v.strip()
+            if sanitized == "" or sanitized.lower() in {"null", "none", "undefined"}:
+                return None
+            return sanitized
+        return v
 
     @field_validator('email', mode='before')
     @classmethod
