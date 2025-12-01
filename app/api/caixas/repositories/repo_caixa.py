@@ -136,7 +136,7 @@ class CaixaRepository:
         + Entradas (pedidos pagos em dinheiro)
         - Saídas (trocos dados, etc.)
         """
-        from app.api.pedidos.models.model_pedido_unificado import PedidoUnificadoModel, TipoPedido
+        from app.api.pedidos.models.model_pedido_unificado import PedidoUnificadoModel, TipoEntrega
         from app.api.cardapio.models.model_transacao_pagamento_dv import TransacaoPagamentoModel
         from app.api.cadastros.models.model_meio_pagamento import MeioPagamentoModel
         from app.api.shared.schemas.schema_shared_enums import PagamentoStatusEnum
@@ -200,7 +200,7 @@ class CaixaRepository:
         Calcula valores esperados por tipo de meio de pagamento.
         Retorna lista com informações de cada meio de pagamento usado no período.
         """
-        from app.api.pedidos.models.model_pedido_unificado import PedidoUnificadoModel, TipoPedido
+        from app.api.pedidos.models.model_pedido_unificado import PedidoUnificadoModel, TipoEntrega
         from app.api.cardapio.models.model_transacao_pagamento_dv import TransacaoPagamentoModel
         from app.api.cadastros.models.model_meio_pagamento import MeioPagamentoModel
         from app.api.shared.schemas.schema_shared_enums import PagamentoStatusEnum

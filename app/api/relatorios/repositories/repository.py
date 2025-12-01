@@ -13,7 +13,7 @@ from sqlalchemy.exc import ProgrammingError, InternalError
 
 from app.api.pedidos.models.model_pedido_unificado import (
     PedidoUnificadoModel,
-    TipoPedido,
+    TipoEntrega,
 )
 from app.api.pedidos.models.model_pedido_item_unificado import PedidoItemUnificadoModel
 from app.api.pedidos.models.model_pedido_historico_unificado import (
@@ -117,7 +117,7 @@ class RelatorioRepository:
                 )
                 .filter(
                     PedidoUnificadoModel.empresa_id == empresa_id,
-                    PedidoUnificadoModel.tipo_pedido == TipoPedido.DELIVERY.value,
+                    PedidoUnificadoModel.tipo_entrega == TipoEntrega.DELIVERY.value,
                     PedidoUnificadoModel.created_at >= inicio,
                     PedidoUnificadoModel.created_at < fim,
                     PedidoUnificadoModel.status != "C",
@@ -134,7 +134,7 @@ class RelatorioRepository:
                 )
                 .filter(
                     PedidoUnificadoModel.empresa_id == empresa_id,
-                    PedidoUnificadoModel.tipo_pedido == TipoPedido.MESA.value,
+                    PedidoUnificadoModel.tipo_entrega == TipoEntrega.MESA.value,
                     PedidoUnificadoModel.created_at >= inicio,
                     PedidoUnificadoModel.created_at < fim,
                     PedidoUnificadoModel.status != StatusPedido.CANCELADO.value,
@@ -151,7 +151,7 @@ class RelatorioRepository:
                 )
                 .filter(
                     PedidoUnificadoModel.empresa_id == empresa_id,
-                    PedidoUnificadoModel.tipo_pedido == TipoPedido.BALCAO.value,
+                    PedidoUnificadoModel.tipo_entrega == TipoEntrega.BALCAO.value,
                     PedidoUnificadoModel.created_at >= inicio,
                     PedidoUnificadoModel.created_at < fim,
                     PedidoUnificadoModel.status != StatusPedido.CANCELADO.value,
@@ -191,7 +191,7 @@ class RelatorioRepository:
                 self.db.query(func.count(PedidoUnificadoModel.id))
                 .filter(
                     PedidoUnificadoModel.empresa_id == empresa_id,
-                    PedidoUnificadoModel.tipo_pedido == TipoPedido.DELIVERY.value,
+                    PedidoUnificadoModel.tipo_entrega == TipoEntrega.DELIVERY.value,
                     PedidoUnificadoModel.created_at >= inicio,
                     PedidoUnificadoModel.created_at < fim,
                     PedidoUnificadoModel.status == "C",
@@ -204,7 +204,7 @@ class RelatorioRepository:
                 self.db.query(func.count(PedidoUnificadoModel.id))
                 .filter(
                     PedidoUnificadoModel.empresa_id == empresa_id,
-                    PedidoUnificadoModel.tipo_pedido == TipoPedido.MESA.value,
+                    PedidoUnificadoModel.tipo_entrega == TipoEntrega.MESA.value,
                     PedidoUnificadoModel.created_at >= inicio,
                     PedidoUnificadoModel.created_at < fim,
                     PedidoUnificadoModel.status == StatusPedido.CANCELADO.value,
@@ -217,7 +217,7 @@ class RelatorioRepository:
                 self.db.query(func.count(PedidoUnificadoModel.id))
                 .filter(
                     PedidoUnificadoModel.empresa_id == empresa_id,
-                    PedidoUnificadoModel.tipo_pedido == TipoPedido.BALCAO.value,
+                    PedidoUnificadoModel.tipo_entrega == TipoEntrega.BALCAO.value,
                     PedidoUnificadoModel.created_at >= inicio,
                     PedidoUnificadoModel.created_at < fim,
                     PedidoUnificadoModel.status == StatusPedido.CANCELADO.value,
@@ -244,7 +244,7 @@ class RelatorioRepository:
                 self.db.query(PedidoUnificadoModel)
                 .filter(
                     PedidoUnificadoModel.empresa_id == empresa_id,
-                    PedidoUnificadoModel.tipo_pedido == TipoPedido.DELIVERY.value,
+                    PedidoUnificadoModel.tipo_entrega == TipoEntrega.DELIVERY.value,
                     PedidoUnificadoModel.created_at >= inicio,
                     PedidoUnificadoModel.created_at < fim,
                     PedidoUnificadoModel.status == "E",  # Apenas entregues
@@ -257,7 +257,7 @@ class RelatorioRepository:
                 self.db.query(PedidoUnificadoModel)
                 .filter(
                     PedidoUnificadoModel.empresa_id == empresa_id,
-                    PedidoUnificadoModel.tipo_pedido == TipoPedido.MESA.value,
+                    PedidoUnificadoModel.tipo_entrega == TipoEntrega.MESA.value,
                     PedidoUnificadoModel.status == StatusPedido.ENTREGUE.value,
                     PedidoUnificadoModel.mesa_id.isnot(None),
                     PedidoUnificadoModel.created_at >= inicio,
@@ -271,7 +271,7 @@ class RelatorioRepository:
                 self.db.query(PedidoUnificadoModel)
                 .filter(
                     PedidoUnificadoModel.empresa_id == empresa_id,
-                    PedidoUnificadoModel.tipo_pedido == TipoPedido.BALCAO.value,
+                    PedidoUnificadoModel.tipo_entrega == TipoEntrega.BALCAO.value,
                     PedidoUnificadoModel.status == StatusPedido.ENTREGUE.value,
                     PedidoUnificadoModel.created_at >= inicio,
                     PedidoUnificadoModel.created_at < fim,
@@ -356,7 +356,7 @@ class RelatorioRepository:
                 )
                 .filter(
                     PedidoUnificadoModel.empresa_id == empresa_id,
-                    PedidoUnificadoModel.tipo_pedido == TipoPedido.DELIVERY.value,
+                    PedidoUnificadoModel.tipo_entrega == TipoEntrega.DELIVERY.value,
                     PedidoUnificadoModel.created_at >= inicio,
                     PedidoUnificadoModel.created_at < fim,
                     PedidoUnificadoModel.status != "C",
@@ -374,7 +374,7 @@ class RelatorioRepository:
                 )
                 .filter(
                     PedidoUnificadoModel.empresa_id == empresa_id,
-                    PedidoUnificadoModel.tipo_pedido == TipoPedido.MESA.value,
+                    PedidoUnificadoModel.tipo_entrega == TipoEntrega.MESA.value,
                     PedidoUnificadoModel.created_at >= inicio,
                     PedidoUnificadoModel.created_at < fim,
                     PedidoUnificadoModel.status != StatusPedido.CANCELADO.value,
@@ -392,7 +392,7 @@ class RelatorioRepository:
                 )
                 .filter(
                     PedidoUnificadoModel.empresa_id == empresa_id,
-                    PedidoUnificadoModel.tipo_pedido == TipoPedido.BALCAO.value,
+                    PedidoUnificadoModel.tipo_entrega == TipoEntrega.BALCAO.value,
                     PedidoUnificadoModel.created_at >= inicio,
                     PedidoUnificadoModel.created_at < fim,
                     PedidoUnificadoModel.status != StatusPedido.CANCELADO.value,
@@ -444,7 +444,7 @@ class RelatorioRepository:
                 )
                 .filter(
                     PedidoUnificadoModel.empresa_id == empresa_id,
-                    PedidoUnificadoModel.tipo_pedido == TipoPedido.DELIVERY.value,
+                    PedidoUnificadoModel.tipo_entrega == TipoEntrega.DELIVERY.value,
                     PedidoUnificadoModel.created_at >= inicio,
                     PedidoUnificadoModel.created_at < fim,
                     PedidoUnificadoModel.status != "C",
@@ -522,7 +522,7 @@ class RelatorioRepository:
                 .outerjoin(ProdutoModel, ProdutoModel.cod_barras == PedidoItemUnificadoModel.produto_cod_barras)
                 .filter(
                     PedidoUnificadoModel.empresa_id == empresa_id,
-                    PedidoUnificadoModel.tipo_pedido == TipoPedido.DELIVERY.value,
+                    PedidoUnificadoModel.tipo_entrega == TipoEntrega.DELIVERY.value,
                     PedidoUnificadoModel.created_at >= inicio,
                     PedidoUnificadoModel.created_at < fim,
                     PedidoUnificadoModel.status != "C",
@@ -549,7 +549,7 @@ class RelatorioRepository:
                 .outerjoin(ProdutoModel, ProdutoModel.cod_barras == PedidoItemUnificadoModel.produto_cod_barras)
                 .filter(
                     PedidoUnificadoModel.empresa_id == empresa_id,
-                    PedidoUnificadoModel.tipo_pedido == TipoPedido.MESA.value,
+                    PedidoUnificadoModel.tipo_entrega == TipoEntrega.MESA.value,
                     PedidoUnificadoModel.created_at >= inicio,
                     PedidoUnificadoModel.created_at < fim,
                     PedidoUnificadoModel.status != StatusPedido.CANCELADO.value,
@@ -576,7 +576,7 @@ class RelatorioRepository:
                 .outerjoin(ProdutoModel, ProdutoModel.cod_barras == PedidoItemUnificadoModel.produto_cod_barras)
                 .filter(
                     PedidoUnificadoModel.empresa_id == empresa_id,
-                    PedidoUnificadoModel.tipo_pedido == TipoPedido.BALCAO.value,
+                    PedidoUnificadoModel.tipo_entrega == TipoEntrega.BALCAO.value,
                     PedidoUnificadoModel.created_at >= inicio,
                     PedidoUnificadoModel.created_at < fim,
                     PedidoUnificadoModel.status != StatusPedido.CANCELADO.value,
@@ -631,7 +631,7 @@ class RelatorioRepository:
                 )
                 .filter(
                     PedidoUnificadoModel.empresa_id == empresa_id,
-                    PedidoUnificadoModel.tipo_pedido == TipoPedido.DELIVERY.value,
+                    PedidoUnificadoModel.tipo_entrega == TipoEntrega.DELIVERY.value,
                     PedidoUnificadoModel.created_at >= inicio,
                     PedidoUnificadoModel.created_at < fim,
                     PedidoUnificadoModel.status != "C",  # Exclui apenas cancelados
@@ -839,7 +839,7 @@ class RelatorioRepository:
                 )
                 .filter(
                     PedidoUnificadoModel.empresa_id == empresa_id,
-                    PedidoUnificadoModel.tipo_pedido == TipoPedido.DELIVERY.value,
+                    PedidoUnificadoModel.tipo_entrega == TipoEntrega.DELIVERY.value,
                     PedidoUnificadoModel.created_at >= inicio_dt,
                     PedidoUnificadoModel.created_at < fim_dt,
                     PedidoUnificadoModel.status != "C",

@@ -17,7 +17,7 @@ from app.utils.minio_client import upload_file_to_minio, remover_arquivo_minio, 
 
 from app.api.cadastros.models.association_tables import entregador_empresa, usuario_empresa
 from app.api.catalogo.models.model_produto_emp import ProdutoEmpModel
-from app.api.pedidos.models.model_pedido_unificado import PedidoUnificadoModel, TipoPedido
+from app.api.pedidos.models.model_pedido_unificado import PedidoUnificadoModel, TipoEntrega
 
 class EmpresaService:
     def __init__(self, db: Session):

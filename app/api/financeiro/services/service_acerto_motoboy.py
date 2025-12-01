@@ -13,7 +13,7 @@ from app.api.financeiro.schemas.schema_acerto_motoboy import (
     ResumoAcertoEntregador,
     AcertosPassadosResponse,
 )
-from app.api.pedidos.models.model_pedido_unificado import PedidoUnificadoModel, TipoPedido
+from app.api.pedidos.models.model_pedido_unificado import PedidoUnificadoModel, TipoEntrega
 from app.api.cadastros.models.model_entregador_dv import EntregadorDeliveryModel
 from decimal import Decimal
 from app.utils.database_utils import now_trimmed
@@ -52,7 +52,7 @@ class AcertoEntregadoresService:
             self.db.query(PedidoUnificadoModel)
             .filter(
                 PedidoUnificadoModel.empresa_id == empresa_id,
-                PedidoUnificadoModel.tipo_pedido == TipoPedido.DELIVERY.value,
+                PedidoUnificadoModel.tipo_entrega == TipoEntrega.DELIVERY.value,
                 PedidoUnificadoModel.entregador_id.isnot(None),
                 PedidoUnificadoModel.status == "E",
                 PedidoUnificadoModel.acertado_entregador == False,
@@ -79,7 +79,7 @@ class AcertoEntregadoresService:
             self.db.query(PedidoUnificadoModel)
             .filter(
                 PedidoUnificadoModel.empresa_id == empresa_id,
-                PedidoUnificadoModel.tipo_pedido == TipoPedido.DELIVERY.value,
+                PedidoUnificadoModel.tipo_entrega == TipoEntrega.DELIVERY.value,
                 PedidoUnificadoModel.entregador_id.isnot(None),
                 PedidoUnificadoModel.status == "E",
                 PedidoUnificadoModel.acertado_entregador == False,
@@ -160,7 +160,7 @@ class AcertoEntregadoresService:
             self.db.query(PedidoUnificadoModel)
             .filter(
                 PedidoUnificadoModel.empresa_id == empresa_id,
-                PedidoUnificadoModel.tipo_pedido == TipoPedido.DELIVERY.value,
+                PedidoUnificadoModel.tipo_entrega == TipoEntrega.DELIVERY.value,
                 PedidoUnificadoModel.entregador_id.isnot(None),
                 PedidoUnificadoModel.status == "E",
                 PedidoUnificadoModel.acertado_entregador == False,
@@ -248,7 +248,7 @@ class AcertoEntregadoresService:
             self.db.query(PedidoUnificadoModel)
             .filter(
                 PedidoUnificadoModel.empresa_id == empresa_id,
-                PedidoUnificadoModel.tipo_pedido == TipoPedido.DELIVERY.value,
+                PedidoUnificadoModel.tipo_entrega == TipoEntrega.DELIVERY.value,
                 PedidoUnificadoModel.entregador_id.isnot(None),
                 PedidoUnificadoModel.acertado_entregador == True,
                 PedidoUnificadoModel.acertado_entregador_em >= inicio,

@@ -15,7 +15,7 @@ from app.api.pedidos.contracts.pedidos_contract import (
     StatusPedidoDTO,
 )
 from app.api.pedidos.repositories.repo_pedidos import PedidoRepository
-from app.api.pedidos.models.model_pedido_unificado import PedidoUnificadoModel, TipoPedido, StatusPedido
+from app.api.pedidos.models.model_pedido_unificado import PedidoUnificadoModel, TipoEntrega, StatusPedido
 from app.api.pedidos.utils.helpers import enum_value
 
 
@@ -38,7 +38,7 @@ class PedidosAdapter(IPedidosContract):
         
         # Status e tipo
         status_value = enum_value(pedido.status)
-        tipo_value = enum_value(pedido.tipo_pedido)
+        tipo_value = enum_value(pedido.tipo_entrega)
         
         # Converte enum string para DTO enum
         try:
