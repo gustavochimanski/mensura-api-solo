@@ -9,6 +9,7 @@ from starlette import status
 from sqlalchemy import func, or_, and_
 from sqlalchemy.orm import Session, joinedload, defer, selectinload
 
+from app.api.cadastros.models.model_mesa import MesaModel
 from app.api.catalogo.models.model_produto_emp import ProdutoEmpModel
 from app.api.pedidos.models.model_pedido_unificado import (
     PedidoUnificadoModel,
