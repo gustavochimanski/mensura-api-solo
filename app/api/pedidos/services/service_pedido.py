@@ -926,7 +926,7 @@ class PedidoService:
             itens.append(
                 PedidoClienteListItem(
                     tipo_pedido=TipoPedidoCheckoutEnum.MESA,
-                    criado_em=pedido.data_criacao or pedido.data_atualizacao or now_trimmed(),
+                    criado_em=pedido.data_criacao,
                     atualizado_em=pedido.data_atualizacao,
                     status_codigo=status_value,
                     status_descricao=pedido.status_descricao,
@@ -947,7 +947,7 @@ class PedidoService:
             itens.append(
                 PedidoClienteListItem(
                     tipo_pedido=TipoPedidoCheckoutEnum.BALCAO,
-                    criado_em=pedido.data_criacao or pedido.data_atualizacao or now_trimmed(),
+                    criado_em=pedido.data_criacao,
                     atualizado_em=pedido.data_atualizacao,
                     status_codigo=status_value,
                     status_descricao=pedido.status_descricao,
