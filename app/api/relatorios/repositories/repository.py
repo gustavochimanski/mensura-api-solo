@@ -109,9 +109,8 @@ class RelatorioRepository:
         quantidade_total = 0
         faturamento_total = Decimal("0")
 
-        # Delivery (usando modelo unificado)
-        try:
-            qtd_delivery, fatur_delivery = (
+        def _query_delivery():
+            return (
                 self.db.query(
                     func.count(PedidoUnificadoModel.id),
                     func.coalesce(func.sum(PedidoUnificadoModel.valor_total), 0),
@@ -126,15 +125,9 @@ class RelatorioRepository:
                 .first()
                 or (0, 0)
             )
-            quantidade_total += int(qtd_delivery or 0)
-            faturamento_total += Decimal(str(fatur_delivery or 0))
-        except ProgrammingError as e:
-            if "does not exist" not in str(e):
-                raise
 
-        # Mesa - usando modelo unificado
-        try:
-            qtd_mesa, fatur_mesa = (
+        def _query_mesa():
+            return (
                 self.db.query(
                     func.count(PedidoUnificadoModel.id),
                     func.coalesce(func.sum(PedidoUnificadoModel.valor_total), 0),
@@ -149,15 +142,9 @@ class RelatorioRepository:
                 .first()
                 or (0, 0)
             )
-            quantidade_total += int(qtd_mesa or 0)
-            faturamento_total += Decimal(str(fatur_mesa or 0))
-        except ProgrammingError as e:
-            if "does not exist" not in str(e):
-                raise
 
-        # Balcão - usando modelo unificado
-        try:
-            qtd_balcao, fatur_balcao = (
+        def _query_balcao():
+            return (
                 self.db.query(
                     func.count(PedidoUnificadoModel.id),
                     func.coalesce(func.sum(PedidoUnificadoModel.valor_total), 0),
@@ -172,11 +159,21 @@ class RelatorioRepository:
                 .first()
                 or (0, 0)
             )
-            quantidade_total += int(qtd_balcao or 0)
-            faturamento_total += Decimal(str(fatur_balcao or 0))
-        except ProgrammingError as e:
-            if "does not exist" not in str(e):
-                raise
+
+        # Delivery (usando modelo unificado)
+        qtd_delivery, fatur_delivery = self._handle_db_error(_query_delivery, default_return=(0, 0))
+        quantidade_total += int(qtd_delivery or 0)
+        faturamento_total += Decimal(str(fatur_delivery or 0))
+
+        # Mesa - usando modelo unificado
+        qtd_mesa, fatur_mesa = self._handle_db_error(_query_mesa, default_return=(0, 0))
+        quantidade_total += int(qtd_mesa or 0)
+        faturamento_total += Decimal(str(fatur_mesa or 0))
+
+        # Balcão - usando modelo unificado
+        qtd_balcao, fatur_balcao = self._handle_db_error(_query_balcao, default_return=(0, 0))
+        quantidade_total += int(qtd_balcao or 0)
+        faturamento_total += Decimal(str(fatur_balcao or 0))
 
         return PeriodoResumo(
             quantidade=quantidade_total,
@@ -189,8 +186,8 @@ class RelatorioRepository:
         """Conta pedidos cancelados (status = 'C') no período."""
         total_cancelados = 0
 
-        try:
-            cancelados_delivery = (
+        def _query_delivery():
+            return (
                 self.db.query(func.count(PedidoUnificadoModel.id))
                 .filter(
                     PedidoUnificadoModel.empresa_id == empresa_id,
@@ -201,13 +198,9 @@ class RelatorioRepository:
                 )
                 .scalar()
             )
-            total_cancelados += int(cancelados_delivery or 0)
-        except ProgrammingError as e:
-            if "does not exist" not in str(e):
-                raise
 
-        try:
-            cancelados_mesa = (
+        def _query_mesa():
+            return (
                 self.db.query(func.count(PedidoUnificadoModel.id))
                 .filter(
                     PedidoUnificadoModel.empresa_id == empresa_id,
@@ -218,13 +211,9 @@ class RelatorioRepository:
                 )
                 .scalar()
             )
-            total_cancelados += int(cancelados_mesa or 0)
-        except ProgrammingError as e:
-            if "does not exist" not in str(e):
-                raise
 
-        try:
-            cancelados_balcao = (
+        def _query_balcao():
+            return (
                 self.db.query(func.count(PedidoUnificadoModel.id))
                 .filter(
                     PedidoUnificadoModel.empresa_id == empresa_id,
@@ -235,10 +224,15 @@ class RelatorioRepository:
                 )
                 .scalar()
             )
-            total_cancelados += int(cancelados_balcao or 0)
-        except ProgrammingError as e:
-            if "does not exist" not in str(e):
-                raise
+
+        cancelados_delivery = self._handle_db_error(_query_delivery, default_return=0)
+        total_cancelados += int(cancelados_delivery or 0)
+
+        cancelados_mesa = self._handle_db_error(_query_mesa, default_return=0)
+        total_cancelados += int(cancelados_mesa or 0)
+
+        cancelados_balcao = self._handle_db_error(_query_balcao, default_return=0)
+        total_cancelados += int(cancelados_balcao or 0)
 
         return total_cancelados
 
@@ -521,18 +515,13 @@ class RelatorioRepository:
                 .all()
             )
 
-        rows_delivery = []
-        rows_mesa = []
-        rows_balcao = []
-
-        try:
-            # Query específica para delivery usando modelo unificado
+        def _query_delivery():
             descricao_expr_delivery = func.coalesce(
                 PedidoItemUnificadoModel.produto_descricao_snapshot,
                 ProdutoModel.descricao,
                 PedidoItemUnificadoModel.produto_cod_barras,
             )
-            rows_delivery = (
+            return (
                 self.db.query(
                     descricao_expr_delivery.label("descricao"),
                     func.sum(PedidoItemUnificadoModel.quantidade).label("quantidade"),
@@ -552,18 +541,14 @@ class RelatorioRepository:
                 .group_by(descricao_expr_delivery)
                 .all()
             )
-        except ProgrammingError as e:
-            if "does not exist" not in str(e):
-                raise
 
-        try:
-            # Query para mesa usando modelo unificado
+        def _query_mesa():
             descricao_expr_mesa = func.coalesce(
                 PedidoItemUnificadoModel.produto_descricao_snapshot,
                 ProdutoModel.descricao,
                 PedidoItemUnificadoModel.produto_cod_barras,
             )
-            rows_mesa = (
+            return (
                 self.db.query(
                     descricao_expr_mesa.label("descricao"),
                     func.sum(PedidoItemUnificadoModel.quantidade).label("quantidade"),
@@ -583,19 +568,14 @@ class RelatorioRepository:
                 .group_by(descricao_expr_mesa)
                 .all()
             )
-        except ProgrammingError as e:
-            if "does not exist" not in str(e):
-                raise
-            rows_mesa = []
 
-        try:
-            # Query para balcão usando modelo unificado
+        def _query_balcao():
             descricao_expr_balcao = func.coalesce(
                 PedidoItemUnificadoModel.produto_descricao_snapshot,
                 ProdutoModel.descricao,
                 PedidoItemUnificadoModel.produto_cod_barras,
             )
-            rows_balcao = (
+            return (
                 self.db.query(
                     descricao_expr_balcao.label("descricao"),
                     func.sum(PedidoItemUnificadoModel.quantidade).label("quantidade"),
@@ -615,10 +595,10 @@ class RelatorioRepository:
                 .group_by(descricao_expr_balcao)
                 .all()
             )
-        except ProgrammingError as e:
-            if "does not exist" not in str(e):
-                raise
-            rows_balcao = []
+
+        rows_delivery = self._handle_db_error(_query_delivery, default_return=[])
+        rows_mesa = self._handle_db_error(_query_mesa, default_return=[])
+        rows_balcao = self._handle_db_error(_query_balcao, default_return=[])
 
         acumulado: dict[str, dict[str, float | int | str]] = {}
 
