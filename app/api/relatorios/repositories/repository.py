@@ -19,11 +19,9 @@ from app.api.pedidos.models.model_pedido_item_unificado import PedidoItemUnifica
 from app.api.pedidos.models.model_pedido_historico_unificado import (
     PedidoHistoricoUnificadoModel,
 )
-# Modelos antigos foram removidos - usar apenas modelos unificados
 from app.api.cadastros.models.model_entregador_dv import EntregadorDeliveryModel
 from app.api.cadastros.models.model_endereco_dv import EnderecoModel
 from app.api.catalogo.models.model_produto import ProdutoModel
-# Migrado para modelos unificados - usar PedidoUnificadoModel
 from app.api.pedidos.models.model_pedido_unificado import StatusPedido
 
 

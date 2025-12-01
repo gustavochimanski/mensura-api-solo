@@ -4,20 +4,18 @@ from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query, status, Path, Body
 from sqlalchemy.orm import Session
 
-from app.api.pedidos.services.service_pedidos_mesa import PedidoMesaService
-# TODO: Migrar schemas para pedidos unificados
-# from app.api.mesas.schemas.schema_pedido_mesa import (...)
-# Stubs temporários até migração completa
-from typing import Any
-PedidoMesaCreate = Any
-PedidoMesaOut = Any
-AdicionarItemRequest = Any
-AdicionarProdutoGenericoRequest = Any
-RemoverItemResponse = Any
-StatusPedidoMesaEnum = Any
-FecharContaMesaRequest = Any
-AtualizarObservacoesRequest = Any
-AtualizarStatusPedidoRequest = Any
+from app.api.pedidos.services.service_pedidos_mesa import (
+    PedidoMesaService,
+    PedidoMesaCreate,
+    AdicionarItemRequest,
+    AdicionarProdutoGenericoRequest,
+    RemoverItemResponse,
+    FecharContaMesaRequest,
+    AtualizarObservacoesRequest,
+    AtualizarStatusPedidoRequest,
+)
+from app.api.pedidos.schemas.schema_pedido import PedidoResponseCompleto
+from app.api.cadastros.schemas.schema_shared_enums import PedidoStatusEnum
 from app.api.catalogo.contracts.produto_contract import IProdutoContract
 from app.api.catalogo.contracts.adicional_contract import IAdicionalContract
 from app.api.catalogo.contracts.combo_contract import IComboContract
@@ -58,7 +56,7 @@ def get_mesa_service(
 # ======================================================================
 @router.post(
     "/",
-    response_model=PedidoMesaOut,
+    response_model=PedidoResponseCompleto,
     status_code=status.HTTP_201_CREATED,
 )
 def criar_pedido_mesa(
@@ -85,7 +83,7 @@ def criar_pedido_mesa(
 # ======================================================================
 @router.get(
     "/",
-    response_model=List[PedidoMesaOut],
+    response_model=List[PedidoResponseCompleto],
     status_code=status.HTTP_200_OK,
 )
 def listar_pedidos_mesa(
@@ -114,7 +112,7 @@ def listar_pedidos_mesa(
 
 @router.get(
     "/{pedido_id}",
-    response_model=PedidoMesaOut,
+    response_model=PedidoResponseCompleto,
     status_code=status.HTTP_200_OK,
 )
 def obter_pedido_mesa(
@@ -133,7 +131,7 @@ def obter_pedido_mesa(
 
 @router.get(
     "/mesa/{mesa_id}/finalizados",
-    response_model=List[PedidoMesaOut],
+    response_model=List[PedidoResponseCompleto],
     status_code=status.HTTP_200_OK,
 )
 def listar_pedidos_finalizados_mesa(
@@ -156,7 +154,7 @@ def listar_pedidos_finalizados_mesa(
 
 @router.get(
     "/cliente/{cliente_id}",
-    response_model=List[PedidoMesaOut],
+    response_model=List[PedidoResponseCompleto],
     status_code=status.HTTP_200_OK,
 )
 def listar_pedidos_por_cliente(
@@ -184,7 +182,7 @@ def listar_pedidos_por_cliente(
 # ======================================================================
 @router.put(
     "/{pedido_id}/adicionar-item",
-    response_model=PedidoMesaOut,
+    response_model=PedidoResponseCompleto,
     status_code=status.HTTP_200_OK,
 )
 def adicionar_item_pedido_mesa(
@@ -207,7 +205,7 @@ def adicionar_item_pedido_mesa(
 
 @router.put(
     "/{pedido_id}/adicionar-produto-generico",
-    response_model=PedidoMesaOut,
+    response_model=PedidoResponseCompleto,
     status_code=status.HTTP_200_OK,
 )
 def adicionar_produto_generico_mesa(
@@ -234,7 +232,7 @@ def adicionar_produto_generico_mesa(
 
 @router.put(
     "/{pedido_id}/observacoes",
-    response_model=PedidoMesaOut,
+    response_model=PedidoResponseCompleto,
     status_code=status.HTTP_200_OK,
 )
 def atualizar_observacoes_pedido_mesa(
@@ -255,7 +253,7 @@ def atualizar_observacoes_pedido_mesa(
 
 @router.put(
     "/{pedido_id}/status",
-    response_model=PedidoMesaOut,
+    response_model=PedidoResponseCompleto,
     status_code=status.HTTP_200_OK,
 )
 def atualizar_status_pedido_mesa(
@@ -276,7 +274,7 @@ def atualizar_status_pedido_mesa(
 
 @router.put(
     "/{pedido_id}/fechar-conta",
-    response_model=PedidoMesaOut,
+    response_model=PedidoResponseCompleto,
     status_code=status.HTTP_200_OK,
 )
 def fechar_conta_mesa(
@@ -298,7 +296,7 @@ def fechar_conta_mesa(
 
 @router.put(
     "/{pedido_id}/reabrir",
-    response_model=PedidoMesaOut,
+    response_model=PedidoResponseCompleto,
     status_code=status.HTTP_200_OK,
 )
 def reabrir_pedido_mesa(
@@ -341,7 +339,7 @@ def remover_item_pedido_mesa(
 
 @router.delete(
     "/{pedido_id}",
-    response_model=PedidoMesaOut,
+    response_model=PedidoResponseCompleto,
     status_code=status.HTTP_200_OK,
 )
 def cancelar_pedido_mesa(

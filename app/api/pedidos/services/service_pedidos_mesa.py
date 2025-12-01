@@ -56,8 +56,9 @@ class AdicionarProdutoGenericoRequest(BaseModel):
 
 
 class RemoverItemResponse(BaseModel):
-    sucesso: bool
-    mensagem: str
+    ok: bool
+    pedido_id: int
+    valor_total: float
 
 
 class FecharContaMesaRequest(BaseModel):
@@ -163,7 +164,7 @@ class PedidoMesaService:
         self, 
         pedido_id: int, 
         body: AdicionarProdutoGenericoRequest
-    ) -> PedidoMesaOut:
+    ) -> PedidoResponseCompleto:
         """
         Adiciona um produto genérico ao pedido (produto normal, receita ou combo).
         Identifica automaticamente o tipo baseado nos campos preenchidos.
@@ -373,7 +374,7 @@ class PedidoMesaService:
         # Verifica se ainda há outros pedidos abertos nesta mesa (tanto de mesa quanto de balcão)
         # O pedido que acabou de ser cancelado já não será contado (status CANCELADO)
         pedidos_mesa_abertos = self.repo.list_abertos_by_mesa(mesa_id, TipoPedido.MESA, empresa_id=pedido_antes.empresa_id)
-        pedidos_balcao_abertos = self.repo_balcao.list_abertos_by_mesa(mesa_id, empresa_id=pedido_antes.empresa_id)
+        pedidos_balcao_abertos = self.repo.list_abertos_by_mesa(mesa_id, TipoPedido.BALCAO, empresa_id=pedido_antes.empresa_id)
         
         logger.info(
             f"[Pedidos Mesa] Cancelar - pedido_id={pedido_id}, mesa_id={mesa_id}, "
@@ -383,7 +384,9 @@ class PedidoMesaService:
         # Só libera a mesa se realmente não houver mais nenhum pedido em aberto (nem de mesa nem de balcão)
         if len(pedidos_mesa_abertos) == 0 and len(pedidos_balcao_abertos) == 0:
             # Verifica se a mesa está ocupada antes de liberar
-            mesa = self.repo_mesa.get_by_id(mesa_id, empresa_id=pedido_antes.empresa_id)
+            mesa = self.repo_mesa.get_by_id(mesa_id)
+            if mesa.empresa_id != pedido_antes.empresa_id:
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, "Mesa não pertence à empresa")
             if mesa.status == StatusMesa.OCUPADA:
                 logger.info(f"[Pedidos Mesa] Liberando mesa automaticamente (cancelar) - mesa_id={mesa_id} (sem pedidos abertos)")
                 self.repo_mesa.liberar_mesa(mesa_id, empresa_id=pedido_antes.empresa_id)
@@ -434,7 +437,7 @@ class PedidoMesaService:
         # Verifica se ainda há outros pedidos abertos nesta mesa (tanto de mesa quanto de balcão)
         # O pedido que acabou de ser fechado já não será contado (status ENTREGUE)
         pedidos_mesa_abertos = self.repo.list_abertos_by_mesa(mesa_id, TipoPedido.MESA, empresa_id=pedido_antes.empresa_id)
-        pedidos_balcao_abertos = self.repo_balcao.list_abertos_by_mesa(mesa_id, empresa_id=pedido_antes.empresa_id)
+        pedidos_balcao_abertos = self.repo.list_abertos_by_mesa(mesa_id, TipoPedido.BALCAO, empresa_id=pedido_antes.empresa_id)
         
         logger.info(
             f"[Pedidos Mesa] Fechar conta - pedido_id={pedido_id}, mesa_id={mesa_id}, "
@@ -444,7 +447,9 @@ class PedidoMesaService:
         # Só libera a mesa se realmente não houver mais nenhum pedido em aberto (nem de mesa nem de balcão)
         if len(pedidos_mesa_abertos) == 0 and len(pedidos_balcao_abertos) == 0:
             # Verifica se a mesa está ocupada antes de liberar
-            mesa = self.repo_mesa.get_by_id(mesa_id, empresa_id=pedido_antes.empresa_id)
+            mesa = self.repo_mesa.get_by_id(mesa_id)
+            if mesa.empresa_id != pedido_antes.empresa_id:
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, "Mesa não pertence à empresa")
             if mesa.status == StatusMesa.OCUPADA:
                 logger.info(f"[Pedidos Mesa] Liberando mesa automaticamente - mesa_id={mesa_id} (sem pedidos abertos)")
                 self.repo_mesa.liberar_mesa(mesa_id, empresa_id=pedido_antes.empresa_id)
@@ -489,8 +494,8 @@ class PedidoMesaService:
         
         # IMPORTANTE: Não muda o status da mesa imediatamente ao fechar a conta
         # Verifica se ainda há outros pedidos abertos nesta mesa (tanto de mesa quanto de balcão)
-        pedidos_mesa_abertos = self.repo.list_abertos_by_mesa(mesa_id, empresa_id=pedido.empresa_id)
-        pedidos_balcao_abertos = self.repo_balcao.list_abertos_by_mesa(mesa_id, empresa_id=pedido.empresa_id)
+        pedidos_mesa_abertos = self.repo.list_abertos_by_mesa(mesa_id, TipoPedido.MESA, empresa_id=pedido.empresa_id)
+        pedidos_balcao_abertos = self.repo.list_abertos_by_mesa(mesa_id, TipoPedido.BALCAO, empresa_id=pedido.empresa_id)
         
         logger.info(
             f"[Pedidos Mesa] Fechar conta cliente - pedido_id={pedido_id}, mesa_id={mesa_id}, "
@@ -500,7 +505,9 @@ class PedidoMesaService:
         # Só libera a mesa se realmente não houver mais nenhum pedido em aberto (nem de mesa nem de balcão)
         if len(pedidos_mesa_abertos) == 0 and len(pedidos_balcao_abertos) == 0:
             # Verifica se a mesa está ocupada antes de liberar
-            mesa = self.repo_mesa.get_by_id(mesa_id, empresa_id=pedido.empresa_id)
+            mesa = self.repo_mesa.get_by_id(mesa_id)
+            if mesa.empresa_id != pedido.empresa_id:
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, "Mesa não pertence à empresa")
             if mesa.status == StatusMesa.OCUPADA:
                 logger.info(f"[Pedidos Mesa] Liberando mesa automaticamente (cliente) - mesa_id={mesa_id} (sem pedidos abertos)")
                 self.repo_mesa.liberar_mesa(mesa_id, empresa_id=pedido.empresa_id)
@@ -527,16 +534,18 @@ class PedidoMesaService:
     def list_pedidos_finalizados(self, mesa_id: int, data_filtro: Optional[date] = None, *, empresa_id: int) -> list[PedidoResponseCompleto]:
         """Retorna todos os pedidos finalizados (ENTREGUE) de uma mesa, opcionalmente filtrando por data"""
         # Valida se a mesa existe
-        self.repo_mesa.get_by_id(mesa_id, empresa_id=empresa_id)
+        mesa = self.repo_mesa.get_by_id(mesa_id)
+        if mesa.empresa_id != empresa_id:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Mesa não pertence à empresa")
         pedidos = self.repo.list_finalizados(TipoPedido.MESA, data_filtro, empresa_id=empresa_id, mesa_id=mesa_id)
         return [PedidoResponseBuilder.pedido_to_response_completo(p) for p in pedidos]
 
-    def list_pedidos_by_cliente(self, cliente_id: int, *, empresa_id: int, skip: int = 0, limit: int = 50) -> list[PedidoMesaOut]:
+    def list_pedidos_by_cliente(self, cliente_id: int, *, empresa_id: int, skip: int = 0, limit: int = 50) -> list[PedidoResponseCompleto]:
         """Lista todos os pedidos de mesa/balcão de um cliente específico"""
         pedidos = self.repo.list_by_cliente_id(cliente_id, skip=skip, limit=limit, empresa_id=empresa_id)
         return [PedidoResponseBuilder.pedido_to_response_completo(p) for p in pedidos]
 
-    def atualizar_observacoes(self, pedido_id: int, payload: AtualizarObservacoesRequest) -> PedidoMesaOut:
+    def atualizar_observacoes(self, pedido_id: int, payload: AtualizarObservacoesRequest) -> PedidoResponseCompleto:
         """Atualiza as observações de um pedido"""
         pedido = self.repo.get(pedido_id, TipoPedido.MESA)
         pedido.observacoes = payload.observacoes

@@ -19,18 +19,13 @@ from app.api.pedidos.services.dependencies import get_pedido_service
 from app.core.client_dependecies import get_cliente_by_super_token
 from app.database.db_connection import get_db
 from app.utils.logger import logger
-from app.api.pedidos.services.service_pedidos_mesa import PedidoMesaService
-# TODO: Migrar schemas para pedidos unificados
-# from app.api.mesas.schemas.schema_pedido_mesa import (...)
-# from app.api.balcao.schemas.schema_pedido_balcao import (...)
-# Stubs temporários até migração completa
-from typing import Any
-PedidoMesaCreate = Any
-PedidoMesaItemIn = Any
-PedidoMesaOut = Any
-PedidoBalcaoCreate = Any
-PedidoBalcaoItemIn = Any
-PedidoBalcaoOut = Any
+from app.api.pedidos.services.service_pedidos_mesa import PedidoMesaService, PedidoMesaCreate
+from app.api.pedidos.services.service_pedidos_balcao import PedidoBalcaoService, PedidoBalcaoCreate
+from app.api.pedidos.schemas.schema_pedido import (
+    PedidoResponse,
+    PedidoResponseCompleto,
+    ItemPedidoRequest,
+)
 from app.api.catalogo.contracts.produto_contract import IProdutoContract
 from app.api.cadastros.contracts.dependencies import get_produto_contract
 
@@ -58,7 +53,7 @@ def preview_checkout(
 
 @router.post(
     "/checkout",
-    response_model=Union[PedidoResponse, PedidoMesaOut, PedidoBalcaoOut],
+    response_model=Union[PedidoResponse, PedidoResponseCompleto],
     status_code=status.HTTP_201_CREATED,
 )
 async def finalizar_checkout(
@@ -90,7 +85,7 @@ async def finalizar_checkout(
             observacoes=payload.observacao_geral,
             num_pessoas=payload.num_pessoas,
             itens=[
-                PedidoMesaItemIn(
+                ItemPedidoRequest(
                     produto_cod_barras=item.produto_cod_barras,
                     quantidade=item.quantidade,
                     observacao=item.observacao,
@@ -118,7 +113,7 @@ async def finalizar_checkout(
             cliente_id=cliente.id,
             observacoes=payload.observacao_geral,
             itens=[
-                PedidoBalcaoItemIn(
+                ItemPedidoRequest(
                     produto_cod_barras=item.produto_cod_barras,
                     quantidade=item.quantidade,
                     observacao=item.observacao,

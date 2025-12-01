@@ -5,15 +5,11 @@ from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from app.api.pedidos.schemas.schema_pedido import PedidoResponseSimplificado, TipoPedidoCheckoutEnum
-# : Migrar para modelos unificados - módulos mesas e balcao não existem mais
-# from app.api.mesas.schemas.schema_pedido_mesa import PedidoMesaOut
-# from app.api.balcao.schemas.schema_pedido_balcao import PedidoBalcaoOut
-
-# Stubs temporários até migração completa
-from typing import Any
-PedidoMesaOut = Any
-PedidoBalcaoOut = Any
+from app.api.pedidos.schemas.schema_pedido import (
+    PedidoResponseSimplificado,
+    PedidoResponseCompleto,
+    TipoPedidoCheckoutEnum,
+)
 
 
 class PedidoClienteListItem(BaseModel):
@@ -28,8 +24,8 @@ class PedidoClienteListItem(BaseModel):
     valor_total: float
 
     delivery: Optional[PedidoResponseSimplificado] = None
-    mesa: Optional[PedidoMesaOut] = None
-    balcao: Optional[PedidoBalcaoOut] = None
+    mesa: Optional[PedidoResponseCompleto] = None
+    balcao: Optional[PedidoResponseCompleto] = None
 
     model_config = ConfigDict(from_attributes=True)
 

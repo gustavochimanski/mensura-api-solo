@@ -266,17 +266,6 @@ def importar_models():
     from app.api.cadastros.models.model_parceiros import ParceiroModel, BannerParceiroModel
     from app.api.cadastros.models.model_regiao_entrega import RegiaoEntregaModel
     from app.api.catalogo.models.model_adicional import AdicionalModel
-    # ─── Models Mesas ───────────────────────────────────────────
-    # TODO: Migrar para modelos unificados - módulos mesas e balcao não existem mais
-    # from app.api.mesas.models.model_mesa import MesaModel
-    # from app.api.mesas.models.model_mesa_historico import MesaHistoricoModel
-    # from app.api.mesas.models.model_pedido_mesa import PedidoMesaModel
-    # from app.api.mesas.models.model_pedido_mesa_item import PedidoMesaItemModel
-    # ─── Models Balcao ───────────────────────────────────────────
-    # from app.api.balcao.models.model_pedido_balcao import PedidoBalcaoModel
-    # from app.api.balcao.models.model_pedido_balcao_item import PedidoBalcaoItemModel
-    # from app.api.balcao.models.model_pedido_balcao_historico import PedidoBalcaoHistoricoModel
-#
     logger.info("📦 Models importados com sucesso.")
 
 

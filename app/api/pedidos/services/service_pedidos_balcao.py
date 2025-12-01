@@ -16,21 +16,59 @@ from app.api.catalogo.contracts.adicional_contract import IAdicionalContract
 from app.api.catalogo.contracts.combo_contract import IComboContract
 from app.api.pedidos.models.model_pedido_historico_unificado import TipoOperacaoPedido
 from app.api.pedidos.models.model_pedido_item_unificado import PedidoItemUnificadoModel
-# TODO: Migrar schemas para pedidos unificados
-# from app.api.balcao.schemas.schema_pedido_balcao import (...)
-# from app.api.balcao.schemas.schema_pedido_balcao_historico import (...)
-# Stubs temporários até migração completa
-from typing import Any
-PedidoBalcaoCreate = Any
-PedidoBalcaoOut = Any
-AdicionarItemRequest = Any
-AdicionarProdutoGenericoRequest = Any
-RemoverItemResponse = Any
-StatusPedidoBalcaoEnum = Any
-FecharContaBalcaoRequest = Any
-AtualizarStatusPedidoRequest = Any
-PedidoBalcaoHistoricoOut = Any
-HistoricoPedidoBalcaoResponse = Any
+from app.api.pedidos.schemas.schema_pedido import (
+    ItemPedidoRequest,
+    ReceitaPedidoRequest,
+    ComboPedidoRequest,
+    PedidoResponseCompleto,
+    ItemAdicionalRequest,
+)
+from app.api.pedidos.services.service_pedido_responses import PedidoResponseBuilder
+from app.api.cadastros.schemas.schema_shared_enums import PedidoStatusEnum
+from app.api.pedidos.models.model_pedido_unificado import StatusPedido
+from app.api.pedidos.schemas.schema_pedido_status_historico import PedidoStatusHistoricoOut, HistoricoDoPedidoResponse
+from pydantic import BaseModel
+from typing import Optional, List
+
+
+# Schemas de request para pedidos de balcão
+class PedidoBalcaoCreate(BaseModel):
+    empresa_id: int
+    mesa_id: Optional[int] = None  # Código da mesa (opcional)
+    cliente_id: Optional[int] = None
+    observacoes: Optional[str] = None
+    itens: Optional[List[ItemPedidoRequest]] = None
+
+
+class AdicionarItemRequest(BaseModel):
+    produto_cod_barras: str
+    quantidade: int
+    observacao: Optional[str] = None
+
+
+class AdicionarProdutoGenericoRequest(BaseModel):
+    produto_cod_barras: Optional[str] = None
+    receita_id: Optional[int] = None
+    combo_id: Optional[int] = None
+    quantidade: int = 1
+    observacao: Optional[str] = None
+    adicionais: Optional[List[ItemAdicionalRequest]] = None
+    adicionais_ids: Optional[List[int]] = None
+
+
+class RemoverItemResponse(BaseModel):
+    ok: bool
+    pedido_id: int
+    valor_total: float
+
+
+class FecharContaBalcaoRequest(BaseModel):
+    meio_pagamento_id: Optional[int] = None
+    troco_para: Optional[float] = None
+
+
+class AtualizarStatusPedidoRequest(BaseModel):
+    status: PedidoStatusEnum
 
 from app.api.catalogo.models.model_receita import ReceitaModel
 from app.api.catalogo.models.model_combo import ComboModel
@@ -61,50 +99,9 @@ class PedidoBalcaoService:
             return status_obj.value
         return status_obj
     
-    def _build_pedido_out(self, pedido) -> PedidoBalcaoOut:
-        """
-        Constrói PedidoBalcaoOut de forma padronizada.
-        
-        Segue o padrão definido em PADRAO_RETORNO_PEDIDOS.md:
-        - Constrói o campo 'produtos' com itens, receitas e combos
-        - Recalcula 'valor_total' incluindo receitas, combos e adicionais
-        - Itens ficam apenas dentro de produtos.itens (não na raiz)
-        """
-        from app.api.pedidos.utils.produtos_builder import build_produtos_out_from_items
-        
-        # Constrói o campo produtos usando a função utilitária
-        produtos_snapshot = getattr(pedido, "produtos_snapshot", None)
-        produtos = build_produtos_out_from_items(pedido.itens, produtos_snapshot)
-        
-        # Recalcula valor_total incluindo receitas, combos e adicionais
-        valor_total_calculado = float(self.repo._calc_total(pedido))
-        
-        # Normaliza status para o enum do schema
-        status_str = str(pedido.status) if not isinstance(pedido.status, str) else pedido.status
-        status_enum = StatusPedidoBalcaoEnum(status_str) if status_str in [e.value for e in StatusPedidoBalcaoEnum] else StatusPedidoBalcaoEnum.PENDENTE
-        
-        # Usa a propriedade status_descricao do modelo
-        status_descricao = getattr(pedido, "status_descricao", status_str)
-        
-        pedido_dict = {
-            "id": pedido.id,
-            "empresa_id": pedido.empresa_id,
-            "numero_pedido": pedido.numero_pedido,
-            "mesa_id": pedido.mesa_id,
-            "cliente_id": pedido.cliente_id,
-            "status": status_enum,
-            "status_descricao": status_descricao,
-            "observacoes": pedido.observacoes,
-            "valor_total": valor_total_calculado,
-            "created_at": pedido.created_at,
-            "updated_at": getattr(pedido, "updated_at", None),
-            "produtos": produtos,  # Itens estão dentro de produtos.itens
-        }
-        
-        return PedidoBalcaoOut(**pedido_dict)
 
     # -------- Pedido --------
-    def criar_pedido(self, payload: PedidoBalcaoCreate) -> PedidoBalcaoOut:
+    def criar_pedido(self, payload: PedidoBalcaoCreate) -> PedidoResponseCompleto:
         # Se mesa_id informado, busca a mesa pelo código
         mesa_id_real = None
         if payload.mesa_id is not None:
@@ -160,9 +157,9 @@ class PedidoBalcaoService:
             self.repo.commit()
             pedido = self.repo.get(pedido.id, TipoPedido.BALCAO)
 
-        return self._build_pedido_out(pedido)
+        return PedidoResponseBuilder.pedido_to_response_completo(pedido)
 
-    def adicionar_item(self, pedido_id: int, body: AdicionarItemRequest, usuario_id: int | None = None) -> PedidoBalcaoOut:
+    def adicionar_item(self, pedido_id: int, body: AdicionarItemRequest, usuario_id: int | None = None) -> PedidoResponseCompleto:
         pedido = self.repo.get(pedido_id, TipoPedido.BALCAO)
         if pedido.status in ("C", "E"):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Pedido fechado/cancelado")
@@ -181,14 +178,14 @@ class PedidoBalcaoService:
         )
         self.repo.commit()
         pedido = self.repo.get(pedido_id, TipoPedido.BALCAO)  # Recarrega com itens atualizados
-        return self._build_pedido_out(pedido)
+        return PedidoResponseBuilder.pedido_to_response_completo(pedido)
 
     def adicionar_produto_generico(
         self, 
         pedido_id: int, 
         body: AdicionarProdutoGenericoRequest, 
         usuario_id: int | None = None
-    ) -> PedidoBalcaoOut:
+    ) -> PedidoResponseCompleto:
         """
         Adiciona um produto genérico ao pedido (produto normal, receita ou combo).
         Identifica automaticamente o tipo baseado nos campos preenchidos.
@@ -385,7 +382,7 @@ class PedidoBalcaoService:
         )
         self.repo.commit()
         pedido = self.repo.get(pedido_id, TipoPedido.BALCAO)  # Recarrega com itens atualizados
-        return self._build_pedido_out(pedido)
+        return PedidoResponseBuilder.pedido_to_response_completo(pedido)
 
     def remover_item(self, pedido_id: int, item_id: int, usuario_id: int | None = None) -> RemoverItemResponse:
         pedido = self.repo.get(pedido_id, TipoPedido.BALCAO)
@@ -402,7 +399,7 @@ class PedidoBalcaoService:
         self.repo.commit()
         return RemoverItemResponse(ok=True, pedido_id=pedido.id, valor_total=float(pedido.valor_total or 0))
 
-    def cancelar(self, pedido_id: int, usuario_id: int | None = None) -> PedidoBalcaoOut:
+    def cancelar(self, pedido_id: int, usuario_id: int | None = None) -> PedidoResponseCompleto:
         pedido_antes = self.repo.get(pedido_id, TipoPedido.BALCAO)
         status_anterior = self._status_value(pedido_antes.status)
         pedido = self.repo.cancelar(pedido_id)
@@ -417,9 +414,9 @@ class PedidoBalcaoService:
         )
         self.repo.commit()
         pedido = self.repo.get(pedido_id, TipoPedido.BALCAO)
-        return self._build_pedido_out(pedido)
+        return PedidoResponseBuilder.pedido_to_response_completo(pedido)
 
-    def confirmar(self, pedido_id: int, usuario_id: int | None = None) -> PedidoBalcaoOut:
+    def confirmar(self, pedido_id: int, usuario_id: int | None = None) -> PedidoResponseCompleto:
         pedido_antes = self.repo.get(pedido_id, TipoPedido.BALCAO)
         status_anterior = self._status_value(pedido_antes.status)
         pedido = self.repo.confirmar(pedido_id)
@@ -434,20 +431,20 @@ class PedidoBalcaoService:
         )
         self.repo.commit()
         pedido = self.repo.get(pedido_id, TipoPedido.BALCAO)
-        return self._build_pedido_out(pedido)
+        return PedidoResponseBuilder.pedido_to_response_completo(pedido)
 
     def atualizar_status(
         self,
         pedido_id: int,
         payload: AtualizarStatusPedidoRequest,
         usuario_id: int | None = None
-    ) -> PedidoBalcaoOut:
+    ) -> PedidoResponseCompleto:
         novo_status = payload.status
-        if novo_status == StatusPedidoBalcaoEnum.CANCELADO:
+        if novo_status == PedidoStatusEnum.CANCELADO:
             return self.cancelar(pedido_id, usuario_id=usuario_id)
-        if novo_status == StatusPedidoBalcaoEnum.ENTREGUE:
+        if novo_status == PedidoStatusEnum.ENTREGUE:
             return self.fechar_conta(pedido_id, payload=None, usuario_id=usuario_id)
-        if novo_status == StatusPedidoBalcaoEnum.IMPRESSAO:
+        if novo_status == PedidoStatusEnum.IMPRESSAO:
             return self.confirmar(pedido_id, usuario_id=usuario_id)
 
         pedido_atual = self.repo.get(pedido_id)
@@ -463,9 +460,9 @@ class PedidoBalcaoService:
         )
         self.repo.commit()
         pedido = self.repo.get(pedido_id, TipoPedido.BALCAO)
-        return self._build_pedido_out(pedido)
+        return PedidoResponseBuilder.pedido_to_response_completo(pedido)
 
-    def fechar_conta(self, pedido_id: int, payload: FecharContaBalcaoRequest | None = None, usuario_id: int | None = None) -> PedidoBalcaoOut:
+    def fechar_conta(self, pedido_id: int, payload: FecharContaBalcaoRequest | None = None, usuario_id: int | None = None) -> PedidoResponseCompleto:
         pedido_antes = self.repo.get(pedido_id, TipoPedido.BALCAO)
         status_anterior = self._status_value(pedido_antes.status)
         mesa_id = pedido_antes.mesa_id  # Guarda mesa_id antes de fechar
@@ -493,7 +490,9 @@ class PedidoBalcaoService:
             
             # Só libera a mesa se não houver mais nenhum pedido aberto (nem de balcão nem de mesa)
             if len(pedidos_balcao_abertos) == 0 and len(pedidos_mesa_abertos) == 0:
-                mesa = self.repo_mesa.get_by_id(mesa_id, empresa_id=pedido.empresa_id)
+                mesa = self.repo_mesa.get_by_id(mesa_id)
+                if mesa.empresa_id != pedido.empresa_id:
+                    raise HTTPException(status.HTTP_400_BAD_REQUEST, "Mesa não pertence à empresa")
                 if mesa.status == StatusMesa.OCUPADA:
                     self.repo_mesa.liberar_mesa(mesa_id, empresa_id=pedido.empresa_id)
         
@@ -516,9 +515,9 @@ class PedidoBalcaoService:
         )
         self.repo.commit()
         pedido = self.repo.get(pedido_id, TipoPedido.BALCAO)
-        return self._build_pedido_out(pedido)
+        return PedidoResponseBuilder.pedido_to_response_completo(pedido)
 
-    def reabrir(self, pedido_id: int, usuario_id: int | None = None) -> PedidoBalcaoOut:
+    def reabrir(self, pedido_id: int, usuario_id: int | None = None) -> PedidoResponseCompleto:
         pedido_antes = self.repo.get(pedido_id, TipoPedido.BALCAO)
         status_anterior = self._status_value(pedido_antes.status)
         pedido = self.repo.reabrir(pedido_id)
@@ -533,10 +532,10 @@ class PedidoBalcaoService:
         )
         self.repo.commit()
         pedido = self.repo.get(pedido_id, TipoPedido.BALCAO)
-        return self._build_pedido_out(pedido)
+        return PedidoResponseBuilder.pedido_to_response_completo(pedido)
 
     # -------- Consultas --------
-    def get_pedido(self, pedido_id: int) -> PedidoBalcaoOut:
+    def get_pedido(self, pedido_id: int) -> PedidoResponseCompleto:
         """
         Busca um pedido de balcão e retorna no formato padronizado.
         
@@ -547,24 +546,24 @@ class PedidoBalcaoService:
         """
         # Busca pedido (o repositório já carrega os itens via joinedload)
         pedido = self.repo.get(pedido_id, TipoPedido.BALCAO)
-        return self._build_pedido_out(pedido)
+        return PedidoResponseBuilder.pedido_to_response_completo(pedido)
 
-    def list_pedidos_abertos(self, *, empresa_id: Optional[int] = None) -> list[PedidoBalcaoOut]:
+    def list_pedidos_abertos(self, *, empresa_id: Optional[int] = None) -> list[PedidoResponseCompleto]:
         pedidos = self.repo.list_abertos_all(TipoPedido.BALCAO, empresa_id=empresa_id)
-        return [self._build_pedido_out(p) for p in pedidos]
+        return [PedidoResponseBuilder.pedido_to_response_completo(p) for p in pedidos]
 
-    def list_pedidos_finalizados(self, data_filtro: Optional[date] = None, *, empresa_id: Optional[int] = None) -> list[PedidoBalcaoOut]:
+    def list_pedidos_finalizados(self, data_filtro: Optional[date] = None, *, empresa_id: Optional[int] = None) -> list[PedidoResponseCompleto]:
         """Retorna todos os pedidos finalizados (ENTREGUE), opcionalmente filtrando por data"""
         pedidos = self.repo.list_finalizados(TipoPedido.BALCAO, data_filtro, empresa_id=empresa_id)
-        return [self._build_pedido_out(p) for p in pedidos]
+        return [PedidoResponseBuilder.pedido_to_response_completo(p) for p in pedidos]
 
-    def list_pedidos_by_cliente(self, cliente_id: int, *, empresa_id: Optional[int] = None, skip: int = 0, limit: int = 50) -> list[PedidoBalcaoOut]:
+    def list_pedidos_by_cliente(self, cliente_id: int, *, empresa_id: Optional[int] = None, skip: int = 0, limit: int = 50) -> list[PedidoResponseCompleto]:
         """Lista todos os pedidos de balcão de um cliente específico"""
         pedidos = self.repo.list_by_cliente_id(cliente_id, empresa_id=empresa_id, skip=skip, limit=limit)
-        return [self._build_pedido_out(p) for p in pedidos]
+        return [PedidoResponseBuilder.pedido_to_response_completo(p) for p in pedidos]
 
     # -------- Histórico --------
-    def get_historico(self, pedido_id: int, limit: int = 100) -> HistoricoPedidoBalcaoResponse:
+    def get_historico(self, pedido_id: int, limit: int = 100) -> HistoricoDoPedidoResponse:
         """Busca histórico completo de um pedido de balcão"""
         # Verifica se o pedido existe
         pedido = self.repo.get(pedido_id, TipoPedido.BALCAO)
@@ -572,16 +571,13 @@ class PedidoBalcaoService:
         # Busca histórico
         historicos = self.repo.get_historico(pedido_id, limit)
         
-        # Converte para schema incluindo nome do usuário
+        # Converte para schema unificado
         historicos_out = []
         for h in historicos:
-            hist_dict = PedidoBalcaoHistoricoOut.model_validate(h).model_dump()
-            # Adiciona nome do usuário se disponível
-            if h.usuario:
-                hist_dict["usuario"] = h.usuario.nome
-            historicos_out.append(PedidoBalcaoHistoricoOut(**hist_dict))
+            historico_out = PedidoResponseBuilder.build_historico_response(h)
+            historicos_out.append(historico_out)
         
-        return HistoricoPedidoBalcaoResponse(
+        return HistoricoDoPedidoResponse(
             pedido_id=pedido_id,
             historicos=historicos_out
         )
