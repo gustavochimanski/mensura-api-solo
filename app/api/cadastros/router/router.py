@@ -10,6 +10,7 @@ from app.api.cadastros.router.admin import (
     router_parceiros,
     router_regiao_entrega,
     router_enderecos,
+    router_combos,
 )
 from app.api.cadastros.router.client import (
     router_categorias as router_categorias_client,
@@ -43,4 +44,5 @@ api_cadastros.include_router(router_meio_pagamento)
 api_cadastros.include_router(router_parceiros)
 api_cadastros.include_router(router_regiao_entrega)
 api_cadastros.include_router(router_enderecos)
+api_cadastros.include_router(router_combos)
 
