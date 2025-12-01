@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session, joinedload, defer, selectinload
 from app.api.catalogo.models.model_produto_emp import ProdutoEmpModel
 from app.api.pedidos.models.model_pedido_unificado import (
     PedidoUnificadoModel,
-    TipoPedido,
+    TipoEntrega,
     StatusPedido,
 )
 from app.api.pedidos.models.model_pedido_item_unificado import PedidoItemUnificadoModel
@@ -67,8 +67,8 @@ class PedidoRepository:
     def get_cupom(self, cupom_id: int) -> Optional[CupomDescontoModel]:
         return self.db.get(CupomDescontoModel, cupom_id)
 
-    def get_pedido(self, pedido_id: int, tipo_pedido: TipoPedido | None = None) -> Optional[PedidoUnificadoModel]:
-        """Busca um pedido por ID. Se tipo_pedido for fornecido, filtra por tipo."""
+    def get_pedido(self, pedido_id: int, tipo_entrega: TipoEntrega | None = None) -> Optional[PedidoUnificadoModel]:
+        """Busca um pedido por ID. Se tipo_entrega for fornecido, filtra por tipo."""
         query = (
             self.db.query(PedidoUnificadoModel)
             .options(
@@ -81,13 +81,13 @@ class PedidoRepository:
             )
             .filter(PedidoUnificadoModel.id == pedido_id)
         )
-        if tipo_pedido:
-            query = query.filter(PedidoUnificadoModel.tipo_pedido == tipo_pedido.value)
+        if tipo_entrega:
+            query = query.filter(PedidoUnificadoModel.tipo_entrega == tipo_entrega.value)
         return query.first()
     
-    def get(self, pedido_id: int, tipo_pedido: TipoPedido) -> PedidoUnificadoModel:
+    def get(self, pedido_id: int, tipo_entrega: TipoEntrega) -> PedidoUnificadoModel:
         """Busca um pedido por ID e tipo, lança exceção se não encontrar."""
-        pedido = self.get_pedido(pedido_id, tipo_pedido)
+        pedido = self.get_pedido(pedido_id, tipo_entrega)
         if not pedido:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
         return pedido
@@ -97,7 +97,7 @@ class PedidoRepository:
         return (
             self.db.query(PedidoUnificadoModel)
             .filter(
-                PedidoUnificadoModel.tipo_pedido == TipoPedido.DELIVERY.value,
+                PedidoUnificadoModel.tipo_entrega == TipoEntrega.DELIVERY.value,
                 PedidoUnificadoModel.cliente_id == cliente_id
             )
             .all()
@@ -113,7 +113,7 @@ class PedidoRepository:
         
         query = self.db.query(PedidoUnificadoModel).filter(
             PedidoUnificadoModel.empresa_id == empresa_id,
-            PedidoUnificadoModel.tipo_pedido == TipoPedido.DELIVERY.value
+            PedidoUnificadoModel.tipo_entrega == TipoEntrega.DELIVERY.value
         )
         
         # Busca pedidos criados naquele dia (qualquer status) OU pedidos com status E atualizados naquele dia
@@ -227,7 +227,7 @@ class PedidoRepository:
             self.db.query(PedidoUnificadoModel)
             .filter(
                 PedidoUnificadoModel.empresa_id == empresa_id,
-                PedidoUnificadoModel.tipo_pedido == TipoPedido.DELIVERY.value
+                PedidoUnificadoModel.tipo_entrega == TipoEntrega.DELIVERY.value
             )
             .count()
             + 1
@@ -235,7 +235,7 @@ class PedidoRepository:
         numero = f"DV-{seq:06d}"
         
         pedido = PedidoUnificadoModel(
-            tipo_pedido=TipoPedido.DELIVERY.value,
+            tipo_entrega=TipoEntrega.DELIVERY.value,
             empresa_id=empresa_id,
             cliente_id=int(cliente_id) if cliente_id is not None else None,
             endereco_id=endereco_id,
@@ -279,7 +279,7 @@ class PedidoRepository:
             self.db.query(PedidoUnificadoModel)
             .filter(
                 PedidoUnificadoModel.empresa_id == empresa_id,
-                PedidoUnificadoModel.tipo_pedido == TipoPedido.BALCAO.value
+                PedidoUnificadoModel.tipo_entrega == TipoEntrega.BALCAO.value
             )
             .count()
             + 1
@@ -287,7 +287,7 @@ class PedidoRepository:
         numero = f"BAL-{seq:06d}"
 
         pedido = PedidoUnificadoModel(
-            tipo_pedido=TipoPedido.BALCAO.value,
+            tipo_entrega=TipoEntrega.BALCAO.value,
             empresa_id=empresa_id,
             mesa_id=mesa_id,
             cliente_id=cliente_id,
@@ -330,7 +330,7 @@ class PedidoRepository:
         seq = (
             self.db.query(PedidoUnificadoModel)
             .filter(
-                PedidoUnificadoModel.tipo_pedido == TipoPedido.MESA.value,
+                PedidoUnificadoModel.tipo_entrega == TipoEntrega.MESA.value,
                 PedidoUnificadoModel.mesa_id == mesa_id,
                 PedidoUnificadoModel.empresa_id == empresa_id,
             )
@@ -340,7 +340,7 @@ class PedidoRepository:
         numero = f"{mesa.numero}-{seq:03d}"
 
         pedido = PedidoUnificadoModel(
-            tipo_pedido=TipoPedido.MESA.value,
+            tipo_entrega=TipoEntrega.MESA.value,
             empresa_id=empresa_id,
             mesa_id=mesa_id,
             cliente_id=cliente_id,
@@ -816,13 +816,13 @@ class PedidoRepository:
         return pedido
 
     # -------------------- Métodos de listagem para balcão e mesa -------------------
-    def list_abertos_by_mesa(self, mesa_id: int, tipo_pedido: TipoPedido, *, empresa_id: Optional[int] = None) -> list[PedidoUnificadoModel]:
+    def list_abertos_by_mesa(self, mesa_id: int, tipo_entrega: TipoEntrega, *, empresa_id: Optional[int] = None) -> list[PedidoUnificadoModel]:
         """Lista pedidos abertos de balcão ou mesa associados a uma mesa específica"""
         query = (
             self.db.query(PedidoUnificadoModel)
             .options(joinedload(PedidoUnificadoModel.itens))
             .filter(
-                PedidoUnificadoModel.tipo_pedido == tipo_pedido.value,
+                PedidoUnificadoModel.tipo_entrega == tipo_entrega.value,
                 PedidoUnificadoModel.mesa_id == mesa_id,
                 PedidoUnificadoModel.status.in_(OPEN_STATUS_PEDIDO_BALCAO_MESA)
             )
@@ -831,13 +831,13 @@ class PedidoRepository:
             query = query.filter(PedidoUnificadoModel.empresa_id == empresa_id)
         return query.order_by(PedidoUnificadoModel.created_at.desc()).all()
 
-    def list_abertos_all(self, tipo_pedido: TipoPedido, *, empresa_id: Optional[int] = None) -> list[PedidoUnificadoModel]:
+    def list_abertos_all(self, tipo_entrega: TipoEntrega, *, empresa_id: Optional[int] = None) -> list[PedidoUnificadoModel]:
         """Lista todos os pedidos abertos de balcão ou mesa"""
         query = (
             self.db.query(PedidoUnificadoModel)
             .options(joinedload(PedidoUnificadoModel.itens))
             .filter(
-                PedidoUnificadoModel.tipo_pedido == tipo_pedido.value,
+                PedidoUnificadoModel.tipo_entrega == tipo_entrega.value,
                 PedidoUnificadoModel.status.in_(OPEN_STATUS_PEDIDO_BALCAO_MESA)
             )
         )
@@ -845,12 +845,12 @@ class PedidoRepository:
             query = query.filter(PedidoUnificadoModel.empresa_id == empresa_id)
         return query.order_by(PedidoUnificadoModel.created_at.desc()).all()
 
-    def get_aberto_mais_recente(self, mesa_id: int, tipo_pedido: TipoPedido, *, empresa_id: int | None = None) -> Optional[PedidoUnificadoModel]:
+    def get_aberto_mais_recente(self, mesa_id: int, tipo_entrega: TipoEntrega, *, empresa_id: int | None = None) -> Optional[PedidoUnificadoModel]:
         """Busca o pedido aberto mais recente de uma mesa (apenas para tipo MESA)"""
         query = (
             self.db.query(PedidoUnificadoModel)
             .filter(
-                PedidoUnificadoModel.tipo_pedido == tipo_pedido.value,
+                PedidoUnificadoModel.tipo_entrega == tipo_entrega.value,
                 PedidoUnificadoModel.mesa_id == mesa_id,
                 PedidoUnificadoModel.status.in_(OPEN_STATUS_PEDIDO_BALCAO_MESA)
             )
@@ -859,13 +859,13 @@ class PedidoRepository:
             query = query.filter(PedidoUnificadoModel.empresa_id == empresa_id)
         return query.order_by(PedidoUnificadoModel.created_at.desc()).first()
 
-    def list_finalizados(self, tipo_pedido: TipoPedido, data_filtro: Optional[date] = None, *, empresa_id: Optional[int] = None, mesa_id: Optional[int] = None) -> list[PedidoUnificadoModel]:
+    def list_finalizados(self, tipo_entrega: TipoEntrega, data_filtro: Optional[date] = None, *, empresa_id: Optional[int] = None, mesa_id: Optional[int] = None) -> list[PedidoUnificadoModel]:
         """Lista pedidos finalizados (ENTREGUE) de balcão ou mesa"""
         query = (
             self.db.query(PedidoUnificadoModel)
             .options(joinedload(PedidoUnificadoModel.itens))
             .filter(
-                PedidoUnificadoModel.tipo_pedido == tipo_pedido.value,
+                PedidoUnificadoModel.tipo_entrega == tipo_entrega.value,
                 PedidoUnificadoModel.status == StatusPedido.ENTREGUE.value
             )
         )
@@ -893,7 +893,7 @@ class PedidoRepository:
         
         return query.order_by(PedidoUnificadoModel.created_at.desc()).all()
 
-    def list_by_cliente_id(self, cliente_id: int, tipo_pedido: TipoPedido, *, empresa_id: Optional[int] = None, skip: int = 0, limit: int = 50) -> list[PedidoUnificadoModel]:
+    def list_by_cliente_id(self, cliente_id: int, tipo_entrega: TipoEntrega, *, empresa_id: Optional[int] = None, skip: int = 0, limit: int = 50) -> list[PedidoUnificadoModel]:
         """Lista pedidos de um cliente específico por tipo"""
         query = (
             self.db.query(PedidoUnificadoModel)
@@ -903,7 +903,7 @@ class PedidoRepository:
                 joinedload(PedidoUnificadoModel.cliente)
             )
             .filter(
-                PedidoUnificadoModel.tipo_pedido == tipo_pedido.value,
+                PedidoUnificadoModel.tipo_entrega == tipo_entrega.value,
                 PedidoUnificadoModel.cliente_id == cliente_id
             )
         )
@@ -932,12 +932,12 @@ class PedidoRepository:
         user_agent: str | None = None
     ):
         """Adiciona um registro ao histórico do pedido"""
-        # Busca o pedido para obter o tipo_pedido (DELIVERY, MESA, BALCAO)
+        # Busca o pedido para obter o tipo_entrega (DELIVERY, RETIRADA, BALCAO, MESA)
         pedido = self.get_pedido(pedido_id)
         if not pedido:
             raise ValueError(f"Pedido {pedido_id} não encontrado")
         
-        tipo_pedido_value = pedido.tipo_pedido.value if hasattr(pedido.tipo_pedido, "value") else pedido.tipo_pedido
+        tipo_entrega_value = pedido.tipo_entrega.value if hasattr(pedido.tipo_entrega, "value") else pedido.tipo_entrega
         
         status_anterior_value = (
             status_anterior.value
@@ -954,7 +954,7 @@ class PedidoRepository:
             pedido_id=pedido_id,
             cliente_id=cliente_id,
             usuario_id=usuario_id,
-            tipo_pedido=tipo_pedido_value,  # DELIVERY, MESA ou BALCAO
+            tipo_entrega=tipo_entrega_value,  # DELIVERY, RETIRADA, BALCAO, MESA
             tipo_operacao=tipo_operacao.value if hasattr(tipo_operacao, "value") else tipo_operacao,  # PEDIDO_CRIADO, STATUS_ALTERADO, etc
             status_anterior=status_anterior_value,
             status_novo=status_novo_value,

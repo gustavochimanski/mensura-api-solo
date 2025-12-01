@@ -110,12 +110,12 @@ def listar_pedidos_delivery(
     )
     
     # Busca pedidos usando o repositório
-    from app.api.pedidos.models.model_pedido_unificado import TipoPedido, PedidoUnificadoModel
+    from app.api.pedidos.models.model_pedido_unificado import TipoEntrega, PedidoUnificadoModel
     from sqlalchemy import and_, or_
     from datetime import datetime, timedelta
     
     query = db.query(PedidoUnificadoModel).filter(
-        PedidoUnificadoModel.tipo_pedido == TipoPedido.DELIVERY.value
+        PedidoUnificadoModel.tipo_entrega == TipoEntrega.DELIVERY.value
     )
     
     if empresa_id:
@@ -166,9 +166,9 @@ def obter_pedido_delivery(
         )
     
     # Verifica se é um pedido de delivery
-    from app.api.pedidos.models.model_pedido_unificado import TipoPedido
+    from app.api.pedidos.models.model_pedido_unificado import TipoEntrega
     pedido_model = svc.repo.get_pedido(pedido_id)
-    if pedido_model and pedido_model.tipo_pedido != TipoPedido.DELIVERY.value:
+    if pedido_model and pedido_model.tipo_entrega != TipoEntrega.DELIVERY.value:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Pedido {pedido_id} não é um pedido de delivery"
@@ -236,8 +236,8 @@ def atualizar_pedido_delivery(
             detail=f"Pedido com ID {pedido_id} não encontrado"
         )
     
-    from app.api.pedidos.models.model_pedido_unificado import TipoPedido
-    if pedido.tipo_pedido != TipoPedido.DELIVERY.value:
+    from app.api.pedidos.models.model_pedido_unificado import TipoEntrega
+    if pedido.tipo_entrega != TipoEntrega.DELIVERY.value:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Pedido {pedido_id} não é um pedido de delivery"
@@ -278,8 +278,8 @@ def atualizar_itens_pedido_delivery(
             detail=f"Pedido com ID {pedido_id} não encontrado"
         )
     
-    from app.api.pedidos.models.model_pedido_unificado import TipoPedido
-    if pedido.tipo_pedido != TipoPedido.DELIVERY.value:
+    from app.api.pedidos.models.model_pedido_unificado import TipoEntrega
+    if pedido.tipo_entrega != TipoEntrega.DELIVERY.value:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Pedido {pedido_id} não é um pedido de delivery"
@@ -327,8 +327,8 @@ def atualizar_status_pedido_delivery(
             detail=f"Pedido com ID {pedido_id} não encontrado"
         )
     
-    from app.api.pedidos.models.model_pedido_unificado import TipoPedido
-    if pedido.tipo_pedido != TipoPedido.DELIVERY.value:
+    from app.api.pedidos.models.model_pedido_unificado import TipoEntrega
+    if pedido.tipo_entrega != TipoEntrega.DELIVERY.value:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Pedido {pedido_id} não é um pedido de delivery"
@@ -369,8 +369,8 @@ def vincular_entregador_delivery(
             detail=f"Pedido com ID {pedido_id} não encontrado"
         )
     
-    from app.api.pedidos.models.model_pedido_unificado import TipoPedido
-    if pedido.tipo_pedido != TipoPedido.DELIVERY.value:
+    from app.api.pedidos.models.model_pedido_unificado import TipoEntrega
+    if pedido.tipo_entrega != TipoEntrega.DELIVERY.value:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Pedido {pedido_id} não é um pedido de delivery"
@@ -410,8 +410,8 @@ def cancelar_pedido_delivery(
             detail=f"Pedido com ID {pedido_id} não encontrado"
         )
     
-    from app.api.pedidos.models.model_pedido_unificado import TipoPedido
-    if pedido.tipo_pedido != TipoPedido.DELIVERY.value:
+    from app.api.pedidos.models.model_pedido_unificado import TipoEntrega
+    if pedido.tipo_entrega != TipoEntrega.DELIVERY.value:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Pedido {pedido_id} não é um pedido de delivery"
@@ -447,8 +447,8 @@ def desvincular_entregador_delivery(
             detail=f"Pedido com ID {pedido_id} não encontrado"
         )
     
-    from app.api.pedidos.models.model_pedido_unificado import TipoPedido
-    if pedido.tipo_pedido != TipoPedido.DELIVERY.value:
+    from app.api.pedidos.models.model_pedido_unificado import TipoEntrega
+    if pedido.tipo_entrega != TipoEntrega.DELIVERY.value:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Pedido {pedido_id} não é um pedido de delivery"

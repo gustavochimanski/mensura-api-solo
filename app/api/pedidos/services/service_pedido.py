@@ -10,7 +10,7 @@ from fastapi import HTTPException, status
 
 from app.api.pedidos.models.model_pedido_unificado import (
     PedidoUnificadoModel,
-    TipoPedido,
+    TipoEntrega,
     StatusPedido,
 )
 from app.api.pedidos.models.model_pedido_item_unificado import PedidoItemUnificadoModel
@@ -300,7 +300,7 @@ class PedidoService:
         pedidos_ativos = (
             self.db.query(PedidoUnificadoModel)
             .filter(
-                PedidoUnificadoModel.tipo_pedido == TipoPedido.DELIVERY.value,
+                PedidoUnificadoModel.tipo_entrega == TipoEntrega.DELIVERY.value,
                 PedidoUnificadoModel.endereco_id == endereco_id,
                 PedidoUnificadoModel.status.in_(["P", "I", "R", "S", "D"])
             )
@@ -867,7 +867,7 @@ class PedidoService:
         pedidos = (
             self.repo.db.query(PedidoUnificadoModel)
             .filter(
-                PedidoUnificadoModel.tipo_pedido == TipoPedido.DELIVERY.value,
+                PedidoUnificadoModel.tipo_entrega == TipoEntrega.DELIVERY.value,
                 PedidoUnificadoModel.cliente_id == cliente_id
             )
             .order_by(PedidoUnificadoModel.created_at.desc())
@@ -970,7 +970,7 @@ class PedidoService:
                 joinedload(PedidoUnificadoModel.meio_pagamento)
             )
             .filter(
-                PedidoUnificadoModel.tipo_pedido == TipoPedido.DELIVERY.value,
+                PedidoUnificadoModel.tipo_entrega == TipoEntrega.DELIVERY.value,
                 PedidoUnificadoModel.cliente_id == cliente_id
             )
             .order_by(PedidoUnificadoModel.created_at.desc())

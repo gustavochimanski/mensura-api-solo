@@ -6,7 +6,7 @@ from sqlalchemy import and_, func
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.pedidos.repositories.repo_pedidos import PedidoRepository
-from app.api.pedidos.models.model_pedido_unificado import PedidoUnificadoModel, TipoPedido, StatusPedido
+from app.api.pedidos.models.model_pedido_unificado import PedidoUnificadoModel, TipoEntrega, StatusPedido
 from app.api.pedidos.schemas.schema_pedido import (
     KanbanAgrupadoResponse,
     MeioPagamentoKanbanResponse,
@@ -109,7 +109,7 @@ class KanbanService:
             .filter(
                 and_(
                     PedidoUnificadoModel.empresa_id == empresa_id,
-                    PedidoUnificadoModel.tipo_pedido == tipo_pedido,
+                    PedidoUnificadoModel.tipo_entrega == tipo_pedido,
                     PedidoUnificadoModel.created_at >= start_dt,
                     PedidoUnificadoModel.created_at < end_dt,
                 )
@@ -364,7 +364,7 @@ class KanbanService:
         # Busca pedidos de MESA
         try:
             pedidos_mesa = self._buscar_pedidos_por_tipo(
-                tipo_pedido=TipoPedido.MESA.value,
+                tipo_pedido=TipoEntrega.MESA.value,
                 date_filter=date_filter,
                 empresa_id=empresa_id,
                 limit=limit
@@ -377,7 +377,7 @@ class KanbanService:
         # Busca pedidos de BALCÃO
         try:
             pedidos_balcao = self._buscar_pedidos_por_tipo(
-                tipo_pedido=TipoPedido.BALCAO.value,
+                tipo_pedido=TipoEntrega.BALCAO.value,
                 date_filter=date_filter,
                 empresa_id=empresa_id,
                 limit=limit

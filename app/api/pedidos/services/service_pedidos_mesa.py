@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.api.cadastros.models.model_mesa import StatusMesa
 from app.api.cadastros.repositories.repo_mesas import MesaRepository
 from app.api.pedidos.repositories.repo_pedidos import PedidoRepository
-from app.api.pedidos.models.model_pedido_unificado import TipoPedido
+from app.api.pedidos.models.model_pedido_unificado import TipoEntrega
 from app.api.catalogo.contracts.produto_contract import IProdutoContract
 from app.api.catalogo.contracts.adicional_contract import IAdicionalContract
 from app.api.catalogo.contracts.combo_contract import IComboContract
@@ -144,12 +144,12 @@ class PedidoMesaService:
                     quantidade=it.quantidade,
                     observacao=it.observacao,
                 )
-            pedido = self.repo.get(pedido.id, TipoPedido.MESA)
+            pedido = self.repo.get(pedido.id, TipoEntrega.MESA)
 
         return PedidoResponseBuilder.pedido_to_response_completo(pedido)
 
     def adicionar_item(self, pedido_id: int, body: AdicionarItemRequest) -> PedidoResponseCompleto:
-        pedido = self.repo.get(pedido_id, TipoPedido.MESA)
+        pedido = self.repo.get(pedido_id, TipoEntrega.MESA)
         if pedido.status in ("C", "E"):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Pedido fechado/cancelado")
         pedido = self.repo.add_item(
@@ -169,7 +169,7 @@ class PedidoMesaService:
         Adiciona um produto genérico ao pedido (produto normal, receita ou combo).
         Identifica automaticamente o tipo baseado nos campos preenchidos.
         """
-        pedido = self.repo.get(pedido_id, TipoPedido.MESA)
+        pedido = self.repo.get(pedido_id, TipoEntrega.MESA)
         if pedido.status in ("C", "E"):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Pedido fechado/cancelado")
         
@@ -352,7 +352,7 @@ class PedidoMesaService:
         return PedidoResponseBuilder.pedido_to_response_completo(pedido)
 
     def remover_item(self, pedido_id: int, item_id: int) -> RemoverItemResponse:
-        pedido = self.repo.get(pedido_id, TipoPedido.MESA)
+        pedido = self.repo.get(pedido_id, TipoEntrega.MESA)
         if pedido.status in ("C", "E"):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Pedido fechado/cancelado")
         pedido = self.repo.remove_item(pedido_id, item_id)
@@ -360,7 +360,7 @@ class PedidoMesaService:
 
     def cancelar(self, pedido_id: int) -> PedidoResponseCompleto:
         # Obtém o pedido antes de cancelar para pegar o mesa_id
-        pedido_antes = self.repo.get(pedido_id, TipoPedido.MESA)
+        pedido_antes = self.repo.get(pedido_id, TipoEntrega.MESA)
         mesa_id = pedido_antes.mesa_id
         
         # Cancela o pedido (muda status para CANCELADO)
@@ -373,8 +373,8 @@ class PedidoMesaService:
         # IMPORTANTE: Não muda o status da mesa imediatamente ao cancelar o pedido
         # Verifica se ainda há outros pedidos abertos nesta mesa (tanto de mesa quanto de balcão)
         # O pedido que acabou de ser cancelado já não será contado (status CANCELADO)
-        pedidos_mesa_abertos = self.repo.list_abertos_by_mesa(mesa_id, TipoPedido.MESA, empresa_id=pedido_antes.empresa_id)
-        pedidos_balcao_abertos = self.repo.list_abertos_by_mesa(mesa_id, TipoPedido.BALCAO, empresa_id=pedido_antes.empresa_id)
+        pedidos_mesa_abertos = self.repo.list_abertos_by_mesa(mesa_id, TipoEntrega.MESA, empresa_id=pedido_antes.empresa_id)
+        pedidos_balcao_abertos = self.repo.list_abertos_by_mesa(mesa_id, TipoEntrega.BALCAO, empresa_id=pedido_antes.empresa_id)
         
         logger.info(
             f"[Pedidos Mesa] Cancelar - pedido_id={pedido_id}, mesa_id={mesa_id}, "
@@ -415,7 +415,7 @@ class PedidoMesaService:
 
     def fechar_conta(self, pedido_id: int, payload: FecharContaMesaRequest | None = None) -> PedidoResponseCompleto:
         # Obtém o pedido antes de fechar para pegar o mesa_id
-        pedido_antes = self.repo.get(pedido_id, TipoPedido.MESA)
+        pedido_antes = self.repo.get(pedido_id, TipoEntrega.MESA)
         mesa_id = pedido_antes.mesa_id
         
         # Se receber payload, salva dados de pagamento nos campos diretos
@@ -436,8 +436,8 @@ class PedidoMesaService:
         # IMPORTANTE: Não muda o status da mesa imediatamente ao fechar a conta
         # Verifica se ainda há outros pedidos abertos nesta mesa (tanto de mesa quanto de balcão)
         # O pedido que acabou de ser fechado já não será contado (status ENTREGUE)
-        pedidos_mesa_abertos = self.repo.list_abertos_by_mesa(mesa_id, TipoPedido.MESA, empresa_id=pedido_antes.empresa_id)
-        pedidos_balcao_abertos = self.repo.list_abertos_by_mesa(mesa_id, TipoPedido.BALCAO, empresa_id=pedido_antes.empresa_id)
+        pedidos_mesa_abertos = self.repo.list_abertos_by_mesa(mesa_id, TipoEntrega.MESA, empresa_id=pedido_antes.empresa_id)
+        pedidos_balcao_abertos = self.repo.list_abertos_by_mesa(mesa_id, TipoEntrega.BALCAO, empresa_id=pedido_antes.empresa_id)
         
         logger.info(
             f"[Pedidos Mesa] Fechar conta - pedido_id={pedido_id}, mesa_id={mesa_id}, "
@@ -470,7 +470,7 @@ class PedidoMesaService:
 
     # Fluxo cliente
     def fechar_conta_cliente(self, pedido_id: int, cliente_id: int, payload: FecharContaMesaRequest) -> PedidoResponseCompleto:
-        pedido = self.repo.get(pedido_id, TipoPedido.MESA)
+        pedido = self.repo.get(pedido_id, TipoEntrega.MESA)
         if pedido.cliente_id and pedido.cliente_id != cliente_id:
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Pedido não pertence ao cliente")
 
@@ -494,8 +494,8 @@ class PedidoMesaService:
         
         # IMPORTANTE: Não muda o status da mesa imediatamente ao fechar a conta
         # Verifica se ainda há outros pedidos abertos nesta mesa (tanto de mesa quanto de balcão)
-        pedidos_mesa_abertos = self.repo.list_abertos_by_mesa(mesa_id, TipoPedido.MESA, empresa_id=pedido.empresa_id)
-        pedidos_balcao_abertos = self.repo.list_abertos_by_mesa(mesa_id, TipoPedido.BALCAO, empresa_id=pedido.empresa_id)
+        pedidos_mesa_abertos = self.repo.list_abertos_by_mesa(mesa_id, TipoEntrega.MESA, empresa_id=pedido.empresa_id)
+        pedidos_balcao_abertos = self.repo.list_abertos_by_mesa(mesa_id, TipoEntrega.BALCAO, empresa_id=pedido.empresa_id)
         
         logger.info(
             f"[Pedidos Mesa] Fechar conta cliente - pedido_id={pedido_id}, mesa_id={mesa_id}, "
@@ -521,14 +521,14 @@ class PedidoMesaService:
 
     # -------- Consultas --------
     def get_pedido(self, pedido_id: int) -> PedidoResponseCompleto:
-        pedido = self.repo.get(pedido_id, TipoPedido.MESA)
+        pedido = self.repo.get(pedido_id, TipoEntrega.MESA)
         return PedidoResponseBuilder.pedido_to_response_completo(pedido)
 
     def list_pedidos_abertos(self, empresa_id: int, mesa_id: Optional[int] = None) -> list[PedidoResponseCompleto]:
         if mesa_id is not None:
-            pedidos = self.repo.list_abertos_by_mesa(mesa_id, TipoPedido.MESA, empresa_id=empresa_id)
+            pedidos = self.repo.list_abertos_by_mesa(mesa_id, TipoEntrega.MESA, empresa_id=empresa_id)
         else:
-            pedidos = self.repo.list_abertos_all(TipoPedido.MESA, empresa_id=empresa_id)
+            pedidos = self.repo.list_abertos_all(TipoEntrega.MESA, empresa_id=empresa_id)
         return [PedidoResponseBuilder.pedido_to_response_completo(p) for p in pedidos]
 
     def list_pedidos_finalizados(self, mesa_id: int, data_filtro: Optional[date] = None, *, empresa_id: int) -> list[PedidoResponseCompleto]:
@@ -537,7 +537,7 @@ class PedidoMesaService:
         mesa = self.repo_mesa.get_by_id(mesa_id)
         if mesa.empresa_id != empresa_id:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Mesa não pertence à empresa")
-        pedidos = self.repo.list_finalizados(TipoPedido.MESA, data_filtro, empresa_id=empresa_id, mesa_id=mesa_id)
+        pedidos = self.repo.list_finalizados(TipoEntrega.MESA, data_filtro, empresa_id=empresa_id, mesa_id=mesa_id)
         return [PedidoResponseBuilder.pedido_to_response_completo(p) for p in pedidos]
 
     def list_pedidos_by_cliente(self, cliente_id: int, *, empresa_id: int, skip: int = 0, limit: int = 50) -> list[PedidoResponseCompleto]:
@@ -547,7 +547,7 @@ class PedidoMesaService:
 
     def atualizar_observacoes(self, pedido_id: int, payload: AtualizarObservacoesRequest) -> PedidoResponseCompleto:
         """Atualiza as observações de um pedido"""
-        pedido = self.repo.get(pedido_id, TipoPedido.MESA)
+        pedido = self.repo.get(pedido_id, TipoEntrega.MESA)
         pedido.observacoes = payload.observacoes
         self.db.commit()
         self.db.refresh(pedido)

@@ -14,13 +14,6 @@ from app.database.db_connection import Base
 from app.utils.database_utils import now_trimmed
 
 
-class OrigemPedido(enum.Enum):
-    """Origem do pedido (de onde veio)."""
-    CARDAPIO = "CARDAPIO"
-    AIAGENT = "AIAGENT"
-    SUPERVISOR = "SUPERVISOR"
-
-
 class StatusPedido(enum.Enum):
     """Status possíveis para um pedido.
     
@@ -62,13 +55,6 @@ class CanalPedido(enum.Enum):
 
 
 # ENUMs do PostgreSQL no schema pedidos
-OrigemPedidoEnum = SAEnum(
-    "CARDAPIO", "AIAGENT", "SUPERVISOR",
-    name="origem_pedido_enum",
-    create_type=False,
-    schema="pedidos"
-)
-
 StatusPedidoEnum = SAEnum(
     "P", "I", "R", "S", "E", "C", "D", "X", "A",
     name="pedido_status_enum",
@@ -97,7 +83,6 @@ class PedidoUnificadoModel(Base):
     
     Centraliza todos os tipos de pedidos:
     - tipo_entrega: DELIVERY, RETIRADA, BALCAO ou MESA (modalidade do pedido)
-    - tipo_pedido: CARDAPIO, AIAGENT ou SUPERVISOR (origem do pedido)
     """
     __tablename__ = "pedidos"
     __table_args__ = (
@@ -105,7 +90,6 @@ class PedidoUnificadoModel(Base):
         Index("idx_pedidos_empresa", "empresa_id"),
         Index("idx_pedidos_empresa_tipo_status", "empresa_id", "tipo_entrega", "status"),
         Index("idx_pedidos_tipo_status", "tipo_entrega", "status"),
-        Index("idx_pedidos_origem", "tipo_pedido"),
         Index("idx_pedidos_numero", "empresa_id", "numero_pedido"),
         Index("idx_pedidos_endereco_snapshot_gin", "endereco_snapshot", postgresql_using="gin"),
         Index("idx_pedidos_endereco_geo_gist", "endereco_geo", postgresql_using="gist"),
@@ -116,9 +100,6 @@ class PedidoUnificadoModel(Base):
     
     # Tipo de entrega/modalidade (DELIVERY, RETIRADA, BALCAO, MESA)
     tipo_entrega = Column(TipoEntregaEnum, nullable=False)
-    
-    # Origem do pedido (CARDAPIO, AIAGENT, SUPERVISOR)
-    tipo_pedido = Column(OrigemPedidoEnum, nullable=False)
     
     # Empresa (obrigatório)
     empresa_id = Column(Integer, ForeignKey("cadastros.empresas.id", ondelete="RESTRICT"), nullable=False)

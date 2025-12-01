@@ -5,14 +5,12 @@ Models do bounded context de Pedidos.
 # Importar apenas os modelos unificados (os antigos serão removidos)
 from .model_pedido_unificado import (
     PedidoUnificadoModel,
-    TipoPedido,
     StatusPedido,
-    TipoEntrega,
-    OrigemPedido,
-    TipoPedidoEnum,
+    TipoEntrega,  # DELIVERY, RETIRADA, BALCAO, MESA
+    CanalPedido,  # WEB, APP, BALCAO
     StatusPedidoEnum,
     TipoEntregaEnum,
-    OrigemPedidoEnum,
+    CanalPedidoEnum,
 )
 from .model_pedido_item_unificado import PedidoItemUnificadoModel
 from .model_pedido_historico_unificado import (
@@ -21,8 +19,8 @@ from .model_pedido_historico_unificado import (
     TipoOperacaoPedidoEnum,
 )
 
-# Aliases para compatibilidade durante transição
-PedidoModel = PedidoUnificadoModel  # Alias para compatibilidade
+# Alias apenas para PedidoModel (deprecated, mas mantido por compatibilidade)
+PedidoModel = PedidoUnificadoModel
 
 __all__ = [
     # Modelos unificados
@@ -30,17 +28,15 @@ __all__ = [
     "PedidoItemUnificadoModel",
     "PedidoHistoricoUnificadoModel",
     # Enums e tipos
-    "TipoPedido",
     "StatusPedido",
-    "TipoEntrega",
-    "OrigemPedido",
-    "TipoPedidoEnum",
+    "TipoEntrega",  # DELIVERY, RETIRADA, BALCAO, MESA
+    "CanalPedido",  # WEB, APP, BALCAO
     "StatusPedidoEnum",
     "TipoEntregaEnum",
-    "OrigemPedidoEnum",
+    "CanalPedidoEnum",
     "TipoOperacaoPedido",
     "TipoOperacaoPedidoEnum",
-    # Aliases para compatibilidade (deprecated)
-    "PedidoModel",  # Alias para PedidoUnificadoModel
+    # Alias para compatibilidade (deprecated)
+    "PedidoModel",
 ]
 
