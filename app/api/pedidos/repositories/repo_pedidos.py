@@ -141,7 +141,7 @@ class PedidoRepository:
             joinedload(PedidoUnificadoModel.meio_pagamento),
             joinedload(PedidoUnificadoModel.transacao).joinedload(TransacaoPagamentoModel.meio_pagamento),
             joinedload(PedidoUnificadoModel.transacoes).joinedload(TransacaoPagamentoModel.meio_pagamento),
-            selectinload(PedidoUnificadoModel.historico).defer(PedidoHistoricoUnificadoModel.tipo_pedido),
+            selectinload(PedidoUnificadoModel.historico).defer(PedidoHistoricoUnificadoModel.tipo_operacao),
         )
 
         query = query.order_by(PedidoUnificadoModel.created_at.desc())
@@ -921,7 +921,7 @@ class PedidoRepository:
     def add_historico(
         self,
         pedido_id: int,
-        tipo_pedido: TipoOperacaoPedido,
+        tipo_operacao: TipoOperacaoPedido,
         status_anterior: str | None = None,
         status_novo: str | None = None,
         descricao: str | None = None,
@@ -932,6 +932,13 @@ class PedidoRepository:
         user_agent: str | None = None
     ):
         """Adiciona um registro ao histórico do pedido"""
+        # Busca o pedido para obter o tipo_pedido (DELIVERY, MESA, BALCAO)
+        pedido = self.get_pedido(pedido_id)
+        if not pedido:
+            raise ValueError(f"Pedido {pedido_id} não encontrado")
+        
+        tipo_pedido_value = pedido.tipo_pedido.value if hasattr(pedido.tipo_pedido, "value") else pedido.tipo_pedido
+        
         status_anterior_value = (
             status_anterior.value
             if hasattr(status_anterior, "value")
@@ -947,7 +954,8 @@ class PedidoRepository:
             pedido_id=pedido_id,
             cliente_id=cliente_id,
             usuario_id=usuario_id,
-            tipo_pedido=tipo_pedido.value if hasattr(tipo_pedido, "value") else tipo_pedido,
+            tipo_pedido=tipo_pedido_value,  # DELIVERY, MESA ou BALCAO
+            tipo_operacao=tipo_operacao.value if hasattr(tipo_operacao, "value") else tipo_operacao,  # PEDIDO_CRIADO, STATUS_ALTERADO, etc
             status_anterior=status_anterior_value,
             status_novo=status_novo_value,
             descricao=descricao,

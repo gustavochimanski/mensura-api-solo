@@ -177,7 +177,7 @@ class PrinterRepository:
                 from app.api.pedidos.models.model_pedido_historico_unificado import TipoOperacaoPedido
                 pedido_repo.add_historico(
                     pedido_id=pedido_id,
-                    tipo_pedido=TipoOperacaoPedido.STATUS_ALTERADO,
+                    tipo_operacao=TipoOperacaoPedido.STATUS_ALTERADO,
                     status_anterior=status_atual,
                     status_novo=novo_status,
                     descricao="Pedido marcado como impresso",

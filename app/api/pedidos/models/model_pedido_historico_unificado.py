@@ -8,7 +8,7 @@ import enum
 
 from app.database.db_connection import Base
 from app.utils.database_utils import now_trimmed
-from .model_pedido_unificado import StatusPedidoEnum
+from .model_pedido_unificado import StatusPedidoEnum, TipoPedidoEnum
 
 
 class TipoOperacaoPedido(enum.Enum):
@@ -56,11 +56,13 @@ class PedidoHistoricoUnificadoModel(Base):
     Suporta dois tipos de histórico:
     1. Histórico simples (apenas mudança de status):
        - status_anterior e status_novo preenchidos
-       - tipo_pedido pode ser NULL ou STATUS_ALTERADO
+       - tipo_pedido: DELIVERY, MESA ou BALCAO (tipo do pedido)
+       - tipo_operacao pode ser NULL ou STATUS_ALTERADO
        - Usado principalmente para delivery
     
-    2. Histórico detalhado (com tipo_pedido):
-       - tipo_pedido preenchido
+    2. Histórico detalhado (com tipo_operacao):
+       - tipo_pedido: DELIVERY, MESA ou BALCAO (tipo do pedido)
+       - tipo_operacao preenchido (PEDIDO_CRIADO, ITEM_ADICIONADO, etc.)
        - status_anterior e status_novo podem ser NULL (dependendo da operação)
        - Usado principalmente para balcão e mesa
     """
@@ -68,6 +70,7 @@ class PedidoHistoricoUnificadoModel(Base):
     __table_args__ = (
         Index("idx_pedidos_historico_pedido", "pedido_id"),
         Index("idx_pedidos_historico_tipo_pedido", "tipo_pedido"),
+        Index("idx_pedidos_historico_tipo_operacao", "tipo_operacao"),
         Index("idx_pedidos_historico_status_novo", "status_novo"),
         Index("idx_pedidos_historico_created_at", "created_at"),
         Index("idx_pedidos_historico_pedido_tipo", "pedido_id", "tipo_pedido"),
@@ -85,9 +88,11 @@ class PedidoHistoricoUnificadoModel(Base):
     )
     pedido = relationship("PedidoUnificadoModel", back_populates="historico")
     
+    # Tipo do pedido (DELIVERY, MESA, BALCAO)
+    tipo_pedido = Column(TipoPedidoEnum, nullable=True)
+    
     # Tipo de operação (nullable - para histórico detalhado)
-    # Nota: A coluna no banco de dados se chama tipo_pedido
-    tipo_pedido = Column(TipoOperacaoPedidoEnum, nullable=True)
+    tipo_operacao = Column(TipoOperacaoPedidoEnum, nullable=True)
     
     # Status anterior e novo (nullable - para histórico de mudança de status)
     status_anterior = Column(StatusPedidoEnum, nullable=True)
@@ -127,13 +132,13 @@ class PedidoHistoricoUnificadoModel(Base):
     @property
     def tipo_operacao_descricao(self) -> str:
         """Retorna a descrição do tipo de operação."""
-        if self.tipo_pedido is None:
+        if self.tipo_operacao is None:
             return "Operação sem tipo"
         
         tipo_key = (
-            self.tipo_pedido.value
-            if isinstance(self.tipo_pedido, TipoOperacaoPedido)
-            else str(self.tipo_pedido)
+            self.tipo_operacao.value
+            if isinstance(self.tipo_operacao, TipoOperacaoPedido)
+            else str(self.tipo_operacao)
         )
         descricoes = {
             TipoOperacaoPedido.PEDIDO_CRIADO.value: "Pedido criado",
@@ -159,12 +164,12 @@ class PedidoHistoricoUnificadoModel(Base):
     @property
     def resumo_operacao(self) -> str:
         """Retorna um resumo da operação."""
-        # Se tem tipo_pedido, usa a descrição
-        if self.tipo_pedido:
+        # Se tem tipo_operacao, usa a descrição
+        if self.tipo_operacao:
             tipo_key = (
-                self.tipo_pedido.value
-                if isinstance(self.tipo_pedido, TipoOperacaoPedido)
-                else str(self.tipo_pedido)
+                self.tipo_operacao.value
+                if isinstance(self.tipo_operacao, TipoOperacaoPedido)
+                else str(self.tipo_operacao)
             )
             
             if tipo_key == TipoOperacaoPedido.STATUS_ALTERADO.value:
@@ -188,7 +193,7 @@ class PedidoHistoricoUnificadoModel(Base):
             else:
                 return self.tipo_operacao_descricao
         
-        # Se não tem tipo_pedido mas tem mudança de status, é histórico simples
+        # Se não tem tipo_operacao mas tem mudança de status, é histórico simples
         elif self.status_anterior is not None or self.status_novo is not None:
             return f"Status alterado de '{self.status_anterior}' para '{self.status_novo}'"
         
@@ -196,8 +201,8 @@ class PedidoHistoricoUnificadoModel(Base):
         return self.descricao or "Operação registrada"
     
     def is_historico_detalhado(self) -> bool:
-        """Verifica se é um histórico detalhado (com tipo_pedido)."""
-        return self.tipo_pedido is not None
+        """Verifica se é um histórico detalhado (com tipo_operacao)."""
+        return self.tipo_operacao is not None
     
     def is_historico_status(self) -> bool:
         """Verifica se é um histórico de mudança de status."""

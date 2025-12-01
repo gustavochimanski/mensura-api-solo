@@ -74,7 +74,8 @@ A API de Pedidos unificada centraliza todos os tipos de pedidos (DELIVERY, MESA,
 |--------|------|-----------|
 | `id` | INTEGER | ID único do registro |
 | `pedido_id` | INTEGER | ID do pedido (FK) |
-| `tipo_pedido` | ENUM | Tipo de operação (PEDIDO_CRIADO, STATUS_ALTERADO, etc.) |
+| `tipo_pedido` | ENUM | Tipo do pedido: DELIVERY, MESA ou BALCAO |
+| `tipo_operacao` | ENUM | Tipo de operação: PEDIDO_CRIADO, STATUS_ALTERADO, ITEM_ADICIONADO, etc. (nullable) |
 | `status_anterior` | ENUM | Status anterior (nullable) |
 | `status_novo` | ENUM | Status novo (nullable) |
 | `descricao` | TEXT | Descrição da operação (nullable) |
@@ -86,7 +87,9 @@ A API de Pedidos unificada centraliza todos os tipos de pedidos (DELIVERY, MESA,
 | `user_agent` | VARCHAR(500) | User agent (nullable) |
 | `created_at` | TIMESTAMP | Data do registro |
 
-**Nota:** A coluna `tipo_pedido` na tabela de histórico armazena o tipo de operação realizada (ex: PEDIDO_CRIADO, STATUS_ALTERADO, ITEM_ADICIONADO).
+**Nota:** 
+- A coluna `tipo_pedido` no histórico armazena o tipo do pedido: **DELIVERY, MESA ou BALCAO**
+- A coluna `tipo_operacao` no histórico armazena o tipo de operação: **PEDIDO_CRIADO, STATUS_ALTERADO, ITEM_ADICIONADO, etc.**
 
 ---
 
@@ -324,7 +327,9 @@ Authorization: Bearer {admin_token}
 }
 ```
 
-**Nota:** O campo `tipo_pedido` no histórico representa o tipo de operação realizada.
+**Nota:** 
+- A coluna `tipo_pedido` no histórico armazena o tipo do pedido: **DELIVERY, MESA ou BALCAO**
+- A coluna `tipo_operacao` no histórico armazena o tipo de operação: **PEDIDO_CRIADO, STATUS_ALTERADO, ITEM_ADICIONADO, etc.**
 
 ---
 
@@ -760,7 +765,7 @@ class StatusPedido(enum.Enum):
     AGUARDANDO_PAGAMENTO = "A"
 ```
 
-### Tipo de Operação (tipo_pedido no histórico)
+### Tipo de Operação (tipo_operacao no histórico)
 
 ```python
 class TipoOperacaoPedido(enum.Enum):
@@ -802,16 +807,19 @@ class TipoOperacaoPedido(enum.Enum):
 - ✅ Opcional: `mesa_id`, `cliente_id`, `observacoes`
 
 ### Histórico
-- ✅ O campo `tipo_pedido` na tabela de histórico representa o tipo de operação
-- ✅ Pode ser NULL para histórico simples (apenas mudança de status)
-- ✅ Preenchido para histórico detalhado (com tipo de operação)
+- ✅ O campo `tipo_pedido` na tabela de histórico armazena: **DELIVERY, MESA ou BALCAO** (tipo do pedido)
+- ✅ O campo `tipo_operacao` na tabela de histórico armazena: **PEDIDO_CRIADO, STATUS_ALTERADO, ITEM_ADICIONADO, etc.** (tipo de operação)
+- ✅ `tipo_operacao` pode ser NULL para histórico simples (apenas mudança de status)
+- ✅ `tipo_operacao` preenchido para histórico detalhado (com tipo de operação)
 
 ---
 
 ## 📝 Notas Finais
 
-1. **Nomenclatura:** A coluna `tipo_pedido` no histórico armazena o tipo de operação, não o tipo do pedido.
-2. **Compatibilidade:** A API mantém compatibilidade com histórico simples (status) e detalhado (tipo_pedido).
+1. **Nomenclatura:** 
+   - A coluna `tipo_pedido` no histórico armazena: **DELIVERY, MESA ou BALCAO** (tipo do pedido)
+   - A coluna `tipo_operacao` no histórico armazena: **PEDIDO_CRIADO, STATUS_ALTERADO, ITEM_ADICIONADO, etc.** (tipo de operação)
+2. **Compatibilidade:** A API mantém compatibilidade com histórico simples (status) e detalhado (tipo_operacao).
 3. **Validações:** Todos os endpoints validam se o pedido pertence ao cliente/empresa correta.
 4. **Permissões:** Clientes não podem alterar status diretamente; apenas admin pode.
 

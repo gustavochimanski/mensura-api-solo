@@ -144,7 +144,7 @@ def obter_historico_pedido(
     for h in historicos:
         status_anterior = parse_status(h.status_anterior)
         status_novo = parse_status(h.status_novo)
-        tipo_pedido_val = h.tipo_pedido.value if h.tipo_pedido and hasattr(h.tipo_pedido, 'value') else (h.tipo_pedido if h.tipo_pedido else None)
+        tipo_operacao_val = h.tipo_operacao.value if h.tipo_operacao and hasattr(h.tipo_operacao, 'value') else (h.tipo_operacao if h.tipo_operacao else None)
         
         historicos_response.append(
             PedidoStatusHistoricoOut(
@@ -153,7 +153,7 @@ def obter_historico_pedido(
                 status=status_novo or status_anterior,
                 status_anterior=status_anterior,
                 status_novo=status_novo,
-                tipo_operacao=tipo_pedido_val,
+                tipo_operacao=tipo_operacao_val,
                 descricao=h.descricao,
                 motivo=h.motivo,
                 observacoes=h.observacoes,
