@@ -13,7 +13,7 @@ from app.api.pedidos.schemas.schema_pedido import (
     EditarPedidoRequest,
     ItemPedidoEditar,
 )
-from app.api.cadastros.schemas.schema_shared_enums import PedidoStatusEnum
+from app.api.shared.schemas.schema_shared_enums import PedidoStatusEnum
 from app.core.admin_dependencies import get_current_user
 from app.database.db_connection import get_db
 from app.api.cadastros.models.user_model import UserModel

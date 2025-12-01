@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, ConfigDict
 
-from app.api.cadastros.schemas.schema_shared_enums import PagamentoGatewayEnum
+from app.api.shared.schemas.schema_shared_enums import PagamentoGatewayEnum
 from app.api.cardapio.schemas.schema_transacao_pagamento import TransacaoStatusUpdateRequest
 from app.api.pedidos.services.service_pedido import PedidoService
 from app.api.pedidos.services.dependencies import get_pedido_service

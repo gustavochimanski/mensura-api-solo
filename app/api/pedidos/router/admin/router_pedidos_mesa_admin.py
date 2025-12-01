@@ -15,7 +15,7 @@ from app.api.pedidos.services.service_pedidos_mesa import (
     AtualizarStatusPedidoRequest,
 )
 from app.api.pedidos.schemas.schema_pedido import PedidoResponseCompleto
-from app.api.cadastros.schemas.schema_shared_enums import PedidoStatusEnum
+from app.api.shared.schemas.schema_shared_enums import PedidoStatusEnum
 from app.api.catalogo.contracts.produto_contract import IProdutoContract
 from app.api.catalogo.contracts.adicional_contract import IAdicionalContract
 from app.api.catalogo.contracts.combo_contract import IComboContract

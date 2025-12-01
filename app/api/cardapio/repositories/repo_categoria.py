@@ -7,7 +7,7 @@ from fastapi import HTTPException, status
 from app.utils.slug_utils import make_slug
 
 from app.api.cardapio.models.model_categoria_dv import CategoriaDeliveryModel
-from app.api.cadastros.schemas.schema_categoria import CategoriaDeliveryIn
+from app.api.cadastros.schemas.schema_categoria import CategoriaDeliveryIn  # Schema compartilhado
 
 
 class CategoriaDeliveryRepository:

@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from typing import Optional, List
 
 from app.database.db_connection import get_db
-from app.api.cadastros.repositories.repo_categoria import CategoriaDeliveryRepository
+from app.api.cardapio.repositories.repo_categoria import CategoriaDeliveryRepository
 from app.api.cadastros.services.service_categoria import CategoriasService
 from app.api.cadastros.schemas.schema_categoria import (
     CategoriaDeliveryIn,

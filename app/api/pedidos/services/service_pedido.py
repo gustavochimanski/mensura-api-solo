@@ -31,7 +31,7 @@ from app.api.pedidos.schemas.schema_pedido import (
     PreviewCheckoutResponse,
     TipoPedidoCheckoutEnum,
 )
-from app.api.cadastros.schemas.schema_shared_enums import (
+from app.api.shared.schemas.schema_shared_enums import (
     PagamentoGatewayEnum,
     PagamentoMetodoEnum,
     PagamentoStatusEnum,

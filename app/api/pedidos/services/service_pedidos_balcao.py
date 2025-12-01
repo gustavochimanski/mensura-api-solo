@@ -24,7 +24,7 @@ from app.api.pedidos.schemas.schema_pedido import (
     ItemAdicionalRequest,
 )
 from app.api.pedidos.services.service_pedido_responses import PedidoResponseBuilder
-from app.api.cadastros.schemas.schema_shared_enums import PedidoStatusEnum
+from app.api.shared.schemas.schema_shared_enums import PedidoStatusEnum
 from app.api.pedidos.models.model_pedido_unificado import StatusPedido
 from app.api.pedidos.schemas.schema_pedido_status_historico import PedidoStatusHistoricoOut, HistoricoDoPedidoResponse
 from pydantic import BaseModel

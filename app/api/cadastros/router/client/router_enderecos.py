@@ -4,7 +4,7 @@ from typing import List
 from app.api.cadastros.services.service_endereco import EnderecosService
 from app.core.client_dependecies import get_cliente_by_super_token
 from app.database.db_connection import get_db
-from app.api.cardapio.schemas.schema_endereco import EnderecoOut, EnderecoCreate, EnderecoUpdate
+from app.api.cadastros.schemas.schema_endereco import EnderecoOut, EnderecoCreate, EnderecoUpdate
 from app.utils.logger import logger
 
 

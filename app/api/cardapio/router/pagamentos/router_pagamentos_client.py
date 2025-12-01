@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.api.cadastros.models.model_cliente_dv import ClienteModel
 from app.api.pedidos.schemas.schema_pedido import PedidoResponse
-from app.api.cadastros.schemas.schema_shared_enums import PagamentoMetodoEnum, PagamentoGatewayEnum
+from app.api.shared.schemas.schema_shared_enums import PagamentoMetodoEnum, PagamentoGatewayEnum
 from app.api.cardapio.schemas.schema_transacao_pagamento import (
     ConsultarTransacaoResponse,
     TransacaoResponse,

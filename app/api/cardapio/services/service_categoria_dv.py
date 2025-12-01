@@ -2,8 +2,8 @@ from __future__ import annotations
 from typing import Optional
 from sqlalchemy.orm import Session
 
-from app.api.cadastros.repositories.repo_categoria import CategoriaDeliveryRepository
-from app.api.cadastros.schemas.schema_categoria import CategoriaDeliveryIn
+from app.api.cardapio.repositories.repo_categoria import CategoriaDeliveryRepository
+from app.api.cadastros.schemas.schema_categoria import CategoriaDeliveryIn  # Schema compartilhado
 from app.utils.minio_client import remover_arquivo_minio, update_file_to_minio
 from app.utils.logger import logger
 

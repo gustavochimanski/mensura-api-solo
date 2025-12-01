@@ -8,7 +8,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.cardapio.repositories.repo_pagamentos import PagamentoRepository
-from app.api.cadastros.schemas.schema_shared_enums import (
+from app.api.shared.schemas.schema_shared_enums import (
     PagamentoGatewayEnum,
     PagamentoMetodoEnum,
     PagamentoStatusEnum,

@@ -6,7 +6,7 @@ from app.api.cadastros.models.user_model import UserModel
 from app.api.cadastros.services.service_endereco import EnderecosService
 from app.core.admin_dependencies import get_current_user
 from app.database.db_connection import get_db
-from app.api.cardapio.schemas.schema_endereco import EnderecoOut, EnderecoCreate, EnderecoUpdate
+from app.api.cadastros.schemas.schema_endereco import EnderecoOut, EnderecoCreate, EnderecoUpdate
 from app.utils.logger import logger
 
 router = APIRouter(prefix="/api/cadastros/admin/enderecos", 
@@ -59,3 +59,18 @@ def atualizar_endereco_admin(
     """
     svc = EnderecosService(db)
     return svc.update_by_cliente_id(cliente_id, endereco_id, payload)
+
+@router.delete("/cliente/{cliente_id}/endereco/{endereco_id}", status_code=status.HTTP_204_NO_CONTENT)
+def deletar_endereco_admin(
+    cliente_id: int = Path(..., description="ID do cliente"),
+    endereco_id: int = Path(..., description="ID do endereço para deletar"),
+    db: Session = Depends(get_db)
+):
+    """
+    Endpoint para admin deletar endereço de um cliente específico.
+    Verifica se o endereço está sendo usado em pedidos ativos antes de deletar.
+    Requer autenticação de admin.
+    """
+    svc = EnderecosService(db)
+    svc.delete_by_cliente_id(cliente_id, endereco_id)
+    return None

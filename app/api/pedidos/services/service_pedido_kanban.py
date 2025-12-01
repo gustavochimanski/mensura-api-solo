@@ -13,7 +13,7 @@ from app.api.pedidos.schemas.schema_pedido import (
     PedidoKanbanResponse,
 )
 from app.api.cadastros.schemas.schema_cliente import ClienteOut
-from app.api.cadastros.schemas.schema_shared_enums import PedidoStatusEnum
+from app.api.shared.schemas.schema_shared_enums import PedidoStatusEnum
 from app.api.pedidos.services.service_pedido_helpers import build_pagamento_resumo
 from app.utils.logger import logger
 from app.api.cadastros.repositories.repo_cliente import ClienteRepository

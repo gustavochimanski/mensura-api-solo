@@ -3,7 +3,7 @@ from fastapi import HTTPException
 from typing import List
 
 from app.api.cadastros.models.model_cliente_dv import ClienteModel
-from app.api.cardapio.schemas.schema_endereco import EnderecoCreate, EnderecoUpdate
+from app.api.cadastros.schemas.schema_endereco import EnderecoCreate, EnderecoUpdate
 from app.api.cadastros.models.model_endereco_dv import EnderecoModel
 
 class EnderecoRepository:

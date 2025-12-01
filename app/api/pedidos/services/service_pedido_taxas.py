@@ -6,7 +6,7 @@ from typing import Optional, Tuple
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.cadastros.schemas.schema_shared_enums import TipoEntregaEnum
+from app.api.shared.schemas.schema_shared_enums import TipoEntregaEnum
 from app.api.pedidos.services.service_pedido_helpers import _dec
 from app.utils.logger import logger
 from app.api.empresas.contracts.empresa_contract import IEmpresaContract

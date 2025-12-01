@@ -139,7 +139,7 @@ class CaixaRepository:
         from app.api.pedidos.models.model_pedido_unificado import PedidoUnificadoModel, TipoPedido
         from app.api.cardapio.models.model_transacao_pagamento_dv import TransacaoPagamentoModel
         from app.api.cadastros.models.model_meio_pagamento import MeioPagamentoModel
-        from app.api.cadastros.schemas.schema_shared_enums import PagamentoStatusEnum
+        from app.api.shared.schemas.schema_shared_enums import PagamentoStatusEnum
         
         caixa = self.get_by_id(caixa_id)
         if not caixa:
@@ -203,7 +203,7 @@ class CaixaRepository:
         from app.api.pedidos.models.model_pedido_unificado import PedidoUnificadoModel, TipoPedido
         from app.api.cardapio.models.model_transacao_pagamento_dv import TransacaoPagamentoModel
         from app.api.cadastros.models.model_meio_pagamento import MeioPagamentoModel
-        from app.api.cadastros.schemas.schema_shared_enums import PagamentoStatusEnum
+        from app.api.shared.schemas.schema_shared_enums import PagamentoStatusEnum
         
         caixa = self.get_by_id(caixa_id)
         if not caixa:

@@ -104,7 +104,7 @@ class PedidoRepository:
         )
 
     def list_all_kanban(self, date_filter: date, empresa_id: int = 1, limit: int = 500):
-        from app.api.cadastros.schemas.schema_shared_enums import PedidoStatusEnum
+        from app.api.shared.schemas.schema_shared_enums import PedidoStatusEnum
         from sqlalchemy import or_, and_
         
         # date_filter é sempre obrigatório

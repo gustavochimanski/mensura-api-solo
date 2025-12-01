@@ -10,7 +10,7 @@ from app.api.cadastros.schemas.schema_categoria import (
     CategoriaDeliveryOut,
     CategoriaSearchOut,
 )
-from app.api.cadastros.repositories.repo_categoria import CategoriaDeliveryRepository
+from app.api.cardapio.repositories.repo_categoria import CategoriaDeliveryRepository
 from app.api.cardapio.repositories.repo_categorias_dv import CategoriaDeliveryDVRepository
 from app.api.cardapio.services.service_categoria_dv import CategoriasService
 from app.core.admin_dependencies import get_current_user

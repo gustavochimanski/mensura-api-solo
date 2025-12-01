@@ -12,7 +12,7 @@ from app.api.pedidos.models.model_pedido_unificado import (
     StatusPedido,
 )
 from app.api.empresas.models.empresa_model import EmpresaModel
-from app.api.cadastros.schemas.schema_shared_enums import PedidoStatusEnum
+from app.api.shared.schemas.schema_shared_enums import PedidoStatusEnum
 from app.api.cardapio.schemas.schema_printer import (
     ItemPedidoPrinter,
     PedidoParaImpressao,

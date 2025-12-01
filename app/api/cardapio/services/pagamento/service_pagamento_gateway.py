@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Optional, Dict, Any
 
-from app.api.cadastros.schemas.schema_shared_enums import (
+from app.api.shared.schemas.schema_shared_enums import (
     PagamentoStatusEnum,
     PagamentoMetodoEnum,
     PagamentoGatewayEnum,

@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.api.cadastros.models.model_cliente_dv import ClienteModel
 from app.api.cadastros.repositories.repo_endereco import EnderecoRepository
-from app.api.cardapio.schemas.schema_endereco import EnderecoOut, EnderecoCreate, EnderecoUpdate
+from app.api.cadastros.schemas.schema_endereco import EnderecoOut, EnderecoCreate, EnderecoUpdate
 from app.api.pedidos.services.service_pedido import PedidoService
 
 class EnderecosService:
@@ -52,7 +52,7 @@ class EnderecosService:
                 dados_atualizados[k] = v
             
             # Cria um objeto temporário para verificar duplicata
-            from app.api.cardapio.schemas.schema_endereco import EnderecoCreate
+            from app.api.cadastros.schemas.schema_endereco import EnderecoCreate
             payload_temp = EnderecoCreate(
                 logradouro=dados_atualizados.get('logradouro'),
                 numero=dados_atualizados.get('numero'),
@@ -76,6 +76,22 @@ class EnderecosService:
         self._atualizar_snapshot_pedidos_ativos(endereco_id, endereco_atualizado)
         
         return EnderecoOut.model_validate(endereco_atualizado)
+
+    def delete_by_cliente_id(self, cliente_id: int, endereco_id: int):
+        """
+        Deleta endereço de um cliente específico por ID.
+        Usado por admins para deletar endereços de qualquer cliente.
+        Verifica se o endereço está sendo usado em pedidos ativos.
+        """
+        # Verifica se o endereço está sendo usado em pedidos ativos
+        pedido_service = PedidoService(self.db)
+        if pedido_service.verificar_endereco_em_uso(endereco_id):
+            raise HTTPException(
+                status_code=400, 
+                detail="Não é possível excluir este endereço pois ele está sendo usado em pedidos ativos"
+            )
+        
+        self.repo.delete(cliente_id, endereco_id)
 
     def _dados_podem_causar_duplicata(self, payload: EnderecoUpdate) -> bool:
         """

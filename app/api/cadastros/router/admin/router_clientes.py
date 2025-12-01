@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.api.cadastros.models.user_model import UserModel
 from app.api.cadastros.repositories.repo_cliente import ClienteRepository
 from app.api.cadastros.schemas.schema_cliente import ClienteOut, ClienteAdminUpdate, ClienteUpdate, ClienteCreate
-from app.api.cardapio.schemas.schema_endereco import EnderecoOut, EnderecoCreate
+from app.api.cadastros.schemas.schema_endereco import EnderecoOut, EnderecoCreate
 from app.api.cadastros.services.service_cliente import ClienteService
 from app.core.admin_dependencies import get_current_user
 from app.database.db_connection import get_db
@@ -162,7 +162,7 @@ def update_cliente_admin(
     # Processar ação de endereço se fornecida
     if endereco_data:
         from app.api.cadastros.repositories.repo_endereco import EnderecoRepository
-        from app.api.cardapio.schemas.schema_endereco import EnderecoCreate, EnderecoUpdate
+        from app.api.cadastros.schemas.schema_endereco import EnderecoCreate, EnderecoUpdate
         
         endereco_repo = EnderecoRepository(db)
         

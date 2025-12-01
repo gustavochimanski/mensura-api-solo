@@ -4,7 +4,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, condecimal, Field, field_validator, model_validator
 
 from app.api.cadastros.schemas.schema_meio_pagamento import MeioPagamentoResponse, MeioPagamentoTipoEnum
-from app.api.cadastros.schemas.schema_shared_enums import (
+from app.api.shared.schemas.schema_shared_enums import (
     PedidoStatusEnum,
     TipoEntregaEnum,
     OrigemPedidoEnum,
@@ -13,7 +13,7 @@ from app.api.cadastros.schemas.schema_shared_enums import (
     PagamentoStatusEnum,
 )
 from app.api.cadastros.schemas.schema_cliente import ClienteOut
-from app.api.cardapio.schemas.schema_endereco import EnderecoOut
+from app.api.cadastros.schemas.schema_endereco import EnderecoOut
 from app.api.cadastros.schemas.schema_entregador import EntregadorOut
 
 

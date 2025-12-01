@@ -25,7 +25,7 @@ class EnderecoBase(BaseModel):
         return str(v)[:2].upper()
 
 class EnderecoCreate(EnderecoBase):
-    pass
+    cliente_id: int
 
 class EnderecoUpdate(BaseModel):
     cep: Optional[str] = None
@@ -50,6 +50,7 @@ class EnderecoUpdate(BaseModel):
 
 class EnderecoOut(EnderecoBase):
     id: int
+    cliente_id: int
 
     model_config = ConfigDict(from_attributes=True)
 

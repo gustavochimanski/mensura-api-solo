@@ -3,7 +3,7 @@ from typing import Optional, Any, Dict
 
 from pydantic import BaseModel, ConfigDict
 
-from app.api.cadastros.schemas.schema_shared_enums import (
+from app.api.shared.schemas.schema_shared_enums import (
     PagamentoGatewayEnum,
     PagamentoMetodoEnum,
     PagamentoStatusEnum,

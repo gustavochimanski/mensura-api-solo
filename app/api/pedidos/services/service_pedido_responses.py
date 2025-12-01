@@ -3,7 +3,7 @@ from __future__ import annotations
 from app.api.pedidos.models.model_pedido_unificado import PedidoUnificadoModel
 from app.api.cadastros.schemas.schema_cliente import ClienteOut
 from app.api.cadastros.schemas.schema_cupom import CupomOut
-from app.api.cardapio.schemas.schema_endereco import EnderecoOut
+from app.api.cadastros.schemas.schema_endereco import EnderecoOut
 from app.api.cadastros.schemas.schema_entregador import EntregadorOut
 from app.api.cadastros.schemas.schema_meio_pagamento import MeioPagamentoResponse
 from app.api.pedidos.schemas.schema_pedido import (
@@ -16,7 +16,7 @@ from app.api.pedidos.schemas.schema_pedido import (
     PedidoResponseSimplificado,
 )
 from app.api.pedidos.schemas.schema_pedido_status_historico import PedidoStatusHistoricoOut
-from app.api.cadastros.schemas.schema_shared_enums import (
+from app.api.shared.schemas.schema_shared_enums import (
     OrigemPedidoEnum,
     PedidoStatusEnum,
     TipoEntregaEnum,

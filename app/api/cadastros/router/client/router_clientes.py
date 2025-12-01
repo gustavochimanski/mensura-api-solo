@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.api.cadastros.models.model_cliente_dv import ClienteModel, default_super_token
 from app.api.cadastros.repositories.repo_cliente import ClienteRepository
 from app.api.cadastros.schemas.schema_cliente import ClienteOut, ClienteUpdate, ClienteCreate
-from app.api.cardapio.schemas.schema_endereco import EnderecoOut
+from app.api.cadastros.schemas.schema_endereco import EnderecoOut
 from app.api.cadastros.services.service_cliente import ClienteService
 from app.core.client_dependecies import get_cliente_by_super_token
 from app.database.db_connection import get_db
