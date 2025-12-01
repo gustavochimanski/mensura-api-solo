@@ -56,12 +56,12 @@ class PedidoHistoricoUnificadoModel(Base):
     Suporta dois tipos de histórico:
     1. Histórico simples (apenas mudança de status):
        - status_anterior e status_novo preenchidos
-       - tipo_pedido: DELIVERY, MESA ou BALCAO (tipo do pedido)
+       - tipo_entrega: DELIVERY, MESA ou BALCAO (tipo de entrega do pedido)
        - tipo_operacao pode ser NULL ou STATUS_ALTERADO
        - Usado principalmente para delivery
     
     2. Histórico detalhado (com tipo_operacao):
-       - tipo_pedido: DELIVERY, MESA ou BALCAO (tipo do pedido)
+       - tipo_entrega: DELIVERY, MESA ou BALCAO (tipo de entrega do pedido)
        - tipo_operacao preenchido (PEDIDO_CRIADO, ITEM_ADICIONADO, etc.)
        - status_anterior e status_novo podem ser NULL (dependendo da operação)
        - Usado principalmente para balcão e mesa
@@ -72,7 +72,7 @@ class PedidoHistoricoUnificadoModel(Base):
         Index("idx_pedidos_historico_tipo_operacao", "tipo_operacao"),
         Index("idx_pedidos_historico_status_novo", "status_novo"),
         Index("idx_pedidos_historico_created_at", "created_at"),
-        Index("idx_pedidos_historico_pedido_tipo", "pedido_id", "tipo_pedido"),
+        Index("idx_pedidos_historico_pedido_tipo", "pedido_id", "tipo_entrega"),
         Index("idx_pedidos_historico_pedido_created_at", "pedido_id", "created_at"),
         {"schema": "pedidos"},
     )
