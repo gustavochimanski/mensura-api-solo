@@ -40,6 +40,21 @@ def listar_mesas(
     return svc.listar_mesas(empresa_id=empresa_id)
 
 
+@router.get("/stats", response_model=MesaStatsResponse)
+def obter_stats_mesas(
+    empresa_id: int = Query(..., description="ID da empresa"),
+    svc: MesaService = Depends(get_mesa_service),
+):
+    """
+    Obtém estatísticas das mesas de uma empresa.
+    
+    Retorna contagem total, disponíveis, ocupadas, reservadas e inativas.
+    IMPORTANTE: Esta rota deve vir antes de /{mesa_id} para evitar conflito.
+    """
+    stats = svc.obter_stats(empresa_id=empresa_id)
+    return MesaStatsResponse(**stats)
+
+
 @router.get("/search", response_model=List[dict])
 def buscar_mesas(
     empresa_id: int = Query(..., description="ID da empresa"),
@@ -183,18 +198,4 @@ def reservar_mesa(
     Altera o status da mesa para "R" (Reservada).
     """
     return svc.reservar_mesa(mesa_id=mesa_id, empresa_id=empresa_id)
-
-
-@router.get("/stats", response_model=MesaStatsResponse)
-def obter_stats_mesas(
-    empresa_id: int = Query(..., description="ID da empresa"),
-    svc: MesaService = Depends(get_mesa_service),
-):
-    """
-    Obtém estatísticas das mesas de uma empresa.
-    
-    Retorna contagem total, disponíveis, ocupadas, reservadas e inativas.
-    """
-    stats = svc.obter_stats(empresa_id=empresa_id)
-    return MesaStatsResponse(**stats)
 
