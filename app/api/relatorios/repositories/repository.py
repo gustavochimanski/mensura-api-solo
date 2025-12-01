@@ -9,7 +9,7 @@ import calendar
 
 from sqlalchemy import func, cast, String, literal
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import ProgrammingError
+from sqlalchemy.exc import ProgrammingError, InternalError
 
 from app.api.pedidos.models.model_pedido_unificado import (
     PedidoUnificadoModel,
@@ -79,6 +79,29 @@ class PeriodoResumo:
 class RelatorioRepository:
     def __init__(self, db: Session) -> None:
         self.db = db
+
+    def _handle_db_error(self, fn, default_return=None):
+        """
+        Executa uma função de query com tratamento de erros de transação.
+        Se a transação estiver abortada, faz rollback e tenta novamente.
+        """
+        try:
+            return fn()
+        except InternalError as e:
+            # Se a transação foi abortada, faz rollback e tenta novamente
+            if "transaction is aborted" in str(e):
+                self.db.rollback()
+                try:
+                    return fn()
+                except (ProgrammingError, InternalError) as retry_e:
+                    if "does not exist" in str(retry_e):
+                        return default_return if default_return is not None else []
+                    raise
+            raise
+        except ProgrammingError as e:
+            if "does not exist" in str(e):
+                return default_return if default_return is not None else []
+            raise
 
     def _resumo_periodo(
         self, empresa_id: int, inicio: datetime, fim: datetime
@@ -392,17 +415,9 @@ class RelatorioRepository:
                 .all()
             )
 
-        def _safe_query(fn):
-            try:
-                return fn()
-            except ProgrammingError as e:
-                if "does not exist" in str(e):
-                    return []
-                raise
-
-        rows_delivery = _safe_query(_rows_delivery)
-        rows_mesa = _safe_query(_rows_mesa)
-        rows_balcao = _safe_query(_rows_balcao)
+        rows_delivery = self._handle_db_error(_rows_delivery, default_return=[])
+        rows_mesa = self._handle_db_error(_rows_mesa, default_return=[])
+        rows_balcao = self._handle_db_error(_rows_balcao, default_return=[])
 
         agregados: dict[int, dict[str, float | int]] = {}
 
