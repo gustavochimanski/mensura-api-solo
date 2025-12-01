@@ -14,6 +14,8 @@ class PedidoStatusEnum(str, Enum):
 class TipoEntregaEnum(str, Enum):
     DELIVERY = "DELIVERY"
     RETIRADA = "RETIRADA"
+    BALCAO = "BALCAO"
+    MESA = "MESA"
 
 class OrigemPedidoEnum(str, Enum):
     WEB = "WEB"
