@@ -11,7 +11,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.pedidos.repositories.repo_pedidos import PedidoRepository
-from app.api.pedidos.models.model_pedido_unificado import TipoPedido, StatusPedido
+from app.api.pedidos.models.model_pedido_unificado import TipoEntrega, StatusPedido
 from app.api.pedidos.schemas.schema_pedido import (
     PedidoCreate,
     PedidoOut,

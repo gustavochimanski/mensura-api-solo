@@ -318,7 +318,7 @@ class PedidoService:
                    ST_Distance(p.endereco_geo, {ponto_centro}) as distancia_metros
             FROM pedidos.pedidos p
             WHERE p.endereco_geo IS NOT NULL
-              AND p.tipo_pedido = 'DELIVERY'
+              AND p.tipo_entrega = 'DELIVERY'
               AND ST_DWithin(p.endereco_geo, {ponto_centro}, :raio_metros)
             ORDER BY distancia_metros
         """)
@@ -331,7 +331,7 @@ class PedidoService:
                 self.db.query(PedidoUnificadoModel)
                 .filter(
                     PedidoUnificadoModel.id == row.id,
-                    PedidoUnificadoModel.tipo_pedido == TipoPedido.DELIVERY.value
+                    PedidoUnificadoModel.tipo_entrega == TipoEntrega.DELIVERY.value
                 )
                 .first()
             )
@@ -352,7 +352,7 @@ class PedidoService:
             SELECT p.*
             FROM pedidos.pedidos p
             WHERE p.endereco_geo IS NOT NULL
-              AND p.tipo_pedido = 'DELIVERY'
+              AND p.tipo_entrega = 'DELIVERY'
               AND ST_Within(p.endereco_geo, ST_GeomFromText(:poligono, 4326))
         """)
         
@@ -364,7 +364,7 @@ class PedidoService:
                 self.db.query(PedidoUnificadoModel)
                 .filter(
                     PedidoUnificadoModel.id == row.id,
-                    PedidoUnificadoModel.tipo_pedido == TipoPedido.DELIVERY.value
+                    PedidoUnificadoModel.tipo_entrega == TipoEntrega.DELIVERY.value
                 )
                 .first()
             )

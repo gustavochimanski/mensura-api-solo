@@ -12,7 +12,7 @@ from app.api.cardapio.schemas.schema_printer import (
     RespostaImpressaoPrinter,
     TipoPedidoPrinterEnum,
 )
-from app.api.pedidos.models.model_pedido_unificado import PedidoUnificadoModel, TipoPedido, StatusPedido
+from app.api.pedidos.models.model_pedido_unificado import PedidoUnificadoModel, TipoEntrega, StatusPedido
 from sqlalchemy import and_
 from datetime import datetime, timedelta
 from app.utils.logger import logger
@@ -104,7 +104,7 @@ class PrinterService:
                 .filter(
                     and_(
                         PedidoUnificadoModel.empresa_id == empresa_id,
-                        PedidoUnificadoModel.tipo_pedido == TipoPedido.MESA.value,
+                        PedidoUnificadoModel.tipo_entrega == TipoEntrega.MESA.value,
                         PedidoUnificadoModel.status == StatusPedido.IMPRESSAO.value,
                     )
                 )
@@ -138,7 +138,7 @@ class PrinterService:
                 .filter(
                     and_(
                         PedidoUnificadoModel.empresa_id == empresa_id,
-                        PedidoUnificadoModel.tipo_pedido == TipoPedido.BALCAO.value,
+                        PedidoUnificadoModel.tipo_entrega == TipoEntrega.BALCAO.value,
                         PedidoUnificadoModel.status == StatusPedido.IMPRESSAO.value,
                     )
                 )

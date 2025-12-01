@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.api.pedidos.models.model_pedido_unificado import (
     PedidoUnificadoModel,
-    TipoPedido,
+    TipoEntrega,
     StatusPedido,
 )
 from app.api.empresas.models.empresa_model import EmpresaModel
@@ -50,7 +50,7 @@ class PrinterRepository:
             )
             .filter(
                 and_(
-                    PedidoUnificadoModel.tipo_pedido == TipoPedido.DELIVERY.value,
+                    PedidoUnificadoModel.tipo_entrega == TipoEntrega.DELIVERY.value,
                     PedidoUnificadoModel.empresa_id == empresa_id,
                     PedidoUnificadoModel.status == PedidoStatusEnum.I.value,
                     PedidoUnificadoModel.status != PedidoStatusEnum.E.value,  # Exclui ENTREGUE
@@ -82,7 +82,7 @@ class PrinterRepository:
             .filter(
                 and_(
                     PedidoUnificadoModel.id == pedido_id,
-                    PedidoUnificadoModel.tipo_pedido == TipoPedido.DELIVERY.value,
+                    PedidoUnificadoModel.tipo_entrega == TipoEntrega.DELIVERY.value,
                     or_(
                         PedidoUnificadoModel.status == PedidoStatusEnum.I.value,
                         PedidoUnificadoModel.status == PedidoStatusEnum.D.value
@@ -127,7 +127,7 @@ class PrinterRepository:
 
             if tipo_pedido == TipoPedidoPrinterEnum.MESA:
                 pedido_repo = PedidoRepository(self.db)
-                pedido = pedido_repo.get_pedido(pedido_id, TipoPedido.MESA)
+                pedido = pedido_repo.get_pedido(pedido_id, TipoEntrega.MESA)
                 if not pedido:
                     logger.warning(f"[PrinterRepository] Pedido mesa {pedido_id} não encontrado")
                     return False
@@ -153,7 +153,7 @@ class PrinterRepository:
 
             if tipo_pedido == TipoPedidoPrinterEnum.BALCAO:
                 pedido_repo = PedidoRepository(self.db)
-                pedido = pedido_repo.get_pedido(pedido_id, TipoPedido.BALCAO)
+                pedido = pedido_repo.get_pedido(pedido_id, TipoEntrega.BALCAO)
                 if not pedido:
                     logger.warning(f"[PrinterRepository] Pedido balcão {pedido_id} não encontrado")
                     return False
@@ -273,7 +273,7 @@ class PrinterRepository:
             self.db.query(PedidoUnificadoModel)
             .filter(
                 and_(
-                    PedidoUnificadoModel.tipo_pedido == TipoPedido.DELIVERY.value,
+                    PedidoUnificadoModel.tipo_entrega == TipoEntrega.DELIVERY.value,
                     PedidoUnificadoModel.empresa_id == empresa_id,
                     or_(
                         PedidoUnificadoModel.status == PedidoStatusEnum.I.value,
@@ -289,7 +289,7 @@ class PrinterRepository:
             self.db.query(PedidoUnificadoModel)
             .filter(
                 and_(
-                    PedidoUnificadoModel.tipo_pedido == TipoPedido.DELIVERY.value,
+                    PedidoUnificadoModel.tipo_entrega == TipoEntrega.DELIVERY.value,
                     PedidoUnificadoModel.empresa_id == empresa_id,
                     PedidoUnificadoModel.status == PedidoStatusEnum.R.value,
                     func.date(PedidoUnificadoModel.updated_at) == hoje
@@ -303,7 +303,7 @@ class PrinterRepository:
             self.db.query(PedidoUnificadoModel)
             .filter(
                 and_(
-                    PedidoUnificadoModel.tipo_pedido == TipoPedido.DELIVERY.value,
+                    PedidoUnificadoModel.tipo_entrega == TipoEntrega.DELIVERY.value,
                     PedidoUnificadoModel.empresa_id == empresa_id,
                     func.date(PedidoUnificadoModel.created_at) == hoje
                 )
