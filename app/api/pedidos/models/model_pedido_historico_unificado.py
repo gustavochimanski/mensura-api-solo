@@ -56,21 +56,21 @@ class PedidoHistoricoUnificadoModel(Base):
     Suporta dois tipos de histórico:
     1. Histórico simples (apenas mudança de status):
        - status_anterior e status_novo preenchidos
-       - tipo_operacao pode ser NULL ou STATUS_ALTERADO
+       - tipo_pedido pode ser NULL ou STATUS_ALTERADO
        - Usado principalmente para delivery
     
-    2. Histórico detalhado (com tipo_operacao):
-       - tipo_operacao preenchido
+    2. Histórico detalhado (com tipo_pedido):
+       - tipo_pedido preenchido
        - status_anterior e status_novo podem ser NULL (dependendo da operação)
        - Usado principalmente para balcão e mesa
     """
     __tablename__ = "pedidos_historico"
     __table_args__ = (
         Index("idx_pedidos_historico_pedido", "pedido_id"),
-        Index("idx_pedidos_historico_tipo_operacao", "tipo_operacao"),
+        Index("idx_pedidos_historico_tipo_pedido", "tipo_pedido"),
         Index("idx_pedidos_historico_status_novo", "status_novo"),
         Index("idx_pedidos_historico_created_at", "created_at"),
-        Index("idx_pedidos_historico_pedido_tipo", "pedido_id", "tipo_operacao"),
+        Index("idx_pedidos_historico_pedido_tipo", "pedido_id", "tipo_pedido"),
         Index("idx_pedidos_historico_pedido_created_at", "pedido_id", "created_at"),
         {"schema": "pedidos"},
     )
@@ -86,7 +86,8 @@ class PedidoHistoricoUnificadoModel(Base):
     pedido = relationship("PedidoUnificadoModel", back_populates="historico")
     
     # Tipo de operação (nullable - para histórico detalhado)
-    tipo_operacao = Column(TipoOperacaoPedidoEnum, nullable=True)
+    # Nota: A coluna no banco de dados se chama tipo_pedido
+    tipo_pedido = Column(TipoOperacaoPedidoEnum, nullable=True)
     
     # Status anterior e novo (nullable - para histórico de mudança de status)
     status_anterior = Column(StatusPedidoEnum, nullable=True)

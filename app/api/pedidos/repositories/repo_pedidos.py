@@ -7,7 +7,7 @@ from typing import Optional
 from fastapi import HTTPException
 from starlette import status
 from sqlalchemy import func, or_, and_
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, defer, selectinload
 
 from app.api.catalogo.models.model_produto_emp import ProdutoEmpModel
 from app.api.pedidos.models.model_pedido_unificado import (
@@ -141,7 +141,7 @@ class PedidoRepository:
             joinedload(PedidoUnificadoModel.meio_pagamento),
             joinedload(PedidoUnificadoModel.transacao).joinedload(TransacaoPagamentoModel.meio_pagamento),
             joinedload(PedidoUnificadoModel.transacoes).joinedload(TransacaoPagamentoModel.meio_pagamento),
-            joinedload(PedidoUnificadoModel.historico),
+            selectinload(PedidoUnificadoModel.historico).defer(PedidoHistoricoUnificadoModel.tipo_operacao),
         )
 
         query = query.order_by(PedidoUnificadoModel.created_at.desc())
