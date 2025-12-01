@@ -14,11 +14,11 @@ from app.database.db_connection import Base
 from app.utils.database_utils import now_trimmed
 
 
-class TipoPedido(enum.Enum):
-    """Tipos de pedidos suportados."""
-    BALCAO = "BALCAO"
-    MESA = "MESA"
-    DELIVERY = "DELIVERY"
+class OrigemPedido(enum.Enum):
+    """Origem do pedido (de onde veio)."""
+    CARDAPIO = "CARDAPIO"
+    AIAGENT = "AIAGENT"
+    SUPERVISOR = "SUPERVISOR"
 
 
 class StatusPedido(enum.Enum):
@@ -47,22 +47,24 @@ class StatusPedido(enum.Enum):
 
 
 class TipoEntrega(enum.Enum):
-    """Tipos de entrega para pedidos de delivery."""
+    """Tipos de entrega/modalidade do pedido."""
     DELIVERY = "DELIVERY"
     RETIRADA = "RETIRADA"
+    BALCAO = "BALCAO"
+    MESA = "MESA"
 
 
-class OrigemPedido(enum.Enum):
-    """Origem do pedido (apenas para delivery)."""
+class CanalPedido(enum.Enum):
+    """Canal de origem do pedido (apenas para delivery)."""
     WEB = "WEB"
     APP = "APP"
     BALCAO = "BALCAO"
 
 
 # ENUMs do PostgreSQL no schema pedidos
-TipoPedidoEnum = SAEnum(
-    "BALCAO", "MESA", "DELIVERY",
-    name="tipo_pedido_enum",
+OrigemPedidoEnum = SAEnum(
+    "CARDAPIO", "AIAGENT", "SUPERVISOR",
+    name="origem_pedido_enum",
     create_type=False,
     schema="pedidos"
 )
@@ -75,15 +77,15 @@ StatusPedidoEnum = SAEnum(
 )
 
 TipoEntregaEnum = SAEnum(
-    "DELIVERY", "RETIRADA",
+    "DELIVERY", "RETIRADA", "BALCAO", "MESA",
     name="tipo_entrega_enum",
     create_type=False,
     schema="pedidos"
 )
 
-OrigemPedidoEnum = SAEnum(
+CanalPedidoEnum = SAEnum(
     "WEB", "APP", "BALCAO",
-    name="origem_pedido_enum",
+    name="canal_pedido_enum",
     create_type=False,
     schema="pedidos"
 )
@@ -94,16 +96,16 @@ class PedidoUnificadoModel(Base):
     Modelo unificado de pedidos no schema pedidos.
     
     Centraliza todos os tipos de pedidos:
-    - Pedidos de Balcão (tipo_pedido='BALCAO', mesa_id opcional)
-    - Pedidos de Mesa (tipo_pedido='MESA', mesa_id obrigatório)
-    - Pedidos de Delivery (tipo_pedido='DELIVERY', endereco_id obrigatório, entregador_id opcional)
+    - tipo_entrega: DELIVERY, RETIRADA, BALCAO ou MESA (modalidade do pedido)
+    - tipo_pedido: CARDAPIO, AIAGENT ou SUPERVISOR (origem do pedido)
     """
     __tablename__ = "pedidos"
     __table_args__ = (
         UniqueConstraint("empresa_id", "numero_pedido", name="uq_pedidos_empresa_numero"),
         Index("idx_pedidos_empresa", "empresa_id"),
-        Index("idx_pedidos_empresa_tipo_status", "empresa_id", "tipo_pedido", "status"),
-        Index("idx_pedidos_tipo_status", "tipo_pedido", "status"),
+        Index("idx_pedidos_empresa_tipo_status", "empresa_id", "tipo_entrega", "status"),
+        Index("idx_pedidos_tipo_status", "tipo_entrega", "status"),
+        Index("idx_pedidos_origem", "tipo_pedido"),
         Index("idx_pedidos_numero", "empresa_id", "numero_pedido"),
         Index("idx_pedidos_endereco_snapshot_gin", "endereco_snapshot", postgresql_using="gin"),
         Index("idx_pedidos_endereco_geo_gist", "endereco_geo", postgresql_using="gist"),
@@ -112,8 +114,11 @@ class PedidoUnificadoModel(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     
-    # Tipo de pedido (obrigatório)
-    tipo_pedido = Column(TipoPedidoEnum, nullable=False)
+    # Tipo de entrega/modalidade (DELIVERY, RETIRADA, BALCAO, MESA)
+    tipo_entrega = Column(TipoEntregaEnum, nullable=False)
+    
+    # Origem do pedido (CARDAPIO, AIAGENT, SUPERVISOR)
+    tipo_pedido = Column(OrigemPedidoEnum, nullable=False)
     
     # Empresa (obrigatório)
     empresa_id = Column(Integer, ForeignKey("cadastros.empresas.id", ondelete="RESTRICT"), nullable=False)
@@ -145,9 +150,8 @@ class PedidoUnificadoModel(Base):
     cupom_id = Column(Integer, ForeignKey("cadastros.cupons_dv.id", ondelete="SET NULL"), nullable=True)
     cupom = relationship("CupomDescontoModel", lazy="select")
     
-    # Campos específicos para Delivery
-    tipo_entrega = Column(TipoEntregaEnum, nullable=True)  # Apenas para DELIVERY
-    origem = Column(OrigemPedidoEnum, nullable=True)  # Apenas para DELIVERY
+    # Canal de origem (apenas para delivery)
+    canal = Column(CanalPedidoEnum, nullable=True)  # WEB, APP, BALCAO
     
     # Observações e informações adicionais
     observacoes = Column(String(500), nullable=True)  # Para balcão e mesa
@@ -262,24 +266,32 @@ class PedidoUnificadoModel(Base):
     def is_delivery(self) -> bool:
         """Verifica se é um pedido de delivery."""
         return (
-            self.tipo_pedido == TipoPedido.DELIVERY.value
-            if isinstance(self.tipo_pedido, str)
-            else self.tipo_pedido == TipoPedido.DELIVERY
+            self.tipo_entrega == TipoEntrega.DELIVERY.value
+            if isinstance(self.tipo_entrega, str)
+            else self.tipo_entrega == TipoEntrega.DELIVERY
         )
     
     def is_mesa(self) -> bool:
         """Verifica se é um pedido de mesa."""
         return (
-            self.tipo_pedido == TipoPedido.MESA.value
-            if isinstance(self.tipo_pedido, str)
-            else self.tipo_pedido == TipoPedido.MESA
+            self.tipo_entrega == TipoEntrega.MESA.value
+            if isinstance(self.tipo_entrega, str)
+            else self.tipo_entrega == TipoEntrega.MESA
         )
     
     def is_balcao(self) -> bool:
         """Verifica se é um pedido de balcão."""
         return (
-            self.tipo_pedido == TipoPedido.BALCAO.value
-            if isinstance(self.tipo_pedido, str)
-            else self.tipo_pedido == TipoPedido.BALCAO
+            self.tipo_entrega == TipoEntrega.BALCAO.value
+            if isinstance(self.tipo_entrega, str)
+            else self.tipo_entrega == TipoEntrega.BALCAO
+        )
+    
+    def is_retirada(self) -> bool:
+        """Verifica se é um pedido para retirada."""
+        return (
+            self.tipo_entrega == TipoEntrega.RETIRADA.value
+            if isinstance(self.tipo_entrega, str)
+            else self.tipo_entrega == TipoEntrega.RETIRADA
         )
 

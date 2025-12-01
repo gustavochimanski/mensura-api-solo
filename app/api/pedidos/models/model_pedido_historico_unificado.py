@@ -8,7 +8,7 @@ import enum
 
 from app.database.db_connection import Base
 from app.utils.database_utils import now_trimmed
-from .model_pedido_unificado import StatusPedidoEnum, TipoPedidoEnum
+from .model_pedido_unificado import StatusPedidoEnum, TipoEntregaEnum, OrigemPedidoEnum
 
 
 class TipoOperacaoPedido(enum.Enum):
@@ -88,8 +88,11 @@ class PedidoHistoricoUnificadoModel(Base):
     )
     pedido = relationship("PedidoUnificadoModel", back_populates="historico")
     
-    # Tipo do pedido (DELIVERY, MESA, BALCAO)
-    tipo_pedido = Column(TipoPedidoEnum, nullable=True)
+    # Tipo de entrega/modalidade (DELIVERY, RETIRADA, BALCAO, MESA)
+    tipo_entrega = Column(TipoEntregaEnum, nullable=True)
+    
+    # Origem do pedido (CARDAPIO, AIAGENT, SUPERVISOR)
+    tipo_pedido = Column(OrigemPedidoEnum, nullable=True)
     
     # Tipo de operação (nullable - para histórico detalhado)
     tipo_operacao = Column(TipoOperacaoPedidoEnum, nullable=True)
