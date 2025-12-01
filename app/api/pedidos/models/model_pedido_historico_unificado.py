@@ -127,13 +127,13 @@ class PedidoHistoricoUnificadoModel(Base):
     @property
     def tipo_operacao_descricao(self) -> str:
         """Retorna a descrição do tipo de operação."""
-        if self.tipo_operacao is None:
+        if self.tipo_pedido is None:
             return "Operação sem tipo"
         
         tipo_key = (
-            self.tipo_operacao.value
-            if isinstance(self.tipo_operacao, TipoOperacaoPedido)
-            else str(self.tipo_operacao)
+            self.tipo_pedido.value
+            if isinstance(self.tipo_pedido, TipoOperacaoPedido)
+            else str(self.tipo_pedido)
         )
         descricoes = {
             TipoOperacaoPedido.PEDIDO_CRIADO.value: "Pedido criado",
@@ -159,12 +159,12 @@ class PedidoHistoricoUnificadoModel(Base):
     @property
     def resumo_operacao(self) -> str:
         """Retorna um resumo da operação."""
-        # Se tem tipo_operacao, usa a descrição
-        if self.tipo_operacao:
+        # Se tem tipo_pedido, usa a descrição
+        if self.tipo_pedido:
             tipo_key = (
-                self.tipo_operacao.value
-                if isinstance(self.tipo_operacao, TipoOperacaoPedido)
-                else str(self.tipo_operacao)
+                self.tipo_pedido.value
+                if isinstance(self.tipo_pedido, TipoOperacaoPedido)
+                else str(self.tipo_pedido)
             )
             
             if tipo_key == TipoOperacaoPedido.STATUS_ALTERADO.value:
@@ -188,7 +188,7 @@ class PedidoHistoricoUnificadoModel(Base):
             else:
                 return self.tipo_operacao_descricao
         
-        # Se não tem tipo_operacao mas tem mudança de status, é histórico simples
+        # Se não tem tipo_pedido mas tem mudança de status, é histórico simples
         elif self.status_anterior is not None or self.status_novo is not None:
             return f"Status alterado de '{self.status_anterior}' para '{self.status_novo}'"
         
@@ -196,8 +196,8 @@ class PedidoHistoricoUnificadoModel(Base):
         return self.descricao or "Operação registrada"
     
     def is_historico_detalhado(self) -> bool:
-        """Verifica se é um histórico detalhado (com tipo_operacao)."""
-        return self.tipo_operacao is not None
+        """Verifica se é um histórico detalhado (com tipo_pedido)."""
+        return self.tipo_pedido is not None
     
     def is_historico_status(self) -> bool:
         """Verifica se é um histórico de mudança de status."""

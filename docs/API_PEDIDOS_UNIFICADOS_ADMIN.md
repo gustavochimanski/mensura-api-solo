@@ -423,7 +423,7 @@ Cada item pode ser:
 ### Histórico
 O histórico unificado suporta:
 - Histórico simples (apenas mudança de status)
-- Histórico detalhado (com `tipo_operacao`, `descricao`, `motivo`, etc.)
+- Histórico detalhado (com `tipo_pedido` no banco, `tipo_operacao` na resposta JSON, `descricao`, `motivo`, etc.)
 
 ### Validações
 - Pedido deve existir

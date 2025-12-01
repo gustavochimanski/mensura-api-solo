@@ -254,7 +254,7 @@ class PedidoResponseBuilder:
             'status': status,
             'status_anterior': status_anterior,
             'status_novo': status_novo,
-            'tipo_operacao': historico.tipo_operacao.value if hasattr(historico, 'tipo_operacao') and historico.tipo_operacao and hasattr(historico.tipo_operacao, 'value') else (historico.tipo_operacao if hasattr(historico, 'tipo_operacao') else None),
+            'tipo_operacao': historico.tipo_pedido.value if hasattr(historico, 'tipo_pedido') and historico.tipo_pedido and hasattr(historico.tipo_pedido, 'value') else (historico.tipo_pedido if hasattr(historico, 'tipo_pedido') else None),
             'descricao': getattr(historico, 'descricao', None),
             'motivo': getattr(historico, 'motivo', None),
             'observacoes': getattr(historico, 'observacoes', None),

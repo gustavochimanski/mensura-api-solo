@@ -24,14 +24,14 @@ class PedidoStatusHistoricoOut(BaseModel):
     """
     Schema de histórico de pedidos compatível com modelo unificado.
     
-    Mantém compatibilidade com histórico simples (status) e detalhado (tipo_operacao).
+    Mantém compatibilidade com histórico simples (status) e detalhado (tipo_pedido).
     """
     id: int
     pedido_id: int
     status: Optional[PedidoStatusEnum] = None  # Pode ser None se for histórico detalhado sem status
     status_anterior: Optional[PedidoStatusEnum] = None  # Status anterior (modelo unificado)
     status_novo: Optional[PedidoStatusEnum] = None  # Status novo (modelo unificado)
-    tipo_operacao: Optional[str] = None  # Tipo de operação (modelo unificado)
+    tipo_operacao: Optional[str] = None  # Tipo de operação (modelo unificado) - coluna tipo_pedido no banco
     descricao: Optional[str] = None  # Descrição da operação (modelo unificado)
     motivo: Optional[str] = None
     observacoes: Optional[str] = None

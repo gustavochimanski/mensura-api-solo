@@ -141,7 +141,7 @@ class PedidoRepository:
             joinedload(PedidoUnificadoModel.meio_pagamento),
             joinedload(PedidoUnificadoModel.transacao).joinedload(TransacaoPagamentoModel.meio_pagamento),
             joinedload(PedidoUnificadoModel.transacoes).joinedload(TransacaoPagamentoModel.meio_pagamento),
-            selectinload(PedidoUnificadoModel.historico).defer(PedidoHistoricoUnificadoModel.tipo_operacao),
+            selectinload(PedidoUnificadoModel.historico).defer(PedidoHistoricoUnificadoModel.tipo_pedido),
         )
 
         query = query.order_by(PedidoUnificadoModel.created_at.desc())
@@ -921,7 +921,7 @@ class PedidoRepository:
     def add_historico(
         self,
         pedido_id: int,
-        tipo_operacao: TipoOperacaoPedido,
+        tipo_pedido: TipoOperacaoPedido,
         status_anterior: str | None = None,
         status_novo: str | None = None,
         descricao: str | None = None,
@@ -947,7 +947,7 @@ class PedidoRepository:
             pedido_id=pedido_id,
             cliente_id=cliente_id,
             usuario_id=usuario_id,
-            tipo_operacao=tipo_operacao.value if hasattr(tipo_operacao, "value") else tipo_operacao,
+            tipo_pedido=tipo_pedido.value if hasattr(tipo_pedido, "value") else tipo_pedido,
             status_anterior=status_anterior_value,
             status_novo=status_novo_value,
             descricao=descricao,

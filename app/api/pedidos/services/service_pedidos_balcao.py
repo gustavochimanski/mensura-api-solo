@@ -126,7 +126,7 @@ class PedidoBalcaoService:
         # Registra histórico de criação
         self.repo.add_historico(
             pedido_id=pedido.id,
-            tipo_operacao=TipoOperacaoPedido.PEDIDO_CRIADO,
+            tipo_pedido=TipoOperacaoPedido.PEDIDO_CRIADO,
             status_novo=self._status_value(pedido.status),
             descricao=f"Pedido {pedido.numero_pedido} criado",
             cliente_id=payload.cliente_id,
@@ -134,7 +134,7 @@ class PedidoBalcaoService:
         if mesa_id_real:
             self.repo.add_historico(
                 pedido_id=pedido.id,
-                tipo_operacao=TipoOperacaoPedido.MESA_ASSOCIADA,
+                tipo_pedido=TipoOperacaoPedido.MESA_ASSOCIADA,
                 descricao=f"Mesa associada ao pedido",
             )
         self.repo.commit()
@@ -151,7 +151,7 @@ class PedidoBalcaoService:
                 # Registra histórico de item adicionado
                 self.repo.add_historico(
                     pedido_id=pedido.id,
-                    tipo_operacao=TipoOperacaoPedido.ITEM_ADICIONADO,
+                    tipo_pedido=TipoOperacaoPedido.ITEM_ADICIONADO,
                     descricao=f"Item adicionado: {it.produto_cod_barras} (qtd: {it.quantidade})",
                 )
             self.repo.commit()
@@ -172,7 +172,7 @@ class PedidoBalcaoService:
         # Registra histórico
         self.repo.add_historico(
             pedido_id=pedido_id,
-            tipo_operacao=TipoOperacaoPedido.ITEM_ADICIONADO,
+            tipo_pedido=TipoOperacaoPedido.ITEM_ADICIONADO,
             descricao=f"Item adicionado: {body.produto_cod_barras} (qtd: {body.quantidade})",
             usuario_id=usuario_id,
         )
@@ -376,7 +376,7 @@ class PedidoBalcaoService:
         # Registra histórico
         self.repo.add_historico(
             pedido_id=pedido_id,
-            tipo_operacao=TipoOperacaoPedido.ITEM_ADICIONADO,
+            tipo_pedido=TipoOperacaoPedido.ITEM_ADICIONADO,
             descricao=descricao_historico,
             usuario_id=usuario_id,
         )
@@ -392,7 +392,7 @@ class PedidoBalcaoService:
         # Registra histórico
         self.repo.add_historico(
             pedido_id=pedido_id,
-            tipo_operacao=TipoOperacaoPedido.ITEM_REMOVIDO,
+            tipo_pedido=TipoOperacaoPedido.ITEM_REMOVIDO,
             descricao=f"Item removido: ID {item_id}",
             usuario_id=usuario_id,
         )
@@ -406,7 +406,7 @@ class PedidoBalcaoService:
         # Registra histórico
         self.repo.add_historico(
             pedido_id=pedido_id,
-            tipo_operacao=TipoOperacaoPedido.PEDIDO_CANCELADO,
+            tipo_pedido=TipoOperacaoPedido.PEDIDO_CANCELADO,
             status_anterior=status_anterior,
             status_novo=self._status_value(pedido.status),
             descricao=f"Pedido {pedido.numero_pedido} cancelado",
@@ -423,7 +423,7 @@ class PedidoBalcaoService:
         # Registra histórico
         self.repo.add_historico(
             pedido_id=pedido_id,
-            tipo_operacao=TipoOperacaoPedido.PEDIDO_CONFIRMADO,
+            tipo_pedido=TipoOperacaoPedido.PEDIDO_CONFIRMADO,
             status_anterior=status_anterior,
             status_novo=self._status_value(pedido.status),
             descricao=f"Pedido {pedido.numero_pedido} confirmado",
@@ -452,7 +452,7 @@ class PedidoBalcaoService:
         pedido = self.repo.atualizar_status(pedido_id, novo_status)
         self.repo.add_historico(
             pedido_id=pedido_id,
-            tipo_operacao=TipoOperacaoPedido.STATUS_ALTERADO,
+            tipo_pedido=TipoOperacaoPedido.STATUS_ALTERADO,
             status_anterior=status_anterior,
             status_novo=self._status_value(pedido.status),
             descricao=f"Status atualizado para {self._status_value(pedido.status)}",
@@ -506,7 +506,7 @@ class PedidoBalcaoService:
         
         self.repo.add_historico(
             pedido_id=pedido_id,
-            tipo_operacao=TipoOperacaoPedido.PEDIDO_FECHADO,
+            tipo_pedido=TipoOperacaoPedido.PEDIDO_FECHADO,
             status_anterior=status_anterior,
             status_novo=self._status_value(pedido.status),
             descricao=f"Pedido {pedido.numero_pedido} fechado",
@@ -524,7 +524,7 @@ class PedidoBalcaoService:
         # Registra histórico
         self.repo.add_historico(
             pedido_id=pedido_id,
-            tipo_operacao=TipoOperacaoPedido.PEDIDO_REABERTO,
+            tipo_pedido=TipoOperacaoPedido.PEDIDO_REABERTO,
             status_anterior=status_anterior,
             status_novo=self._status_value(pedido.status),
             descricao=f"Pedido {pedido.numero_pedido} reaberto",
