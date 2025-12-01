@@ -242,8 +242,7 @@ class PedidoRepository:
             meio_pagamento_id=meio_pagamento_id,
             numero_pedido=numero,
             status=status,
-            tipo_entrega=tipo_entrega,
-            origem=origem,
+            canal=origem,  # Mapeia origem para canal (WEB, APP, BALCAO)
             endereco_snapshot=endereco_snapshot,
             endereco_geo=endereco_geo,
             subtotal=Decimal("0"),
