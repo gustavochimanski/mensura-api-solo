@@ -201,7 +201,7 @@ def criar_enums():
                 ("balcao", "tipooperacaopedidobalcao", ["PEDIDO_CRIADO", "STATUS_ALTERADO", "ITEM_ADICIONADO", "ITEM_REMOVIDO", "PEDIDO_CONFIRMADO", "PEDIDO_CANCELADO", "PEDIDO_FECHADO", "PEDIDO_REABERTO", "CLIENTE_ASSOCIADO", "CLIENTE_DESASSOCIADO", "MESA_ASSOCIADA", "MESA_DESASSOCIADA"]),
             ]
             
-            all_enums = enums_cardapio + enums_cadastros + enums_caixas + enums_mesas + enums_balcao
+            all_enums = enums_cardapio + enums_cadastros + enums_cadastros_caixas + enums_mesas + enums_balcao
             
             for schema, enum_name, values in all_enums:
                 try:
