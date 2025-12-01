@@ -68,43 +68,6 @@ class KanbanService:
             
             subtotal += item_total
         
-        # Soma receitas e combos do produtos_snapshot
-        produtos_snapshot = getattr(pedido, "produtos_snapshot", None)
-        if produtos_snapshot and isinstance(produtos_snapshot, dict):
-            # Receitas
-            receitas = produtos_snapshot.get("receitas", [])
-            for receita in receitas:
-                if isinstance(receita, dict):
-                    preco_unit = Dec(str(receita.get("preco_unitario", 0) or 0))
-                    quantidade = Dec(str(receita.get("quantidade", 0) or 0))
-                    subtotal += preco_unit * quantidade
-                    
-                    # Adiciona adicionais da receita
-                    adicionais = receita.get("adicionais", [])
-                    for adicional in adicionais:
-                        try:
-                            adicional_total = Dec(str(adicional.get("total", 0) or 0))
-                            subtotal += adicional_total
-                        except (ValueError, TypeError):
-                            pass
-            
-            # Combos
-            combos = produtos_snapshot.get("combos", [])
-            for combo in combos:
-                if isinstance(combo, dict):
-                    preco_unit = Dec(str(combo.get("preco_unitario", 0) or 0))
-                    quantidade = Dec(str(combo.get("quantidade", 0) or 0))
-                    subtotal += preco_unit * quantidade
-                    
-                    # Adiciona adicionais do combo
-                    adicionais = combo.get("adicionais", [])
-                    for adicional in adicionais:
-                        try:
-                            adicional_total = Dec(str(adicional.get("total", 0) or 0))
-                            subtotal += adicional_total
-                        except (ValueError, TypeError):
-                            pass
-        
         # Para delivery, adiciona taxas; para mesa/balcão, apenas desconto
         if pedido.is_delivery():
             desconto = Dec(str(pedido.desconto or 0))

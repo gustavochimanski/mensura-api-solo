@@ -32,8 +32,8 @@ class PedidoResponseBuilder:
 
     @staticmethod
     def _build_produtos(pedido: PedidoUnificadoModel):
-        snapshot = getattr(pedido, "produtos_snapshot", None)
-        return build_produtos_out_from_items(pedido.itens, snapshot)
+        # produtos_snapshot foi removido - receitas e combos agora estão nos itens do pedido
+        return build_produtos_out_from_items(pedido.itens, None)
 
     @staticmethod
     def pedido_to_response(pedido: PedidoUnificadoModel) -> PedidoResponse:

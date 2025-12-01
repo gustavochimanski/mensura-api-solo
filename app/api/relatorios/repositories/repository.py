@@ -614,8 +614,8 @@ class RelatorioRepository:
     def _top_entregadores(
         self, empresa_id: int, inicio: datetime, fim: datetime, limite: int = 5
     ) -> List[Dict[str, float | int | str]]:
-        try:
-            rows = (
+        def _query():
+            return (
                 self.db.query(
                     EntregadorDeliveryModel.nome.label("nome"),
                     EntregadorDeliveryModel.telefone.label("telefone"),
@@ -646,11 +646,8 @@ class RelatorioRepository:
                 .limit(limite)
                 .all()
             )
-        except ProgrammingError as e:
-            # Se a tabela não existir, retorna lista vazia
-            if "does not exist" in str(e):
-                return []
-            raise
+        
+        rows = self._handle_db_error(_query, default_return=[])
 
         return [
             {
@@ -829,8 +826,8 @@ class RelatorioRepository:
             literal("Não informado"),
         )
 
-        try:
-            rows = (
+        def _query():
+            return (
                 self.db.query(
                     bairro_expr.label("bairro"),
                     func.count(PedidoUnificadoModel.id).label("quantidade"),
@@ -852,11 +849,8 @@ class RelatorioRepository:
                 .limit(limite)
                 .all()
             )
-        except ProgrammingError as e:
-            # Se a tabela não existir, retorna lista vazia
-            if "does not exist" in str(e):
-                return []
-            raise
+        
+        rows = self._handle_db_error(_query, default_return=[])
 
         return [
             {

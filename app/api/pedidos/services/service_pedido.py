@@ -518,7 +518,6 @@ class PedidoService:
             logger.info(f"[finalizar_pedido] criado pedido_id={pedido.id} cliente_id={pedido.cliente_id}")
 
             subtotal = Decimal("0")
-            produtos_snapshot_data: dict[str, list] = {"receitas": [], "combos": []}
 
             # Itens normais (produtos com código de barras)
             for it in itens_normais:
