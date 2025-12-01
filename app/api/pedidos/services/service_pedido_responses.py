@@ -50,8 +50,7 @@ class PedidoResponseBuilder:
             meio_pagamento_id=pedido.meio_pagamento_id,
             tipo_entrega=pedido.tipo_entrega if isinstance(pedido.tipo_entrega, TipoEntregaEnum)
                         else TipoEntregaEnum(pedido.tipo_entrega),
-            origem=pedido.origem if isinstance(pedido.origem, OrigemPedidoEnum)
-                        else OrigemPedidoEnum(pedido.origem),
+            origem=OrigemPedidoEnum(pedido.canal.value) if pedido.canal else OrigemPedidoEnum.WEB,
             subtotal=float(pedido.subtotal or 0),
             desconto=float(pedido.desconto or 0),
             taxa_entrega=float(pedido.taxa_entrega or 0),
@@ -100,8 +99,7 @@ class PedidoResponseBuilder:
             meio_pagamento_id=pedido.meio_pagamento_id,
             tipo_entrega=pedido.tipo_entrega if isinstance(pedido.tipo_entrega, TipoEntregaEnum)
                         else TipoEntregaEnum(pedido.tipo_entrega),
-            origem=pedido.origem if isinstance(pedido.origem, OrigemPedidoEnum)
-                        else OrigemPedidoEnum(pedido.origem),
+            origem=OrigemPedidoEnum(pedido.canal.value) if pedido.canal else OrigemPedidoEnum.WEB,
             subtotal=float(pedido.subtotal or 0),
             desconto=float(pedido.desconto or 0),
             taxa_entrega=float(pedido.taxa_entrega or 0),
@@ -148,8 +146,7 @@ class PedidoResponseBuilder:
             meio_pagamento_id=pedido.meio_pagamento_id,
             tipo_entrega=pedido.tipo_entrega if isinstance(pedido.tipo_entrega, TipoEntregaEnum)
                         else TipoEntregaEnum(pedido.tipo_entrega),
-            origem=pedido.origem if isinstance(pedido.origem, OrigemPedidoEnum)
-                        else OrigemPedidoEnum(pedido.origem),
+            origem=OrigemPedidoEnum(pedido.canal.value) if pedido.canal else OrigemPedidoEnum.WEB,
             subtotal=float(pedido.subtotal or 0),
             desconto=float(pedido.desconto or 0),
             taxa_entrega=float(pedido.taxa_entrega or 0),
@@ -288,8 +285,7 @@ class PedidoResponseBuilder:
             historicos=[PedidoResponseBuilder.build_historico_response(h) for h in pedido.historicos] if pedido.historicos else [],
             tipo_entrega=pedido.tipo_entrega if isinstance(pedido.tipo_entrega, TipoEntregaEnum)
                         else TipoEntregaEnum(pedido.tipo_entrega),
-            origem=pedido.origem if isinstance(pedido.origem, OrigemPedidoEnum)
-                        else OrigemPedidoEnum(pedido.origem),
+            origem=OrigemPedidoEnum(pedido.canal.value) if pedido.canal else OrigemPedidoEnum.WEB,
             subtotal=float(pedido.subtotal or 0),
             desconto=float(pedido.desconto or 0),
             taxa_entrega=float(pedido.taxa_entrega or 0),
