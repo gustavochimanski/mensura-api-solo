@@ -929,8 +929,8 @@ class PedidoService:
                     criado_em=pedido.data_criacao,
                     atualizado_em=pedido.data_atualizacao,
                     status_codigo=status_value,
-                    status_descricao=pedido.status_descricao,
-                    numero_pedido=pedido.numero_pedido,
+                    status_descricao=self._status_descricao_delivery(pedido.status),
+                    numero_pedido=str(pedido.id),
                     valor_total=pedido.valor_total,
                     mesa=pedido,
                 )
@@ -950,8 +950,8 @@ class PedidoService:
                     criado_em=pedido.data_criacao,
                     atualizado_em=pedido.data_atualizacao,
                     status_codigo=status_value,
-                    status_descricao=pedido.status_descricao,
-                    numero_pedido=pedido.numero_pedido,
+                    status_descricao=self._status_descricao_delivery(pedido.status),
+                    numero_pedido=str(pedido.id),
                     valor_total=pedido.valor_total,
                     balcao=pedido,
                 )
