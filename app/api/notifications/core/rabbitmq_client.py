@@ -60,8 +60,24 @@ class RabbitMQClient:
         try:
             self._running = False
             
-            if self.connection and not self.connection.is_closed:
-                await self.connection.close()
+            if self.connection:
+                try:
+                    if not self.connection.is_closed:
+                        await self.connection.close()
+                except Exception as e:
+                    logger.warning(f"Erro ao fechar conexão RabbitMQ: {e}")
+                finally:
+                    # Limpa referências para evitar problemas no __del__
+                    self.connection = None
+            
+            if self.channel:
+                try:
+                    if not self.channel.is_closed:
+                        await self.channel.close()
+                except Exception as e:
+                    logger.warning(f"Erro ao fechar canal RabbitMQ: {e}")
+                finally:
+                    self.channel = None
             
             logger.info("Desconectado do RabbitMQ")
             
@@ -337,7 +353,7 @@ class RabbitMQClient:
 # Instância global do cliente RabbitMQ
 rabbitmq_client: Optional[RabbitMQClient] = None
 
-async def get_rabbitmq_client() -> RabbitMQClient:
+async def get_rabbitmq_client() -> Optional[RabbitMQClient]:
     """Retorna a instância global do cliente RabbitMQ"""
     global rabbitmq_client
     
@@ -354,8 +370,13 @@ async def get_rabbitmq_client() -> RabbitMQClient:
             virtual_host=os.getenv("RABBITMQ_VHOST", RABBITMQ_CONFIG['virtual_host'])
         )
         
-        await rabbitmq_client.connect()
-        await rabbitmq_client.setup_notification_system()
+        try:
+            await rabbitmq_client.connect()
+            await rabbitmq_client.setup_notification_system()
+        except Exception as e:
+            logger.error(f"Falha ao conectar ao RabbitMQ: {e}")
+            logger.warning("Aplicação continuará sem RabbitMQ. Notificações via RabbitMQ estarão desabilitadas.")
+            rabbitmq_client = None
     
     return rabbitmq_client
 
@@ -364,5 +385,9 @@ async def close_rabbitmq_client():
     global rabbitmq_client
     
     if rabbitmq_client:
-        await rabbitmq_client.disconnect()
-        rabbitmq_client = None
+        try:
+            await rabbitmq_client.disconnect()
+        except Exception as e:
+            logger.error(f"Erro ao fechar cliente RabbitMQ: {e}")
+        finally:
+            rabbitmq_client = None

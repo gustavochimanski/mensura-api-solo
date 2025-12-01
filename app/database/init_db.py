@@ -8,7 +8,7 @@ from app.core.security import hash_password
 from app.api.cadastros.models.user_model import UserModel
 
 logger = logging.getLogger(__name__)
-SCHEMAS = ["mesas", "notifications", "balcao", "cadastros", "cardapio", "catalogo", "receitas", "produtos", "financeiro", "pedidos"]
+SCHEMAS = ["mesas", "notifications", "balcao", "cadastros", "cardapio", "catalogo", "financeiro", "pedidos"]
 
 #
 def verificar_banco_inicializado():
@@ -18,14 +18,13 @@ def verificar_banco_inicializado():
             # Verifica se existem tabelas principais dos schemas
             result = conn.execute(text("""
                 SELECT COUNT(*) FROM information_schema.tables 
-                    WHERE table_schema IN ('cardapio', 'cadastros', 'mesas', 'notifications', 'balcao', 'receitas', 'produtos', 'financeiro', 'pedidos')
+                    WHERE table_schema IN ('cardapio', 'cadastros', 'mesas', 'notifications', 'balcao', 'catalogo', 'financeiro', 'pedidos')
                 AND table_name IN (
                     'usuarios', 'empresas', 'produtos', 'produtos_empresa', 'categorias',
-                    'clientes', 'pedidos_dv', 'enderecos', 'regioes_entrega',
-                    'categorias_dv', 'vitrines', 'entregadores_dv', 'meio_pagamento_dv',
-                    
-                    'cupons_dv', 'transacoes_pagamento_dv', 'pedido_itens_dv',
-                    'pedido_status_historico_dv', 'parceiros_dv', 'banner_parceiros_dv'
+                    'clientes', 'pedidos', 'enderecos', 'regioes_entrega',
+                    'categoria_dv', 'vitrines_dv', 'entregadores_dv', 'meio_pagamento_dv',
+                    'cupons_dv', 'transacoes_pagamento_dv', 'pedidos_itens',
+                    'pedidos_historico', 'parceiros_dv', 'banner_parceiros_dv'
                 );
             """))
             table_count = result.scalar()
@@ -274,11 +273,11 @@ def verificar_tabelas_cardapio():
     try:
         with engine.connect() as conn:
             # Lista de tabelas esperadas no schema cardapio
+            # Nota: Tabelas de pedidos foram movidas para o schema pedidos
             tabelas_cardapio = [
-                "pedidos_dv",
-                "pedido_itens_dv",
-                "pedido_status_historico_dv",
-                "transacoes_pagamento_dv"
+                "transacoes_pagamento_dv",
+                "categoria_dv",
+                "vitrines_dv"
             ]
             
             tabelas_faltando = []

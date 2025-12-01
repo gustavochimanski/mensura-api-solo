@@ -124,6 +124,24 @@ async def startup():
     logger.info("API iniciada com sucesso.")
 
 # ───────────────────────────
+# Shutdown
+# ───────────────────────────
+@app.on_event("shutdown")
+async def shutdown():
+    from app.api.notifications.core.notification_system import shutdown_notification_system
+    
+    logger.info("Encerrando API...")
+    
+    # Encerra sistema de notificações
+    try:
+        await shutdown_notification_system()
+        logger.info("Sistema de notificações encerrado com sucesso.")
+    except Exception as e:
+        logger.error(f"Erro ao encerrar sistema de notificações: {e}")
+    
+    logger.info("API encerrada.")
+
+# ───────────────────────────
 # Rotas
 # ───────────────────────────
 

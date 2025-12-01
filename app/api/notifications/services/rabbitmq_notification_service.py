@@ -32,16 +32,25 @@ class RabbitMQNotificationService:
         """Inicializa o serviço com RabbitMQ"""
         try:
             self._rabbitmq_client = await get_rabbitmq_client()
-            self._running = True
-            logger.info("RabbitMQNotificationService inicializado")
+            if self._rabbitmq_client:
+                self._running = True
+                logger.info("RabbitMQNotificationService inicializado")
+            else:
+                logger.warning("RabbitMQNotificationService não inicializado - RabbitMQ não disponível")
+                self._running = False
         except Exception as e:
             logger.error(f"Erro ao inicializar RabbitMQNotificationService: {e}")
-            raise
+            self._running = False
+            # Não levanta exceção para não quebrar a aplicação
     
     async def start_consumers(self):
         """Inicia consumidores RabbitMQ para notificações"""
         if not self._running:
             await self.initialize()
+        
+        if not self._rabbitmq_client or not self._running:
+            logger.warning("RabbitMQ não disponível - consumidores não serão iniciados")
+            return
         
         try:
             # Inicia consumidores para cada canal
@@ -58,7 +67,7 @@ class RabbitMQNotificationService:
             
         except Exception as e:
             logger.error(f"Erro ao iniciar consumidores de notificações: {e}")
-            raise
+            # Não levanta exceção para não quebrar a aplicação
     
     async def _consume_notifications(self, channel: str):
         """Consome notificações de um canal específico"""
@@ -147,11 +156,15 @@ class RabbitMQNotificationService:
         recipient: str,
         priority: str = "normal",
         channel_metadata: Optional[Dict[str, Any]] = None
-    ) -> str:
+    ) -> Optional[str]:
         """Envia notificação via RabbitMQ"""
         try:
             if not self._rabbitmq_client:
                 await self.initialize()
+            
+            if not self._rabbitmq_client:
+                logger.warning("RabbitMQ não disponível - notificação não será enviada via RabbitMQ")
+                return None
             
             # Cria notificação no banco
             notification_data = {
@@ -198,7 +211,7 @@ class RabbitMQNotificationService:
                 
         except Exception as e:
             logger.error(f"Erro ao enviar notificação: {e}")
-            raise
+            return None
     
     async def send_bulk_notifications(
         self,
@@ -349,6 +362,9 @@ class RabbitMQNotificationService:
     
     async def retry_failed_notifications(self, limit: int = 50) -> int:
         """Tenta reenviar notificações que falharam"""
+        if not self._rabbitmq_client or not self._running:
+            return 0
+        
         try:
             failed_notifications = self.notification_repo.get_failed_notifications(limit=limit)
             retried_count = 0
@@ -396,11 +412,54 @@ class RabbitMQNotificationService:
             if not self._rabbitmq_client:
                 await self.initialize()
             
+            if not self._rabbitmq_client:
+                return {"connected": False, "error": "RabbitMQ não disponível"}
+            
             return self._rabbitmq_client.get_connection_info()
             
         except Exception as e:
             logger.error(f"Erro ao buscar estatísticas do RabbitMQ: {e}")
-            return {}
+            return {"connected": False, "error": str(e)}
+    
+    async def process_pending_notifications(self, limit: int = 50):
+        """Processa notificações pendentes"""
+        if not self._rabbitmq_client or not self._running:
+            return
+        
+        try:
+            pending_notifications = self.notification_repo.get_pending_notifications(limit)
+            
+            for notification in pending_notifications:
+                try:
+                    # Prepara dados para RabbitMQ
+                    rabbitmq_data = {
+                        "id": notification.id,
+                        "empresa_id": notification.empresa_id,
+                        "user_id": notification.user_id,
+                        "event_type": notification.event_type,
+                        "title": notification.title,
+                        "message": notification.message,
+                        "channel": notification.channel,
+                        "recipient": notification.recipient,
+                        "priority": notification.priority,
+                        "channel_metadata": notification.channel_metadata,
+                        "created_at": notification.created_at.isoformat()
+                    }
+                    
+                    # Publica no RabbitMQ
+                    success = await self._rabbitmq_client.publish_notification(
+                        channel=notification.channel,
+                        notification_data=rabbitmq_data
+                    )
+                    
+                    if success:
+                        logger.info(f"Notificação pendente {notification.id} publicada no RabbitMQ")
+                    
+                except Exception as e:
+                    logger.error(f"Erro ao processar notificação pendente {notification.id}: {e}")
+                    
+        except Exception as e:
+            logger.error(f"Erro ao processar notificações pendentes: {e}")
     
     async def stop(self):
         """Para o serviço"""

@@ -38,7 +38,7 @@ class NotificationSystem:
                 notification_repo, subscription_repo, event_repo
             )
             
-            # Inicializa o serviço RabbitMQ
+            # Inicializa o serviço RabbitMQ (pode falhar se RabbitMQ não estiver disponível)
             await self.notification_service.initialize()
             
             # Cria processador de eventos
@@ -58,8 +58,9 @@ class NotificationSystem:
             # Inicia o event bus
             await event_bus.start()
             
-            # Inicia consumidores RabbitMQ
-            asyncio.create_task(self.notification_service.start_consumers())
+            # Inicia consumidores RabbitMQ apenas se o serviço estiver rodando
+            if self.notification_service and self.notification_service._running:
+                asyncio.create_task(self.notification_service.start_consumers())
             
             # Inicia processamento de notificações pendentes
             asyncio.create_task(self._process_notifications_loop())
@@ -69,7 +70,8 @@ class NotificationSystem:
             
         except Exception as e:
             logger.error(f"Erro ao inicializar sistema de notificações: {e}")
-            raise
+            # Não levanta exceção para não quebrar a aplicação
+            self._running = False
     
     async def shutdown(self):
         """Para o sistema de notificações"""
