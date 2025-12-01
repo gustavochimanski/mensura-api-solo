@@ -9,6 +9,8 @@ class GoogleMapsAdapter:
     
     BASE_URL = "https://maps.googleapis.com/maps/api/geocode/json"
     DISTANCE_MATRIX_URL = "https://maps.googleapis.com/maps/api/distancematrix/json"
+    PLACES_AUTOCOMPLETE_URL = "https://maps.googleapis.com/maps/api/place/autocomplete/json"
+    PLACES_DETAILS_URL = "https://maps.googleapis.com/maps/api/place/details/json"
     
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key or settings.GOOGLE_MAPS_API_KEY
@@ -168,7 +170,7 @@ class GoogleMapsAdapter:
     
     def buscar_enderecos(self, texto: str, max_results: int = 5) -> List[Dict]:
         """
-        Busca endereços usando Google Maps Geocoding API.
+        Busca endereços usando Google Maps Places Autocomplete API.
         
         Args:
             texto: Texto para buscar (pode ser parcial)
@@ -183,14 +185,15 @@ class GoogleMapsAdapter:
             
         try:
             with httpx.Client(timeout=10.0) as client:
+                # Primeiro, usa Places Autocomplete para obter múltiplos resultados
                 response = client.get(
-                    self.BASE_URL,
+                    self.PLACES_AUTOCOMPLETE_URL,
                     params={
-                        "address": texto,
+                        "input": texto,
                         "key": self.api_key,
-                        "region": "br",  # Dá preferência ao Brasil
                         "components": "country:br",  # Restringe busca APENAS ao Brasil
-                        "language": "pt-BR"
+                        "language": "pt-BR",
+                        "types": "address"  # Restringe a endereços
                     }
                 )
             response.raise_for_status()
@@ -205,14 +208,14 @@ class GoogleMapsAdapter:
                 if "referer restrictions" in error_message.lower():
                     logger.error(
                         f"[GoogleMapsAdapter] Acesso negado pela API do Google Maps para '{texto}'. "
-                        f"PROBLEMA: A API key tem restrições de referer (domínio/URL), mas a Geocoding API não aceita esse tipo de restrição. "
+                        f"PROBLEMA: A API key tem restrições de referer (domínio/URL), mas a Places API não aceita esse tipo de restrição. "
                         f"SOLUÇÃO: No Google Cloud Console, altere as restrições da API key para 'Restrição de IP' ou remova as restrições. "
                         f"Erro completo: {error_message}"
                     )
                 else:
                     logger.error(
                         f"[GoogleMapsAdapter] Acesso negado pela API do Google Maps para '{texto}'. "
-                        f"Verifique se a API key está correta e se a Geocoding API está habilitada. "
+                        f"Verifique se a API key está correta e se a Places API está habilitada. "
                         f"Erro: {error_message}"
                     )
                 return []
@@ -230,17 +233,48 @@ class GoogleMapsAdapter:
             elif status_code == "ZERO_RESULTS":
                 logger.info(f"[GoogleMapsAdapter] Nenhum resultado encontrado para '{texto}'")
                 return []
-            elif status_code != "OK" or not data.get("results"):
+            elif status_code != "OK" or not data.get("predictions"):
                 logger.warning(
                     f"[GoogleMapsAdapter] Status inesperado para '{texto}': {status_code}. "
                     f"Mensagem: {data.get('error_message', 'N/A')}"
                 )
                 return []
             
+            # Obtém os place_ids dos resultados
+            predictions = data.get("predictions", [])[:max_results]
+            
+            if not predictions:
+                return []
+            
+            # Para cada prediction, busca os detalhes completos usando Places Details
             resultados = []
-            for result in data.get("results", [])[:max_results]:
-                endereco_info = self._extrair_endereco_formatado(result)
-                resultados.append(endereco_info)
+            with httpx.Client(timeout=10.0) as client:
+                for prediction in predictions:
+                    place_id = prediction.get("place_id")
+                    if not place_id:
+                        continue
+                    
+                    try:
+                        # Busca detalhes do lugar
+                        details_response = client.get(
+                            self.PLACES_DETAILS_URL,
+                            params={
+                                "place_id": place_id,
+                                "key": self.api_key,
+                                "language": "pt-BR",
+                                "fields": "address_components,formatted_address,geometry"
+                            }
+                        )
+                        details_response.raise_for_status()
+                        details_data = details_response.json()
+                        
+                        if details_data.get("status") == "OK" and details_data.get("result"):
+                            result = details_data.get("result")
+                            endereco_info = self._extrair_endereco_formatado(result)
+                            resultados.append(endereco_info)
+                    except Exception as e:
+                        logger.warning(f"[GoogleMapsAdapter] Erro ao buscar detalhes do place_id {place_id}: {e}")
+                        continue
             
             return resultados
         except httpx.HTTPStatusError as e:
