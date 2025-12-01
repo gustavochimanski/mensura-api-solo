@@ -107,15 +107,14 @@ class PrinterRepository:
             True se atualizado com sucesso, False caso contrário
         """
         try:
+            pedido_repo = PedidoRepository(self.db)
+            
             if tipo_pedido == TipoPedidoPrinterEnum.DELIVERY:
-                from app.api.pedidos.repositories.repo_pedidos import PedidoRepository
-
                 pedido = self.get_pedido_para_impressao(pedido_id)
                 if not pedido:
                     logger.warning(f"[PrinterRepository] Pedido delivery {pedido_id} não encontrado ou não está pendente de impressão")
                     return False
 
-                pedido_repo = PedidoRepository(self.db)
                 pedido_repo.atualizar_status_pedido(
                     pedido=pedido,
                     novo_status=PedidoStatusEnum.R.value,
@@ -126,7 +125,6 @@ class PrinterRepository:
                 return True
 
             if tipo_pedido == TipoPedidoPrinterEnum.MESA:
-                pedido_repo = PedidoRepository(self.db)
                 pedido = pedido_repo.get_pedido(pedido_id, TipoEntrega.MESA)
                 if not pedido:
                     logger.warning(f"[PrinterRepository] Pedido mesa {pedido_id} não encontrado")
