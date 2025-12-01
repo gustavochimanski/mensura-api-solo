@@ -26,6 +26,7 @@ from app.config.settings import CORS_ORIGINS, CORS_ALLOW_ALL, BASE_URL as SETTIN
 from app.api.auth import auth_controller
 from app.api.cardapio.router.router import api_cardapio
 from app.api.cadastros.router.router import api_cadastros
+from app.api.cadastros.router.admin.router_mesas import router as router_mesas
 from app.api.empresas.router.router import api_empresas
 from app.api.pedidos.router.router import api_pedidos
 from app.api.relatorios.router.router import router as relatorios_router
@@ -166,6 +167,7 @@ app.include_router(monitoring_router)  # Logs com autenticação
 app.include_router(auth_controller.router)
 app.include_router(api_cardapio)
 app.include_router(api_cadastros)
+app.include_router(router_mesas)  # Router de mesas em /api/mesas/admin/mesas
 app.include_router(api_empresas)
 app.include_router(api_pedidos)
 app.include_router(relatorios_router)
