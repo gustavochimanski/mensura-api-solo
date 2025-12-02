@@ -70,7 +70,6 @@ class PedidoRepository:
 
     def get_pedido(self, pedido_id: int, tipo_entrega: TipoEntrega | None = None) -> Optional[PedidoUnificadoModel]:
         """Busca um pedido por ID. Se tipo_entrega for fornecido, filtra por tipo."""
-        from app.api.pedidos.models.model_pedido_historico_unificado import PedidoHistoricoUnificadoModel
         query = (
             self.db.query(PedidoUnificadoModel)
             .options(
