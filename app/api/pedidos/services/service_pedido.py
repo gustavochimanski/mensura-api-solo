@@ -183,29 +183,52 @@ class PedidoService:
                 "Endereço é obrigatório para pedidos de delivery.",
             )
 
+        empresa_preferida = None
         if empresa_id:
-            empresa = self.repo_empresa.get_empresa_by_id(empresa_id)
-            if not empresa:
-                raise HTTPException(status.HTTP_404_NOT_FOUND, "Empresa não encontrada")
-            if not self.taxa_service.verificar_regioes_cadastradas(empresa.id):
-                raise HTTPException(
-                    status.HTTP_400_BAD_REQUEST,
-                    "Empresa selecionada não possui faixas de entrega cadastradas.",
+            empresa_preferida = self.repo_empresa.get_empresa_by_id(empresa_id)
+            if not empresa_preferida:
+                logger.warning(
+                    "[Pedidos] Empresa informada no payload (%s) não foi encontrada. " 
+                    "Será utilizada a empresa mais próxima.",
+                    empresa_id,
                 )
-            if not self._empresa_possui_produtos(empresa.id, itens):
-                raise HTTPException(
-                    status.HTTP_404_NOT_FOUND,
-                    "Alguns produtos não estão disponíveis na empresa selecionada.",
-                )
-            return empresa, None
+                empresa_preferida = None
+            else:
+                if not self.taxa_service.verificar_regioes_cadastradas(empresa_preferida.id):
+                    logger.warning(
+                        "[Pedidos] Empresa %s não possui faixas de entrega cadastradas. "
+                        "Ignorando empresa informada no payload.",
+                        empresa_preferida.id,
+                    )
+                    empresa_preferida = None
+                elif not self._empresa_possui_produtos(empresa_preferida.id, itens):
+                    logger.warning(
+                        "[Pedidos] Empresa %s não possui todos os produtos do pedido. "
+                        "Ignorando empresa informada no payload.",
+                        empresa_preferida.id,
+                    )
+                    empresa_preferida = None
 
-        empresa, distancia = self._selecionar_empresa_mais_proxima(endereco, itens)
-        if not empresa:
+        empresa_encontrada, distancia = self._selecionar_empresa_mais_proxima(endereco, itens)
+        if not empresa_encontrada:
+            if empresa_preferida:
+                # Mantém compatibilidade com comportamento anterior: se não foi possível
+                # determinar a mais próxima (ex.: falta de coordenadas), usa empresa válida
+                # informada no payload.
+                return empresa_preferida, None
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
                 "Nenhuma empresa disponível para os itens e endereço informados.",
             )
-        return empresa, distancia
+
+        if empresa_preferida and empresa_preferida.id != empresa_encontrada.id:
+            logger.info(
+                "[Pedidos] Empresa %s informada no payload substituída pela mais próxima %s.",
+                empresa_preferida.id,
+                empresa_encontrada.id,
+            )
+
+        return empresa_encontrada, distancia
 
     def _selecionar_empresa_mais_proxima(self, endereco, itens):
         # Busca todas as empresas sem limite para garantir que encontra a mais próxima
