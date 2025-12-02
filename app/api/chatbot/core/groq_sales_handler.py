@@ -28,13 +28,13 @@ AI_FUNCTIONS = [
         "type": "function",
         "function": {
             "name": "adicionar_produto",
-            "description": "Adiciona um produto ao carrinho do cliente. Use quando o cliente quer pedir/comprar algo. Exemplos: 'me ve uma coca', 'quero pizza', '2 hamburguers', 'manda um x-bacon'",
+            "description": "Adiciona um produto ao carrinho. Use APENAS quando o cliente CLARAMENTE quer pedir algo específico. Exemplos: 'me ve uma coca', 'quero 2 pizzas', 'manda um x-bacon', 'uma coca cola'",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "produto_busca": {
                         "type": "string",
-                        "description": "Nome ou parte do nome do produto que o cliente quer. Ex: 'coca', 'pizza calabresa', 'x-bacon', 'hamburguer'"
+                        "description": "Nome do produto que o cliente quer"
                     },
                     "quantidade": {
                         "type": "integer",
@@ -50,7 +50,7 @@ AI_FUNCTIONS = [
         "type": "function",
         "function": {
             "name": "finalizar_pedido",
-            "description": "Cliente quer finalizar/fechar o pedido. Use quando ele diz: 'só isso', 'pode fechar', 'é isso', 'não quero mais nada', 'finalizar', 'fechar pedido', 'pronto', 'acabou', etc.",
+            "description": "Cliente quer FINALIZAR/FECHAR o pedido. Use quando: 'só isso', 'pode fechar', 'é isso', 'não quero mais nada', 'finalizar', 'fechar pedido', 'pronto', 'acabou'",
             "parameters": {
                 "type": "object",
                 "properties": {},
@@ -62,7 +62,7 @@ AI_FUNCTIONS = [
         "type": "function",
         "function": {
             "name": "ver_cardapio",
-            "description": "Cliente quer ver o cardápio/menu/produtos disponíveis. Exemplos: 'o que tem?', 'quais produtos?', 'me mostra o cardápio', 'o que vocês vendem?'",
+            "description": "Cliente quer ver o CARDÁPIO COMPLETO. Use APENAS quando pedir explicitamente: 'mostra o cardápio', 'quero ver o menu', 'lista de produtos'. NÃO use para perguntas vagas como 'o que tem?'",
             "parameters": {
                 "type": "object",
                 "properties": {},
@@ -74,7 +74,7 @@ AI_FUNCTIONS = [
         "type": "function",
         "function": {
             "name": "ver_carrinho",
-            "description": "Cliente quer ver o que já pediu/carrinho atual. Exemplos: 'o que eu pedi?', 'ver meu pedido', 'quanto tá?', 'meu carrinho'",
+            "description": "Cliente quer ver o carrinho/pedido atual. Exemplos: 'o que eu pedi?', 'ver meu pedido', 'quanto tá?', 'meu carrinho', 'quanto deu?'",
             "parameters": {
                 "type": "object",
                 "properties": {},
@@ -86,7 +86,7 @@ AI_FUNCTIONS = [
         "type": "function",
         "function": {
             "name": "remover_produto",
-            "description": "Cliente quer remover/tirar um produto do carrinho. Exemplos: 'tira a coca', 'remove o hamburguer', 'não quero mais a pizza'",
+            "description": "Cliente quer REMOVER algo do carrinho. Exemplos: 'tira a coca', 'remove o hamburguer', 'não quero mais a pizza', 'cancela a bebida'",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -102,56 +102,98 @@ AI_FUNCTIONS = [
     {
         "type": "function",
         "function": {
-            "name": "responder_conversa",
-            "description": "Para qualquer outra conversa que não seja pedido de produto, finalização, ver cardápio ou carrinho. Exemplos: saudações, dúvidas gerais, perguntas sobre ingredientes, etc.",
+            "name": "informar_sobre_produto",
+            "description": "Cliente quer SABER MAIS sobre um produto específico. Exemplos: 'o que vem no x-bacon?', 'qual o tamanho da pizza?', 'tem lactose?', 'é picante?', 'o que tem na calabresa?'",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "resposta": {
+                    "produto_busca": {
                         "type": "string",
-                        "description": "Resposta amigável para o cliente"
+                        "description": "Nome do produto que o cliente quer saber mais"
+                    },
+                    "pergunta": {
+                        "type": "string",
+                        "description": "O que o cliente quer saber (ingredientes, tamanho, etc)"
                     }
                 },
-                "required": ["resposta"]
+                "required": ["produto_busca"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "conversar",
+            "description": "Para QUALQUER conversa casual, saudações, perguntas vagas ou quando não souber o que fazer. Exemplos: 'oi', 'eae', 'tudo bem?', 'o que eu quero?', 'não sei', 'hum', 'que que tem ai de bom?', 'me ajuda', 'sugestão'",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "tipo_conversa": {
+                        "type": "string",
+                        "enum": ["saudacao", "pergunta_vaga", "pedido_sugestao", "duvida_geral", "resposta_generica"],
+                        "description": "Tipo de conversa detectada"
+                    },
+                    "contexto": {
+                        "type": "string",
+                        "description": "Contexto adicional da conversa"
+                    }
+                },
+                "required": ["tipo_conversa"]
             }
         }
     }
 ]
 
-# Prompt para a IA interpretar intenções
-AI_INTERPRETER_PROMPT = """Você é um assistente de interpretação de pedidos para um restaurante/delivery.
+# Prompt para a IA interpretar intenções - VERSÃO CONVERSACIONAL
+AI_INTERPRETER_PROMPT = """Você é um atendente HUMANO de delivery via WhatsApp. Seja natural e simpático!
 
-Sua ÚNICA função é analisar a mensagem do cliente e decidir qual ação tomar.
+REGRA DE OURO: Na dúvida, use "conversar". É melhor conversar do que fazer ação errada!
 
-REGRAS IMPORTANTES:
-1. Se o cliente menciona QUALQUER produto (comida, bebida, etc), use "adicionar_produto"
-2. Se o cliente diz que não quer mais nada, só isso, pode fechar, etc = "finalizar_pedido"
-3. Se o cliente quer ver o cardápio/menu = "ver_cardapio"
-4. Se o cliente quer ver o que pediu = "ver_carrinho"
-5. Se o cliente quer tirar algo = "remover_produto"
-6. Para TODO o resto (saudações, dúvidas, etc) = "responder_conversa"
+=== QUANDO USAR CADA FUNÇÃO ===
 
-EXEMPLOS de adicionar_produto:
-- "me ve uma coca" → adicionar_produto(produto_busca="coca", quantidade=1)
-- "quero 2 pizzas de calabresa" → adicionar_produto(produto_busca="pizza calabresa", quantidade=2)
-- "manda um x-bacon" → adicionar_produto(produto_busca="x-bacon", quantidade=1)
-- "coca cola" → adicionar_produto(produto_busca="coca cola", quantidade=1)
-- "hamburguer" → adicionar_produto(produto_busca="hamburguer", quantidade=1)
+✅ adicionar_produto - APENAS quando cliente PEDE CLARAMENTE um produto:
+   - "me ve uma coca" → adicionar_produto(produto_busca="coca")
+   - "quero pizza calabresa" → adicionar_produto(produto_busca="pizza calabresa")
+   - "2 x-bacon" → adicionar_produto(produto_busca="x-bacon", quantidade=2)
 
-EXEMPLOS de finalizar_pedido:
-- "só isso" → finalizar_pedido()
-- "não quero mais nada" → finalizar_pedido()
-- "pode fechar" → finalizar_pedido()
-- "é isso" → finalizar_pedido()
-- "pronto" → finalizar_pedido()
+❌ NÃO use adicionar_produto para:
+   - "o que tem?" → use conversar
+   - "tem coca?" → use conversar (é pergunta, não pedido)
+   - "que que é isso?" → use conversar
 
-PRODUTOS DISPONÍVEIS NO CARDÁPIO:
+✅ conversar - Para TUDO que não for ação clara:
+   - Saudações: "oi", "eae", "opa", "tudo bem?" → conversar(tipo="saudacao")
+   - Perguntas vagas: "o que tem?", "que que é bom?" → conversar(tipo="pergunta_vaga")
+   - Pedido sugestão: "me indica algo", "o que você recomenda?" → conversar(tipo="pedido_sugestao")
+   - Dúvidas: "vocês entregam?", "até que horas?" → conversar(tipo="duvida_geral")
+   - Respostas sem sentido: "hum", "talvez", "não sei" → conversar(tipo="resposta_generica")
+
+✅ informar_sobre_produto - Quando quer SABER sobre produto (não pedir):
+   - "o que vem no x-bacon?" → informar_sobre_produto(produto_busca="x-bacon")
+   - "a pizza é grande?" → informar_sobre_produto(produto_busca="pizza")
+   - "tem lactose?" → informar_sobre_produto
+
+✅ ver_cardapio - APENAS quando pede EXPLICITAMENTE o cardápio:
+   - "mostra o cardápio" → ver_cardapio
+   - "quero ver o menu" → ver_cardapio
+   ❌ NÃO use para: "o que tem?", "tem o que ai?" (use conversar)
+
+✅ finalizar_pedido - Quando quer FECHAR o pedido:
+   - "só isso", "pode fechar", "é isso", "pronto", "não quero mais nada"
+
+✅ ver_carrinho - Quando quer ver O QUE JÁ PEDIU:
+   - "o que eu pedi?", "quanto tá?", "meu pedido"
+
+✅ remover_produto - Quando quer TIRAR algo do carrinho:
+   - "tira a coca", "remove a pizza", "não quero mais o hamburguer"
+
+=== PRODUTOS DISPONÍVEIS ===
 {produtos_lista}
 
-CARRINHO ATUAL DO CLIENTE:
+=== CARRINHO ATUAL ===
 {carrinho_atual}
 
-Analise a mensagem e chame a função apropriada."""
+Analise a mensagem e escolha a função correta. NA DÚVIDA, USE "conversar"!"""
 
 # Estados da conversa
 STATE_WELCOME = "welcome"
@@ -330,30 +372,35 @@ class GroqSalesHandler:
 
     def _gerar_mensagem_boas_vindas(self) -> str:
         """
-        Gera mensagem de boas-vindas com produtos do banco de dados
+        Gera mensagem de boas-vindas CURTA e NATURAL
         """
-        # Busca até 5 produtos para mostrar nas promoções
+        import random
+
+        # Busca alguns produtos para sugestão
         produtos = self._buscar_promocoes()
 
-        mensagem = """🎉 Olá! Bem-vindo ao nosso atendimento via WhatsApp!
+        # Mensagens variadas de boas-vindas
+        saudacoes = [
+            "E aí! 😊 Tudo bem?",
+            "Opa! Beleza?",
+            "Olá! Tudo certo?",
+            "E aí, tudo bem? 👋",
+        ]
 
-📱 *Formas de Pedido:*
-• Acesse nosso cardápio completo: """ + LINK_CARDAPIO + """
-• Ou continue aqui e eu te ajudo a fazer o pedido! 😊
+        saudacao = random.choice(saudacoes)
 
-"""
+        mensagem = f"{saudacao}\n\n"
+        mensagem += "Aqui é o atendimento do delivery!\n\n"
 
+        # Mostra apenas 2-3 sugestões rápidas
         if produtos:
-            mensagem += "🔥 *PROMOÇÕES DO DIA:*\n"
-            for i, p in enumerate(produtos[:5], 1):
-                mensagem += f"{i}. {p['nome']} - R$ {p['preco']:.2f}\n"
+            destaques = produtos[:3]
+            mensagem += "🔥 *Hoje tá saindo muito:*\n"
+            for p in destaques:
+                mensagem += f"• {p['nome']} - R$ {p['preco']:.2f}\n"
             mensagem += "\n"
 
-        mensagem += """💬 *Para pedir por aqui, é só me dizer:*
-• Qual produto você quer
-• Ou peça sugestões!
-
-Já sabe o que quer ou prefere uma sugestão? 😉"""
+        mensagem += "O que vai ser hoje? 😋"
 
         return mensagem
 
@@ -1597,6 +1644,145 @@ Qual vai ser?"""
         print("[SalvarPedido] AVISO: Método legado chamado. Use _salvar_pedido_via_checkout.")
         return None
 
+    # ========== RESPOSTAS CONVERSACIONAIS ==========
+
+    async def _gerar_resposta_conversacional(
+        self,
+        user_id: str,
+        mensagem: str,
+        tipo_conversa: str,
+        contexto: str,
+        produtos: List[Dict],
+        carrinho: List[Dict],
+        dados: Dict
+    ) -> str:
+        """
+        Gera resposta conversacional natural usando a IA.
+        É o coração do bot humanizado - conversa como pessoa real!
+        """
+        # Monta prompt conversacional
+        prompt_conversa = f"""Você é um atendente simpático de delivery via WhatsApp.
+Responda de forma NATURAL, CURTA (1-3 frases) e AMIGÁVEL. Use no máximo 1 emoji.
+
+CONTEXTO:
+- Tipo de conversa: {tipo_conversa}
+- Carrinho do cliente: {len(carrinho)} itens, R$ {sum(i['preco']*i.get('quantidade',1) for i in carrinho):.2f}
+- Histórico recente disponível
+
+REGRAS:
+1. NUNCA mostre o cardápio completo (a menos que peçam explicitamente "cardápio")
+2. Para "o que tem?", "tem o que?" → Responda algo como "Temos pizzas, lanches e bebidas! Quer uma sugestão ou prefere ver o cardápio?"
+3. Para saudações → Seja simpático e pergunte o que a pessoa quer
+4. Para perguntas vagas → Dê uma sugestão rápida de 1-2 produtos populares
+5. Para "não sei" → Ajude sugerindo algo
+6. NUNCA peça dados pessoais, cartão, CPF etc
+7. Seja BREVE - máximo 2-3 linhas
+
+PRODUTOS DISPONÍVEIS (para referência, NÃO liste todos):
+{', '.join([p['nome'] for p in produtos[:10]])}
+
+Mensagem do cliente: "{mensagem}"
+
+Responda de forma natural e curta:"""
+
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                payload = {
+                    "model": MODEL_NAME,
+                    "messages": [
+                        {"role": "system", "content": prompt_conversa},
+                        {"role": "user", "content": mensagem}
+                    ],
+                    "temperature": 0.8,  # Mais criatividade
+                    "max_tokens": 150,   # Respostas curtas
+                }
+
+                headers = {
+                    "Authorization": f"Bearer {GROQ_API_KEY}",
+                    "Content-Type": "application/json"
+                }
+
+                response = await client.post(GROQ_API_URL, json=payload, headers=headers)
+
+                if response.status_code == 200:
+                    result = response.json()
+                    resposta = result["choices"][0]["message"]["content"].strip()
+
+                    # Limpa respostas muito longas
+                    if len(resposta) > 300:
+                        resposta = resposta[:300] + "..."
+
+                    # Salva no histórico
+                    historico = dados.get('historico', [])
+                    historico.append({"role": "user", "content": mensagem})
+                    historico.append({"role": "assistant", "content": resposta})
+                    dados['historico'] = historico[-10:]
+                    self._salvar_estado_conversa(user_id, STATE_AGUARDANDO_PEDIDO, dados)
+
+                    return resposta
+
+        except Exception as e:
+            print(f"❌ Erro na conversa: {e}")
+
+        # Fallback para respostas padrão por tipo
+        fallbacks = {
+            "saudacao": "E aí! Tudo bem? 😊 O que vai ser hoje?",
+            "pergunta_vaga": "Temos várias opções! Quer uma pizza, lanche ou bebida?",
+            "pedido_sugestao": "Recomendo nosso X-Bacon, tá fazendo sucesso! Ou prefere pizza?",
+            "duvida_geral": "Como posso te ajudar?",
+            "resposta_generica": "Entendi! O que você gostaria de pedir?"
+        }
+        return fallbacks.get(tipo_conversa, "O que você gostaria de pedir?")
+
+    async def _gerar_resposta_sobre_produto(
+        self,
+        user_id: str,
+        produto: Dict,
+        pergunta: str,
+        dados: Dict
+    ) -> str:
+        """
+        Gera resposta sobre um produto específico.
+        Explica ingredientes, tamanho, etc.
+        """
+        prompt = f"""Você é um atendente de delivery. O cliente quer saber sobre:
+
+PRODUTO: {produto['nome']} - R$ {produto['preco']:.2f}
+
+PERGUNTA DO CLIENTE: {pergunta if pergunta else 'quer saber mais sobre o produto'}
+
+Responda de forma CURTA e ÚTIL (2-3 frases máximo).
+Se não souber detalhes específicos, dê uma resposta genérica positiva.
+Termine perguntando se quer pedir.
+
+Responda:"""
+
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                payload = {
+                    "model": MODEL_NAME,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0.7,
+                    "max_tokens": 100,
+                }
+
+                headers = {
+                    "Authorization": f"Bearer {GROQ_API_KEY}",
+                    "Content-Type": "application/json"
+                }
+
+                response = await client.post(GROQ_API_URL, json=payload, headers=headers)
+
+                if response.status_code == 200:
+                    result = response.json()
+                    return result["choices"][0]["message"]["content"].strip()
+
+        except Exception as e:
+            print(f"❌ Erro ao informar produto: {e}")
+
+        # Fallback
+        return f"{produto['nome']} é uma ótima escolha! Custa R$ {produto['preco']:.2f}. Quer adicionar ao pedido?"
+
     # ========== PROCESSAMENTO PRINCIPAL ==========
 
     async def processar_mensagem(self, user_id: str, mensagem: str) -> str:
@@ -1679,7 +1865,7 @@ Qual vai ser?"""
 
             # Chama a IA para interpretar a intenção do cliente
             intencao = await self._interpretar_intencao_ia(mensagem, todos_produtos, carrinho)
-            funcao = intencao.get("funcao", "responder_conversa")
+            funcao = intencao.get("funcao", "conversar")
             params = intencao.get("params", {})
 
             print(f"🎯 IA interpretou: {funcao} com params {params}")
@@ -1702,14 +1888,19 @@ Qual vai ser?"""
                     carrinho = dados.get('carrinho', [])
                     total = sum(item['preco'] * item.get('quantidade', 1) for item in carrinho)
 
-                    msg_resposta = f"✅ *{produto['nome']}* adicionado!\n"
-                    msg_resposta += f"Preço: R$ {produto['preco']:.2f}\n\n"
-                    msg_resposta += f"💰 Total: R$ {total:.2f}\n\n"
-                    msg_resposta += "Quer mais alguma coisa?\n"
-                    msg_resposta += "Ou digite *FECHAR* para finalizar 😊"
+                    # Respostas variadas e naturais
+                    respostas_confirmacao = [
+                        f"Anotado! {quantidade}x {produto['nome']} 👍\nMais alguma coisa?",
+                        f"Beleza! {produto['nome']} no carrinho! Quer mais algo?",
+                        f"Show! Adicionei {produto['nome']}. E aí, vai querer mais?",
+                        f"Pronto! {produto['nome']} anotado. Mais algum pedido?",
+                    ]
+                    import random
+                    msg_resposta = random.choice(respostas_confirmacao)
+                    msg_resposta += f"\n\n💰 Total até agora: R$ {total:.2f}"
                     return msg_resposta
                 else:
-                    return f"Desculpe, não encontrei '{produto_busca}' no cardápio 😅\n\nDigite *CARDÁPIO* para ver os produtos disponíveis!"
+                    return f"Hmm, não achei '{produto_busca}' aqui 🤔\n\nQuer que eu te mostre o que temos?"
 
             # REMOVER PRODUTO
             elif funcao == "remover_produto":
@@ -1722,14 +1913,12 @@ Qual vai ser?"""
 
                     carrinho = dados.get('carrinho', [])
                     if carrinho:
-                        msg_resposta = msg_remocao + "\n\n"
-                        msg_resposta += self._formatar_carrinho(carrinho)
-                        msg_resposta += "\n\nQuer mais alguma coisa? Ou digite *FECHAR* para finalizar 😊"
+                        total = sum(item['preco'] * item.get('quantidade', 1) for item in carrinho)
+                        return f"Ok, tirei! 👍\nTotal agora: R$ {total:.2f}\n\nMais alguma coisa?"
                     else:
-                        msg_resposta = msg_remocao + "\n\n🛒 Seu carrinho está vazio agora.\n\nO que você gostaria de pedir?"
-                    return msg_resposta
+                        return "Pronto, tirei! Seu carrinho tá vazio agora.\n\nO que vai querer?"
                 else:
-                    return f"Não encontrei '{produto_busca}' no seu carrinho 🤔"
+                    return f"Não achei '{produto_busca}' no seu pedido 🤔"
 
             # FINALIZAR PEDIDO
             elif funcao == "finalizar_pedido":
@@ -1737,7 +1926,7 @@ Qual vai ser?"""
                     print("🛒 Cliente quer finalizar, perguntando entrega ou retirada")
                     return self._perguntar_entrega_ou_retirada(user_id, dados)
                 else:
-                    return "Seu carrinho está vazio! 😊\n\nO que você gostaria de pedir?"
+                    return "Opa, seu carrinho tá vazio ainda! O que vai querer?"
 
             # VER CARDÁPIO
             elif funcao == "ver_cardapio":
@@ -1749,82 +1938,40 @@ Qual vai ser?"""
                 print("🛒 Cliente pediu para ver o carrinho")
                 if carrinho:
                     msg = self._formatar_carrinho(carrinho)
-                    msg += "\n\nQuer mais alguma coisa? Ou digite *FECHAR* para finalizar 😊"
+                    msg += "\n\nQuer mais algo ou posso fechar?"
                     return msg
                 else:
-                    return "🛒 Seu carrinho está vazio!\n\nO que você gostaria de pedir? 😊"
+                    return "Carrinho vazio ainda! O que vai ser hoje?"
 
-            # RESPONDER CONVERSA (fallback para IA conversacional)
-            elif funcao == "responder_conversa":
-                # Se a IA já gerou uma resposta, usa ela
-                resposta_ia = params.get("resposta", "")
-                if resposta_ia:
-                    print(f"💬 IA respondeu diretamente: {resposta_ia[:50]}...")
-                    return resposta_ia
+            # INFORMAR SOBRE PRODUTO
+            elif funcao == "informar_sobre_produto":
+                produto_busca = params.get("produto_busca", "")
+                pergunta = params.get("pergunta", "")
+                produto = self._buscar_produto_por_termo(produto_busca, todos_produtos)
 
-                # Senão, chama o fluxo normal de conversa
-                contexto_sistema, historico = self._montar_contexto(user_id, mensagem, estado, dados)
-                messages = [{"role": "system", "content": contexto_sistema}]
-                messages.extend(historico)
+                if produto:
+                    # Gera resposta contextual sobre o produto
+                    return await self._gerar_resposta_sobre_produto(user_id, produto, pergunta, dados)
+                else:
+                    return "Qual produto você quer saber mais? Me fala o nome!"
 
-                async with httpx.AsyncClient(timeout=30.0) as client:
-                    payload = {
-                        "model": MODEL_NAME,
-                        "messages": messages,
-                        "temperature": 0.7,
-                        "max_tokens": 300,
-                    }
+            # CONVERSAR (função principal para interação natural)
+            elif funcao == "conversar":
+                tipo_conversa = params.get("tipo_conversa", "resposta_generica")
+                contexto = params.get("contexto", "")
 
-                    headers = {
-                        "Authorization": f"Bearer {GROQ_API_KEY}",
-                        "Content-Type": "application/json"
-                    }
+                print(f"💬 Conversa tipo: {tipo_conversa}")
 
-                    print(f"🤖 Chamando Groq API para conversa...")
-                    response = await client.post(GROQ_API_URL, json=payload, headers=headers)
+                # Gera resposta conversacional natural
+                return await self._gerar_resposta_conversacional(
+                    user_id, mensagem, tipo_conversa, contexto, todos_produtos, carrinho, dados
+                )
 
-                    if response.status_code == 200:
-                        result = response.json()
-                        resposta = result["choices"][0]["message"]["content"]
-                        print(f"✅ Resposta do Groq: {resposta[:100]}...")
-
-                        # ========== VALIDAÇÃO DE SEGURANÇA ==========
-                        # Bloqueia respostas perigosas da IA
-                        resposta_lower = resposta.lower()
-
-                        # Frases perigosas que a IA NUNCA deveria dizer
-                        frases_bloqueadas = [
-                            'número do cartão', 'numero do cartao',
-                            'cvv', 'código de segurança', 'codigo de seguranca',
-                            'data de validade', 'validade do cartão',
-                            'seu pedido foi confirmado', 'pedido confirmado',
-                            'está a caminho', 'esta a caminho',
-                            'forneça o número', 'forneca o numero',
-                            'me passe os dados', 'dados do cartão', 'dados do cartao',
-                            'me informe seu cpf', 'qual seu cpf', 'preciso do cpf',
-                            'me informe seu rg', 'qual seu rg', 'preciso do rg',
-                            'dados pessoais', 'dados bancários', 'dados bancarios'
-                        ]
-
-                        for frase in frases_bloqueadas:
-                            if frase in resposta_lower:
-                                print(f"⚠️ BLOQUEADO: IA tentou dizer '{frase}'")
-                                resposta = "Opa! O que mais você gostaria de pedir? 😊\n\nMe fala o nome do produto ou peça *sugestões*!"
-                                break
-
-                        # Salva resposta no histórico
-                        historico = dados.get('historico', [])
-                        historico.append({"role": "assistant", "content": resposta})
-                        dados['historico'] = historico[-10:]  # Mantém últimas 10
-                        self._salvar_estado_conversa(user_id, estado, dados)
-
-                        return resposta.strip()
-                    else:
-                        print(f"❌ Erro no Groq: {response.status_code} - {response.text}")
-                        return "Opa, deu um probleminha aqui! Pode mandar de novo?"
-
-            # Fallback para qualquer função não reconhecida
-            return "Desculpe, não entendi. Pode repetir? 😊"
+            # Fallback - trata como conversa
+            else:
+                return await self._gerar_resposta_conversacional(
+                    user_id, mensagem, "resposta_generica", "", todos_produtos, carrinho, dados
+                )
 
         except httpx.TimeoutException:
             print("⏰ Timeout no Groq")
