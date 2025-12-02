@@ -47,17 +47,42 @@ class EmpresaService:
             for row in resultados
         ]
 
+    def _gerar_slug_unico(self, slug_base: str, empresa_id_excluir: int | None = None) -> str:
+        """
+        Gera um slug único verificando se já existe no banco.
+        Se existir, adiciona sufixo numérico (ex: campo-magro-2, campo-magro-3, etc.)
+        
+        Args:
+            slug_base: Slug base a ser verificado
+            empresa_id_excluir: ID da empresa a ser excluído da verificação (útil na atualização)
+        """
+        slug = slug_base
+        contador = 1
+        
+        while True:
+            empresa_existente = self.repo_emp.get_emp_by_slug(slug)
+            # Se não existe ou é a própria empresa sendo atualizada, pode usar
+            if not empresa_existente or (empresa_id_excluir and empresa_existente.id == empresa_id_excluir):
+                break
+            contador += 1
+            slug = f"{slug_base}-{contador}"
+        
+        return slug
+
     # Cria empresa
     def create_empresa(self, data: EmpresaCreate, logo: UploadFile | None = None):
         # Checa se CNPJ já existe
         if data.cnpj and self.repo_emp.get_emp_by_cnpj(data.cnpj):
             raise HTTPException(status_code=400, detail="Empresa já cadastrada (CNPJ)")
 
+        # Garante slug único
+        slug = self._gerar_slug_unico(data.slug)
+
         # Cria empresa
         empresa = EmpresaModel(
             nome=data.nome,
             cnpj=data.cnpj,
-            slug=data.slug,
+            slug=slug,
             cardapio_tema=data.cardapio_tema,
             aceita_pedido_automatico=bool(data.aceita_pedido_automatico),
             tempo_entrega_maximo=data.tempo_entrega_maximo,
@@ -106,14 +131,21 @@ class EmpresaService:
                     
         except IntegrityError as e:
             self.db.rollback()
+            error_str = str(e.orig)
             # verifica se é duplicidade de cardapio_link
-            if 'empresas_cardapio_link_key' in str(e.orig):
+            if 'empresas_cardapio_link_key' in error_str:
                 raise HTTPException(
                     status_code=400,
                     detail=f"Cardápio link '{data.cardapio_link}' já existe."
                 )
+            # verifica se é duplicidade de slug
+            if 'empresas_slug_key' in error_str or 'slug' in error_str.lower():
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Slug '{slug}' já existe. Tente novamente."
+                )
             # outros erros de integridade
-            raise HTTPException(status_code=400, detail=str(e.orig))
+            raise HTTPException(status_code=400, detail=f"Erro de integridade: {error_str}")
 
         return empresa
 
@@ -121,6 +153,13 @@ class EmpresaService:
     def update_empresa(self, id: int, data: EmpresaUpdate, logo: UploadFile | None = None):
         empresa = self.get_empresa(id)
         payload = data.model_dump(exclude_unset=True)
+
+        # Se slug está sendo atualizado, garante que seja único
+        if "slug" in payload and payload["slug"]:
+            novo_slug = payload["slug"]
+            # Se o slug mudou e já existe (em outra empresa), gera um único
+            if novo_slug != empresa.slug:
+                payload["slug"] = self._gerar_slug_unico(novo_slug, empresa_id_excluir=id)
 
         # Atualiza dados da empresa (exceto endereço e cardapio_link)
         update_data = {k: v for k, v in payload.items() if k != "cardapio_link"}
@@ -148,8 +187,26 @@ class EmpresaService:
             elif isinstance(cardapio, str):
                 empresa.cardapio_link = cardapio
 
-        self.db.commit()
-        self.db.refresh(empresa)
+        try:
+            self.db.commit()
+            self.db.refresh(empresa)
+        except IntegrityError as e:
+            self.db.rollback()
+            error_str = str(e.orig)
+            # verifica se é duplicidade de cardapio_link
+            if 'empresas_cardapio_link_key' in error_str:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Cardápio link '{payload.get('cardapio_link')}' já existe."
+                )
+            # verifica se é duplicidade de slug
+            if 'empresas_slug_key' in error_str or 'slug' in error_str.lower():
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Slug '{payload.get('slug')}' já existe. Tente novamente."
+                )
+            # outros erros de integridade
+            raise HTTPException(status_code=400, detail=f"Erro de integridade: {error_str}")
         
         # Verifica e configura bucket MinIO após edição
         if empresa.cnpj:
