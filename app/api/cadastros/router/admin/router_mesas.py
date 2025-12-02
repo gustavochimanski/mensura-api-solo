@@ -3,7 +3,6 @@ from fastapi import APIRouter, Depends, Query, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
-from app.api.cadastros.models.user_model import UserModel
 from app.api.cadastros.services.service_mesas import MesaService
 from app.api.cadastros.schemas.schema_mesa import (
     MesaResponse,
