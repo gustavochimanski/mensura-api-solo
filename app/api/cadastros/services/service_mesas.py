@@ -92,7 +92,7 @@ class MesaService:
             "label": mesa.label,
             "num_pessoas_atual": num_pessoas_atual,
             "empresa_id": mesa.empresa_id,
-            "pedidos_abertos": [pedido.model_dump() for pedido in pedidos_abertos] if pedidos_abertos else None,
+            "pedidos_abertos": [pedido.model_dump() for pedido in pedidos_abertos] if pedidos_abertos else [],
         }
 
     def listar_mesas(self, empresa_id: int) -> List[dict]:
