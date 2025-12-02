@@ -282,7 +282,7 @@ class PedidoResponseBuilder:
             meio_pagamento=MeioPagamentoResponse.model_validate(pedido.meio_pagamento) if pedido.meio_pagamento else None,
             cupom=CupomOut.model_validate(pedido.cupom) if pedido.cupom else None,
             transacao=TransacaoResponse.model_validate(pedido.transacao) if pedido.transacao else None,
-            historicos=[PedidoResponseBuilder.build_historico_response(h) for h in pedido.historicos] if pedido.historicos else [],
+            historicos=[PedidoResponseBuilder.build_historico_response(h) for h in pedido.historico] if pedido.historico else [],
             tipo_entrega=pedido.tipo_entrega if isinstance(pedido.tipo_entrega, TipoEntregaEnum)
                         else TipoEntregaEnum(pedido.tipo_entrega),
             origem=OrigemPedidoEnum(pedido.canal.value if hasattr(pedido.canal, 'value') else pedido.canal) if pedido.canal else OrigemPedidoEnum.WEB,

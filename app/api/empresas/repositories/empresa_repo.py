@@ -10,7 +10,7 @@ class EmpresaRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def list(self, skip: int = 0, limit: int = 100) -> List[EmpresaModel]:
+    def list(self, skip: int = 0, limit: Optional[int] = 100) -> List[EmpresaModel]:
         q = (
             self.db.query(EmpresaModel)
             .offset(skip)

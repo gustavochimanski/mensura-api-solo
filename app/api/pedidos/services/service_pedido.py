@@ -208,7 +208,8 @@ class PedidoService:
         return empresa, distancia
 
     def _selecionar_empresa_mais_proxima(self, endereco, itens):
-        empresas = self.repo_empresa.list()
+        # Busca todas as empresas sem limite para garantir que encontra a mais próxima
+        empresas = self.repo_empresa.list(skip=0, limit=None)
         if not empresas:
             return None, None
 
