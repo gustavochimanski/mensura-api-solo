@@ -79,3 +79,17 @@ htmlcov/
 *.sqlite
 *.sqlite3
 
+# Node.js / Next.js
+node_modules/
+.next/
+out/
+.turbo/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+package-lock.json
+
+# Next.js cache
+.next/cache/
+
