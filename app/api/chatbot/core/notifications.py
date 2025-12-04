@@ -1,0 +1,300 @@
+"""
+Módulo de notificações de pedidos
+Integra com cardápio, mesas e balcão para enviar notificações aos clientes
+Suporta envio via WhatsApp Business API (Meta) e chat interno
+"""
+from typing import Dict, Optional
+from datetime import datetime
+from sqlalchemy.orm import Session
+import httpx
+import asyncio
+
+
+class OrderNotification:
+    """Gerenciador de notificações de pedidos"""
+
+    @staticmethod
+    async def send_whatsapp_message(phone: str, message: str) -> Dict:
+        """
+        Envia mensagem via WhatsApp Business API (Meta)
+
+        Args:
+            phone: Número de telefone (formato: 5511999999999)
+            message: Texto da mensagem
+
+        Returns:
+            Dict com resultado do envio
+        """
+        try:
+            from .config_whatsapp import WHATSAPP_CONFIG, get_whatsapp_url, get_headers, format_phone_number
+
+            # Formata o número para o padrão WhatsApp
+            phone_formatted = format_phone_number(phone)
+
+            # URL da API
+            url = get_whatsapp_url()
+
+            # Headers com token de autorização
+            headers = get_headers()
+
+            # Payload da mensagem
+            payload = {
+                "messaging_product": "whatsapp",
+                "to": phone_formatted,
+                "type": "text",
+                "text": {
+                    "preview_url": False,
+                    "body": message
+                }
+            }
+
+            # Envia a mensagem
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(url, json=payload, headers=headers)
+
+                if response.status_code == 200:
+                    result = response.json()
+                    return {
+                        "success": True,
+                        "provider": "WhatsApp Business API (Meta)",
+                        "phone": phone_formatted,
+                        "message_id": result.get("messages", [{}])[0].get("id"),
+                        "status": "sent",
+                        "response": result
+                    }
+                else:
+                    error_data = response.json() if response.text else {}
+                    return {
+                        "success": False,
+                        "provider": "WhatsApp Business API (Meta)",
+                        "error": error_data.get("error", {}).get("message", response.text),
+                        "status_code": response.status_code,
+                        "phone": phone_formatted
+                    }
+
+        except Exception as e:
+            return {
+                "success": False,
+                "provider": "WhatsApp Business API (Meta)",
+                "error": str(e),
+                "phone": phone
+            }
+
+    @staticmethod
+    def format_cardapio_notification(order_data: Dict) -> str:
+        """Formata notificação de pedido delivery/cardápio"""
+        message = f"""🍕 *Pedido Confirmado - Delivery*
+
+Olá *{order_data['client_name']}*! 👋
+
+Seu pedido #{order_data['order_id']} foi confirmado com sucesso!
+
+📦 *Itens do Pedido:*
+{order_data['items']}
+
+💰 *Total:* {order_data['total']}
+
+📍 *Endereço de Entrega:*
+{order_data['address']}
+
+⏱️ *Tempo Estimado:* {order_data['estimated_time']}
+
+Aguarde, em breve seu pedido estará a caminho! 🚚
+
+_Qualquer dúvida, entre em contato conosco._"""
+
+        return message
+
+    @staticmethod
+    def format_mesa_notification(order_data: Dict) -> str:
+        """Formata notificação de pedido de mesa"""
+        message = f"""🍽️ *Pedido Confirmado - Mesa {order_data['table_number']}*
+
+Olá *{order_data['client_name']}*! 👋
+
+Seu pedido #{order_data['order_id']} foi confirmado!
+
+📦 *Itens do Pedido:*
+{order_data['items']}
+
+💰 *Total:* {order_data['total']}
+
+🪑 *Mesa:* {order_data['table_number']}
+
+Seu pedido já está sendo preparado! Em breve será servido. 👨‍🍳
+
+_Bom apetite!_"""
+
+        return message
+
+    @staticmethod
+    def format_balcao_notification(order_data: Dict) -> str:
+        """Formata notificação de pedido de balcão"""
+        message = f"""🏪 *Pedido Confirmado - Balcão*
+
+Olá *{order_data['client_name']}*! 👋
+
+Seu pedido #{order_data['order_id']} foi confirmado!
+
+📦 *Itens do Pedido:*
+{order_data['items']}
+
+💰 *Total:* {order_data['total']}
+
+⏱️ *Tempo de Preparo:* {order_data['preparation_time']}
+
+Aguarde na fila do balcão. Avisaremos quando estiver pronto! 🔔
+
+_Obrigado pela preferência!_"""
+
+        return message
+
+    @staticmethod
+    def send_notification(db: Session, phone: str, message: str, order_type: str) -> Dict:
+        """
+        Envia notificação como mensagem no chat
+
+        O número de telefone do cliente vira o user_id no chat
+        A IA envia automaticamente a mensagem de confirmação
+        """
+        from . import database as chatbot_db
+
+        try:
+            # Use o telefone como user_id
+            user_id = phone
+            session_id = f"order_{order_type}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+
+            # Cria ou busca conversa existente para esse usuário
+            conversations = chatbot_db.get_conversations_by_user(db, user_id)
+
+            if conversations:
+                # Usa a conversa mais recente
+                conversation_id = conversations[0]['id']
+            else:
+                # Cria nova conversa
+                conversation_id = chatbot_db.create_conversation(
+                    db=db,
+                    session_id=session_id,
+                    user_id=user_id,
+                    prompt_key="default",
+                    model="notification-system"
+                )
+
+            # Adiciona a mensagem de notificação como resposta da IA
+            chatbot_db.create_message(
+                db=db,
+                conversation_id=conversation_id,
+                role="assistant",
+                content=message
+            )
+
+            notification_log = {
+                "success": True,
+                "phone": phone,
+                "user_id": user_id,
+                "conversation_id": conversation_id,
+                "message": message,
+                "order_type": order_type,
+                "sent_at": datetime.now().isoformat(),
+                "provider": "Chat Interno",
+                "status": "delivered"
+            }
+
+            return notification_log
+
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e),
+                "phone": phone
+            }
+
+    @classmethod
+    async def notify_order_confirmed_async(cls, db: Session, order_data: Dict, order_type: str) -> Dict:
+        """
+        Processa e envia notificação de pedido confirmado (versão async)
+
+        Args:
+            db: Sessão do banco de dados
+            order_data: Dados do pedido
+            order_type: Tipo do pedido (cardapio, mesa, balcao)
+
+        Returns:
+            Dict com resultado do envio
+        """
+        from .config_whatsapp import WHATSAPP_CONFIG
+
+        # Formata mensagem baseada no tipo de pedido
+        if order_type == "cardapio":
+            message = cls.format_cardapio_notification(order_data)
+        elif order_type == "mesa":
+            message = cls.format_mesa_notification(order_data)
+        elif order_type == "balcao":
+            message = cls.format_balcao_notification(order_data)
+        else:
+            return {
+                "success": False,
+                "error": "Tipo de pedido inválido"
+            }
+
+        # Valida telefone
+        phone = order_data.get('client_phone')
+        if not phone:
+            return {
+                "success": False,
+                "error": "Telefone do cliente não fornecido"
+            }
+
+        results = {
+            "whatsapp_api": None,
+            "chat_interno": None,
+            "success": False
+        }
+
+        # Sempre salva no chat interno (para histórico)
+        chat_result = cls.send_notification(db, phone, message, order_type)
+        results["chat_interno"] = chat_result
+
+        # Se modo API estiver ativado, envia via WhatsApp também
+        if WHATSAPP_CONFIG.get("send_mode") == "api":
+            whatsapp_result = await cls.send_whatsapp_message(phone, message)
+            results["whatsapp_api"] = whatsapp_result
+
+            # Considera sucesso se WhatsApp API funcionou
+            if whatsapp_result.get("success"):
+                results["success"] = True
+                results["provider"] = "WhatsApp API + Chat Interno"
+                results["message"] = "Notificação enviada via WhatsApp e salva no chat"
+            else:
+                results["success"] = False
+                results["error"] = whatsapp_result.get("error")
+                results["message"] = "Erro ao enviar via WhatsApp, mas salvo no chat"
+        else:
+            # Modo chat interno apenas
+            results["success"] = chat_result.get("success", False)
+            results["provider"] = "Chat Interno"
+            results["message"] = "Notificação salva no chat interno"
+
+        return results
+
+    @classmethod
+    def notify_order_confirmed(cls, db: Session, order_data: Dict, order_type: str) -> Dict:
+        """
+        Processa e envia notificação de pedido confirmado (versão síncrona)
+
+        Args:
+            db: Sessão do banco de dados
+            order_data: Dados do pedido
+            order_type: Tipo do pedido (cardapio, mesa, balcao)
+
+        Returns:
+            Dict com resultado do envio
+        """
+        # Executa a versão async de forma síncrona
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+        return loop.run_until_complete(cls.notify_order_confirmed_async(db, order_data, order_type))
