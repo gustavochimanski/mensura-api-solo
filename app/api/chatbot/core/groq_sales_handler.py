@@ -2,6 +2,7 @@
 Handler de vendas integrado com Groq API (LLaMA 3.1 rápido e gratuito)
 Inclui fluxo de endereços com Google Maps e endereços salvos
 """
+import os
 import httpx
 import json
 import re
@@ -13,8 +14,7 @@ from datetime import datetime
 from .sales_prompts import SALES_SYSTEM_PROMPT
 from .address_service import ChatbotAddressService
 
-# Configuração do Groq
-import os
+# Configuração do Groq - API Key deve ser configurada via variável de ambiente
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 MODEL_NAME = "llama-3.1-8b-instant"  # Modelo rápido do Groq
@@ -256,7 +256,7 @@ class GroqSalesHandler:
                         {"role": "user", "content": mensagem}
                     ],
                     "tools": AI_FUNCTIONS,
-                    "tool_choice": "required",  # Força a IA a chamar uma função
+                    "tool_choice": "auto",  # IA decide se precisa chamar função
                     "temperature": 0.1,  # Baixa temperatura para mais precisão
                     "max_tokens": 200,
                 }
@@ -288,18 +288,19 @@ class GroqSalesHandler:
                         print(f"🎯 IA decidiu: {funcao}({params})")
                         return {"funcao": funcao, "params": params}
 
-                    # Se não tem tool_calls, tenta extrair do content
+                    # Se não tem tool_calls, trata como conversa
                     content = message.get("content", "")
-                    print(f"⚠️ IA não chamou função, resposta: {content[:100]}")
-                    return {"funcao": "responder_conversa", "params": {"resposta": content}}
+                    print(f"⚠️ IA não chamou função, tratando como conversa")
+                    return {"funcao": "conversar", "params": {"tipo_conversa": "resposta_generica", "contexto": content}}
 
                 else:
                     print(f"❌ Erro na API Groq: {response.status_code}")
-                    return {"funcao": "responder_conversa", "params": {"resposta": "Desculpe, não entendi. Pode repetir?"}}
+                    # Ainda assim tenta conversar
+                    return {"funcao": "conversar", "params": {"tipo_conversa": "resposta_generica"}}
 
         except Exception as e:
             print(f"❌ Erro ao interpretar intenção: {e}")
-            return {"funcao": "responder_conversa", "params": {"resposta": "Ops, tive um probleminha. Pode repetir?"}}
+            return {"funcao": "conversar", "params": {"tipo_conversa": "resposta_generica"}}
 
     def _buscar_produto_por_termo(self, termo: str, produtos: List[Dict]) -> Optional[Dict]:
         """

@@ -22,18 +22,38 @@ from app.config.settings import CORS_ORIGINS, CORS_ALLOW_ALL, BASE_URL as SETTIN
 # Garante que todos os modelos estejam registrados no SQLAlchemy
 # antes de qualquer query ser executada
 # ───────────────────────────
+from app.api.financeiro.models.model_caixa_conferencia import CaixaConferenciaModel  # noqa: F401
+from app.api.caixas.models.model_caixa import CaixaModel  # noqa: F401
+from app.api.balcao.models.model_pedido_balcao import PedidoBalcaoModel  # noqa: F401
+from app.api.balcao.models.model_pedido_balcao_item import PedidoBalcaoItemModel  # noqa: F401
+from app.api.balcao.models.model_pedido_balcao_historico import PedidoBalcaoHistoricoModel  # noqa: F401
+# Importar modelos do cardápio para garantir registro no SQLAlchemy
+from app.api.cardapio.models.model_pedido_dv import PedidoDeliveryModel  # noqa: F401
+# Importar modelos do bounded context de pedidos unificados
+from app.api.pedidos.models.model_pedido import PedidoModel  # noqa: F401
+from app.api.pedidos.models.model_pedido_item import PedidoUnificadoItemModel  # noqa: F401
+from app.api.pedidos.models.model_pedido_historico import PedidoHistoricoModel  # noqa: F401
+from app.api.cardapio.models.model_pedido_item_dv import PedidoItemModel  # noqa: F401
+from app.api.cardapio.models.model_pedido_status_historico_dv import PedidoStatusHistoricoModel  # noqa: F401
+from app.api.cardapio.models.model_transacao_pagamento_dv import TransacaoPagamentoModel  # noqa: F401
+# Importar modelos do catálogo para garantir registro no SQLAlchemy
+from app.api.catalogo.models.model_produto import ProdutoModel  # noqa: F401
+from app.api.catalogo.models.model_receita import ReceitaModel, ReceitaIngredienteModel, ReceitaAdicionalModel  # noqa: F401
+from app.api.catalogo.receitas.models.model_ingrediente import IngredienteModel  # noqa: F401
 
 from app.api.auth import auth_controller
 from app.api.cardapio.router.router import api_cardapio
 from app.api.cadastros.router.router import api_cadastros
-from app.api.cadastros.router.admin.router_mesas import router as router_mesas
 from app.api.empresas.router.router import api_empresas
+from app.api.mesas.router.router import api_mesas
+from app.api.balcao.router.router import api_balcao
 from app.api.pedidos.router.router import api_pedidos
 from app.api.relatorios.router.router import router as relatorios_router
 from app.api.notifications.router.router import router as notifications_router
 from app.api.caixas.router.router import router as caixa_router
 from app.api.localizacao.router.router_localizacao import router as localizacao_router
 from app.api.catalogo.router.router import router as catalogo_router
+from app.api.chatbot.router.router import router as chatbot_router
 
 
 # ───────────────────────────
@@ -100,7 +120,14 @@ app.add_middleware(
 # ───────────────────────────
 # Arquivos estáticos
 # ───────────────────────────
+STATIC_DIR = BASE_DIR / "static"
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")
 app.mount("/img", StaticFiles(directory=str(STATIC_IMG_DIR)), name="img")
+
+# Frontend do Chatbot (Unitec-Supervisor)
+CHATBOT_FRONTEND_DIR = BASE_DIR / "static" / "chatbot"
+if CHATBOT_FRONTEND_DIR.exists():
+    logger.info(f"✅ Frontend do chatbot (Unitec-Supervisor) disponível em /static/chatbot/")
 
 # ───────────────────────────
 # Startup
@@ -110,10 +137,11 @@ async def startup():
     from app.database.init_db import inicializar_banco
     from app.database.db_connection import get_db
     from app.api.notifications.core.notification_system import initialize_notification_system
-    
+    from app.api.chatbot.core import database as chatbot_db
+
     logger.info("Iniciando API e banco de dados...")
     inicializar_banco()
-    
+
     # Inicializa sistema de notificações
     try:
         db = next(get_db())
@@ -121,7 +149,20 @@ async def startup():
         logger.info("Sistema de notificações inicializado com sucesso.")
     except Exception as e:
         logger.error(f"Erro ao inicializar sistema de notificações: {e}")
-    
+
+    # Inicializa banco de dados do chatbot
+    try:
+        db = next(get_db())
+        chatbot_db.init_database(db)
+        chatbot_db.seed_default_prompts(db)
+        logger.info("Sistema de chatbot inicializado com sucesso.")
+    except Exception as e:
+        logger.error(f"Erro ao inicializar sistema de chatbot: {e}")
+
+    # WhatsApp webhook usando dominio proprio (sem ngrok)
+    # URL do webhook: https://seu-dominio.com/api/chatbot/webhook
+    logger.info("WhatsApp webhook disponivel via dominio proprio.")
+
     logger.info("API iniciada com sucesso.")
 
 # ───────────────────────────
@@ -129,17 +170,7 @@ async def startup():
 # ───────────────────────────
 @app.on_event("shutdown")
 async def shutdown():
-    from app.api.notifications.core.notification_system import shutdown_notification_system
-    
-    logger.info("Encerrando API...")
-    
-    # Encerra sistema de notificações
-    try:
-        await shutdown_notification_system()
-        logger.info("Sistema de notificações encerrado com sucesso.")
-    except Exception as e:
-        logger.error(f"Erro ao encerrar sistema de notificações: {e}")
-    
+    """Para serviços ao encerrar a aplicação"""
     logger.info("API encerrada.")
 
 # ───────────────────────────
@@ -167,14 +198,16 @@ app.include_router(monitoring_router)  # Logs com autenticação
 app.include_router(auth_controller.router)
 app.include_router(api_cardapio)
 app.include_router(api_cadastros)
-app.include_router(router_mesas)  # Router de mesas em /api/mesas/admin/mesas
 app.include_router(api_empresas)
+app.include_router(api_mesas)
+app.include_router(api_balcao)
 app.include_router(api_pedidos)
 app.include_router(relatorios_router)
 app.include_router(notifications_router)
 app.include_router(caixa_router)
 app.include_router(localizacao_router)
 app.include_router(catalogo_router)
+app.include_router(chatbot_router)
 
 # ───────────────────────────
 # OpenAPI: Segurança Bearer/JWT no Swagger
