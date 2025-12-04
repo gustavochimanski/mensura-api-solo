@@ -34,6 +34,7 @@ from app.api.notifications.router.router import router as notifications_router
 from app.api.caixas.router.router import router as caixa_router
 from app.api.localizacao.router.router_localizacao import router as localizacao_router
 from app.api.catalogo.router.router import router as catalogo_router
+from app.api.chatbot.router.router import router as chatbot_router
 
 
 # ───────────────────────────
@@ -110,10 +111,11 @@ async def startup():
     from app.database.init_db import inicializar_banco
     from app.database.db_connection import get_db
     from app.api.notifications.core.notification_system import initialize_notification_system
-    
+    from app.api.chatbot.core import database as chatbot_db
+
     logger.info("Iniciando API e banco de dados...")
     inicializar_banco()
-    
+
     # Inicializa sistema de notificações
     try:
         db = next(get_db())
@@ -121,7 +123,16 @@ async def startup():
         logger.info("Sistema de notificações inicializado com sucesso.")
     except Exception as e:
         logger.error(f"Erro ao inicializar sistema de notificações: {e}")
-    
+
+    # Inicializa banco de dados do chatbot
+    try:
+        db = next(get_db())
+        chatbot_db.init_database(db)
+        chatbot_db.seed_default_prompts(db)
+        logger.info("Sistema de chatbot inicializado com sucesso.")
+    except Exception as e:
+        logger.error(f"Erro ao inicializar sistema de chatbot: {e}")
+
     logger.info("API iniciada com sucesso.")
 
 # ───────────────────────────
@@ -175,6 +186,7 @@ app.include_router(notifications_router)
 app.include_router(caixa_router)
 app.include_router(localizacao_router)
 app.include_router(catalogo_router)
+app.include_router(chatbot_router)
 
 # ───────────────────────────
 # OpenAPI: Segurança Bearer/JWT no Swagger
