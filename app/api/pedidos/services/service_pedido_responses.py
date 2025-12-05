@@ -82,6 +82,7 @@ class PedidoResponseBuilder:
             transacao=TransacaoResponse.model_validate(pedido.transacao) if pedido.transacao else None,
             pagamento=pagamento,
             acertado_entregador=getattr(pedido, "acertado_entregador", None),
+            pago=getattr(pedido, "pago", False),
             produtos=PedidoResponseBuilder._build_produtos(pedido),
         )
 
@@ -129,6 +130,7 @@ class PedidoResponseBuilder:
                 for it in pedido.itens
             ],
             pagamento=pagamento,
+            pago=getattr(pedido, "pago", False),
             produtos=PedidoResponseBuilder._build_produtos(pedido),
         )
 
@@ -176,6 +178,7 @@ class PedidoResponseBuilder:
                 for it in pedido.itens
             ],
             pagamento=pagamento,
+            pago=getattr(pedido, "pago", False),
             produtos=PedidoResponseBuilder._build_produtos(pedido),
         )
 

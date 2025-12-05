@@ -1045,6 +1045,15 @@ class PedidoService:
         if not pedido:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado")
 
+        # Impede setar status E (Entregue) para pedidos de delivery
+        # Delivery deve usar o endpoint fechar-conta para marcar como pago
+        if novo_status == PedidoStatusEnum.E:
+            if pedido.is_delivery() or pedido.is_retirada():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Não é possível setar status 'Entregue' para pedidos de delivery/retirada. Use o endpoint 'fechar-conta' para marcar o pedido como pago."
+                )
+
         observacoes = None
         if novo_status == PedidoStatusEnum.E:
             obs_parts = []

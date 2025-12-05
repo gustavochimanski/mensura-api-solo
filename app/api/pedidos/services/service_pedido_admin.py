@@ -362,10 +362,47 @@ class PedidoAdminService:
         if tipo == TipoEntregaEnum.BALCAO:
             balcao_payload = FecharContaBalcaoRequest(**(payload.model_dump() if payload else {})) if payload else None
             return self.balcao_service.fechar_conta(pedido_id, balcao_payload)
+        # Delivery e Retirada: marca como pago sem mudar status
+        if tipo in {TipoEntregaEnum.DELIVERY, TipoEntregaEnum.RETIRADA}:
+            return self._fechar_conta_delivery(pedido_id, payload)
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            "Fechamento de conta é suportado apenas para pedidos de mesa ou balcão.",
+            "Fechamento de conta não suportado para este tipo de pedido.",
         )
+    
+    def _fechar_conta_delivery(self, pedido_id: int, payload: PedidoFecharContaRequest | None) -> PedidoResponseCompleto:
+        """Fecha conta de pedido delivery/retirada marcando como pago."""
+        pedido = self.repo.get_pedido(pedido_id)
+        if not pedido:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
+        
+        # Valida meio de pagamento se fornecido
+        if payload and payload.meio_pagamento_id:
+            from app.api.cadastros.services.service_meio_pagamento import MeioPagamentoService
+            meio_pagamento = MeioPagamentoService(self.db).get(payload.meio_pagamento_id)
+            if not meio_pagamento or not meio_pagamento.ativo:
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, "Meio de pagamento inválido ou inativo")
+            pedido.meio_pagamento_id = payload.meio_pagamento_id
+        
+        # Atualiza troco se fornecido
+        if payload and payload.troco_para is not None:
+            pedido.troco_para = payload.troco_para
+        
+        # Marca como pago
+        pedido.pago = True
+        
+        # Registra no histórico
+        self.repo.atualizar_status_pedido(
+            pedido=pedido,
+            novo_status=pedido.status,  # Mantém o status atual
+            observacoes=f"Conta fechada. Meio de pagamento: {pedido.meio_pagamento.nome if pedido.meio_pagamento else 'N/A'}",
+            criado_por_id=None,
+        )
+        
+        self.db.commit()
+        self.db.refresh(pedido)
+        
+        return self.pedido_service.response_builder.pedido_to_response_completo(pedido)
 
     def reabrir(self, pedido_id: int):
         pedido = self._get_pedido(pedido_id)
