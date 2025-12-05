@@ -391,11 +391,17 @@ class PedidoAdminService:
         # Marca como pago
         pedido.pago = True
         
-        # Registra no histórico
-        self.repo.atualizar_status_pedido(
-            pedido=pedido,
-            novo_status=pedido.status,  # Mantém o status atual
-            observacoes=f"Conta fechada. Meio de pagamento: {pedido.meio_pagamento.nome if pedido.meio_pagamento else 'N/A'}",
+        # Registra no histórico sem alterar status
+        meio_pagamento_nome = pedido.meio_pagamento.nome if pedido.meio_pagamento else "N/A"
+        observacoes = f"Conta fechada. Meio de pagamento: {meio_pagamento_nome}"
+        if payload and payload.troco_para is not None:
+            observacoes += f". Troco para: R$ {payload.troco_para:.2f}"
+        
+        self.repo.add_status_historico(
+            pedido.id,
+            pedido.status,  # Mantém o status atual
+            motivo="Conta fechada",
+            observacoes=observacoes,
             criado_por_id=None,
         )
         
