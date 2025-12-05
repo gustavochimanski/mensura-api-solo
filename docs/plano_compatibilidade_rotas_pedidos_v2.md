@@ -35,21 +35,23 @@ Garantir a convivência controlada entre as rotas legadas de pedidos e a nova AP
 
 ## 5. Rollout Proposto
 
-1. **Fase 0 (dev/staging):** habilitar flag v2 apenas para QA/backend.
-2. **Fase 1 (beta controlado):** liberar para um conjunto pequeno de empresas com suporte próximo.
-3. **Fase 2 (default on):** ativar flag por padrão; rotas legadas ainda disponíveis, mas com log depreciação.
-4. **Fase 3 (sunset):** bloquear criação de novos pedidos via rotas legadas, mantendo apenas leitura. Comunicar data de desligamento.
-5. **Fase 4 (remoção):** retirar rotas legadas e a camada de compatibilidade.
+| Fase | Ambiente/escopo | Ações principais | Critérios de avanço |
+| --- | --- | --- | --- |
+| 0 – Dev/Staging | Squad backend + QA | Habilitar `PEDIDOS_V2_ENABLED=True` apenas nestes ambientes. Validar rotas v2 com suite automatizada e smoke manual. | Testes de regressão verdes, documentação revisada. |
+| 1 – Pilot | 3-5 empresas piloto | Ativar flag por empresa (feature flag/tenant). Monitorar logs de depreciação, erros 5xx, tempo de resposta. | Nenhum incidente crítico por 1 semana; feedback positivo dos pilotos. |
+| 2 – Default ON | Todas as empresas | Habilitar v2 por padrão, manter rotas legadas acessíveis com headers de depreciação. Disponibilizar canal de suporte. | Uso das rotas legadas < 20% das requisições totais por 2 semanas. |
+| 3 – Sunset | Todas as empresas | Bloquear mutações nas rotas legadas (responder 410 ou redirecionar). Somente leitura permitida para consultas históricas. | Nenhuma requisição crítica nas rotas bloqueadas por 1 semana. |
+| 4 – Remoção | Todas as empresas | Remover camada de compatibilidade, código e documentação legado. Atualizar SDKs internos e avisar parceiros. | Aprovação de produto/CS; métricas alinhadas. |
 
 ## 6. Tarefas Técnicas
 
 - [x] Criar `PedidoAdminService` centralizando operações.
 - [x] Implementar router v2 com endpoints definidos em `docs/API_PEDIDOS_UNIFICADOS_ADMIN.md`.
-- [ ] Ajustar rotas legadas para usar `PedidoAdminService`.
+- [x] Ajustar rotas legadas para usar `PedidoAdminService`.
 - [x] Adicionar middleware/utility para logs e verificação de flag (`PEDIDOS_V2_ENABLED`).
 - [ ] Configurar métricas e alertas (observability).
 - [ ] Atualizar testes existentes e criar novos cenários para o fluxo v2.
-- [ ] Documentar guia de migração para frontend e integrações.
+- [x] Documentar guia de migração para frontend e integrações.
 
 ## 7. Riscos e Mitigações
 
