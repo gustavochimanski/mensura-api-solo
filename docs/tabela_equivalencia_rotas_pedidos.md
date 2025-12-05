@@ -1,4 +1,4 @@
-# Tabela de Equivalência – Rotas Legadas vs Rotas `/api/pedidos/admin/v2`
+# Tabela de Equivalência – Rotas Legadas vs Rotas `/api/pedidos/admin`
 
 | Canal/Fluxo | Rota legada | Método | Rota unificada (`/api/pedidos/admin`) | Observações |
 | --- | --- | --- | --- | --- |
@@ -31,6 +31,6 @@
 ## Como usar
 
 1. Atualize a documentação pública com esta tabela (linkando no guia de migração).
-2. Para cada chamada legada, valide se o front ou integração já suporta os filtros/DTOS v2.
+2. Para cada chamada legada, valide se o front ou integração já suporta os filtros/DTOs do contrato unificado.
 3. Use os logs de depreciação (`Deprecation`, `Link`) para monitorar adoção e planejar o desligamento definitivo.
 

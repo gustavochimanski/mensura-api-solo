@@ -233,7 +233,11 @@ def atualizar_item(
     payload: PedidoItemMutationRequest = Body(...),
     svc: PedidoAdminService = Depends(get_pedido_admin_service),
 ):
-    mutation = payload.model_copy(update={"acao": PedidoItemMutationAction.UPDATE, "item_id": item_id})
+    mutation = PedidoItemMutationRequest(
+        **payload.model_dump(),
+        acao=PedidoItemMutationAction.UPDATE,
+        item_id=item_id,
+    )
     return svc.gerenciar_item(pedido_id, mutation)
 
 
