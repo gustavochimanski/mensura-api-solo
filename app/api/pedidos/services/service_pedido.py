@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import os
-import re
 import threading
 from datetime import date
 from decimal import Decimal
@@ -61,7 +59,8 @@ from app.api.catalogo.contracts.produto_contract import IProdutoContract, Produt
 from app.api.pedidos.services.service_pedido_kanban import KanbanService
 # Migrado para modelos unificados - contratos não são mais necessários
 from app.api.empresas.repositories.empresa_repo import EmpresaRepository
-from app.api.notifications.channels.whatsapp_channel import WhatsAppChannel
+from app.api.chatbot.core.config_whatsapp import WHATSAPP_CONFIG
+from app.api.chatbot.core.notifications import OrderNotification
 from app.utils.logger import logger
 from app.utils.database_utils import now_trimmed
 
@@ -1376,6 +1375,11 @@ class PedidoService:
             return status.value
         return str(status)
 
+    @staticmethod
+    def _whatsapp_config_valida() -> bool:
+        required_keys = ("access_token", "phone_number_id", "api_version")
+        return all(WHATSAPP_CONFIG.get(chave) for chave in required_keys)
+
     def _execute_async(self, coro_factory: Callable[[], object]) -> object:
         primary_coro = coro_factory()
         try:
@@ -1403,37 +1407,6 @@ class PedidoService:
             if "error" in error_container:
                 raise error_container["error"]
             return result_container.get("result")
-
-    @staticmethod
-    def _get_whatsapp_config() -> dict[str, str] | None:
-        account_sid = os.getenv("TWILIO_ACCOUNT_SID")
-        auth_token = os.getenv("TWILIO_AUTH_TOKEN")
-        from_number = os.getenv("TWILIO_WHATSAPP_FROM") or os.getenv("TWILIO_WHATSAPP_NUMBER")
-        if not all([account_sid, auth_token, from_number]):
-            return None
-        return {
-            "account_sid": account_sid,
-            "auth_token": auth_token,
-            "from_number": from_number,
-        }
-
-    @staticmethod
-    def _normalize_whatsapp_number(phone: str | None) -> str | None:
-        if not phone:
-            return None
-        phone = phone.strip()
-        if not phone:
-            return None
-        if phone.startswith("+") and re.fullmatch(r"\+\d{8,15}", phone):
-            return phone
-        digits = re.sub(r"\D", "", phone)
-        if not digits:
-            return None
-        if digits.startswith("55") and len(digits) >= 12:
-            return f"+{digits}"
-        if len(digits) in {10, 11}:
-            return f"+55{digits}"
-        return f"+{digits}"
 
     @staticmethod
     def _extract_endereco_snapshot(pedido: PedidoUnificadoModel) -> dict[str, object]:
@@ -1567,7 +1540,8 @@ class PedidoService:
                 )
                 return
 
-            telefone = self._normalize_whatsapp_number(getattr(entregador, "telefone", None))
+            telefone_raw = getattr(entregador, "telefone", None)
+            telefone = str(telefone_raw).strip() if telefone_raw is not None else ""
             if not telefone:
                 logger.warning(
                     "[Pedidos] Entregador %s sem telefone válido para WhatsApp",
@@ -1583,19 +1557,16 @@ class PedidoService:
                 )
                 return
 
-            config = self._get_whatsapp_config()
-            if not config:
-                logger.warning("[Pedidos] Configurações de WhatsApp ausentes; notificação não enviada")
+            if not self._whatsapp_config_valida():
+                logger.warning("[Pedidos] Configurações do WhatsApp (chatbot) ausentes; notificação não enviada")
                 return
 
-            channel = WhatsAppChannel(config)
             title, message = self._build_rotas_message(getattr(entregador, "nome", ""), pedidos_em_rota)
+            whatsapp_message = f"*{title}*\n\n{message}"
             result = self._execute_async(
-                lambda: channel.send(
-                    recipient=telefone,
-                    title=title,
-                    message=message,
-                    channel_metadata=None,
+                lambda: OrderNotification.send_whatsapp_message(
+                    telefone,
+                    whatsapp_message,
                 )
             )
 
@@ -1606,7 +1577,7 @@ class PedidoService:
                 )
                 return
 
-            if getattr(result, "success", False):
+            if isinstance(result, dict) and result.get("success"):
                 logger.info(
                     "[Pedidos] Mensagem WhatsApp enviada para o entregador %s",
                     entregador.id,
@@ -1615,7 +1586,7 @@ class PedidoService:
                 logger.error(
                     "[Pedidos] Erro ao enviar WhatsApp para o entregador %s: %s",
                     entregador.id,
-                    getattr(result, "message", "erro desconhecido"),
+                    (result.get("error") if isinstance(result, dict) else str(result) if result else "erro desconhecido"),
                 )
 
         except Exception as exc:  # noqa: BLE001
