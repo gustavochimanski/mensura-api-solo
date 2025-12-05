@@ -54,6 +54,7 @@ class EnderecosService:
             # Cria um objeto temporário para verificar duplicata
             from app.api.cadastros.schemas.schema_endereco import EnderecoCreate
             payload_temp = EnderecoCreate(
+                cliente_id=cliente_id,
                 logradouro=dados_atualizados.get('logradouro'),
                 numero=dados_atualizados.get('numero'),
                 bairro=dados_atualizados.get('bairro'),

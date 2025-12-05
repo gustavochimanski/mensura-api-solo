@@ -317,6 +317,7 @@ class PedidoResponseBuilder:
                 for it in pedido.itens
             ],
             pagamento=pagamento,
+            pago=getattr(pedido, "pago", False),
             produtos=PedidoResponseBuilder._build_produtos(pedido),
         )
 
