@@ -54,9 +54,9 @@ from app.api.shared.schemas.schema_shared_enums import PedidoStatusEnum, TipoEnt
 
 class PedidoAdminService:
     """
-    Fachada para operações de pedidos no contexto admin unificado (v2).
+    Fachada para operações de pedidos no contexto admin unificado.
     Delegamos comportamentos específicos para os services legados e expomos
-    uma interface única para o router v2.
+    uma interface única para o router unificado.
     """
 
     def __init__(
