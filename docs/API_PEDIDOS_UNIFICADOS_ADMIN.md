@@ -1,440 +1,155 @@
-# API de Pedidos Unificados - Admin
+# API de Pedidos Unificados (Admin) – Versão Proposta
 
-## 📋 Resumo das Alterações
+## 1. Objetivo
 
-### O que mudou?
+Padronizar as operações de pedidos para o canal admin em um único conjunto de rotas REST, eliminando a duplicidade por tipo (`delivery`, `mesa`, `balcão`) e oferecendo um contrato consistente para o frontend.
 
-1. **Repositório Unificado**: Todos os pedidos (DELIVERY, MESA, BALCAO) agora usam o mesmo repositório `PedidoRepository`
-2. **Modelo Unificado**: Todos os pedidos estão na tabela `pedidos.pedidos` com campo `tipo_pedido`
-3. **Itens Unificados**: Itens podem ser produtos, receitas ou combos na mesma tabela `pedidos.pedidos_itens`
-4. **Histórico Unificado**: Histórico de todos os pedidos na tabela `pedidos.pedidos_historico`
+## 2. Convenções Gerais
 
-### Arquivos Removidos
-- ❌ `app/api/pedidos/repositories/repo_pedidos_balcao.py`
-- ❌ `app/api/pedidos/repositories/repo_pedidos_mesa.py`
+- **Prefixo base:** `/api/pedidos/admin/v2`.
+- **Autenticação:** mesmas dependências atuais (`Depends(get_current_user)`), mantidas via router.
+- **Identificação do pedido:** `pedido_id` (inteiro). A inferência do tipo de pedido (`tipo_pedido`) é automática a partir dos dados persistidos.
+- **Enums e Schemas reutilizados:** Manter `PedidoResponse`, `PedidoResponseCompleto`, `PedidoStatusEnum`, `ItemPedidoEditar`, etc., adicionando novos DTOs apenas quando necessário.
+- **Respostas de mutação:** Sempre retornam `200 OK` com o pedido atualizado (`PedidoResponse` ou `PedidoResponseCompleto`, conforme contexto).
+- **Tratamento de erros:** `404` quando o pedido não existe, `400` para validações de domínio, `403` para permissões.
 
-### Arquivos Atualizados
-- ✅ `app/api/pedidos/repositories/repo_pedidos.py` - Agora suporta todos os tipos de pedido
-- ✅ `app/api/pedidos/services/service_pedidos_balcao.py` - Usa repositório unificado
-- ✅ `app/api/pedidos/services/service_pedidos_mesa.py` - Usa repositório unificado
+## 3. Endpoints
 
----
+### 3.1 Listagem e Consulta
 
-## 🔌 Endpoints Disponíveis
+| Método | Caminho | Descrição | Notas |
+| --- | --- | --- | --- |
+| GET | `/api/pedidos/admin/v2` | Lista pedidos com filtros por tipo, status, intervalo de datas, mesa, cliente e empresa. | Combina rotas `/delivery`, `/mesa` e filtros específicos. Retorno paginado em `PedidoResponse`. |
+| GET | `/api/pedidos/admin/v2/kanban` | Recupera visão agregada para Kanban. | Parâmetros atuais (`date_filter`, `empresa_id`, `limit`) preservados. Retorna `KanbanAgrupadoResponse`. |
+| GET | `/api/pedidos/admin/v2/{pedido_id}` | Retorna detalhes completos do pedido. | Substitui `/api/pedidos/admin/{pedido_id}`. Responde `PedidoResponseCompletoTotal`. |
+| GET | `/api/pedidos/admin/v2/{pedido_id}/historico` | Histórico de status e eventos. | Mesmo comportamento atual (`HistoricoDoPedidoResponse`). |
 
-### Base URL
-```
-/api/pedidos/admin
-```
+### 3.2 Criação
 
-**Autenticação**: Requer token de admin (via `get_current_user`)
+| Método | Caminho | Body | Descrição |
+| --- | --- | --- | --- |
+| POST | `/api/pedidos/admin/v2` | `PedidoCreateRequest` | Cria pedido para qualquer tipo. Campo `tipo_pedido` (`DELIVERY`, `MESA`, `BALCAO`) orienta validações. Reaproveita estruturas existentes (`FinalizarPedidoRequest`, `PedidoMesaCreate`, `PedidoBalcaoCreate`) via composição. Resposta `PedidoResponseCompleto`. |
 
----
+### 3.3 Atualizações Gerais
 
-## 📊 1. Listar Pedidos (Kanban)
+| Método | Caminho | Body | Descrição |
+| --- | --- | --- | --- |
+| PUT | `/api/pedidos/admin/v2/{pedido_id}` | `PedidoUpdateRequest` | Atualização parcial de metadados comuns (cliente, pagamentos, observação geral, endereço/troco para delivery, mesa ligada, etc.). |
+| PATCH | `/api/pedidos/admin/v2/{pedido_id}/status` | `AlterarStatusPedidoBody` | Atualiza status (enum unificado). |
+| PATCH | `/api/pedidos/admin/v2/{pedido_id}/observacoes` | `AtualizarObservacoesRequest` | Atualiza observações gerais. |
+| PATCH | `/api/pedidos/admin/v2/{pedido_id}/fechar-conta` | `FecharContaMesaRequest` (campos opcionais) | Garante fechamento unificado, delegando regras específicas por tipo. Retorna pedido atualizado. |
+| PATCH | `/api/pedidos/admin/v2/{pedido_id}/reabrir` | (sem body) | Reabre pedidos finalizados/cancelados (quando permitido). |
+| DELETE | `/api/pedidos/admin/v2/{pedido_id}` | — | Cancela pedido (status `CANCELADO`). |
 
-Lista todos os pedidos agrupados por tipo para visualização no Kanban.
+### 3.4 Itens do Pedido
 
-### Endpoint
-```
-GET /api/pedidos/admin/kanban
-```
+| Método | Caminho | Body | Descrição |
+| --- | --- | --- | --- |
+| POST | `/api/pedidos/admin/v2/{pedido_id}/itens` | `PedidoItemMutationRequest` | Executa ações sobre itens (`ADD`, `UPDATE`, `REMOVE`). Estrutura baseada em `ItemPedidoEditar`, enriquecida com identificadores auxiliares. |
+| PATCH | `/api/pedidos/admin/v2/{pedido_id}/itens/{item_id}` | `PedidoItemMutationRequest` (com ação `UPDATE`) | Atalho para atualizar item específico. |
+| DELETE | `/api/pedidos/admin/v2/{pedido_id}/itens/{item_id}` | — | Remove item sem payload adicional. |
 
-### Query Parameters
-| Parâmetro | Tipo | Obrigatório | Descrição |
-|-----------|------|-------------|-----------|
-| `date_filter` | date | ✅ Sim | Data no formato YYYY-MM-DD |
-| `empresa_id` | int | ✅ Sim | ID da empresa (deve ser > 0) |
-| `limit` | int | ❌ Não | Limite de pedidos por categoria (padrão: 500, máx: 1000) |
+### 3.5 Entregador / Logística
 
-### Exemplo de Request
-```http
-GET /api/pedidos/admin/kanban?date_filter=2024-01-15&empresa_id=1&limit=500
-Authorization: Bearer {admin_token}
-```
+| Método | Caminho | Body | Descrição |
+| --- | --- | --- | --- |
+| PUT | `/api/pedidos/admin/v2/{pedido_id}/entregador` | `PedidoEntregadorRequest` | Vincula ou atualiza entregador (tipo delivery). |
+| DELETE | `/api/pedidos/admin/v2/{pedido_id}/entregador` | — | Remove entregador. |
 
-### Response (200 OK)
+### 3.6 Recursos Específicos de Mesa
+
+Para manter compatibilidade com funcionalidades específicas de mesa (ex.: comandas, produtos genéricos), os endpoints genéricos de itens permanecem, com extensão via payload:
+
+- `PedidoItemMutationRequest` aceita campos como `produto_cod_barras`, `receita_id`, `combo_id`, `adicionais` e `adicionais_ids`.
+- O service centralizado delegará para estratégias de delivery/mesa/balcão, reutilizando `PedidoMesaService` internamente.
+
+## 4. Schemas Propostos
+
+### 4.1 PedidoCreateRequest
+
 ```json
 {
-  "delivery": [
-    {
-      "id": 123,
-      "status": "I",
-      "cliente": {
-        "id": 45,
-        "nome": "João Silva",
-        "telefone": "11999999999"
-      },
-      "valor_total": 45.90,
-      "data_criacao": "2024-01-15T10:30:00",
-      "observacao_geral": "Entregar na portaria",
-      "endereco": "Rua Exemplo, 123 - São Paulo/SP",
-      "meio_pagamento": {
-        "id": 1,
-        "nome": "Dinheiro",
-        "tipo": "DINHEIRO",
-        "ativo": true
-      },
-      "entregador": {
-        "id": 5,
-        "nome": "Carlos"
-      },
-      "pagamento": {
-        "status": "PAGO",
-        "esta_pago": true,
-        "valor": 45.90
-      },
-      "tipo_pedido": "DELIVERY",
-      "numero_pedido": "DV-000123"
-    }
-  ],
-  "balcao": [
-    {
-      "id": 456,
-      "status": "I",
-      "cliente": {
-        "id": 46,
-        "nome": "Maria Santos"
-      },
-      "valor_total": 32.50,
-      "data_criacao": "2024-01-15T11:00:00",
-      "tipo_pedido": "BALCAO",
-      "numero_pedido": "BAL-000456",
-      "mesa_id": 10,
-      "mesa_numero": "M10"
-    }
-  ],
-  "mesas": [
-    {
-      "id": 789,
-      "status": "I",
-      "cliente": {
-        "id": 47,
-        "nome": "Pedro Costa"
-      },
-      "valor_total": 78.00,
-      "data_criacao": "2024-01-15T12:00:00",
-      "tipo_pedido": "MESA",
-      "numero_pedido": "M12-001",
-      "mesa_id": 12,
-      "mesa_numero": "M12"
-    }
-  ]
-}
-```
-
----
-
-## 🔍 2. Buscar Pedido por ID
-
-Busca um pedido específico com todas as informações completas.
-
-### Endpoint
-```
-GET /api/pedidos/admin/{pedido_id}
-```
-
-### Path Parameters
-| Parâmetro | Tipo | Obrigatório | Descrição |
-|-----------|------|-------------|-----------|
-| `pedido_id` | int | ✅ Sim | ID do pedido (deve ser > 0) |
-
-### Exemplo de Request
-```http
-GET /api/pedidos/admin/123
-Authorization: Bearer {admin_token}
-```
-
-### Response (200 OK)
-```json
-{
-  "id": 123,
-  "tipo_pedido": "DELIVERY",
-  "numero_pedido": "DV-000123",
-  "status": "I",
-  "empresa_id": 1,
-  "cliente_id": 45,
-  "cliente": {
-    "id": 45,
-    "nome": "João Silva",
-    "telefone": "11999999999"
+  "tipo_pedido": "DELIVERY|MESA|BALCAO",
+  "empresa_id": 123,
+  "cliente_id": 456,
+  "origem": "WEB|APP|PDV",
+  "dados_delivery": {
+    "endereco_id": 789,
+    "troco_para": 100.0
   },
-  "endereco_id": 10,
-  "endereco": {
-    "id": 10,
-    "logradouro": "Rua Exemplo",
-    "numero": "123",
-    "bairro": "Centro",
-    "cidade": "São Paulo",
-    "estado": "SP",
-    "cep": "01234567"
+  "dados_mesa": {
+    "mesa_id": 10,
+    "num_pessoas": 4
   },
   "itens": [
     {
-      "id": 1,
-      "produto_cod_barras": "7891234567890",
-      "receita_id": null,
-      "combo_id": null,
-      "quantidade": 2,
-      "preco_unitario": 15.90,
-      "preco_total": 31.80,
-      "observacao": "Sem cebola",
-      "produto_descricao_snapshot": "Hambúrguer Artesanal",
-      "adicionais_snapshot": [
-        {
-          "adicional_id": 5,
-          "nome": "Bacon Extra",
-          "quantidade": 1,
-          "preco_unitario": 3.50,
-          "total": 3.50
-        }
-      ]
-    },
-    {
-      "id": 2,
-      "produto_cod_barras": null,
-      "receita_id": 8,
-      "combo_id": null,
+      "produto_cod_barras": "123",
       "quantidade": 1,
-      "preco_unitario": 12.00,
-      "preco_total": 12.00,
-      "observacao": null,
-      "produto_descricao_snapshot": "Pizza Margherita"
+      "observacao": "..."
     }
   ],
-  "subtotal": 47.30,
-  "desconto": 0.00,
-  "taxa_entrega": 5.00,
-  "taxa_servico": 0.00,
-  "valor_total": 52.30,
-  "meio_pagamento_id": 1,
-  "meio_pagamento": {
-    "id": 1,
-    "nome": "Dinheiro",
-    "tipo": "DINHEIRO"
-  },
-  "created_at": "2024-01-15T10:30:00",
-  "updated_at": "2024-01-15T10:35:00"
-}
-```
-
----
-
-## 📜 3. Obter Histórico do Pedido
-
-Obtém o histórico completo de alterações de um pedido.
-
-### Endpoint
-```
-GET /api/pedidos/admin/{pedido_id}/historico
-```
-
-### Path Parameters
-| Parâmetro | Tipo | Obrigatório | Descrição |
-|-----------|------|-------------|-----------|
-| `pedido_id` | int | ✅ Sim | ID do pedido (deve ser > 0) |
-
-### Exemplo de Request
-```http
-GET /api/pedidos/admin/123/historico
-Authorization: Bearer {admin_token}
-```
-
-### Response (200 OK)
-```json
-{
-  "pedido_id": 123,
-  "historicos": [
+  "pagamentos": [
     {
-      "id": 1,
-      "pedido_id": 123,
-      "status": "I",
-      "status_anterior": "P",
-      "status_novo": "I",
-      "tipo_operacao": "STATUS_ALTERADO",
-      "descricao": "Status atualizado para I",
-      "motivo": "Pendente → Em impressão",
-      "observacoes": null,
-      "criado_em": "2024-01-15T10:35:00",
-      "criado_por": "admin",
-      "usuario_id": 1,
-      "cliente_id": null,
-      "ip_origem": "192.168.1.1",
-      "user_agent": "Mozilla/5.0..."
-    },
-    {
-      "id": 2,
-      "pedido_id": 123,
-      "status": "P",
-      "status_anterior": null,
-      "status_novo": "P",
-      "tipo_operacao": "PEDIDO_CRIADO",
-      "descricao": "Pedido criado",
-      "motivo": "Pedido criado",
-      "criado_em": "2024-01-15T10:30:00",
-      "criado_por": null,
-      "usuario_id": null
+      "meio_pagamento_id": 1,
+      "valor": 50.0
     }
-  ]
+  ],
+  "observacao_geral": "string"
 }
 ```
 
----
+### 4.2 PedidoUpdateRequest (parcial)
 
-## 🔄 4. Atualizar Status do Pedido
-
-Atualiza o status de um pedido.
-
-### Endpoint
-```
-PUT /api/pedidos/admin/{pedido_id}/status
-```
-
-### Path Parameters
-| Parâmetro | Tipo | Obrigatório | Descrição |
-|-----------|------|-------------|-----------|
-| `pedido_id` | int | ✅ Sim | ID do pedido (deve ser > 0) |
-
-### Query Parameters
-| Parâmetro | Tipo | Obrigatório | Descrição |
-|-----------|------|-------------|-----------|
-| `novo_status` | enum | ✅ Sim | Novo status do pedido |
-
-### Status Disponíveis
-- `P` = PENDENTE
-- `I` = EM IMPRESSÃO
-- `R` = EM PREPARO
-- `S` = SAIU PARA ENTREGA
-- `E` = ENTREGUE
-- `C` = CANCELADO
-- `D` = EDITADO
-- `X` = EM EDIÇÃO
-- `A` = AGUARDANDO PAGAMENTO
-
-### Exemplo de Request
-```http
-PUT /api/pedidos/admin/123/status?novo_status=R
-Authorization: Bearer {admin_token}
-```
-
-### Response (200 OK)
 ```json
 {
-  "id": 123,
-  "status": "R",
-  "numero_pedido": "DV-000123",
-  "valor_total": 52.30,
-  // ... outros campos do pedido
+  "cliente_id": 456,
+  "observacao_geral": "string",
+  "pagamentos": [...],
+  "dados_delivery": {...},
+  "dados_mesa": {...}
 }
 ```
 
----
+### 4.3 PedidoItemMutationRequest
 
-## 🚴 5. Vincular Entregador
-
-Vincula ou desvincula um entregador a um pedido de delivery.
-
-### Endpoint
-```
-PUT /api/pedidos/admin/{pedido_id}/entregador
-```
-
-### Path Parameters
-| Parâmetro | Tipo | Obrigatório | Descrição |
-|-----------|------|-------------|-----------|
-| `pedido_id` | int | ✅ Sim | ID do pedido (deve ser > 0) |
-
-### Query Parameters
-| Parâmetro | Tipo | Obrigatório | Descrição |
-|-----------|------|-------------|-----------|
-| `entregador_id` | int \| null | ❌ Não | ID do entregador (null para desvincular) |
-
-### Exemplo de Request - Vincular
-```http
-PUT /api/pedidos/admin/123/entregador?entregador_id=5
-Authorization: Bearer {admin_token}
-```
-
-### Exemplo de Request - Desvincular
-```http
-PUT /api/pedidos/admin/123/entregador?entregador_id=null
-Authorization: Bearer {admin_token}
-```
-
-### Response (200 OK)
 ```json
 {
-  "id": 123,
-  "entregador_id": 5,
-  "entregador": {
-    "id": 5,
-    "nome": "Carlos"
-  },
-  // ... outros campos do pedido
+  "acao": "ADD|UPDATE|REMOVE",
+  "item_id": 1,
+  "produto_cod_barras": "123",
+  "receita_id": null,
+  "combo_id": null,
+  "quantidade": 2,
+  "observacao": "sem cebola",
+  "adicionais": [...],
+  "adicionais_ids": [...]
 }
 ```
 
----
+### 4.4 PedidoEntregadorRequest
 
-## 🚫 6. Desvincular Entregador
-
-Desvincula o entregador atual de um pedido.
-
-### Endpoint
-```
-DELETE /api/pedidos/admin/{pedido_id}/entregador
-```
-
-### Path Parameters
-| Parâmetro | Tipo | Obrigatório | Descrição |
-|-----------|------|-------------|-----------|
-| `pedido_id` | int | ✅ Sim | ID do pedido (deve ser > 0) |
-
-### Exemplo de Request
-```http
-DELETE /api/pedidos/admin/123/entregador
-Authorization: Bearer {admin_token}
-```
-
-### Response (200 OK)
 ```json
 {
-  "id": 123,
-  "entregador_id": null,
-  // ... outros campos do pedido
+  "entregador_id": 321
 }
 ```
 
----
+## 5. Estratégia de Implementação
 
-## 📝 Notas Importantes
+1. **Service unificado (`PedidoAdminService`):** camada que orquestra operações comuns e delega comportamentos específicos (delivery/mesa/balcão) para serviços especializados já existentes.
+2. **Router v2:** novo router em `app/api/pedidos/router/admin/router_pedidos_admin_v2.py` expondo as rotas descritas acima.
+3. **Schemas compartilhados:** adicionar novos DTOs em `app/api/pedidos/schemas`, reaproveitando classes atuais.
+4. **Feature flag / versionamento:** exposição controlada via prefixo `/v2` e cabeçalho `x-api-version: 2` na documentação.
 
-### Tipos de Pedido
-- **DELIVERY**: Pedidos de entrega (requer `endereco_id`, `tipo_entrega`, `origem`)
-- **MESA**: Pedidos de mesa (requer `mesa_id`, opcional `num_pessoas`)
-- **BALCAO**: Pedidos de balcão (opcional `mesa_id`)
+## 6. Compatibilidade Temporária
 
-### Itens do Pedido
-Cada item pode ser:
-- **Produto**: `produto_cod_barras` preenchido, `receita_id` e `combo_id` null
-- **Receita**: `receita_id` preenchido, `produto_cod_barras` e `combo_id` null
-- **Combo**: `combo_id` preenchido, `produto_cod_barras` e `receita_id` null
+- Rotas antigas permanecem operando (com logs de depreciação).
+- Adicionar middleware/handler no router antigo para redirecionar chamadas internas para o service unificado quando aplicável (ver plano específico de compatibilidade).
 
-### Histórico
-O histórico unificado suporta:
-- Histórico simples (apenas mudança de status)
-- Histórico detalhado (com `tipo_pedido` no banco, `tipo_operacao` na resposta JSON, `descricao`, `motivo`, etc.)
+## 7. Próximos Passos
 
-### Validações
-- Pedido deve existir
-- Entregador deve estar vinculado à empresa do pedido (ao vincular)
-- Status deve ser válido
-- Apenas um tipo de item por vez (produto OU receita OU combo)
-
----
-
-## 🔗 Relacionados
-
-- [API de Pedidos - Client](./API_PEDIDOS_UNIFICADOS_CLIENT.md)
-- [Plano de Migração](../PLANO_MIGRACAO_PEDIDOS_CENTRALIZADOS.md)
+1. Criar tabela de equivalência entre rotas antigas e novas.
+2. Implementar `router_pedidos_admin_v2.py` + service unificado.
+3. Atualizar testes e criar novos cenários cobrindo pedidos de todos os tipos.
+4. Preparar guia de migração para o frontend.
 

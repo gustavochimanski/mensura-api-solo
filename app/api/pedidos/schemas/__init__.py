@@ -44,6 +44,16 @@ from .schema_pedido_status_historico import (
     PedidoStatusHistoricoOut,
     HistoricoDoPedidoResponse,
 )
+from .schema_pedido_admin_v2 import (
+    PedidoCreateRequest,
+    PedidoUpdateRequest,
+    PedidoStatusPatchRequest,
+    PedidoObservacaoPatchRequest,
+    PedidoFecharContaRequest,
+    PedidoItemMutationRequest,
+    PedidoItemMutationAction,
+    PedidoEntregadorRequest,
+)
 
 __all__ = [
     # Enums
@@ -82,5 +92,13 @@ __all__ = [
     "AlterarStatusPedidoBody",
     "PedidoStatusHistoricoOut",
     "HistoricoDoPedidoResponse",
+    "PedidoCreateRequest",
+    "PedidoUpdateRequest",
+    "PedidoStatusPatchRequest",
+    "PedidoObservacaoPatchRequest",
+    "PedidoFecharContaRequest",
+    "PedidoItemMutationRequest",
+    "PedidoItemMutationAction",
+    "PedidoEntregadorRequest",
 ]
 

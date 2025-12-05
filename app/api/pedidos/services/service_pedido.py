@@ -1,8 +1,14 @@
 from __future__ import annotations
 
+import asyncio
+import os
+import re
+import threading
 from datetime import date
 from decimal import Decimal
-from typing import Optional, TYPE_CHECKING
+from typing import Callable, Optional, TYPE_CHECKING
+from urllib.parse import quote_plus
+
 from sqlalchemy import func, text, update
 from sqlalchemy.orm import Session, joinedload
 
@@ -55,6 +61,7 @@ from app.api.catalogo.contracts.produto_contract import IProdutoContract, Produt
 from app.api.pedidos.services.service_pedido_kanban import KanbanService
 # Migrado para modelos unificados - contratos não são mais necessários
 from app.api.empresas.repositories.empresa_repo import EmpresaRepository
+from app.api.notifications.channels.whatsapp_channel import WhatsAppChannel
 from app.utils.logger import logger
 from app.utils.database_utils import now_trimmed
 
@@ -1060,6 +1067,8 @@ class PedidoService:
         
         self.db.commit()
         self.db.refresh(pedido)
+        if novo_status == PedidoStatusEnum.S and pedido.entregador_id:
+            self._notificar_entregador_rotas(pedido)
         return self._pedido_to_response(pedido)
 
     def editar_pedido_parcial(self, pedido_id: int, payload: EditarPedidoRequest) -> PedidoResponse:
@@ -1334,6 +1343,8 @@ class PedidoService:
             self.db.commit()
             self.db.refresh(pedido)
             logger.info(f"[vincular_entregador] Entregador {entregador_id} vinculado ao pedido {pedido_id}")
+            if self._status_value(pedido.status) == PedidoStatusEnum.S.value:
+                self._notificar_entregador_rotas(pedido)
             return self._pedido_to_response(pedido)
         except Exception as exc:
             self.db.rollback()
@@ -1358,6 +1369,261 @@ class PedidoService:
         logger.info(f"[desvincular_entregador] Entregador desvinculado do pedido {pedido_id}")
         
         return self._pedido_to_response(pedido)
+
+    @staticmethod
+    def _status_value(status: StatusPedido | PedidoStatusEnum | str) -> str:
+        if isinstance(status, (StatusPedido, PedidoStatusEnum)):
+            return status.value
+        return str(status)
+
+    def _execute_async(self, coro_factory: Callable[[], object]) -> object:
+        primary_coro = coro_factory()
+        try:
+            return asyncio.run(primary_coro) if asyncio.iscoroutine(primary_coro) else primary_coro
+        except RuntimeError:
+            if asyncio.iscoroutine(primary_coro):
+                primary_coro.close()
+            result_container: dict[str, object] = {}
+            error_container: dict[str, BaseException] = {}
+
+            def _runner():
+                try:
+                    followup_coro = coro_factory()
+                    if asyncio.iscoroutine(followup_coro):
+                        result_container["result"] = asyncio.run(followup_coro)
+                    else:
+                        result_container["result"] = followup_coro
+                except BaseException as exc:  # noqa: BLE001
+                    error_container["error"] = exc
+
+            thread = threading.Thread(target=_runner, daemon=True)
+            thread.start()
+            thread.join()
+
+            if "error" in error_container:
+                raise error_container["error"]
+            return result_container.get("result")
+
+    @staticmethod
+    def _get_whatsapp_config() -> dict[str, str] | None:
+        account_sid = os.getenv("TWILIO_ACCOUNT_SID")
+        auth_token = os.getenv("TWILIO_AUTH_TOKEN")
+        from_number = os.getenv("TWILIO_WHATSAPP_FROM") or os.getenv("TWILIO_WHATSAPP_NUMBER")
+        if not all([account_sid, auth_token, from_number]):
+            return None
+        return {
+            "account_sid": account_sid,
+            "auth_token": auth_token,
+            "from_number": from_number,
+        }
+
+    @staticmethod
+    def _normalize_whatsapp_number(phone: str | None) -> str | None:
+        if not phone:
+            return None
+        phone = phone.strip()
+        if not phone:
+            return None
+        if phone.startswith("+") and re.fullmatch(r"\+\d{8,15}", phone):
+            return phone
+        digits = re.sub(r"\D", "", phone)
+        if not digits:
+            return None
+        if digits.startswith("55") and len(digits) >= 12:
+            return f"+{digits}"
+        if len(digits) in {10, 11}:
+            return f"+55{digits}"
+        return f"+{digits}"
+
+    @staticmethod
+    def _extract_endereco_snapshot(pedido: PedidoUnificadoModel) -> dict[str, object]:
+        snapshot = pedido.endereco_snapshot if isinstance(pedido.endereco_snapshot, dict) else None
+        if snapshot:
+            return snapshot
+        endereco = getattr(pedido, "endereco", None)
+        if not endereco:
+            return {}
+        return {
+            "logradouro": getattr(endereco, "logradouro", None),
+            "numero": getattr(endereco, "numero", None),
+            "complemento": getattr(endereco, "complemento", None),
+            "bairro": getattr(endereco, "bairro", None),
+            "cidade": getattr(endereco, "cidade", None),
+            "estado": getattr(endereco, "estado", None),
+            "cep": getattr(endereco, "cep", None),
+            "latitude": float(endereco.latitude) if getattr(endereco, "latitude", None) is not None else None,
+            "longitude": float(endereco.longitude) if getattr(endereco, "longitude", None) is not None else None,
+        }
+
+    @staticmethod
+    def _format_endereco_snapshot(snapshot: dict[str, object]) -> str:
+        if not snapshot:
+            return ""
+        partes: list[str] = []
+        logradouro = snapshot.get("logradouro")
+        numero = snapshot.get("numero")
+        if logradouro:
+            logradouro_str = str(logradouro)
+            if numero:
+                logradouro_str = f"{logradouro_str}, {numero}"
+            partes.append(logradouro_str)
+        complemento = snapshot.get("complemento")
+        if complemento:
+            partes.append(str(complemento))
+        bairro = snapshot.get("bairro")
+        if bairro:
+            partes.append(str(bairro))
+        cidade = snapshot.get("cidade")
+        estado = snapshot.get("estado")
+        cidade_estado = ", ".join(str(valor) for valor in [cidade, estado] if valor)
+        if cidade_estado:
+            partes.append(cidade_estado)
+        cep = snapshot.get("cep")
+        if cep:
+            partes.append(str(cep))
+        return " - ".join(partes)
+
+    def _build_google_maps_link(self, pedidos: list[PedidoUnificadoModel]) -> str | None:
+        addresses: list[str] = []
+        for pedido in pedidos:
+            snapshot = self._extract_endereco_snapshot(pedido)
+            lat = snapshot.get("latitude")
+            lon = snapshot.get("longitude")
+            coordinate = None
+            if lat is not None and lon is not None:
+                try:
+                    coordinate = f"{float(lat):.6f},{float(lon):.6f}"
+                except (TypeError, ValueError):
+                    coordinate = None
+            if coordinate:
+                addresses.append(coordinate)
+            else:
+                formatted = self._format_endereco_snapshot(snapshot)
+                if formatted:
+                    addresses.append(formatted)
+
+        if not addresses:
+            return None
+
+        base_url = "https://www.google.com/maps/dir/?api=1&travelmode=driving"
+        if len(addresses) == 1:
+            destination = quote_plus(addresses[0])
+            return f"{base_url}&destination={destination}"
+
+        destination = quote_plus(addresses[-1])
+        waypoints = "%7C".join(quote_plus(addr) for addr in addresses[:-1])
+        return f"{base_url}&destination={destination}&waypoints={waypoints}"
+
+    def _build_rotas_message(
+        self,
+        entregador_nome: str | None,
+        pedidos: list[PedidoUnificadoModel],
+    ) -> tuple[str, str]:
+        quantidade = len(pedidos)
+        primeiro_nome = (entregador_nome or "").strip().split(" ")[0] or "!"
+        saudacao = f"Olá {primeiro_nome}! Seguem {quantidade} pedido(s) em rota de entrega:"
+
+        linhas: list[str] = []
+        for pedido_item in pedidos:
+            partes = [pedido_item.numero_pedido or f"#{pedido_item.id}"]
+            cliente = getattr(pedido_item, "cliente", None)
+            cliente_nome = getattr(cliente, "nome", None)
+            if cliente_nome:
+                partes.append(cliente_nome)
+            endereco = self._format_endereco_snapshot(self._extract_endereco_snapshot(pedido_item))
+            if endereco:
+                partes.append(endereco)
+            linha = " - ".join(partes)
+            valor_total = getattr(pedido_item, "valor_total", None)
+            if valor_total is not None:
+                try:
+                    linha += f" - Valor: R$ {float(valor_total):.2f}"
+                except (TypeError, ValueError):
+                    pass
+            linhas.append(linha)
+
+        rota = self._build_google_maps_link(pedidos)
+        mensagem_partes = [saudacao, "\n".join(linhas)]
+        if rota:
+            mensagem_partes.append(f"Rota no Google Maps: {rota}")
+
+        mensagem = "\n\n".join(part for part in mensagem_partes if part)
+        titulo = f"Rotas de entrega ({quantidade})"
+        return titulo, mensagem
+
+    def _notificar_entregador_rotas(self, pedido: PedidoUnificadoModel) -> None:
+        if not pedido or not getattr(pedido, "entregador_id", None):
+            return
+
+        try:
+            entregador = getattr(pedido, "entregador", None)
+            if not entregador or not getattr(entregador, "telefone", None):
+                entregador = self.repo_entregador.get(pedido.entregador_id)
+
+            if not entregador:
+                logger.warning(
+                    "[Pedidos] Entregador %s não encontrado para notificação de rota",
+                    pedido.entregador_id,
+                )
+                return
+
+            telefone = self._normalize_whatsapp_number(getattr(entregador, "telefone", None))
+            if not telefone:
+                logger.warning(
+                    "[Pedidos] Entregador %s sem telefone válido para WhatsApp",
+                    entregador.id,
+                )
+                return
+
+            pedidos_em_rota = self.repo.list_pedidos_em_rota_por_entregador(entregador.id)
+            if not pedidos_em_rota:
+                logger.info(
+                    "[Pedidos] Nenhum pedido em rota para o entregador %s no momento",
+                    entregador.id,
+                )
+                return
+
+            config = self._get_whatsapp_config()
+            if not config:
+                logger.warning("[Pedidos] Configurações de WhatsApp ausentes; notificação não enviada")
+                return
+
+            channel = WhatsAppChannel(config)
+            title, message = self._build_rotas_message(getattr(entregador, "nome", ""), pedidos_em_rota)
+            result = self._execute_async(
+                lambda: channel.send(
+                    recipient=telefone,
+                    title=title,
+                    message=message,
+                    channel_metadata=None,
+                )
+            )
+
+            if not result:
+                logger.error(
+                    "[Pedidos] Falha ao enviar WhatsApp para o entregador %s (sem retorno)",
+                    entregador.id,
+                )
+                return
+
+            if getattr(result, "success", False):
+                logger.info(
+                    "[Pedidos] Mensagem WhatsApp enviada para o entregador %s",
+                    entregador.id,
+                )
+            else:
+                logger.error(
+                    "[Pedidos] Erro ao enviar WhatsApp para o entregador %s: %s",
+                    entregador.id,
+                    getattr(result, "message", "erro desconhecido"),
+                )
+
+        except Exception as exc:  # noqa: BLE001
+            logger.error(
+                "[Pedidos] Falha ao notificar entregador %s: %s",
+                getattr(pedido, "entregador_id", None),
+                exc,
+            )
 
     def testar_busca_regiao(self, distancia_km: float, empresa_id: int) -> dict:
         """Método auxiliar para testar a busca de faixa por distância."""

@@ -105,6 +105,23 @@ class PedidoRepository:
             .all()
         )
 
+    def list_pedidos_em_rota_por_entregador(self, entregador_id: int) -> list[PedidoUnificadoModel]:
+        """Retorna pedidos de delivery vinculados ao entregador com status 'Saiu para entrega'."""
+        return (
+            self.db.query(PedidoUnificadoModel)
+            .options(
+                joinedload(PedidoUnificadoModel.cliente),
+                joinedload(PedidoUnificadoModel.endereco),
+            )
+            .filter(
+                PedidoUnificadoModel.entregador_id == entregador_id,
+                PedidoUnificadoModel.tipo_entrega == TipoEntrega.DELIVERY.value,
+                PedidoUnificadoModel.status == StatusPedido.SAIU_PARA_ENTREGA.value,
+            )
+            .order_by(PedidoUnificadoModel.updated_at.asc())
+            .all()
+        )
+
     def list_all_kanban(self, date_filter: date, empresa_id: int = 1, limit: int = 500):
         from app.api.shared.schemas.schema_shared_enums import PedidoStatusEnum
         from sqlalchemy import or_, and_
