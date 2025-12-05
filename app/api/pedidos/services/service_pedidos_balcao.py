@@ -440,11 +440,11 @@ class PedidoBalcaoService:
         usuario_id: int | None = None
     ) -> PedidoResponseCompleto:
         novo_status = payload.status
-        if novo_status == PedidoStatusEnum.CANCELADO:
+        if novo_status == PedidoStatusEnum.C:
             return self.cancelar(pedido_id, usuario_id=usuario_id)
-        if novo_status == PedidoStatusEnum.ENTREGUE:
+        if novo_status == PedidoStatusEnum.E:
             return self.fechar_conta(pedido_id, payload=None, usuario_id=usuario_id)
-        if novo_status == PedidoStatusEnum.IMPRESSAO:
+        if novo_status == PedidoStatusEnum.I:
             return self.confirmar(pedido_id, usuario_id=usuario_id)
 
         pedido_atual = self.repo.get(pedido_id)

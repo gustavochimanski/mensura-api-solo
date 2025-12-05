@@ -404,11 +404,11 @@ class PedidoMesaService:
 
     def atualizar_status(self, pedido_id: int, payload: AtualizarStatusPedidoRequest) -> PedidoResponseCompleto:
         novo_status = payload.status
-        if novo_status == PedidoStatusEnum.CANCELADO:
+        if novo_status == PedidoStatusEnum.C:
             return self.cancelar(pedido_id)
-        if novo_status == PedidoStatusEnum.ENTREGUE:
+        if novo_status == PedidoStatusEnum.E:
             return self.fechar_conta(pedido_id, None)
-        if novo_status == PedidoStatusEnum.IMPRESSAO:
+        if novo_status == PedidoStatusEnum.I:
             return self.confirmar(pedido_id)
         pedido = self.repo.atualizar_status(pedido_id, novo_status)
         return PedidoResponseBuilder.pedido_to_response_completo(pedido)
