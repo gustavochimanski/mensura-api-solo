@@ -387,6 +387,7 @@ class PedidoResponse(BaseModel):
     transacao: Optional[TransacaoResponse] = None
     pagamento: PedidoPagamentoResumo | None = None
     acertado_entregador: bool | None = None
+    pago: bool = False
     produtos: ProdutosPedidoOut = Field(default_factory=ProdutosPedidoOut)
     model_config = ConfigDict(from_attributes=True)
 
@@ -416,6 +417,7 @@ class PedidoResponseCompleto(BaseModel):
     data_atualizacao: datetime
     itens: List[ItemPedidoResponse]
     pagamento: PedidoPagamentoResumo | None = None
+    pago: bool = False
     produtos: ProdutosPedidoOut = Field(default_factory=ProdutosPedidoOut)
     model_config = ConfigDict(from_attributes=True)
 
@@ -445,6 +447,7 @@ class PedidoResponseCompletoComEndereco(BaseModel):
     data_atualizacao: datetime
     itens: List[ItemPedidoResponse]
     pagamento: PedidoPagamentoResumo | None = None
+    pago: bool = False
     produtos: ProdutosPedidoOut = Field(default_factory=ProdutosPedidoOut)
     model_config = ConfigDict(from_attributes=True)
 
@@ -477,6 +480,7 @@ class PedidoResponseCompletoTotal(BaseModel):
     data_atualizacao: datetime
     itens: List[ItemPedidoResponse]
     pagamento: PedidoPagamentoResumo | None = None
+    pago: bool = False
     produtos: ProdutosPedidoOut = Field(default_factory=ProdutosPedidoOut)
     model_config = ConfigDict(from_attributes=True)
 
