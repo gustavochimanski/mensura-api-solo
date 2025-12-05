@@ -44,7 +44,7 @@ from .schema_pedido_status_historico import (
     PedidoStatusHistoricoOut,
     HistoricoDoPedidoResponse,
 )
-from .schema_pedido_admin_v2 import (
+from .schema_pedido_admin import (
     PedidoCreateRequest,
     PedidoUpdateRequest,
     PedidoStatusPatchRequest,

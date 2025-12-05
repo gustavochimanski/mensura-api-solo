@@ -12,13 +12,12 @@ from app.api.pedidos.schemas.schema_pedido import (
     ItemPedidoRequest,
     MeioPagamentoParcialRequest,
 )
-from app.api.pedidos.services.service_pedidos_mesa import FecharContaMesaRequest
 from app.api.shared.schemas.schema_shared_enums import PedidoStatusEnum
 
 
 class PedidoCreateRequest(FinalizarPedidoRequest):
     """
-    Alias semântico para criação de pedidos via admin v2.
+    Alias semântico para criação de pedidos via camada admin unificada.
 
     Herdamos `FinalizarPedidoRequest` para reaproveitar validações e estruturas
     (itens, receitas, combos, pagamentos, etc.).
@@ -75,8 +74,17 @@ class PedidoObservacaoPatchRequest(BaseModel):
     observacoes: str = Field(..., max_length=500, description="Observação a ser registrada no pedido.")
 
 
-class PedidoFecharContaRequest(FecharContaMesaRequest):
-    """Alias semântico reutilizando payload de fechamento de conta da mesa."""
+class PedidoFecharContaRequest(BaseModel):
+    """Payload unificado para fechamento de conta."""
+
+    meio_pagamento_id: Optional[int] = Field(
+        default=None,
+        description="ID do meio de pagamento utilizado no fechamento.",
+    )
+    troco_para: Optional[float] = Field(
+        default=None,
+        description="Valor informado para troco (quando aplicável).",
+    )
 
 
 class PedidoItemMutationAction(str, Enum):

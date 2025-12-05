@@ -62,6 +62,6 @@
 - Agendar workshop rápido com backend/front/QA para validar o plano.
 - Iniciar o mapeamento detalhado das rotas e consolidar os dados em um repositório compartilhado.
 - Definir responsáveis por cada etapa do roadmap e alinhar expectativas de cronograma.
-- Elaborar plano de rollout controlado (vide `docs/plano_compatibilidade_rotas_pedidos_v2.md`).
+- Elaborar plano de rollout controlado (vide `docs/plano_compatibilidade_rotas_pedidos.md`).
 - Consolidar tabela de equivalência (`docs/tabela_equivalencia_rotas_pedidos.md`) e manter atualizada durante a migração.
 
