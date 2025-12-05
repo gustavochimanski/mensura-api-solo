@@ -6,11 +6,11 @@ Garantir a convivência controlada entre as rotas legadas de pedidos e a nova AP
 
 ## 2. Estratégia Geral
 
-1. **Router v2 isolado:** adicionar `router_pedidos_admin_v2.py` com prefixo `/api/pedidos/admin/v2`.
-2. **Camada de serviço unificada:** todas as rotas (legadas e v2) delegam para `PedidoAdminService`, responsável por orquestrar regras compartilhadas + especializações.
-3. **Feature flag:** habilitar uso das rotas v2 via flag (`PEDIDOS_V2_ENABLED`) consultada em middleware ou dependency.
-4. **Versionamento por cabeçalho:** frontend envia `x-api-version: 2` para explicitar uso da versão nova; facilita métricas e roteamento.
-5. **Logs de depreciação:** rotas legadas emitem log `warning` informando chamada, empresa e recomendação de migração.
+1. **Router unificado:** `router_pedidos_admin.py` expõe `/api/pedidos/admin` com o contrato padronizado.
+2. **Camada de serviço unificada:** todas as rotas delegam para `PedidoAdminService`, responsável por orquestrar regras compartilhadas + especializações.
+3. **Controle gradual:** habilitar a disseminação do novo contrato via feature flag por empresa/ambiente (no API Gateway ou serviço de configuração).
+4. **Observabilidade ativa:** registrar logs estruturados, métricas e alertas específicos para monitorar adoção e regressões.
+5. **Comunicação contínua:** informar clientes internos/externos sobre cronograma e implicações da remoção das rotas legadas.
 
 ## 3. Fluxo de Compatibilidade
 
@@ -22,10 +22,11 @@ Garantir a convivência controlada entre as rotas legadas de pedidos e a nova AP
   - `GET /delivery` → `PedidoAdminService.listar_pedidos(tipo=DELIVERY)`.
   - `PUT /mesa/{pedido_id}/status` → `PedidoAdminService.atualizar_status(pedido_id, payload)`.
 
-### 3.2 Redirecionamento Opcional
+### 3.2 Comunicação e depreciação
 
-- Implementar helper `ensure_v2_enabled(request)` que, quando a flag estiver ativa e o cabeçalho `x-api-version: 2` estiver ausente, adiciona header de alerta (`Deprecation`) e sugestão de migração.
-- Para ambientes internos, podemos responder `308 Permanent Redirect` apontando para o endpoint v2 equivalente (configurável).
+- Expor headers de `Deprecation`/`Link` via API Gateway ou middleware para sinalizar clientes que ainda consomem contratos antigos.
+- Registrar logs estruturados (`rota_origem`, `empresa_id`, `user_agent`) para acompanhar o progresso de migração.
+- Opcional: implementar redirecionamento (308) em camadas superiores quando o contrato antigo for usado.
 
 ## 4. Monitoramento e Métricas
 
