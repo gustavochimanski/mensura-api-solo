@@ -31,7 +31,7 @@ Garantir a convivência controlada entre as rotas legadas de pedidos e a API uni
 ## 4. Monitoramento e Métricas
 
 - **Logs estruturados:** incluir campos `rota_origem`, `rota_destino`, `empresa_id`, `tipo_pedido`.
-- **Dashboard:** acompanhar taxa de requisições v2 vs legado, erros por rota e tempos de resposta.
+- **Dashboard:** acompanhar taxa de requisições contrato unificado vs legado, erros por rota e tempos de resposta.
 - **Alertas:** configurar alertas quando chamadas legadas excederem o limite planejado após data-alvo de desalocação.
 
 ## 5. Rollout Proposto
