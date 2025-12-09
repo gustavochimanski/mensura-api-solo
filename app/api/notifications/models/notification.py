@@ -53,12 +53,12 @@ class Notification(Base):
     # Conteúdo da notificação
     title = Column(String, nullable=False)
     message = Column(Text, nullable=False)
-    channel = Column(Enum(NotificationChannel), nullable=False, index=True)
+    channel = Column(Enum(NotificationChannel, name='notificationchannel', schema='notifications', create_type=False), nullable=False, index=True)
     
     # Status e controle
-    status = Column(Enum(NotificationStatus), default=NotificationStatus.PENDING, index=True)
-    priority = Column(Enum(NotificationPriority), default=NotificationPriority.NORMAL)
-    message_type = Column(Enum(MessageType), nullable=False, index=True, default=MessageType.UTILITY)
+    status = Column(Enum(NotificationStatus, name='notificationstatus', schema='notifications', create_type=False), default=NotificationStatus.PENDING, index=True)
+    priority = Column(Enum(NotificationPriority, name='notificationpriority', schema='notifications', create_type=False), default=NotificationPriority.NORMAL)
+    message_type = Column(Enum(MessageType, name='messagetype', schema='notifications', create_type=False), nullable=False, index=True, default=MessageType.UTILITY)
     
     # Configurações de entrega
     recipient = Column(String, nullable=False)  # email, phone, webhook_url, etc.
@@ -85,7 +85,7 @@ class NotificationLog(Base):
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     notification_id = Column(String, ForeignKey("notifications.notifications.id"), nullable=False)
     
-    status = Column(Enum(NotificationStatus), nullable=False)
+    status = Column(Enum(NotificationStatus, name='notificationstatus', schema='notifications', create_type=False), nullable=False)
     message = Column(Text, nullable=True)
     error_details = Column(JSON, nullable=True)
     
