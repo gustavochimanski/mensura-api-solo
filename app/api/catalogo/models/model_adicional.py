@@ -6,8 +6,8 @@ from app.database.db_connection import Base
 
 
 class AdicionalModel(Base):
-    """Modelo para produtos adicionais dentro de complementos (ex: molhos, tamanhos de bebida, etc.)"""
-    __tablename__ = "adicional_produto"
+    """Modelo para itens de complementos (ex: molhos, tamanhos de bebida, etc.)"""
+    __tablename__ = "complemento_itens"
     __table_args__ = {"schema": "catalogo"}
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -15,7 +15,7 @@ class AdicionalModel(Base):
     # Vinculado a uma empresa
     empresa_id = Column(Integer, nullable=False, index=True)  # Sem FK para evitar dependência circular
     
-    # Vinculado a um complemento
+    # Vinculado a um complemento (grupo de itens)
     complemento_id = Column(Integer, ForeignKey("catalogo.complemento_produto.id", ondelete="CASCADE"), nullable=False, index=True)
     
     # Informações do adicional

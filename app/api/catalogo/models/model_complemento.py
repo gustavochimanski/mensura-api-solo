@@ -5,7 +5,7 @@ from app.database.db_connection import Base
 
 
 class ComplementoModel(Base):
-    """Modelo para complementos de produtos (grupos de adicionais com configurações)"""
+    """Modelo para complementos de produtos (grupos de itens com configurações)"""
     __tablename__ = "complemento_produto"
     __table_args__ = {"schema": "catalogo"}
 
@@ -39,7 +39,7 @@ class ComplementoModel(Base):
         viewonly=True,  # Leitura apenas, pois a relação real é no link
     )
     
-    # Relacionamento 1:N com adicionais (produtos dentro do complemento)
+    # Relacionamento 1:N com itens de complemento (itens dentro do complemento)
     adicionais = relationship(
         "AdicionalModel",
         back_populates="complemento",
