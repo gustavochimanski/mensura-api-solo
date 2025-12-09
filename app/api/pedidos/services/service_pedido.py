@@ -51,11 +51,12 @@ from app.api.pedidos.services.service_pedido_helpers import (
     is_pix_online_meio_pagamento,
 )
 from app.api.pedidos.services.service_pedido_responses import PedidoResponseBuilder
-from app.api.pedidos.utils.adicionais import resolve_produto_adicionais
+from app.api.pedidos.utils.complementos import resolve_produto_complementos, resolve_complementos_diretos
 from app.api.pedidos.services.service_pedido_taxas import TaxaService
 from app.api.empresas.contracts.empresa_contract import IEmpresaContract
 from app.api.cadastros.contracts.regiao_entrega_contract import IRegiaoEntregaContract
 from app.api.catalogo.contracts.produto_contract import IProdutoContract, ProdutoEmpDTO
+from app.api.catalogo.contracts.complemento_contract import IComplementoContract
 from app.api.pedidos.services.service_pedido_kanban import KanbanService
 # Migrado para modelos unificados - contratos não são mais necessários
 from app.api.empresas.repositories.empresa_repo import EmpresaRepository
@@ -82,6 +83,7 @@ class PedidoService:
         regiao_contract: IRegiaoEntregaContract | None = None,
         produto_contract: IProdutoContract | None = None,
         adicional_contract=None,
+        complemento_contract: IComplementoContract | None = None,
         combo_contract=None,
     ):
         self.db = db
@@ -96,6 +98,7 @@ class PedidoService:
         )
         self.produto_contract = produto_contract
         self.adicional_contract = adicional_contract
+        self.complemento_contract = complemento_contract
         self.combo_contract = combo_contract
         self.response_builder = PedidoResponseBuilder()
         self.kanban_service = KanbanService(
@@ -611,12 +614,13 @@ class PedidoService:
                 preco_rec = _dec(receita.preco_venda)
                 subtotal += preco_rec * qtd_rec
 
-                # Adicionais da receita (por ID)
-                adicionais_rec = getattr(rec, "adicionais", None) or []
-                adicionais_total_rec, adicionais_snapshot_rec = self._calcular_total_e_snapshot_adicionais_por_ids(
+                # Complementos da receita
+                complementos_rec = getattr(rec, "complementos", None) or []
+                adicionais_total_rec, adicionais_snapshot_rec = resolve_complementos_diretos(
+                    complemento_contract=self.complemento_contract,
                     empresa_id=receita.empresa_id,
-                    adicionais_req=adicionais_rec,
-                    qtd_item=qtd_rec,
+                    complementos_request=complementos_rec,
+                    quantidade_item=qtd_rec,
                 )
                 subtotal += adicionais_total_rec
 
@@ -646,12 +650,13 @@ class PedidoService:
                 qtd_combo = max(int(getattr(cb, "quantidade", 1) or 1), 1)
                 preco_combo = _dec(combo.preco_total)
 
-                # Adicionais do combo (por ID, aplicados ao combo inteiro)
-                adicionais_combo = getattr(cb, "adicionais", None) or []
-                adicionais_total_combo, adicionais_snapshot_combo = self._calcular_total_e_snapshot_adicionais_por_ids(
+                # Complementos do combo
+                complementos_combo = getattr(cb, "complementos", None) or []
+                adicionais_total_combo, adicionais_snapshot_combo = resolve_complementos_diretos(
+                    complemento_contract=self.complemento_contract,
                     empresa_id=combo.empresa_id,
-                    adicionais_req=adicionais_combo,
-                    qtd_item=qtd_combo,
+                    complementos_request=complementos_combo,
+                    quantidade_item=qtd_combo,
                 )
                 subtotal += preco_combo * qtd_combo + adicionais_total_combo
 
@@ -1744,12 +1749,14 @@ class PedidoService:
             preco_rec = _dec(receita.preco_venda)
             subtotal += preco_rec * qtd_rec
 
-            adicionais_rec = getattr(rec, "adicionais", None) or []
-            subtotal += self._calcular_total_adicionais_por_ids(
+            complementos_rec = getattr(rec, "complementos", None) or []
+            total_complementos_rec, _ = resolve_complementos_diretos(
+                complemento_contract=self.complemento_contract,
                 empresa_id=receita.empresa_id,
-                adicionais_req=adicionais_rec,
-                qtd_item=qtd_rec,
+                complementos_request=complementos_rec,
+                quantidade_item=qtd_rec,
             )
+            subtotal += total_complementos_rec
 
         # Combos opcionais no preview (base + adicionais de combo, se existirem)
         for cb in combos_req or []:
@@ -1765,12 +1772,14 @@ class PedidoService:
             qtd_combo = max(int(getattr(cb, "quantidade", 1) or 1), 1)
             subtotal += _dec(combo.preco_total) * qtd_combo
 
-            adicionais_combo = getattr(cb, "adicionais", None) or []
-            subtotal += self._calcular_total_adicionais_por_ids(
+            complementos_combo = getattr(cb, "complementos", None) or []
+            total_complementos_combo, _ = resolve_complementos_diretos(
+                complemento_contract=self.complemento_contract,
                 empresa_id=combo.empresa_id,
-                adicionais_req=adicionais_combo,
-                qtd_item=qtd_combo,
+                complementos_request=complementos_combo,
+                quantidade_item=qtd_combo,
             )
+            subtotal += total_complementos_combo
 
         desconto = self._aplicar_cupom(
             cupom_id=payload.cupom_id,
