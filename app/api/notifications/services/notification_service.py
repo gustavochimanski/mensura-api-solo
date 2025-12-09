@@ -121,7 +121,9 @@ class NotificationService(INotificationService):
                 return
             
             # Cria instância do canal
-            channel = self.channel_factory.create_channel(notification.channel, channel_config)
+            # Converte o enum para string (valor) antes de passar para o factory
+            channel_type = notification.channel.value if hasattr(notification.channel, 'value') else str(notification.channel)
+            channel = self.channel_factory.create_channel(channel_type, channel_config)
             
             # Envia a notificação
             result = await channel.send(
