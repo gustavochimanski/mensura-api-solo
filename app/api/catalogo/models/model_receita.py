@@ -49,7 +49,7 @@ class ReceitaAdicionalModel(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     receita_id = Column(Integer, ForeignKey("catalogo.receitas.id", ondelete="CASCADE"), nullable=False)
-    adicional_id = Column(Integer, ForeignKey("catalogo.complemento_itens.id", ondelete="RESTRICT"), nullable=False)
+    adicional_id = Column(Integer, ForeignKey("catalogo.adicionais.id", ondelete="RESTRICT"), nullable=False)
 
     receita = relationship("ReceitaModel", back_populates="adicionais")
     adicional = relationship("AdicionalModel", foreign_keys=[adicional_id])
