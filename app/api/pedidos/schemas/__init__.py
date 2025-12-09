@@ -7,7 +7,8 @@ from .schema_pedido import (
     # Enums
     TipoPedidoCheckoutEnum,
     # Request schemas
-    ItemAdicionalRequest,
+    ItemAdicionalComplementoRequest,
+    ItemComplementoRequest,
     ItemPedidoRequest,
     ReceitaPedidoRequest,
     ComboPedidoRequest,
@@ -59,7 +60,8 @@ __all__ = [
     # Enums
     "TipoPedidoCheckoutEnum",
     # Request schemas
-    "ItemAdicionalRequest",
+    "ItemAdicionalComplementoRequest",
+    "ItemComplementoRequest",
     "ItemPedidoRequest",
     "ReceitaPedidoRequest",
     "ComboPedidoRequest",

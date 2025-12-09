@@ -447,7 +447,7 @@ class PedidoAdminService:
 
         if tipo == TipoEntregaEnum.MESA:
             if payload.acao == PedidoItemMutationAction.ADD:
-                if payload.receita_id or payload.combo_id or payload.adicionais or payload.adicionais_ids:
+                if payload.receita_id or payload.combo_id or payload.complementos:
                     from app.api.pedidos.services.service_pedidos_mesa import AdicionarProdutoGenericoRequest
 
                     body = AdicionarProdutoGenericoRequest(
@@ -456,8 +456,7 @@ class PedidoAdminService:
                         combo_id=payload.combo_id,
                         quantidade=payload.quantidade or 1,
                         observacao=payload.observacao,
-                        adicionais=payload.adicionais,
-                        adicionais_ids=payload.adicionais_ids,
+                        complementos=payload.complementos,
                     )
                     self.mesa_service.adicionar_produto_generico(pedido_id, body)
                 from app.api.pedidos.services.service_pedidos_mesa import AdicionarItemRequest
@@ -484,15 +483,14 @@ class PedidoAdminService:
             )
 
             if payload.acao == PedidoItemMutationAction.ADD:
-                if payload.receita_id or payload.combo_id or payload.adicionais or payload.adicionais_ids:
+                if payload.receita_id or payload.combo_id or payload.complementos:
                     body = BalcaoProdutoGenericoRequest(
                         produto_cod_barras=payload.produto_cod_barras,
                         receita_id=payload.receita_id,
                         combo_id=payload.combo_id,
                         quantidade=payload.quantidade or 1,
                         observacao=payload.observacao,
-                        adicionais=payload.adicionais,
-                        adicionais_ids=payload.adicionais_ids,
+                        complementos=payload.complementos,
                     )
                     self.balcao_service.adicionar_produto_generico(pedido_id, body)
                 body = BalcaoAdicionarItemRequest(

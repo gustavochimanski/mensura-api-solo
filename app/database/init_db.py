@@ -273,6 +273,7 @@ def importar_models():
     from app.api.cadastros.models.model_parceiros import ParceiroModel, BannerParceiroModel
     from app.api.cadastros.models.model_regiao_entrega import RegiaoEntregaModel
     from app.api.catalogo.models.model_adicional import AdicionalModel
+    from app.api.catalogo.models.model_complemento import ComplementoModel
     # ─── Models Notifications ───────────────────────────────────────────
     from app.api.notifications.models.notification import Notification, NotificationLog
     logger.info("📦 Models importados com sucesso.")

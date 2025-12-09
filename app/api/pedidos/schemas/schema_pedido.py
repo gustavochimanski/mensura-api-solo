@@ -111,10 +111,19 @@ class ModoEdicaoRequest(BaseModel):
 # ======================================================================
 
 
-class ItemAdicionalRequest(BaseModel):
-    """Adicional vinculado a um item do pedido, com quantidade."""
+class ItemAdicionalComplementoRequest(BaseModel):
+    """Adicional dentro de um complemento, com quantidade (se o complemento for quantitativo)."""
     adicional_id: int
-    quantidade: int = Field(ge=1, default=1, description="Quantidade deste adicional para o item")
+    quantidade: int = Field(ge=1, default=1, description="Quantidade deste adicional (usado apenas se complemento for quantitativo)")
+
+
+class ItemComplementoRequest(BaseModel):
+    """Complemento com seus adicionais selecionados."""
+    complemento_id: int
+    adicionais: List[ItemAdicionalComplementoRequest] = Field(
+        default_factory=list,
+        description="Lista de adicionais selecionados dentro deste complemento",
+    )
 
 
 class ItemPedidoRequest(BaseModel):
@@ -122,16 +131,10 @@ class ItemPedidoRequest(BaseModel):
     quantidade: int
     observacao: Optional[str] = None
 
-    # Novo formato: adicionais com quantidade
-    adicionais: Optional[List[ItemAdicionalRequest]] = Field(
+    # Complementos com adicionais
+    complementos: Optional[List[ItemComplementoRequest]] = Field(
         default=None,
-        description="Lista de adicionais do item, com quantidade por adicional",
-    )
-
-    # LEGADO: manter por compatibilidade (apenas IDs, quantidade = 1 por adicional)
-    adicionais_ids: Optional[List[int]] = Field(
-        default=None,
-        description="(LEGADO) IDs de adicionais vinculados ao produto; quantidade implícita = 1",
+        description="Lista de complementos do item, cada um com seus adicionais selecionados",
     )
 
 
@@ -145,30 +148,27 @@ class ReceitaPedidoRequest(BaseModel):
     quantidade: int
     observacao: Optional[str] = None
 
-    adicionais: Optional[List[ItemAdicionalRequest]] = Field(
+    # Complementos com adicionais
+    complementos: Optional[List[ItemComplementoRequest]] = Field(
         default=None,
-        description="Lista de adicionais vinculados à receita para este item",
-    )
-
-    # LEGADO / compat: permite também enviar apenas IDs
-    adicionais_ids: Optional[List[int]] = Field(
-        default=None,
-        description="(LEGADO) IDs de adicionais vinculados à receita; quantidade implícita = 1",
+        description="Lista de complementos da receita, cada um com seus adicionais selecionados",
     )
 
 
 class ComboItemAdicionalPedidoRequest(BaseModel):
-    """Mantido apenas para compatibilidade retroativa (NÃO USAR NO NOVO FLUXO)."""
+    """DEPRECADO - usar complementos."""
     produto_cod_barras: str
-    adicionais: List[ItemAdicionalRequest]
+    complementos: Optional[List[ItemComplementoRequest]] = None
 
 
 class ComboPedidoRequest(BaseModel):
     combo_id: int
     quantidade: int = Field(ge=1, default=1)
-    adicionais: Optional[List[ItemAdicionalRequest]] = Field(
+    
+    # Complementos com adicionais
+    complementos: Optional[List[ItemComplementoRequest]] = Field(
         default=None,
-        description="Lista de adicionais aplicados ao combo (por ID, sem usar código de barras)",
+        description="Lista de complementos do combo, cada um com seus adicionais selecionados",
     )
 
 
