@@ -1,13 +1,11 @@
 from sqlalchemy import Column, String, Boolean, JSON, DateTime, Index
-from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime
 import uuid
 
-Base = declarative_base()
+from ....database.db_connection import Base
 
 class NotificationSubscription(Base):
     __tablename__ = "notification_subscriptions"
-    __table_args__ = {"schema": "notifications"}
     
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     empresa_id = Column(String, nullable=False, index=True)
@@ -34,6 +32,7 @@ class NotificationSubscription(Base):
     
     # Índices compostos para performance
     __table_args__ = (
+        {"schema": "notifications"},
         Index('idx_empresa_event_channel', 'empresa_id', 'event_type', 'channel'),
         Index('idx_user_event_channel', 'user_id', 'event_type', 'channel'),
     )
