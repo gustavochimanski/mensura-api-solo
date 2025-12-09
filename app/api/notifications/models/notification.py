@@ -29,6 +29,16 @@ class NotificationPriority(PyEnum):
     HIGH = "high"
     URGENT = "urgent"
 
+class MessageType(PyEnum):
+    """Tipos de mensagem para classificação e controle de disparo"""
+    MARKETING = "marketing"
+    UTILITY = "utility"
+    TRANSACTIONAL = "transactional"
+    PROMOTIONAL = "promotional"
+    ALERT = "alert"
+    SYSTEM = "system"
+    NEWS = "news"
+
 class Notification(Base):
     __tablename__ = "notifications"
     __table_args__ = {"schema": "notifications"}
@@ -49,6 +59,7 @@ class Notification(Base):
     # Status e controle
     status = Column(Enum(NotificationStatus), default=NotificationStatus.PENDING, index=True)
     priority = Column(Enum(NotificationPriority), default=NotificationPriority.NORMAL)
+    message_type = Column(Enum(MessageType), nullable=False, index=True, default=MessageType.UTILITY)
     
     # Configurações de entrega
     recipient = Column(String, nullable=False)  # email, phone, webhook_url, etc.

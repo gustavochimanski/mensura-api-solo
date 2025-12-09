@@ -94,6 +94,7 @@ async def list_notifications(
     channel: Optional[str] = Query(None, description="Canal de notificação"),
     status: Optional[str] = Query(None, description="Status da notificação"),
     priority: Optional[str] = Query(None, description="Prioridade"),
+    message_type: Optional[str] = Query(None, description="Tipo da mensagem (marketing, utility, etc)"),
     page: int = Query(1, ge=1, description="Página"),
     per_page: int = Query(50, ge=1, le=100, description="Itens por página"),
     service: NotificationService = Depends(get_notification_service),
@@ -101,13 +102,16 @@ async def list_notifications(
 ):
     """Lista notificações com filtros"""
     try:
+        from ..schemas.notification_schemas import MessageType
+        
         filters = NotificationFilter(
             empresa_id=empresa_id,
             user_id=user_id,
             event_type=event_type,
             channel=channel,
             status=status,
-            priority=priority
+            priority=priority,
+            message_type=MessageType(message_type) if message_type else None
         )
         
         offset = (page - 1) * per_page

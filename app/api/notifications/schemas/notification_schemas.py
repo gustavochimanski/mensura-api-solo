@@ -25,6 +25,16 @@ class NotificationPriority(str, Enum):
     HIGH = "high"
     URGENT = "urgent"
 
+class MessageType(str, Enum):
+    """Tipos de mensagem para classificação e controle de disparo"""
+    MARKETING = "marketing"  # Mensagens promocionais e de marketing
+    UTILITY = "utility"  # Mensagens utilitárias (confirmações, atualizações)
+    TRANSACTIONAL = "transactional"  # Mensagens transacionais (pedidos, pagamentos)
+    PROMOTIONAL = "promotional"  # Promoções e ofertas
+    ALERT = "alert"  # Alertas e avisos importantes
+    SYSTEM = "system"  # Mensagens do sistema
+    NEWS = "news"  # Notícias e atualizações
+
 # Schemas de Request
 class CreateNotificationRequest(BaseModel):
     empresa_id: str = Field(..., description="ID da empresa")
@@ -36,6 +46,7 @@ class CreateNotificationRequest(BaseModel):
     channel: NotificationChannel = Field(..., description="Canal de notificação")
     recipient: str = Field(..., description="Destinatário da notificação")
     priority: NotificationPriority = Field(NotificationPriority.NORMAL, description="Prioridade da notificação")
+    message_type: MessageType = Field(..., description="Tipo da mensagem (marketing, utility, transactional, etc)")
     channel_metadata: Optional[Dict[str, Any]] = Field(None, description="Metadados específicos do canal")
     max_attempts: int = Field(3, ge=1, le=10, description="Número máximo de tentativas")
 
@@ -49,6 +60,7 @@ class SendNotificationRequest(BaseModel):
     channels: List[NotificationChannel] = Field(..., description="Canais para envio")
     recipients: Dict[NotificationChannel, str] = Field(..., description="Destinatários por canal")
     priority: NotificationPriority = Field(NotificationPriority.NORMAL, description="Prioridade")
+    message_type: MessageType = Field(..., description="Tipo da mensagem (marketing, utility, transactional, etc)")
 
 # Schemas de Response
 class NotificationResponse(BaseModel):
@@ -62,6 +74,7 @@ class NotificationResponse(BaseModel):
     channel: NotificationChannel
     status: NotificationStatus
     priority: NotificationPriority
+    message_type: MessageType
     recipient: str
     channel_metadata: Optional[Dict[str, Any]]
     attempts: int
@@ -97,6 +110,7 @@ class NotificationFilter(BaseModel):
     channel: Optional[NotificationChannel] = None
     status: Optional[NotificationStatus] = None
     priority: Optional[NotificationPriority] = None
+    message_type: Optional[MessageType] = None
     created_from: Optional[datetime] = None
     created_to: Optional[datetime] = None
 

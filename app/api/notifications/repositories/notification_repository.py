@@ -4,7 +4,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 import logging
 
-from ..models.notification import Notification, NotificationLog, NotificationStatus, NotificationChannel, NotificationPriority
+from ..models.notification import Notification, NotificationLog, NotificationStatus, NotificationChannel, NotificationPriority, MessageType
 from ..schemas.notification_schemas import NotificationFilter
 
 logger = logging.getLogger(__name__)
@@ -187,6 +187,9 @@ class NotificationRepository:
         if filters.priority:
             query = query.filter(Notification.priority == filters.priority)
         
+        if filters.message_type:
+            query = query.filter(Notification.message_type == filters.message_type)
+        
         if filters.created_from:
             query = query.filter(Notification.created_at >= filters.created_from)
         
@@ -221,6 +224,9 @@ class NotificationRepository:
         
         if filters.priority:
             query = query.filter(Notification.priority == filters.priority)
+        
+        if filters.message_type:
+            query = query.filter(Notification.message_type == filters.message_type)
         
         if filters.created_from:
             query = query.filter(Notification.created_at >= filters.created_from)
