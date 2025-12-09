@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, validator, root_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 from .notification_schemas import MessageType, NotificationChannel, NotificationPriority
@@ -27,29 +27,27 @@ class DispatchMessageRequest(BaseModel):
     # Configurações de agendamento
     scheduled_at: Optional[datetime] = Field(None, description="Data/hora para envio agendado (opcional)")
     
-    @validator('channels')
+    @field_validator('channels')
+    @classmethod
     def validate_channels(cls, v):
         if not v or len(v) == 0:
             raise ValueError('Pelo menos um canal deve ser especificado')
         return v
     
-    @root_validator
-    def validate_recipients(cls, values):
+    @model_validator(mode='after')
+    def validate_recipients(self):
         """Valida que pelo menos um tipo de destinatário foi fornecido"""
-        user_ids = values.get('user_ids')
-        recipient_emails = values.get('recipient_emails')
-        recipient_phones = values.get('recipient_phones')
-        
-        has_user_ids = user_ids and len(user_ids) > 0
-        has_emails = recipient_emails and len(recipient_emails) > 0
-        has_phones = recipient_phones and len(recipient_phones) > 0
+        has_user_ids = self.user_ids and len(self.user_ids) > 0
+        has_emails = self.recipient_emails and len(self.recipient_emails) > 0
+        has_phones = self.recipient_phones and len(self.recipient_phones) > 0
         
         if not (has_user_ids or has_emails or has_phones):
             raise ValueError('Deve fornecer pelo menos um: user_ids, recipient_emails ou recipient_phones')
         
-        return values
+        return self
     
-    @validator('message_type')
+    @field_validator('message_type')
+    @classmethod
     def validate_message_type(cls, v):
         """Validações específicas por tipo de mensagem"""
         if v == MessageType.MARKETING:
@@ -86,7 +84,8 @@ class BulkDispatchRequest(BaseModel):
     # Limites
     max_recipients: Optional[int] = Field(None, ge=1, description="Limite máximo de destinatários")
     
-    @validator('channels')
+    @field_validator('channels')
+    @classmethod
     def validate_channels(cls, v):
         if not v or len(v) == 0:
             raise ValueError('Pelo menos um canal deve ser especificado')
