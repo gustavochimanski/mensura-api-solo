@@ -192,7 +192,7 @@ class ReceitasRepository:
             raise HTTPException(
                 status.HTTP_404_NOT_FOUND, 
                 f"Adicional não encontrado com ID: {data.adicional_id}. "
-                f"O adicional deve estar cadastrado na tabela de adicionais (catalogo.adicional_produto) antes de ser vinculado à receita."
+                f"O adicional deve estar cadastrado na tabela de complemento_itens (catalogo.complemento_itens) antes de ser vinculado à receita."
             )
         
         # Verifica se o adicional pertence à mesma empresa da receita
