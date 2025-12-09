@@ -39,11 +39,21 @@ class ComplementoModel(Base):
         viewonly=True,  # Leitura apenas, pois a relação real é no link
     )
     
-    # Relacionamento 1:N com itens de complemento (itens dentro do complemento)
+    # Relacionamento N:N com itens de complemento (via tabela de associação)
+    # Um complemento pode ter vários itens e um item pode pertencer a vários complementos
+    itens = relationship(
+        "AdicionalModel",
+        secondary="catalogo.complemento_item_link",
+        back_populates="complementos",
+        viewonly=True,
+    )
+    
+    # Mantido para compatibilidade (alias para itens)
     adicionais = relationship(
         "AdicionalModel",
-        back_populates="complemento",
-        cascade="all, delete-orphan",
+        secondary="catalogo.complemento_item_link",
+        back_populates="complementos",
+        viewonly=True,
     )
     
     model_config = ConfigDict(from_attributes=True)
