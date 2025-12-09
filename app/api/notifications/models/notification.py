@@ -1,11 +1,10 @@
 from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, JSON, ForeignKey, Enum
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from enum import Enum as PyEnum
 import uuid
 
-Base = declarative_base()
+from ....database.db_connection import Base
 
 class NotificationStatus(PyEnum):
     PENDING = "pending"
