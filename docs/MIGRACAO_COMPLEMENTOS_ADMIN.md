@@ -80,131 +80,340 @@ Produto
 
 ---
 
-## 🚫 Endpoints Obsoletos
+## 🚫 Endpoints Removidos
 
-### ⚠️ Endpoints de Adicionais que DEVEM SER DESCONTINUADOS
+### ❌ Endpoints de Adicionais REMOVIDOS
 
-#### Admin - `/api/catalogo/admin/adicionais`
+**Todos os endpoints abaixo foram completamente removidos do sistema:**
 
-| Método | Endpoint | Status | Motivo |
-|--------|----------|--------|--------|
-| `POST` | `/api/catalogo/admin/adicionais` | ❌ **OBSOLETO** | Adicionais agora são criados dentro de complementos |
-| `PUT` | `/api/catalogo/admin/adicionais/{adicional_id}` | ❌ **OBSOLETO** | Use endpoints de complementos |
-| `DELETE` | `/api/catalogo/admin/adicionais/{adicional_id}` | ❌ **OBSOLETO** | Use endpoints de complementos |
-| `POST` | `/api/catalogo/admin/adicionais/produto/{cod_barras}/vincular` | ❌ **OBSOLETO** | Vincule complementos ao produto, não adicionais diretos |
+#### Admin - `/api/catalogo/admin/adicionais` (REMOVIDO)
 
-#### Client - `/api/catalogo/client/adicionais`
+| Método | Endpoint | Status | Substituição |
+|--------|----------|--------|--------------|
+| `POST` | `/api/catalogo/admin/adicionais` | ❌ **REMOVIDO** | Use `POST /api/catalogo/admin/complementos/{id}/adicionais` |
+| `PUT` | `/api/catalogo/admin/adicionais/{adicional_id}` | ❌ **REMOVIDO** | Use `PUT /api/catalogo/admin/complementos/{id}/adicionais/{adicional_id}` |
+| `DELETE` | `/api/catalogo/admin/adicionais/{adicional_id}` | ❌ **REMOVIDO** | Use `DELETE /api/catalogo/admin/complementos/{id}/adicionais/{adicional_id}` |
+| `POST` | `/api/catalogo/admin/adicionais/produto/{cod_barras}/vincular` | ❌ **REMOVIDO** | Use `POST /api/catalogo/admin/complementos/produto/{cod_barras}/vincular` |
+| `GET` | `/api/catalogo/admin/adicionais/` | ❌ **REMOVIDO** | Use `GET /api/catalogo/admin/complementos/` |
+| `GET` | `/api/catalogo/admin/adicionais/{adicional_id}` | ❌ **REMOVIDO** | Use endpoints de complementos |
+| `GET` | `/api/catalogo/admin/adicionais/produto/{cod_barras}` | ❌ **REMOVIDO** | Use `GET /api/catalogo/admin/complementos/produto/{cod_barras}` |
 
-| Método | Endpoint | Status | Motivo |
-|--------|----------|--------|--------|
-| `GET` | `/api/catalogo/client/adicionais/produto/{cod_barras}` | ❌ **OBSOLETO** | Use endpoint de complementos do produto |
-| `GET` | `/api/catalogo/client/adicionais/combo/{combo_id}` | ❌ **OBSOLETO** | Use endpoint de complementos do combo |
-| `GET` | `/api/catalogo/client/adicionais/receita/{receita_id}` | ❌ **OBSOLETO** | Use endpoint de complementos da receita |
+#### Client - `/api/catalogo/client/adicionais` (REMOVIDO)
 
-### ⚠️ Endpoints que AINDA FUNCIONAM (mas limitados)
-
-| Método | Endpoint | Status | Observação |
-|--------|----------|--------|------------|
-| `GET` | `/api/catalogo/admin/adicionais/` | ⚠️ **LIMITADO** | Lista adicionais, mas eles devem estar dentro de complementos |
-| `GET` | `/api/catalogo/admin/adicionais/{adicional_id}` | ⚠️ **LIMITADO** | Busca adicional, mas ele deve estar dentro de um complemento |
-| `GET` | `/api/catalogo/admin/adicionais/produto/{cod_barras}` | ⚠️ **LIMITADO** | Retorna vazio (adicionais não são mais vinculados diretamente a produtos) |
+| Método | Endpoint | Status | Substituição |
+|--------|----------|--------|--------------|
+| `GET` | `/api/catalogo/client/adicionais/produto/{cod_barras}` | ❌ **REMOVIDO** | Use `GET /api/catalogo/client/complementos/produto/{cod_barras}` |
+| `GET` | `/api/catalogo/client/adicionais/combo/{combo_id}` | ❌ **REMOVIDO** | Use `GET /api/catalogo/client/complementos/combo/{combo_id}` |
+| `GET` | `/api/catalogo/client/adicionais/receita/{receita_id}` | ❌ **REMOVIDO** | Use `GET /api/catalogo/client/complementos/receita/{receita_id}` |
 
 ---
 
-## ✅ Novos Endpoints Necessários
+## ✅ Novos Endpoints Disponíveis
 
-### 🔨 Endpoints de Complementos (A CRIAR)
+### ✅ Endpoints de Complementos (IMPLEMENTADOS)
 
 #### Admin - `/api/catalogo/admin/complementos`
 
-```python
+```http
 # Listar complementos de uma empresa
 GET /api/catalogo/admin/complementos?empresa_id={id}&apenas_ativos=true
+Authorization: Bearer {token}
 
 # Criar complemento
 POST /api/catalogo/admin/complementos
-Body: {
-    "empresa_id": int,
-    "nome": str,
-    "descricao": str | null,
-    "obrigatorio": bool,
-    "quantitativo": bool,
-    "permite_multipla_escolha": bool,
-    "ordem": int
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+    "empresa_id": 1,
+    "nome": "Molhos",
+    "descricao": "Escolha seus molhos favoritos",
+    "obrigatorio": false,
+    "quantitativo": false,
+    "permite_multipla_escolha": true,
+    "ordem": 1
 }
+
+# Response: ComplementoResponse com id, empresa_id, nome, etc.
 
 # Buscar complemento por ID
 GET /api/catalogo/admin/complementos/{complemento_id}
+Authorization: Bearer {token}
 
 # Atualizar complemento
 PUT /api/catalogo/admin/complementos/{complemento_id}
-Body: {
-    "nome": str | null,
-    "descricao": str | null,
-    "obrigatorio": bool | null,
-    "quantitativo": bool | null,
-    "permite_multipla_escolha": bool | null,
-    "ativo": bool | null,
-    "ordem": int | null
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+    "nome": "Molhos Especiais",
+    "descricao": "Nova descrição",
+    "obrigatorio": true,
+    "quantitativo": false,
+    "permite_multipla_escolha": true,
+    "ativo": true,
+    "ordem": 1
 }
 
 # Deletar complemento
 DELETE /api/catalogo/admin/complementos/{complemento_id}
+Authorization: Bearer {token}
 
 # Vincular complementos a um produto
 POST /api/catalogo/admin/complementos/produto/{cod_barras}/vincular
-Body: {
-    "complemento_ids": [int]
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+    "complemento_ids": [10, 11, 12]
 }
+
+# Response: VincularComplementosProdutoResponse
 
 # Listar complementos de um produto
 GET /api/catalogo/admin/complementos/produto/{cod_barras}?apenas_ativos=true
+Authorization: Bearer {token}
 ```
 
 #### Admin - Adicionais dentro de Complementos
 
-```python
+```http
 # Criar adicional dentro de um complemento
 POST /api/catalogo/admin/complementos/{complemento_id}/adicionais
-Body: {
-    "nome": str,
-    "descricao": str | null,
-    "preco": decimal,
-    "custo": decimal,
-    "ativo": bool,
-    "ordem": int
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+    "nome": "Ketchup",
+    "descricao": "Molho de tomate",
+    "preco": 0.00,
+    "custo": 0.00,
+    "ativo": true,
+    "ordem": 1
 }
 
-# Atualizar adicional
-PUT /api/catalogo/admin/complementos/{complemento_id}/adicionais/{adicional_id}
-Body: {
-    "nome": str | null,
-    "descricao": str | null,
-    "preco": decimal | null,
-    "custo": decimal | null,
-    "ativo": bool | null,
-    "ordem": int | null
-}
-
-# Deletar adicional
-DELETE /api/catalogo/admin/complementos/{complemento_id}/adicionais/{adicional_id}
+# Response: AdicionalResponse
 
 # Listar adicionais de um complemento
 GET /api/catalogo/admin/complementos/{complemento_id}/adicionais?apenas_ativos=true
+Authorization: Bearer {token}
+
+# Response: List[AdicionalResponse]
+
+# Atualizar adicional
+PUT /api/catalogo/admin/complementos/{complemento_id}/adicionais/{adicional_id}
+Authorization: Bearer {token}
+Content-Type: application/json
+
+{
+    "nome": "Ketchup Premium",
+    "preco": 1.00,
+    "ativo": true
+}
+
+# Response: AdicionalResponse
+
+# Deletar adicional
+DELETE /api/catalogo/admin/complementos/{complemento_id}/adicionais/{adicional_id}
+Authorization: Bearer {token}
+
+# Response: { "message": "Adicional deletado com sucesso" }
 ```
 
 #### Client - `/api/catalogo/client/complementos`
 
-```python
+```http
 # Listar complementos de um produto (com seus adicionais)
 GET /api/catalogo/client/complementos/produto/{cod_barras}?apenas_ativos=true
+X-Super-Token: {super_token}
+
+# Response: List[ComplementoResponse] com adicionais incluídos
 
 # Listar complementos de um combo (com seus adicionais)
 GET /api/catalogo/client/complementos/combo/{combo_id}?apenas_ativos=true
+X-Super-Token: {super_token}
+
+# Response: List[ComplementoResponse] - agrega complementos de todos os produtos do combo
 
 # Listar complementos de uma receita (com seus adicionais)
 GET /api/catalogo/client/complementos/receita/{receita_id}?apenas_ativos=true
+X-Super-Token: {super_token}
+
+# Response: List[ComplementoResponse] - atualmente retorna lista vazia
+# (receitas não têm produtos diretamente vinculados)
 ```
+
+---
+
+## 📖 Detalhes dos Endpoints Implementados
+
+### Endpoints Admin - Complementos
+
+#### GET `/api/catalogo/admin/complementos/`
+Lista todos os complementos de uma empresa.
+
+**Query Parameters:**
+- `empresa_id` (int, obrigatório) - ID da empresa
+- `apenas_ativos` (bool, default: `true`) - Filtrar apenas complementos ativos
+
+**Response 200:**
+```json
+[
+  {
+    "id": 10,
+    "empresa_id": 1,
+    "nome": "Molhos",
+    "descricao": "Escolha seus molhos favoritos",
+    "obrigatorio": false,
+    "quantitativo": false,
+    "permite_multipla_escolha": true,
+    "ordem": 1,
+    "ativo": true,
+    "adicionais": [
+      {
+        "id": 1,
+        "nome": "Ketchup",
+        "descricao": null,
+        "preco": 0.00,
+        "custo": 0.00,
+        "ativo": true,
+        "ordem": 1,
+        "created_at": "2024-01-01T00:00:00Z",
+        "updated_at": "2024-01-01T00:00:00Z"
+      }
+    ],
+    "created_at": "2024-01-01T00:00:00Z",
+    "updated_at": "2024-01-01T00:00:00Z"
+  }
+]
+```
+
+#### POST `/api/catalogo/admin/complementos/`
+Cria um novo complemento.
+
+**Request Body:**
+```json
+{
+  "empresa_id": 1,
+  "nome": "Molhos",
+  "descricao": "Escolha seus molhos favoritos",
+  "obrigatorio": false,
+  "quantitativo": false,
+  "permite_multipla_escolha": true,
+  "ordem": 1
+}
+```
+
+**Response 201:** `ComplementoResponse` (sem adicionais inicialmente)
+
+#### GET `/api/catalogo/admin/complementos/{complemento_id}`
+Busca um complemento específico por ID.
+
+**Response 200:** `ComplementoResponse` com todos os adicionais
+
+**Response 404:** `{"detail": "Complemento {id} não encontrado."}`
+
+#### PUT `/api/catalogo/admin/complementos/{complemento_id}`
+Atualiza um complemento existente.
+
+**Request Body:** Todos os campos são opcionais
+```json
+{
+  "nome": "Molhos Especiais",
+  "obrigatorio": true,
+  "ativo": false
+}
+```
+
+**Response 200:** `ComplementoResponse` atualizado
+
+#### DELETE `/api/catalogo/admin/complementos/{complemento_id}`
+Deleta um complemento (e todos os seus adicionais por cascade).
+
+**Response 200:** `{"message": "Complemento deletado com sucesso"}`
+
+**Response 404:** `{"detail": "Complemento {id} não encontrado."}`
+
+#### POST `/api/catalogo/admin/complementos/produto/{cod_barras}/vincular`
+Vincula múltiplos complementos a um produto.
+
+**Request Body:**
+```json
+{
+  "complemento_ids": [10, 11, 12]
+}
+```
+
+**Response 200:**
+```json
+{
+  "produto_cod_barras": "7891234567890",
+  "complementos_vinculados": [
+    {
+      "id": 10,
+      "nome": "Molhos",
+      "obrigatorio": false,
+      "quantitativo": false,
+      "permite_multipla_escolha": true,
+      "ordem": 1
+    }
+  ],
+  "message": "Complementos vinculados com sucesso"
+}
+```
+
+#### GET `/api/catalogo/admin/complementos/produto/{cod_barras}`
+Lista todos os complementos vinculados a um produto.
+
+**Query Parameters:**
+- `apenas_ativos` (bool, default: `true`)
+
+**Response 200:** `List[ComplementoResponse]` com adicionais incluídos
+
+### Endpoints Admin - Adicionais dentro de Complementos
+
+#### POST `/api/catalogo/admin/complementos/{complemento_id}/adicionais`
+Cria um adicional dentro de um complemento.
+
+**Request Body:**
+```json
+{
+  "nome": "Ketchup",
+  "descricao": "Molho de tomate",
+  "preco": 0.00,
+  "custo": 0.00,
+  "ativo": true,
+  "ordem": 1
+}
+```
+
+**Response 201:** `AdicionalResponse`
+
+#### GET `/api/catalogo/admin/complementos/{complemento_id}/adicionais`
+Lista todos os adicionais de um complemento.
+
+**Query Parameters:**
+- `apenas_ativos` (bool, default: `true`)
+
+**Response 200:** `List[AdicionalResponse]`
+
+#### PUT `/api/catalogo/admin/complementos/{complemento_id}/adicionais/{adicional_id}`
+Atualiza um adicional dentro de um complemento.
+
+**Request Body:** Todos os campos são opcionais
+```json
+{
+  "nome": "Ketchup Premium",
+  "preco": 1.00
+}
+```
+
+**Response 200:** `AdicionalResponse` atualizado
+
+#### DELETE `/api/catalogo/admin/complementos/{complemento_id}/adicionais/{adicional_id}`
+Deleta um adicional de um complemento.
+
+**Response 200:** `{"message": "Adicional deletado com sucesso"}`
 
 ---
 
@@ -294,7 +503,7 @@ class PedidoItemMutationRequest(BaseModel):
     # REMOVIDO: adicionais_ids (obsoleto)
 ```
 
-### Schemas de Complementos (A CRIAR)
+### Schemas de Complementos (IMPLEMENTADOS)
 
 #### Request Schemas
 
@@ -616,11 +825,11 @@ GET /api/catalogo/client/complementos/produto/7891234567890?apenas_ativos=true
 
 ## 📌 Checklist de Migração
 
-- [ ] Criar endpoints de complementos (admin e client)
-- [ ] Criar schemas de complementos
-- [ ] Atualizar documentação da API
+- [x] Criar endpoints de complementos (admin e client) ✅
+- [x] Criar schemas de complementos ✅
+- [x] Atualizar documentação da API ✅
 - [ ] Migrar dados existentes
-- [ ] Descontinuar endpoints obsoletos de adicionais
+- [x] Descontinuar endpoints obsoletos de adicionais ✅ (REMOVIDOS)
 - [ ] Atualizar frontend para usar complementos
 - [ ] Testar fluxo completo de pedidos com complementos
 - [ ] Validar cálculos de preços com complementos

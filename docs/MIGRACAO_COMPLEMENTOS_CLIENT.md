@@ -59,15 +59,19 @@ A nova estrutura permite:
 
 ---
 
-## 🚫 Endpoints Obsoletos
+## 🚫 Endpoints Removidos
 
-### ⚠️ NÃO USE MAIS ESTES ENDPOINTS
+### ❌ ENDPOINTS REMOVIDOS - NÃO EXISTEM MAIS
+
+**Todos os endpoints abaixo foram completamente removidos do sistema:**
 
 | Método | Endpoint | Status | Substituição |
 |--------|----------|--------|--------------|
-| `GET` | `/api/catalogo/client/adicionais/produto/{cod_barras}` | ❌ **OBSOLETO** | Use `/api/catalogo/client/complementos/produto/{cod_barras}` |
-| `GET` | `/api/catalogo/client/adicionais/combo/{combo_id}` | ❌ **OBSOLETO** | Use `/api/catalogo/client/complementos/combo/{combo_id}` |
-| `GET` | `/api/catalogo/client/adicionais/receita/{receita_id}` | ❌ **OBSOLETO** | Use `/api/catalogo/client/complementos/receita/{receita_id}` |
+| `GET` | `/api/catalogo/client/adicionais/produto/{cod_barras}` | ❌ **REMOVIDO** | Use `/api/catalogo/client/complementos/produto/{cod_barras}` |
+| `GET` | `/api/catalogo/client/adicionais/combo/{combo_id}` | ❌ **REMOVIDO** | Use `/api/catalogo/client/complementos/combo/{combo_id}` |
+| `GET` | `/api/catalogo/client/adicionais/receita/{receita_id}` | ❌ **REMOVIDO** | Use `/api/catalogo/client/complementos/receita/{receita_id}` |
+
+⚠️ **IMPORTANTE:** Se você tentar acessar os endpoints antigos, receberá um erro 404 (Not Found).
 
 ### ⚠️ Campos Removidos dos Schemas
 
@@ -80,11 +84,13 @@ A nova estrutura permite:
 
 ---
 
-## ✅ Novos Endpoints
+## ✅ Novos Endpoints (DISPONÍVEIS)
 
 ### 1. Listar Complementos de um Produto
 
 **Endpoint:** `GET /api/catalogo/client/complementos/produto/{cod_barras}`
+
+**Status:** ✅ **IMPLEMENTADO E DISPONÍVEL**
 
 **Headers:**
 ```
@@ -156,6 +162,8 @@ X-Super-Token: {seu_token}
 
 **Endpoint:** `GET /api/catalogo/client/complementos/combo/{combo_id}`
 
+**Status:** ✅ **IMPLEMENTADO E DISPONÍVEL**
+
 **Headers:**
 ```
 X-Super-Token: {seu_token}
@@ -170,6 +178,8 @@ X-Super-Token: {seu_token}
 
 **Endpoint:** `GET /api/catalogo/client/complementos/receita/{receita_id}`
 
+**Status:** ✅ **IMPLEMENTADO** (atualmente retorna lista vazia, pois receitas não têm produtos diretamente vinculados)
+
 **Headers:**
 ```
 X-Super-Token: {seu_token}
@@ -179,6 +189,109 @@ X-Super-Token: {seu_token}
 - `apenas_ativos` (boolean, default: `true`)
 
 **Response:** Mesma estrutura do endpoint de produto
+
+---
+
+## 📖 Detalhes dos Endpoints Implementados
+
+### GET `/api/catalogo/client/complementos/produto/{cod_barras}`
+
+**Status:** ✅ **IMPLEMENTADO E DISPONÍVEL**
+
+**Headers Obrigatórios:**
+```
+X-Super-Token: {seu_token_cliente}
+```
+
+**Query Parameters:**
+- `apenas_ativos` (boolean, default: `true`) - Filtrar apenas complementos ativos
+
+**Response 200:**
+```json
+[
+  {
+    "id": 10,
+    "empresa_id": 1,
+    "nome": "Molhos",
+    "descricao": "Escolha seus molhos favoritos",
+    "obrigatorio": false,
+    "quantitativo": false,
+    "permite_multipla_escolha": true,
+    "ordem": 1,
+    "ativo": true,
+    "adicionais": [
+      {
+        "id": 1,
+        "nome": "Ketchup",
+        "descricao": null,
+        "preco": 0.00,
+        "custo": 0.00,
+        "ativo": true,
+        "ordem": 1,
+        "created_at": "2024-01-01T00:00:00Z",
+        "updated_at": "2024-01-01T00:00:00Z"
+      },
+      {
+        "id": 2,
+        "nome": "Mostarda",
+        "descricao": null,
+        "preco": 0.00,
+        "custo": 0.00,
+        "ativo": true,
+        "ordem": 2,
+        "created_at": "2024-01-01T00:00:00Z",
+        "updated_at": "2024-01-01T00:00:00Z"
+      }
+    ],
+    "created_at": "2024-01-01T00:00:00Z",
+    "updated_at": "2024-01-01T00:00:00Z"
+  }
+]
+```
+
+**Response 401:** Token inválido ou ausente
+**Response 404:** Produto não encontrado
+
+### GET `/api/catalogo/client/complementos/combo/{combo_id}`
+
+**Status:** ✅ **IMPLEMENTADO E DISPONÍVEL**
+
+**Headers Obrigatórios:**
+```
+X-Super-Token: {seu_token_cliente}
+```
+
+**Query Parameters:**
+- `apenas_ativos` (boolean, default: `true`)
+
+**Funcionamento:**
+- Busca o combo e todos os produtos que o compõem
+- Agrega os complementos de todos os produtos do combo
+- Remove duplicatas (mesmo complemento em múltiplos produtos)
+
+**Response 200:** Mesma estrutura do endpoint de produto
+
+**Response 401:** Token inválido ou ausente
+**Response 404:** Combo não encontrado ou inativo
+
+### GET `/api/catalogo/client/complementos/receita/{receita_id}`
+
+**Status:** ✅ **IMPLEMENTADO** (retorna lista vazia)
+
+**Headers Obrigatórios:**
+```
+X-Super-Token: {seu_token_cliente}
+```
+
+**Query Parameters:**
+- `apenas_ativos` (boolean, default: `true`)
+
+**Observação:** Atualmente retorna uma lista vazia `[]`, pois receitas não têm produtos diretamente vinculados através de ingredientes. Este endpoint foi implementado para manter consistência da API, mas pode ser expandido no futuro se houver necessidade de vincular complementos diretamente a receitas.
+
+**Response 200:** `[]` (lista vazia)
+
+**Response 401:** Token inválido ou ausente
+**Response 404:** Receita não encontrada ou inativa
 
 ---
 
@@ -518,7 +631,7 @@ Se `complemento.permite_multipla_escolha = false`:
 
 ### 6. Os endpoints antigos ainda funcionam?
 
-❌ **Resposta:** Não! Os endpoints antigos de adicionais foram descontinuados. Você DEVE usar os novos endpoints de complementos.
+❌ **Resposta:** Não! Os endpoints antigos de adicionais foram **completamente removidos** do sistema. Se você tentar acessá-los, receberá um erro 404 (Not Found). Você DEVE usar os novos endpoints de complementos.
 
 ### 7. Como migrar meu código existente?
 
@@ -538,14 +651,14 @@ Se `complemento.permite_multipla_escolha = false`:
 
 ### Passo 1: Atualizar busca de adicionais
 
-**Antes:**
+**Antes (REMOVIDO - não funciona mais):**
 ```javascript
-GET /api/catalogo/client/adicionais/produto/7891234567890
+GET /api/catalogo/client/adicionais/produto/7891234567890  // ❌ 404 Not Found
 ```
 
-**Agora:**
+**Agora (USE ESTE):**
 ```javascript
-GET /api/catalogo/client/complementos/produto/7891234567890
+GET /api/catalogo/client/complementos/produto/7891234567890  // ✅ Funciona
 ```
 
 ### Passo 2: Atualizar estrutura do pedido
