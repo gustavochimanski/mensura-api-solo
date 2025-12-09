@@ -13,7 +13,7 @@ from ..models.notification import NotificationStatus, NotificationChannel, Notif
 from ..schemas.notification_schemas import CreateNotificationRequest, SendNotificationRequest
 from ..contracts.notification_service_contract import INotificationService
 from ..contracts.channel_config_provider_contract import IChannelConfigProvider
-from ..adapters.channel_config_adapters import DefaultChannelConfigAdapter, CompositeChannelConfigAdapter
+from ..adapters.channel_config_adapters import DefaultChannelConfigAdapter
 
 logger = logging.getLogger(__name__)
 

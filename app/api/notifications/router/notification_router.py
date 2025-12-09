@@ -17,6 +17,7 @@ from ..schemas.notification_schemas import (
     NotificationFilter,
     NotificationLogResponse
 )
+from ..adapters.channel_config_adapters import DefaultChannelConfigAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +28,16 @@ def get_notification_service(db: Session = Depends(get_db)) -> NotificationServi
     notification_repo = NotificationRepository(db)
     subscription_repo = SubscriptionRepository(db)
     event_repo = EventRepository(db)
-    return NotificationService(notification_repo, subscription_repo, event_repo)
+    
+    # Configura provedor de configuração de canais
+    channel_config_provider = DefaultChannelConfigAdapter()
+    
+    return NotificationService(
+        notification_repo,
+        subscription_repo,
+        event_repo,
+        channel_config_provider=channel_config_provider
+    )
 
 @router.post("/", response_model=NotificationResponse)
 async def create_notification(

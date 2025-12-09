@@ -18,7 +18,7 @@ from ..schemas.message_dispatch_schemas import (
 )
 from ..models.notification import MessageType
 from ..adapters.recipient_adapters import ClienteRecipientAdapter, CompositeRecipientAdapter
-from ..adapters.channel_config_adapters import DefaultChannelConfigAdapter, CompositeChannelConfigAdapter
+from ..adapters.channel_config_adapters import DefaultChannelConfigAdapter
 
 logger = logging.getLogger(__name__)
 
