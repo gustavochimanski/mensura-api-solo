@@ -83,8 +83,34 @@ class NotificationRepository:
             
             # Log para debug: mostra os valores finais antes de criar o objeto
             logger.debug(f"Valores finais antes de criar notificação: channel={notification_data.get('channel')}, "
+                        f"channel.value={notification_data.get('channel').value if hasattr(notification_data.get('channel'), 'value') else 'N/A'}, "
                         f"status={notification_data.get('status')}, priority={notification_data.get('priority')}, "
                         f"message_type={notification_data.get('message_type')}")
+            
+            # CRÍTICO: Garante que os enums estão usando os valores corretos antes de criar o objeto
+            # O SQLAlchemy pode serializar usando o nome do membro em vez do valor
+            # Por isso, sempre recriamos os enums usando o valor extraído
+            if 'channel' in notification_data:
+                channel_enum = notification_data['channel']
+                # Sempre extrai o valor e recria o enum para garantir que o SQLAlchemy use o valor correto
+                channel_value = channel_enum.value if hasattr(channel_enum, 'value') else str(channel_enum)
+                notification_data['channel'] = NotificationChannel(channel_value.lower())
+                logger.debug(f"Channel final: {notification_data['channel']} (value: {notification_data['channel'].value})")
+            
+            if 'status' in notification_data:
+                status_enum = notification_data['status']
+                status_value = status_enum.value if hasattr(status_enum, 'value') else str(status_enum)
+                notification_data['status'] = NotificationStatus(status_value.lower())
+            
+            if 'priority' in notification_data:
+                priority_enum = notification_data['priority']
+                priority_value = priority_enum.value if hasattr(priority_enum, 'value') else str(priority_enum)
+                notification_data['priority'] = NotificationPriority(priority_value.lower())
+            
+            if 'message_type' in notification_data:
+                message_type_enum = notification_data['message_type']
+                message_type_value = message_type_enum.value if hasattr(message_type_enum, 'value') else str(message_type_enum)
+                notification_data['message_type'] = MessageType(message_type_value.lower())
             
             notification = Notification(**notification_data)
             self.db.add(notification)
