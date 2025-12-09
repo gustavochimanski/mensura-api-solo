@@ -97,7 +97,7 @@ class HomeRepository:
                 ProdutoEmpModel.disponivel.is_(True),
             )
             .options(
-                joinedload(ProdutoEmpModel.produto).selectinload(ProdutoModel.adicionais)
+                joinedload(ProdutoEmpModel.produto).selectinload(ProdutoModel.complementos)
             )
             .order_by(VitrineProdutoLink.posicao)
             .all()
@@ -139,7 +139,7 @@ class HomeRepository:
                 VitrineCategoriaLink.categoria_id == categoria_id,
             )
             .options(
-                joinedload(ProdutoEmpModel.produto).selectinload(ProdutoModel.adicionais)
+                joinedload(ProdutoEmpModel.produto).selectinload(ProdutoModel.complementos)
             )
             .order_by(VitrineProdutoLink.posicao)
             .all()

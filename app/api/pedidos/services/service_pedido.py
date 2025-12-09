@@ -67,7 +67,6 @@ from app.utils.database_utils import now_trimmed
 
 from app.api.catalogo.models.model_receita import ReceitaModel
 from app.api.catalogo.models.model_combo import ComboModel
-from app.api.catalogo.models.model_adicional import AdicionalModel
 
 if TYPE_CHECKING:
     from app.api.pedidos.schemas.schema_pedido_cliente import PedidoClienteListItem
@@ -1852,91 +1851,3 @@ class PedidoService:
         total, _ = self._resolver_adicionais_item_snapshot(item_req)
         return total
 
-    def _calcular_total_e_snapshot_adicionais_por_ids(
-        self,
-        empresa_id: int,
-        adicionais_req,
-        qtd_item: int = 1,
-    ) -> tuple[Decimal, list[dict]]:
-        """
-        Calcula o total de adicionais com base apenas em seus IDs e quantidades.
-
-        Usado para:
-        - receitas: adicionais vinculados à receita (sem código de barras)
-        - combos: adicionais aplicados ao combo inteiro
-        """
-        adicionais_req = adicionais_req or []
-        if not adicionais_req:
-            return Decimal("0"), []
-
-        adicional_ids: list[int] = []
-        for a in adicionais_req:
-            ad_id = getattr(a, "adicional_id", None)
-            if ad_id is not None:
-                adicional_ids.append(ad_id)
-
-        if not adicional_ids:
-            return Decimal("0"), []
-
-        adicionais_db = (
-            self.db.query(AdicionalModel)
-            .filter(
-                AdicionalModel.id.in_(adicional_ids),
-                AdicionalModel.empresa_id == empresa_id,
-                AdicionalModel.ativo.is_(True),
-            )
-            .all()
-        )
-
-        if not adicionais_db:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                f"Nenhum adicional encontrado para a empresa {empresa_id}.",
-            )
-
-        precos_por_id: dict[int, Decimal] = {a.id: _dec(a.preco) for a in adicionais_db}
-
-        total_por_unidade = Decimal("0")
-        snapshot: list[dict] = []
-        for req in adicionais_req:
-            ad_id = getattr(req, "adicional_id", None)
-            if ad_id is None:
-                continue
-            if ad_id not in precos_por_id:
-                raise HTTPException(
-                    status.HTTP_400_BAD_REQUEST,
-                    f"Adicional {ad_id} não encontrado ou não pertence à empresa {empresa_id}.",
-                )
-            try:
-                qtd = int(getattr(req, "quantidade", 1) or 1)
-            except (TypeError, ValueError):
-                qtd = 1
-            if qtd < 1:
-                qtd = 1
-            preco_un = precos_por_id[ad_id]
-            total_por_unidade += preco_un * qtd
-            snapshot.append(
-                {
-                    "adicional_id": ad_id,
-                    "nome": next((a.nome for a in adicionais_db if a.id == ad_id), None),
-                    "quantidade": qtd,
-                    "preco_unitario": float(preco_un),
-                    "total": float((preco_un * qtd) * max(int(qtd_item or 1), 1)),
-                }
-            )
-
-        qtd_item = max(int(qtd_item or 1), 1)
-        return total_por_unidade * qtd_item, snapshot
-
-    def _calcular_total_adicionais_por_ids(
-        self,
-        empresa_id: int,
-        adicionais_req,
-        qtd_item: int = 1,
-    ) -> Decimal:
-        total, _ = self._calcular_total_e_snapshot_adicionais_por_ids(
-            empresa_id,
-            adicionais_req,
-            qtd_item,
-        )
-        return total
