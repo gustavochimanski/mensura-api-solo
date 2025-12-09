@@ -81,12 +81,10 @@ class NotificationRepository:
             else:
                 notification_data['message_type'] = MessageType.UTILITY
             
-            # Verificação final: garante que todos os enums estão corretos antes de criar o objeto
-            # Isso previne problemas de serialização do SQLAlchemy
-            if 'channel' in notification_data and isinstance(notification_data['channel'], NotificationChannel):
-                # Garante que o valor do enum está correto
-                if notification_data['channel'].value != notification_data['channel'].value.lower():
-                    notification_data['channel'] = NotificationChannel(notification_data['channel'].value.lower())
+            # Log para debug: mostra os valores finais antes de criar o objeto
+            logger.debug(f"Valores finais antes de criar notificação: channel={notification_data.get('channel')}, "
+                        f"status={notification_data.get('status')}, priority={notification_data.get('priority')}, "
+                        f"message_type={notification_data.get('message_type')}")
             
             notification = Notification(**notification_data)
             self.db.add(notification)
