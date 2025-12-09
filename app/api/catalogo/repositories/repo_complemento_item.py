@@ -33,6 +33,25 @@ class ComplementoItemRepository:
             query = query.filter_by(ativo=True)
         return query.order_by(AdicionalModel.nome).all()
 
+    def buscar_por_termo(self, empresa_id: int, termo: str, apenas_ativos: bool = True) -> List[AdicionalModel]:
+        """Busca itens por termo (nome ou descrição)."""
+        from sqlalchemy import or_
+        
+        termo_lower = f"%{termo.lower()}%"
+        query = self.db.query(AdicionalModel).filter_by(empresa_id=empresa_id)
+        
+        if apenas_ativos:
+            query = query.filter_by(ativo=True)
+        
+        query = query.filter(
+            or_(
+                AdicionalModel.nome.ilike(termo_lower),
+                AdicionalModel.descricao.ilike(termo_lower)
+            )
+        )
+        
+        return query.order_by(AdicionalModel.nome).all()
+
     def atualizar_item(self, item: AdicionalModel, **data) -> AdicionalModel:
         """Atualiza um item existente."""
         for key, value in data.items():
