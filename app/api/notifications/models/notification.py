@@ -11,13 +11,31 @@ class EnumValueType(TypeDecorator):
     impl = String
     cache_ok = True
     
-    def __init__(self, enum_class, enum_name=None, schema=None, *args, **kwargs):
+    def __init__(self, enum_class, enum_name=None, schema=None, name=None, *args, **kwargs):
         self.enum_class = enum_class
-        self.enum_name = enum_name
+        # Usa enum_name ou name (ambos são aceitos)
+        self.enum_name = enum_name or name
         self.schema = schema
+        
+        # Remove argumentos que não são válidos para String.__init__()
+        # name e schema são específicos do Enum, não do String
+        filtered_kwargs = {k: v for k, v in kwargs.items() if k not in ['name', 'schema']}
+        
         # Usa o Enum do SQLAlchemy para validação no banco, mas serializa usando o valor
-        self.enum_type = Enum(enum_class, name=enum_name, schema=schema, create_type=False, native_enum=False)
-        super().__init__(*args, **kwargs)
+        # Não cria tipo no banco (create_type=False) e não usa enum nativo (native_enum=False)
+        if self.enum_name:
+            self.enum_type = Enum(
+                enum_class,
+                name=self.enum_name,
+                schema=self.schema,
+                create_type=False,
+                native_enum=False
+            )
+        else:
+            self.enum_type = None
+        
+        # Chama super().__init__() apenas com argumentos válidos para String
+        super().__init__(*args, **filtered_kwargs)
     
     def process_bind_param(self, value, dialect):
         """Converte enum para seu valor (string) antes de salvar no banco"""
