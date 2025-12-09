@@ -18,26 +18,34 @@ class NotificationRepository:
     def create(self, notification_data: Dict[str, Any]) -> Notification:
         """Cria uma nova notificação"""
         try:
-            # Garante que enums sejam convertidos para seus valores
+            # Converte strings para enums se necessário
             from ..models.notification import NotificationStatus, NotificationChannel, NotificationPriority, MessageType
             
-            if 'status' in notification_data and isinstance(notification_data['status'], NotificationStatus):
-                notification_data['status'] = notification_data['status'].value
-            elif 'status' not in notification_data:
-                notification_data['status'] = NotificationStatus.PENDING.value
+            # Converte status (string -> enum se necessário)
+            if 'status' in notification_data:
+                if isinstance(notification_data['status'], str):
+                    notification_data['status'] = NotificationStatus(notification_data['status'])
+                # Se já for enum, mantém
+            else:
+                notification_data['status'] = NotificationStatus.PENDING
             
-            if 'channel' in notification_data and isinstance(notification_data['channel'], NotificationChannel):
-                notification_data['channel'] = notification_data['channel'].value
+            # Converte channel (string -> enum se necessário)
+            if 'channel' in notification_data and isinstance(notification_data['channel'], str):
+                notification_data['channel'] = NotificationChannel(notification_data['channel'])
             
-            if 'priority' in notification_data and isinstance(notification_data['priority'], NotificationPriority):
-                notification_data['priority'] = notification_data['priority'].value
-            elif 'priority' not in notification_data:
-                notification_data['priority'] = NotificationPriority.NORMAL.value
+            # Converte priority (string -> enum se necessário)
+            if 'priority' in notification_data:
+                if isinstance(notification_data['priority'], str):
+                    notification_data['priority'] = NotificationPriority(notification_data['priority'])
+            else:
+                notification_data['priority'] = NotificationPriority.NORMAL
             
-            if 'message_type' in notification_data and isinstance(notification_data['message_type'], MessageType):
-                notification_data['message_type'] = notification_data['message_type'].value
-            elif 'message_type' not in notification_data:
-                notification_data['message_type'] = MessageType.UTILITY.value
+            # Converte message_type (string -> enum se necessário)
+            if 'message_type' in notification_data:
+                if isinstance(notification_data['message_type'], str):
+                    notification_data['message_type'] = MessageType(notification_data['message_type'])
+            else:
+                notification_data['message_type'] = MessageType.UTILITY
             
             notification = Notification(**notification_data)
             self.db.add(notification)
