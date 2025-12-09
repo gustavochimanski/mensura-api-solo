@@ -30,9 +30,5 @@ class NotificationSubscription(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
-    # Índices compostos para performance
-    __table_args__ = (
-        {"schema": "notifications"},
-        Index('idx_empresa_event_channel', 'empresa_id', 'event_type', 'channel'),
-        Index('idx_user_event_channel', 'user_id', 'event_type', 'channel'),
-    )
+    # Schema
+    __table_args__ = {"schema": "notifications"}
