@@ -11,22 +11,27 @@ from ..core.websocket_manager import websocket_manager
 from ..core.event_bus import EventHandler, Event, EventType
 from ..models.notification import NotificationStatus, NotificationChannel, NotificationPriority
 from ..schemas.notification_schemas import CreateNotificationRequest, SendNotificationRequest
+from ..contracts.notification_service_contract import INotificationService
+from ..contracts.channel_config_provider_contract import IChannelConfigProvider
+from ..adapters.channel_config_adapters import DefaultChannelConfigAdapter, CompositeChannelConfigAdapter
 
 logger = logging.getLogger(__name__)
 
-class NotificationService:
+class NotificationService(INotificationService):
     """Serviço principal de notificações"""
     
     def __init__(
         self,
         notification_repo: NotificationRepository,
         subscription_repo: SubscriptionRepository,
-        event_repo: EventRepository
+        event_repo: EventRepository,
+        channel_config_provider: Optional[IChannelConfigProvider] = None
     ):
         self.notification_repo = notification_repo
         self.subscription_repo = subscription_repo
         self.event_repo = event_repo
         self.channel_factory = ChannelFactory()
+        self.channel_config_provider = channel_config_provider or DefaultChannelConfigAdapter()
     
     async def create_notification(self, request: CreateNotificationRequest) -> str:
         """Cria uma nova notificação"""
@@ -147,37 +152,18 @@ class NotificationService:
             self._handle_notification_failure(notification, str(e))
     
     def _get_channel_config(self, empresa_id: str, channel: NotificationChannel) -> Optional[Dict[str, Any]]:
-        """Busca configuração do canal para a empresa"""
-        # Aqui você implementaria a lógica para buscar configurações específicas da empresa
-        # Por enquanto, retorna configurações padrão baseadas no canal
+        """Busca configuração do canal para a empresa usando o provedor de configuração"""
+        config = self.channel_config_provider.get_channel_config(empresa_id, channel)
         
-        default_configs = {
-            NotificationChannel.EMAIL: {
-                "smtp_server": "smtp.gmail.com",
-                "smtp_port": 587,
-                "username": "noreply@mensura.com.br",
-                "password": "your_password_here",
-                "from_email": "noreply@mensura.com.br",
-                "from_name": "Sistema Mensura"
-            },
-            NotificationChannel.WEBHOOK: {
-                "timeout": 30,
-                "headers": {"Content-Type": "application/json"}
-            },
-            NotificationChannel.WHATSAPP: {
-                "account_sid": "your_twilio_sid",
-                "auth_token": "your_twilio_token",
-                "from_number": "+1234567890"
-            },
-            NotificationChannel.PUSH: {
-                "server_key": "your_firebase_server_key"
-            },
-            NotificationChannel.IN_APP: {
-                "websocket_manager": websocket_manager
-            }
-        }
+        # Se não encontrou configuração específica, usa a padrão
+        if not config:
+            config = self.channel_config_provider.get_default_channel_config(channel)
         
-        return default_configs.get(channel)
+        # Adiciona websocket_manager para canal in_app se necessário
+        if channel == NotificationChannel.IN_APP and config:
+            config["websocket_manager"] = websocket_manager
+        
+        return config
     
     def _handle_notification_failure(self, notification, error_message: str, error_details: Optional[Dict[str, Any]] = None):
         """Trata falha no envio de notificação"""

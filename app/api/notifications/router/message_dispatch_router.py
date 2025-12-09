@@ -17,6 +17,8 @@ from ..schemas.message_dispatch_schemas import (
     BulkDispatchRequest
 )
 from ..models.notification import MessageType
+from ..adapters.recipient_adapters import ClienteRecipientAdapter, CompositeRecipientAdapter
+from ..adapters.channel_config_adapters import DefaultChannelConfigAdapter, CompositeChannelConfigAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -27,8 +29,28 @@ def get_message_dispatch_service(db: Session = Depends(get_db)) -> MessageDispat
     notification_repo = NotificationRepository(db)
     subscription_repo = SubscriptionRepository(db)
     event_repo = EventRepository(db)
-    notification_service = NotificationService(notification_repo, subscription_repo, event_repo)
-    return MessageDispatchService(notification_service)
+    
+    # Configura provedor de configuração de canais
+    channel_config_provider = DefaultChannelConfigAdapter()
+    
+    # Cria serviço de notificações com provedor de configuração
+    notification_service = NotificationService(
+        notification_repo,
+        subscription_repo,
+        event_repo,
+        channel_config_provider=channel_config_provider
+    )
+    
+    # Configura provedor de destinatários
+    cliente_adapter = ClienteRecipientAdapter(db)
+    recipient_provider = CompositeRecipientAdapter([cliente_adapter])
+    
+    # Cria serviço de disparo com provedor de destinatários
+    return MessageDispatchService(
+        notification_service,
+        db=db,
+        recipient_provider=recipient_provider
+    )
 
 @router.post("/dispatch", response_model=DispatchMessageResponse)
 async def dispatch_message(

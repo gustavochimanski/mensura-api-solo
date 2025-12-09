@@ -1,6 +1,7 @@
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 import logging
+from sqlalchemy.orm import Session
 
 from ..repositories.notification_repository import NotificationRepository
 from ..repositories.subscription_repository import SubscriptionRepository
@@ -12,20 +13,34 @@ from ..schemas.message_dispatch_schemas import (
     BulkDispatchRequest
 )
 from .notification_service import NotificationService
+from ..contracts.message_dispatch_service_contract import IMessageDispatchService
+from ..contracts.recipient_provider_contract import IRecipientProvider
+from ..adapters.recipient_adapters import ClienteRecipientAdapter, CompositeRecipientAdapter
 
 logger = logging.getLogger(__name__)
 
-class MessageDispatchService:
+class MessageDispatchService(IMessageDispatchService):
     """Serviço especializado para disparo de mensagens com tipos determinados"""
     
     def __init__(
         self,
-        notification_service: NotificationService
+        notification_service: NotificationService,
+        db: Optional[Session] = None,
+        recipient_provider: Optional[IRecipientProvider] = None
     ):
         self.notification_service = notification_service
         self.notification_repo = notification_service.notification_repo
         self.subscription_repo = notification_service.subscription_repo
         self.event_repo = notification_service.event_repo
+        self.db = db or notification_service.notification_repo.db
+        
+        # Usa o provedor de destinatários fornecido ou cria um padrão
+        if recipient_provider:
+            self.recipient_provider = recipient_provider
+        else:
+            # Cria um adaptador composto com ClienteRecipientAdapter por padrão
+            cliente_adapter = ClienteRecipientAdapter(self.db)
+            self.recipient_provider = CompositeRecipientAdapter([cliente_adapter])
     
     async def dispatch_message(self, request: DispatchMessageRequest) -> DispatchMessageResponse:
         """
@@ -49,7 +64,7 @@ class MessageDispatchService:
             if total_recipients == 0:
                 raise ValueError("Nenhum destinatário encontrado")
             
-            # Para cada canal, cria notificações para cada destinatário
+            # Para cada canal, cria notificações para cada destinatário apropriado
             for channel in request.channels:
                 channels_used.add(channel)
                 
@@ -58,8 +73,22 @@ class MessageDispatchService:
                     user_id = recipient_info.get('user_id')
                     
                     if not recipient:
-                        logger.warning(f"Destinatário inválido para canal {channel}")
                         continue
+                    
+                    # Valida se o recipient é apropriado para o canal
+                    if channel == NotificationChannel.EMAIL:
+                        # Para email, recipient deve ser um email válido
+                        if '@' not in recipient:
+                            logger.debug(f"Recipient {recipient} não é um email válido, pulando canal email")
+                            continue
+                    elif channel in [NotificationChannel.WHATSAPP, NotificationChannel.SMS]:
+                        # Para WhatsApp/SMS, recipient deve ser um telefone
+                        # Remove caracteres não numéricos para validação básica
+                        phone_digits = ''.join(filter(str.isdigit, recipient))
+                        if len(phone_digits) < 10:
+                            logger.debug(f"Recipient {recipient} não parece ser um telefone válido, pulando canal {channel}")
+                            continue
+                    # Para outros canais (push, webhook, in_app), aceita qualquer recipient
                     
                     # Cria notificação usando o serviço existente
                     from ..schemas.notification_schemas import CreateNotificationRequest
@@ -105,22 +134,33 @@ class MessageDispatchService:
     def _build_recipients_list(self, request: DispatchMessageRequest) -> List[Dict[str, str]]:
         """
         Constrói lista de destinatários a partir dos dados da requisição
+        Usa o provedor de destinatários para buscar informações
         
         Returns:
             Lista de dicionários com 'recipient' e 'user_id'
         """
         recipients = []
         
-        # Se há user_ids específicos, busca informações dos usuários
+        # Se há user_ids específicos, busca informações usando o provedor
         if request.user_ids:
-            for user_id in request.user_ids:
-                # Aqui você buscaria os dados do usuário (email, telefone) do banco
-                # Por enquanto, vamos usar os dados fornecidos diretamente
-                # TODO: Implementar busca de dados do usuário
-                recipients.append({
-                    "user_id": user_id,
-                    "recipient": None  # Será preenchido com email/telefone do usuário
-                })
+            recipient_data_list = self.recipient_provider.get_recipients_by_ids(request.user_ids)
+            
+            for recipient_data in recipient_data_list:
+                user_id = recipient_data.get('user_id') or recipient_data.get('cliente_id')
+                
+                # Adiciona email se disponível
+                if recipient_data.get('email'):
+                    recipients.append({
+                        "user_id": user_id,
+                        "recipient": recipient_data['email']
+                    })
+                
+                # Adiciona telefone se disponível
+                if recipient_data.get('phone'):
+                    recipients.append({
+                        "user_id": user_id,
+                        "recipient": recipient_data['phone']
+                    })
         
         # Adiciona emails fornecidos diretamente
         if request.recipient_emails:
@@ -165,15 +205,37 @@ class MessageDispatchService:
                     f"Total encontrado: {len(recipients)}"
                 )
             
+            # Separa recipients por tipo para criar a requisição corretamente
+            user_ids_list = []
+            emails_list = []
+            phones_list = []
+            
+            for r in recipients:
+                user_id = r.get('user_id')
+                email = r.get('email')
+                phone = r.get('phone')
+                
+                if user_id and (email or phone):
+                    # Se tem user_id, adiciona aos user_ids
+                    # Os emails e phones serão buscados automaticamente
+                    if user_id not in user_ids_list:
+                        user_ids_list.append(user_id)
+                else:
+                    # Se não tem user_id, adiciona diretamente
+                    if email and email not in emails_list:
+                        emails_list.append(email)
+                    if phone and phone not in phones_list:
+                        phones_list.append(phone)
+            
             # Cria requisição de disparo normal
             dispatch_request = DispatchMessageRequest(
                 empresa_id=request.empresa_id,
                 message_type=request.message_type,
                 title=request.title,
                 message=request.message,
-                user_ids=[r.get('user_id') for r in recipients if r.get('user_id')],
-                recipient_emails=[r.get('email') for r in recipients if r.get('email')],
-                recipient_phones=[r.get('phone') for r in recipients if r.get('phone')],
+                user_ids=user_ids_list if user_ids_list else None,
+                recipient_emails=emails_list if emails_list else None,
+                recipient_phones=phones_list if phones_list else None,
                 channels=request.channels,
                 priority=request.priority,
                 event_type=f"bulk_dispatch_{request.message_type.value}",
@@ -193,22 +255,31 @@ class MessageDispatchService:
     async def _get_recipients_by_filters(self, request: BulkDispatchRequest) -> List[Dict[str, Any]]:
         """
         Busca destinatários baseado nos filtros especificados
+        Usa o provedor de destinatários para buscar
         
         Returns:
-            Lista de destinatários com suas informações
+            Lista de destinatários com suas informações (email, phone, user_id)
         """
-        recipients = []
-        
-        # TODO: Implementar busca real no banco de dados
-        # Por enquanto, retorna lista vazia
-        # A implementação real buscaria:
-        # - Usuários da empresa (se filter_by_empresa=True)
-        # - Usuários por tipo (se filter_by_user_type especificado)
-        # - Usuários por tags (se filter_by_tags especificado)
-        
-        logger.warning("Busca de destinatários por filtros não implementada completamente")
-        
-        return recipients
+        try:
+            recipients = self.recipient_provider.get_recipients_by_filters(
+                empresa_id=request.empresa_id,
+                filter_by_empresa=request.filter_by_empresa,
+                filter_by_user_type=request.filter_by_user_type,
+                filter_by_tags=request.filter_by_tags
+            )
+            
+            logger.info(
+                f"Encontrados {len(recipients)} destinatários com os filtros especificados "
+                f"(empresa: {request.filter_by_empresa}, "
+                f"tipo: {request.filter_by_user_type}, "
+                f"tags: {request.filter_by_tags})"
+            )
+            
+            return recipients
+            
+        except Exception as e:
+            logger.error(f"Erro ao buscar destinatários por filtros: {e}")
+            raise
     
     def get_dispatch_stats(
         self,

@@ -1,10 +1,44 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, JSON, ForeignKey, Enum
+from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, JSON, ForeignKey, Enum, TypeDecorator
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from enum import Enum as PyEnum
 import uuid
 
 from ....database.db_connection import Base
+
+class EnumValueType(TypeDecorator):
+    """TypeDecorator que força o SQLAlchemy a usar o valor do enum, não o nome"""
+    impl = String
+    cache_ok = True
+    
+    def __init__(self, enum_class, enum_name=None, schema=None, *args, **kwargs):
+        self.enum_class = enum_class
+        self.enum_name = enum_name
+        self.schema = schema
+        # Usa o Enum do SQLAlchemy para validação no banco, mas serializa usando o valor
+        self.enum_type = Enum(enum_class, name=enum_name, schema=schema, create_type=False, native_enum=False)
+        super().__init__(*args, **kwargs)
+    
+    def process_bind_param(self, value, dialect):
+        """Converte enum para seu valor (string) antes de salvar no banco"""
+        if value is None:
+            return None
+        # Sempre extrai o valor do enum, nunca usa o nome
+        if isinstance(value, self.enum_class):
+            return value.value.lower()  # Garante minúsculas
+        if isinstance(value, str):
+            return value.lower()  # Normaliza strings
+        # Se for outro tipo de enum (ex: Pydantic), extrai o valor
+        if hasattr(value, 'value'):
+            return str(value.value).lower()
+        # Última tentativa: converte para string e normaliza
+        return str(value).lower()
+    
+    def process_result_value(self, value, dialect):
+        """Converte string do banco de volta para enum"""
+        if value is None:
+            return None
+        return self.enum_class(value.lower())
 
 class NotificationStatus(PyEnum):
     PENDING = "pending"
@@ -53,12 +87,13 @@ class Notification(Base):
     # Conteúdo da notificação
     title = Column(String, nullable=False)
     message = Column(Text, nullable=False)
-    channel = Column(Enum(NotificationChannel, name='notificationchannel', schema='notifications', create_type=False), nullable=False, index=True)
+    # Usa EnumValueType para garantir que o SQLAlchemy sempre use o valor do enum, não o nome
+    channel = Column(EnumValueType(NotificationChannel, name='notificationchannel', schema='notifications'), nullable=False, index=True)
     
     # Status e controle
-    status = Column(Enum(NotificationStatus, name='notificationstatus', schema='notifications', create_type=False), default=NotificationStatus.PENDING, index=True)
-    priority = Column(Enum(NotificationPriority, name='notificationpriority', schema='notifications', create_type=False), default=NotificationPriority.NORMAL)
-    message_type = Column(Enum(MessageType, name='messagetype', schema='notifications', create_type=False), nullable=False, index=True, default=MessageType.UTILITY)
+    status = Column(EnumValueType(NotificationStatus, name='notificationstatus', schema='notifications'), default=NotificationStatus.PENDING, index=True)
+    priority = Column(EnumValueType(NotificationPriority, name='notificationpriority', schema='notifications'), default=NotificationPriority.NORMAL)
+    message_type = Column(EnumValueType(MessageType, name='messagetype', schema='notifications'), nullable=False, index=True, default=MessageType.UTILITY)
     
     # Configurações de entrega
     recipient = Column(String, nullable=False)  # email, phone, webhook_url, etc.
@@ -85,7 +120,7 @@ class NotificationLog(Base):
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     notification_id = Column(String, ForeignKey("notifications.notifications.id"), nullable=False)
     
-    status = Column(Enum(NotificationStatus, name='notificationstatus', schema='notifications', create_type=False), nullable=False)
+    status = Column(EnumValueType(NotificationStatus, name='notificationstatus', schema='notifications'), nullable=False)
     message = Column(Text, nullable=True)
     error_details = Column(JSON, nullable=True)
     
