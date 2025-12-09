@@ -1,15 +1,17 @@
-# API de Disparo de Mensagens - Documentação Frontend
+# 📨 API de Disparo de Mensagens - Documentação Completa
 
-Documentação completa para implementação de disparo de mensagens no frontend.
+Documentação completa e atualizada para implementação de disparo de mensagens no frontend.
+
+---
 
 ## 📋 Índice
 
 1. [Visão Geral](#visão-geral)
 2. [Tipos de Mensagem](#tipos-de-mensagem)
 3. [Canais de Envio](#canais-de-envio)
-4. [Endpoints](#endpoints)
-5. [Schemas](#schemas)
-6. [Exemplos de Uso](#exemplos-de-uso)
+4. [Endpoints da API](#endpoints-da-api)
+5. [Schemas e Tipos](#schemas-e-tipos)
+6. [Exemplos Práticos](#exemplos-práticos)
 7. [Tratamento de Erros](#tratamento-de-erros)
 8. [Boas Práticas](#boas-práticas)
 
@@ -17,16 +19,30 @@ Documentação completa para implementação de disparo de mensagens no frontend
 
 ## 🎯 Visão Geral
 
-O sistema de disparo de mensagens permite enviar notificações para usuários através de múltiplos canais, classificando-as por tipo (marketing, utility, transactional, etc).
+O sistema de disparo de mensagens permite enviar notificações para usuários através de múltiplos canais, com classificação por tipo (marketing, utility, transactional, etc).
 
-### Características Principais
+### Características
 
-- ✅ Múltiplos tipos de mensagem (marketing, utility, transactional, etc)
-- ✅ Suporte a múltiplos canais (email, WhatsApp, push, etc)
-- ✅ Disparo individual ou em massa
-- ✅ Filtros avançados para destinatários
-- ✅ Estatísticas de disparo
-- ✅ Agendamento de mensagens
+- ✅ **Múltiplos tipos de mensagem** (marketing, utility, transactional, etc)
+- ✅ **Suporte a múltiplos canais** (email, WhatsApp, push, webhook, in-app)
+- ✅ **Disparo individual ou em massa**
+- ✅ **Filtros avançados** para seleção de destinatários
+- ✅ **Estatísticas de disparo** em tempo real
+- ✅ **Agendamento de mensagens**
+
+### Base URL
+
+```
+/api/notifications/messages
+```
+
+### Autenticação
+
+Todos os endpoints requerem autenticação via Bearer Token:
+
+```
+Authorization: Bearer {seu_token}
+```
 
 ---
 
@@ -50,32 +66,19 @@ Cada mensagem deve ter um tipo definido para classificação e controle:
 
 Os canais disponíveis para envio de mensagens:
 
-| Canal | Valor | Descrição |
-|-------|-------|-----------|
-| `email` | "email" | Envio por email |
-| `whatsapp` | "whatsapp" | Envio por WhatsApp (Twilio) |
-| `push` | "push" | Notificação push (Firebase) |
-| `webhook` | "webhook" | Webhook HTTP POST |
-| `in_app` | "in_app" | Notificação in-app (WebSocket) |
-| `sms` | "sms" | SMS (futuro) |
-| `telegram` | "telegram" | Telegram (futuro) |
+| Canal | Valor | Descrição | Status |
+|-------|-------|-----------|--------|
+| `email` | "email" | Envio por email | ✅ Disponível |
+| `whatsapp` | "whatsapp" | Envio por WhatsApp (Twilio) | ✅ Disponível |
+| `push` | "push" | Notificação push (Firebase) | ✅ Disponível |
+| `webhook` | "webhook" | Webhook HTTP POST | ✅ Disponível |
+| `in_app` | "in_app" | Notificação in-app (WebSocket) | ✅ Disponível |
+| `sms` | "sms" | SMS | 🚧 Futuro |
+| `telegram` | "telegram" | Telegram | 🚧 Futuro |
 
 ---
 
-## 🔌 Endpoints
-
-### Base URL
-```
-/api/notifications/messages
-```
-
-### Autenticação
-Todos os endpoints requerem autenticação via Bearer Token:
-```
-Authorization: Bearer {seu_token}
-```
-
----
+## 🔌 Endpoints da API
 
 ### 1. Disparo de Mensagem Individual
 
@@ -281,7 +284,7 @@ interface MessageDispatchStats {
 
 ---
 
-## 💡 Exemplos de Uso
+## 💡 Exemplos Práticos
 
 ### Exemplo 1: Disparo de Email Marketing
 
@@ -785,5 +788,6 @@ Para dúvidas ou problemas, consulte a equipe de desenvolvimento ou a documenta�
 
 ---
 
-**Última atualização:** Dezembro 2024
+**Última atualização:** Dezembro 2024  
+**Versão da API:** 1.0.0
 
