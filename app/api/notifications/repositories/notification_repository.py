@@ -24,26 +24,34 @@ class NotificationRepository:
             # Converte status (string -> enum se necessário)
             if 'status' in notification_data:
                 if isinstance(notification_data['status'], str):
-                    notification_data['status'] = NotificationStatus(notification_data['status'])
+                    # Normaliza para minúsculas antes de converter para enum
+                    status_value = notification_data['status'].lower()
+                    notification_data['status'] = NotificationStatus(status_value)
                 # Se já for enum, mantém
             else:
                 notification_data['status'] = NotificationStatus.PENDING
             
             # Converte channel (string -> enum se necessário)
             if 'channel' in notification_data and isinstance(notification_data['channel'], str):
-                notification_data['channel'] = NotificationChannel(notification_data['channel'])
+                # Normaliza para minúsculas antes de converter para enum
+                channel_value = notification_data['channel'].lower()
+                notification_data['channel'] = NotificationChannel(channel_value)
             
             # Converte priority (string -> enum se necessário)
             if 'priority' in notification_data:
                 if isinstance(notification_data['priority'], str):
-                    notification_data['priority'] = NotificationPriority(notification_data['priority'])
+                    # Normaliza para minúsculas antes de converter para enum
+                    priority_value = notification_data['priority'].lower()
+                    notification_data['priority'] = NotificationPriority(priority_value)
             else:
                 notification_data['priority'] = NotificationPriority.NORMAL
             
             # Converte message_type (string -> enum se necessário)
             if 'message_type' in notification_data:
                 if isinstance(notification_data['message_type'], str):
-                    notification_data['message_type'] = MessageType(notification_data['message_type'])
+                    # Normaliza para minúsculas antes de converter para enum
+                    message_type_value = notification_data['message_type'].lower()
+                    notification_data['message_type'] = MessageType(message_type_value)
             else:
                 notification_data['message_type'] = MessageType.UTILITY
             
