@@ -265,11 +265,22 @@ Authorization: Bearer {token}
 Content-Type: application/json
 ```
 
-**Request Body:**
+**Request Body (Formato Simples - Recomendado):**
 ```json
 {
-  "item_id": 1,
-  "nova_ordem": 2
+  "item_ids": [1, 2, 3]
+}
+```
+A ordem é definida pela posição no array (índice 0 = primeira posição, índice 1 = segunda, etc.)
+
+**Request Body (Formato Completo):**
+```json
+{
+  "item_ordens": [
+    { "item_id": 1, "ordem": 0 },
+    { "item_id": 2, "ordem": 1 },
+    { "item_id": 3, "ordem": 2 }
+  ]
 }
 ```
 
@@ -279,6 +290,8 @@ Content-Type: application/json
   "message": "Ordem dos itens atualizada com sucesso"
 }
 ```
+
+**Nota**: Use o formato simples (`item_ids`) quando a ordem for sequencial baseada na posição. Use o formato completo (`item_ordens`) quando precisar de ordens não sequenciais ou personalizadas.
 
 ---
 

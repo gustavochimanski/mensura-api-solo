@@ -374,7 +374,24 @@ class ComplementoService:
             )
         
         # Converte para lista de dicts
-        item_ordens_dict = [{"item_id": io.item_id, "ordem": io.ordem} for io in req.item_ordens]
+        if req.item_ids:
+            # Formato simples: item_ids na ordem desejada (ordem = índice)
+            item_ordens_dict = [
+                {"item_id": item_id, "ordem": idx} 
+                for idx, item_id in enumerate(req.item_ids)
+            ]
+        elif req.item_ordens:
+            # Formato completo: item_ordens com ordem explícita
+            item_ordens_dict = [
+                {"item_id": io.item_id, "ordem": io.ordem} 
+                for io in req.item_ordens
+            ]
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Deve fornecer 'item_ids' ou 'item_ordens'"
+            )
+        
         self.repo_item.atualizar_ordem_itens(complemento_id, item_ordens_dict)
 
     # ------ Helpers ------
