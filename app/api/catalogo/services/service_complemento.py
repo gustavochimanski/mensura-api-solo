@@ -252,6 +252,16 @@ class ComplementoService:
         itens = self.repo_item.listar_por_empresa(empresa_id, apenas_ativos)
         return [self._adicional_to_response(item) for item in itens]
 
+    def buscar_adicionais(self, empresa_id: int, termo: str, apenas_ativos: bool = True) -> List[AdicionalResponse]:
+        """Busca adicionais por termo (nome ou descrição)."""
+        self._empresa_or_404(empresa_id)
+        if not termo or not termo.strip():
+            # Se termo vazio, retorna lista completa
+            return self.listar_itens(empresa_id, apenas_ativos)
+        
+        itens = self.repo_item.buscar_por_termo(empresa_id, termo.strip(), apenas_ativos)
+        return [self._adicional_to_response(item) for item in itens]
+
     def atualizar_item(self, item_id: int, req: AtualizarAdicionalRequest) -> AdicionalResponse:
         """Atualiza um item existente."""
         item = self.repo_item.buscar_por_id(item_id)
