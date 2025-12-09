@@ -81,9 +81,10 @@ class Notification(Base):
 
 class NotificationLog(Base):
     __tablename__ = "notification_logs"
+    __table_args__ = {"schema": "notifications"}
     
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    notification_id = Column(String, ForeignKey("notifications.id"), nullable=False)
+    notification_id = Column(String, ForeignKey("notifications.notifications.id"), nullable=False)
     
     status = Column(Enum(NotificationStatus), nullable=False)
     message = Column(Text, nullable=True)
