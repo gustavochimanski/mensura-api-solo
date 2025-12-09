@@ -34,7 +34,6 @@ class ProdutoModel(Base):
     adicionais = relationship(
         "AdicionalModel",
         secondary="catalogo.produto_adicional_link",
-        back_populates="produtos",
         viewonly=True,
     )
     
