@@ -31,6 +31,12 @@ class NotificationService:
     async def create_notification(self, request: CreateNotificationRequest) -> str:
         """Cria uma nova notificação"""
         try:
+            # Extrai os valores dos enums para garantir compatibilidade com SQLAlchemy
+            # Isso previne problemas de serialização onde o nome do enum é usado em vez do valor
+            channel_value = request.channel.value if hasattr(request.channel, 'value') else str(request.channel)
+            priority_value = request.priority.value if hasattr(request.priority, 'value') else str(request.priority)
+            message_type_value = request.message_type.value if hasattr(request.message_type, 'value') else str(request.message_type)
+            
             notification_data = {
                 "empresa_id": request.empresa_id,
                 "user_id": request.user_id,
@@ -38,10 +44,10 @@ class NotificationService:
                 "event_data": request.event_data,
                 "title": request.title,
                 "message": request.message,
-                "channel": request.channel,
+                "channel": channel_value,  # Passa o valor do enum, não o enum em si
                 "recipient": request.recipient,
-                "priority": request.priority,
-                "message_type": request.message_type,
+                "priority": priority_value,  # Passa o valor do enum, não o enum em si
+                "message_type": message_type_value,  # Passa o valor do enum, não o enum em si
                 "channel_metadata": request.channel_metadata,
                 "max_attempts": request.max_attempts
             }
@@ -61,6 +67,10 @@ class NotificationService:
         """Envia notificação para múltiplos canais"""
         notification_ids = []
         
+        # Extrai os valores dos enums uma vez para reutilizar
+        priority_value = request.priority.value if hasattr(request.priority, 'value') else str(request.priority)
+        message_type_value = request.message_type.value if hasattr(request.message_type, 'value') else str(request.message_type)
+        
         for channel in request.channels:
             recipient = request.recipients.get(channel)
             if not recipient:
@@ -68,6 +78,9 @@ class NotificationService:
                 continue
             
             try:
+                # Extrai o valor do enum do canal
+                channel_value = channel.value if hasattr(channel, 'value') else str(channel)
+                
                 notification_data = {
                     "empresa_id": request.empresa_id,
                     "user_id": request.user_id,
@@ -75,10 +88,10 @@ class NotificationService:
                     "event_data": request.event_data,
                     "title": request.title,
                     "message": request.message,
-                    "channel": channel,
+                    "channel": channel_value,  # Passa o valor do enum, não o enum em si
                     "recipient": recipient,
-                    "priority": request.priority,
-                    "message_type": request.message_type
+                    "priority": priority_value,  # Passa o valor do enum, não o enum em si
+                    "message_type": message_type_value  # Passa o valor do enum, não o enum em si
                 }
                 
                 notification = self.notification_repo.create(notification_data)
