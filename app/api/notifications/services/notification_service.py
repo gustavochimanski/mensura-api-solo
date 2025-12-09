@@ -41,6 +41,7 @@ class NotificationService:
                 "channel": request.channel,
                 "recipient": request.recipient,
                 "priority": request.priority,
+                "message_type": request.message_type,
                 "channel_metadata": request.channel_metadata,
                 "max_attempts": request.max_attempts
             }
@@ -76,7 +77,8 @@ class NotificationService:
                     "message": request.message,
                     "channel": channel,
                     "recipient": recipient,
-                    "priority": request.priority
+                    "priority": request.priority,
+                    "message_type": request.message_type
                 }
                 
                 notification = self.notification_repo.create(notification_data)

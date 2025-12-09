@@ -6,6 +6,7 @@ from .websocket_router import router as websocket_router
 from .pedido_router import router as pedido_router
 from .historico_router import router as historico_router
 from .rabbitmq_router import router as rabbitmq_router
+from .message_dispatch_router import router as message_dispatch_router
 
 # Router principal que agrupa todos os endpoints de notificações
 router = APIRouter(
@@ -21,3 +22,4 @@ router.include_router(websocket_router)
 router.include_router(pedido_router)
 router.include_router(historico_router)
 router.include_router(rabbitmq_router)
+router.include_router(message_dispatch_router)
