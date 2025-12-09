@@ -44,7 +44,7 @@ class NotificationService:
                 "event_data": request.event_data,
                 "title": request.title,
                 "message": request.message,
-                "channel": channel_value,  # Passa o valor do enum, não o enum em si
+                "channel": channel_value, 
                 "recipient": request.recipient,
                 "priority": priority_value,  # Passa o valor do enum, não o enum em si
                 "message_type": message_type_value,  # Passa o valor do enum, não o enum em si
