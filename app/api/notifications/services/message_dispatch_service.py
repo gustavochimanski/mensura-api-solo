@@ -209,23 +209,28 @@ class MessageDispatchService(IMessageDispatchService):
             user_ids_list = []
             emails_list = []
             phones_list = []
+            seen_user_ids = set()
+            seen_emails = set()
+            seen_phones = set()
             
             for r in recipients:
-                user_id = r.get('user_id')
+                user_id = r.get('user_id') or r.get('cliente_id')
                 email = r.get('email')
                 phone = r.get('phone')
                 
-                if user_id and (email or phone):
+                if user_id and user_id not in seen_user_ids:
                     # Se tem user_id, adiciona aos user_ids
-                    # Os emails e phones serão buscados automaticamente
-                    if user_id not in user_ids_list:
-                        user_ids_list.append(user_id)
+                    # Os emails e phones serão buscados automaticamente pelo _build_recipients_list
+                    user_ids_list.append(user_id)
+                    seen_user_ids.add(user_id)
                 else:
                     # Se não tem user_id, adiciona diretamente
-                    if email and email not in emails_list:
+                    if email and email not in seen_emails:
                         emails_list.append(email)
-                    if phone and phone not in phones_list:
+                        seen_emails.add(email)
+                    if phone and phone not in seen_phones:
                         phones_list.append(phone)
+                        seen_phones.add(phone)
             
             # Cria requisição de disparo normal
             dispatch_request = DispatchMessageRequest(
