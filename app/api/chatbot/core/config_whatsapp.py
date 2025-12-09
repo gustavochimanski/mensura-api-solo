@@ -4,9 +4,9 @@ Configuração da API do WhatsApp Business
 """
 
 WHATSAPP_CONFIG = {
-    "access_token": "EAAW5T51VWCEBQNPX9Wg9SzKk9A6A1oC1qxBhnyh4gKPozbFbfMLJdOCTKZB6990jAegg8eJTK6DOd3bSTDqdBDYkOHKld9akpnkGt40l7iWNImDGZCzuFpO2q2qoIp636wF1SSbiOdt5QkxOlVz1Os6cZAOJlDQy7aUNd2bCByEG9SP0qHMQtNYoZCNe7PSM9QCTiP4PJNzKIc4WBbqXWoz7vatStZAbH1gHm99j4y4z7zO4R0jJlnGMajlVgDRUh3BDIuGwekBSUPELNlgReWfAAVuZB4tQxtDEQZD",
-    "phone_number_id": "887075554489957",
-    "business_account_id": "1454221955671283",
+    "access_token": "EAAWrQRyXUaoBQGUm0oFmheVu6RIFTvEMv3Nce1f89jKitCqDaTxe1XFZBl0ZBeQGXqtaUye4ZBOLs3eknDCjKTY30sqYY3QaiOv4KJZAnaAXTJ71fTXcVGsJuFwb7shTaw7XPZCD6lTh5tKmwqrJZBZAYZAt1ZBcJOlLmWrIPG25SWZApYw2Yi4Ybg217aZBmrcfTrbZAPiOYYf1lYWd4NuCYx2ZBMlQU5yGarszBZBFD0mqAFY6WZAEIWdRFZA79xN13EBBznoQZCNZBa95ukjZCCTVptd2SOO",
+    "phone_number_id": "865697123299398",
+    "business_account_id": "1435285257954191",
     "api_version": "v22.0",
     "send_mode": "api"
 }
