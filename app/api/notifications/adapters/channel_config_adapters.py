@@ -18,7 +18,27 @@ class DefaultChannelConfigAdapter(IChannelConfigProvider):
         channel: NotificationChannel
     ) -> Optional[Dict[str, Any]]:
         """Retorna configuração padrão baseada no canal"""
-        return self.get_default_channel_config(channel)
+        config = self.get_default_channel_config(channel)
+        
+        # Para WhatsApp, tenta usar a configuração do chatbot se disponível
+        if channel == NotificationChannel.WHATSAPP:
+            try:
+                from app.api.chatbot.core.config_whatsapp import WHATSAPP_CONFIG
+                # Usa a configuração do chatbot se estiver disponível
+                if WHATSAPP_CONFIG.get("access_token") and WHATSAPP_CONFIG.get("phone_number_id"):
+                    config = {
+                        "access_token": WHATSAPP_CONFIG.get("access_token"),
+                        "phone_number_id": WHATSAPP_CONFIG.get("phone_number_id"),
+                        "api_version": WHATSAPP_CONFIG.get("api_version", "v22.0")
+                    }
+                    logger.debug("Usando configuração do WhatsApp do chatbot")
+            except ImportError:
+                # Se o módulo do chatbot não estiver disponível, usa a configuração padrão
+                pass
+            except Exception as e:
+                logger.warning(f"Erro ao buscar configuração do WhatsApp do chatbot: {e}")
+        
+        return config
     
     def validate_channel_config(
         self,
@@ -30,7 +50,7 @@ class DefaultChannelConfigAdapter(IChannelConfigProvider):
         if channel == NotificationChannel.EMAIL:
             return 'username' in config and 'password' in config
         elif channel == NotificationChannel.WHATSAPP:
-            return all(k in config for k in ['account_sid', 'auth_token', 'from_number'])
+            return all(k in config for k in ['access_token', 'phone_number_id'])
         elif channel == NotificationChannel.WEBHOOK:
             return 'url' in config or 'endpoint' in config
         elif channel == NotificationChannel.PUSH:
@@ -53,9 +73,9 @@ class DefaultChannelConfigAdapter(IChannelConfigProvider):
                 "headers": {"Content-Type": "application/json"}
             },
             NotificationChannel.WHATSAPP: {
-                "account_sid": "your_twilio_sid",
-                "auth_token": "your_twilio_token",
-                "from_number": "+1234567890"
+                "access_token": "your_whatsapp_access_token",
+                "phone_number_id": "your_phone_number_id",
+                "api_version": "v22.0"
             },
             NotificationChannel.PUSH: {
                 "server_key": "your_firebase_server_key"
