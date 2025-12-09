@@ -29,6 +29,7 @@ def get_pedido_service(
     regiao_contract: IRegiaoEntregaContract = Depends(get_regiao_entrega_contract),
     produto_contract: IProdutoContract = Depends(get_produto_contract),
     adicional_contract: IAdicionalContract = Depends(get_adicional_contract),
+    complemento_contract: IComplementoContract = Depends(get_complemento_contract),
     combo_contract: IComboContract = Depends(get_combo_contract),
 ) -> PedidoService:
     return PedidoService(
@@ -37,6 +38,7 @@ def get_pedido_service(
         regiao_contract=regiao_contract,
         produto_contract=produto_contract,
         adicional_contract=adicional_contract,
+        complemento_contract=complemento_contract,
         combo_contract=combo_contract,
     )
 
@@ -88,6 +90,7 @@ def get_pedido_admin_service(
         regiao_contract=regiao_contract,
         produto_contract=produto_contract,
         adicional_contract=adicional_contract,
+        complemento_contract=complemento_contract,
         combo_contract=combo_contract,
     )
     mesa_service = PedidoMesaService(
