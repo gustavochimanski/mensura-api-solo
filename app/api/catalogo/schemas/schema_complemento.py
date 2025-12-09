@@ -148,6 +148,14 @@ class ItemOrdemRequest(BaseModel):
 
 
 class AtualizarOrdemItensRequest(BaseModel):
-    """Request para atualizar a ordem dos itens em um complemento"""
-    item_ordens: List[ItemOrdemRequest] = Field(..., description="Lista de itens com suas ordens")
+    """Request para atualizar a ordem dos itens em um complemento
+    
+    Aceita dois formatos:
+    1. item_ids: Lista de IDs na ordem desejada (ordem = índice) - Formato simples
+    2. item_ordens: Lista de objetos com item_id e ordem explícita - Formato completo
+    """
+    item_ids: Optional[List[int]] = Field(None, description="IDs dos itens na ordem desejada (ordem = índice)")
+    item_ordens: Optional[List[ItemOrdemRequest]] = Field(None, description="Lista de itens com suas ordens explícitas")
+    
+    model_config = ConfigDict(from_attributes=True)
 
