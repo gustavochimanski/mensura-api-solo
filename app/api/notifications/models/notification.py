@@ -1,31 +1,10 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, JSON, ForeignKey, Enum, TypeDecorator
+from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, JSON, ForeignKey, Enum
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from enum import Enum as PyEnum
 import uuid
 
 from ....database.db_connection import Base
-
-class EnumValue(TypeDecorator):
-    """TypeDecorator para garantir que enums sejam salvos como valores (strings) em vez de nomes"""
-    impl = String
-    cache_ok = True
-    
-    def __init__(self, enum_class, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.enum_class = enum_class
-    
-    def process_bind_param(self, value, dialect):
-        if value is None:
-            return None
-        if isinstance(value, self.enum_class):
-            return value.value
-        return value
-    
-    def process_result_value(self, value, dialect):
-        if value is None:
-            return None
-        return self.enum_class(value)
 
 class NotificationStatus(PyEnum):
     PENDING = "pending"
