@@ -81,6 +81,13 @@ class NotificationRepository:
             else:
                 notification_data['message_type'] = MessageType.UTILITY
             
+            # Verificação final: garante que todos os enums estão corretos antes de criar o objeto
+            # Isso previne problemas de serialização do SQLAlchemy
+            if 'channel' in notification_data and isinstance(notification_data['channel'], NotificationChannel):
+                # Garante que o valor do enum está correto
+                if notification_data['channel'].value != notification_data['channel'].value.lower():
+                    notification_data['channel'] = NotificationChannel(notification_data['channel'].value.lower())
+            
             notification = Notification(**notification_data)
             self.db.add(notification)
             self.db.commit()
