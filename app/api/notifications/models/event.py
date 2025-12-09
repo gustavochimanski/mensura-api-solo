@@ -25,9 +25,5 @@ class Event(Base):
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
     
-    # Índices compostos para performance
-    __table_args__ = (
-        {"schema": "notifications"},
-        Index('idx_empresa_event_type', 'empresa_id', 'event_type'),
-        Index('idx_empresa_processed', 'empresa_id', 'processed'),
-    )
+    # Schema
+    __table_args__ = {"schema": "notifications"}
