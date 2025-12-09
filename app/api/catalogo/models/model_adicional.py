@@ -6,8 +6,8 @@ from app.database.db_connection import Base
 
 
 class AdicionalModel(Base):
-    """Modelo para itens de complementos (ex: molhos, tamanhos de bebida, etc.)"""
-    __tablename__ = "complemento_itens"
+    """Modelo para adicionais (itens que podem ser usados em complementos, receitas, combos, etc.)"""
+    __tablename__ = "adicionais"
     __table_args__ = {"schema": "catalogo"}
 
     id = Column(Integer, primary_key=True, autoincrement=True)
