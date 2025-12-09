@@ -28,8 +28,20 @@ class AtualizarComplementoRequest(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class CriarItemRequest(BaseModel):
+    """Request para criar um item de complemento (independente)"""
+    empresa_id: int
+    nome: str = Field(..., min_length=1, max_length=100)
+    descricao: Optional[str] = Field(None, max_length=255)
+    preco: condecimal(max_digits=18, decimal_places=2) = Field(default=0)
+    custo: condecimal(max_digits=18, decimal_places=2) = Field(default=0)
+    ativo: bool = True
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class CriarAdicionalRequest(BaseModel):
-    """Request para criar um adicional dentro de um complemento"""
+    """Request para criar um adicional dentro de um complemento (DEPRECADO - usar CriarItemRequest)"""
     nome: str = Field(..., min_length=1, max_length=100)
     descricao: Optional[str] = Field(None, max_length=255)
     preco: condecimal(max_digits=18, decimal_places=2) = Field(default=0)
@@ -111,4 +123,31 @@ class VincularComplementosProdutoResponse(BaseModel):
     message: str = "Complementos vinculados com sucesso"
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ------ Vincular itens a complementos (N:N) ------
+class VincularItensComplementoRequest(BaseModel):
+    """Request para vincular múltiplos itens a um complemento"""
+    item_ids: List[int] = Field(..., description="IDs dos itens a vincular")
+    ordens: Optional[List[int]] = Field(None, description="Ordem de cada item (opcional, usa índice se não informado)")
+
+
+class VincularItensComplementoResponse(BaseModel):
+    """Response após vincular itens a um complemento"""
+    complemento_id: int
+    itens_vinculados: List[AdicionalResponse]
+    message: str = "Itens vinculados com sucesso"
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ItemOrdemRequest(BaseModel):
+    """Item com ordem para atualização"""
+    item_id: int
+    ordem: int
+
+
+class AtualizarOrdemItensRequest(BaseModel):
+    """Request para atualizar a ordem dos itens em um complemento"""
+    item_ordens: List[ItemOrdemRequest] = Field(..., description="Lista de itens com suas ordens")
 

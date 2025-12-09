@@ -15,29 +15,25 @@ class AdicionalModel(Base):
     # Vinculado a uma empresa
     empresa_id = Column(Integer, nullable=False, index=True)  # Sem FK para evitar dependência circular
     
-    # Vinculado a um complemento (grupo de itens)
-    complemento_id = Column(Integer, ForeignKey("catalogo.complemento_produto.id", ondelete="CASCADE"), nullable=False, index=True)
-    
-    # Informações do adicional
+    # Informações do item
     nome = Column(String(100), nullable=False)
     descricao = Column(String(255), nullable=True)
     preco = Column(Numeric(18, 2), nullable=False, default=0)
-    custo = Column(Numeric(18, 2), nullable=False, default=0)  # Custo interno do adicional
+    custo = Column(Numeric(18, 2), nullable=False, default=0)  # Custo interno do item
     
     # Configurações
     ativo = Column(Boolean, nullable=False, default=True)
-    
-    # Ordem de exibição dentro do complemento
-    ordem = Column(Integer, nullable=False, default=0)
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     
-    # Relacionamento com complemento
-    complemento = relationship(
+    # Relacionamento N:N com complementos (via tabela de associação)
+    complementos = relationship(
         "ComplementoModel",
-        back_populates="adicionais",
+        secondary="catalogo.complemento_item_link",
+        back_populates="itens",
+        viewonly=True,
     )
     
     model_config = ConfigDict(from_attributes=True)

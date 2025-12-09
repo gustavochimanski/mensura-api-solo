@@ -8,9 +8,13 @@ from app.api.catalogo.schemas.schema_complemento import (
     AtualizarComplementoRequest,
     AdicionalResponse,
     CriarAdicionalRequest,
+    CriarItemRequest,
     AtualizarAdicionalRequest,
     VincularComplementosProdutoRequest,
     VincularComplementosProdutoResponse,
+    VincularItensComplementoRequest,
+    VincularItensComplementoResponse,
+    AtualizarOrdemItensRequest,
 )
 from app.api.catalogo.services.service_complemento import ComplementoService
 from app.core.admin_dependencies import get_current_user
@@ -156,4 +160,114 @@ def deletar_adicional(
     service = ComplementoService(db)
     service.deletar_adicional(complemento_id, adicional_id)
     return {"message": "Adicional deletado com sucesso"}
+
+
+# ------ Itens de Complemento (Independentes) ------
+@router.post("/itens/", response_model=AdicionalResponse, status_code=status.HTTP_201_CREATED)
+def criar_item(
+    req: CriarItemRequest,
+    db: Session = Depends(get_db),
+):
+    """Cria um item de complemento independente (não vinculado a nenhum complemento ainda)."""
+    logger.info(f"[Complementos] Criar item - empresa={req.empresa_id} nome={req.nome}")
+    service = ComplementoService(db)
+    return service.criar_item(req)
+
+
+@router.get("/itens/", response_model=List[AdicionalResponse])
+def listar_itens(
+    empresa_id: int,
+    apenas_ativos: bool = True,
+    db: Session = Depends(get_db),
+):
+    """Lista todos os itens de complemento de uma empresa."""
+    logger.info(f"[Complementos] Listar itens - empresa={empresa_id} apenas_ativos={apenas_ativos}")
+    service = ComplementoService(db)
+    return service.listar_itens(empresa_id, apenas_ativos)
+
+
+@router.get("/itens/{item_id}", response_model=AdicionalResponse)
+def buscar_item(
+    item_id: int,
+    db: Session = Depends(get_db),
+):
+    """Busca um item por ID."""
+    logger.info(f"[Complementos] Buscar item - id={item_id}")
+    service = ComplementoService(db)
+    return service.buscar_item_por_id(item_id)
+
+
+@router.put("/itens/{item_id}", response_model=AdicionalResponse)
+def atualizar_item(
+    item_id: int,
+    req: AtualizarAdicionalRequest,
+    db: Session = Depends(get_db),
+):
+    """Atualiza um item existente."""
+    logger.info(f"[Complementos] Atualizar item - id={item_id}")
+    service = ComplementoService(db)
+    return service.atualizar_item(item_id, req)
+
+
+@router.delete("/itens/{item_id}", status_code=status.HTTP_200_OK)
+def deletar_item(
+    item_id: int,
+    db: Session = Depends(get_db),
+):
+    """Deleta um item (remove automaticamente os vínculos com complementos)."""
+    logger.info(f"[Complementos] Deletar item - id={item_id}")
+    service = ComplementoService(db)
+    service.deletar_item(item_id)
+    return {"message": "Item deletado com sucesso"}
+
+
+# ------ Vincular Itens a Complementos (N:N) ------
+@router.post("/{complemento_id}/itens/vincular", response_model=VincularItensComplementoResponse, status_code=status.HTTP_200_OK)
+def vincular_itens_complemento(
+    complemento_id: int = Path(..., description="ID do complemento"),
+    req: VincularItensComplementoRequest = Depends(),
+    db: Session = Depends(get_db),
+):
+    """Vincula múltiplos itens a um complemento."""
+    logger.info(f"[Complementos] Vincular itens - complemento={complemento_id} itens={req.item_ids}")
+    service = ComplementoService(db)
+    return service.vincular_itens_complemento(complemento_id, req)
+
+
+@router.delete("/{complemento_id}/itens/{item_id}", status_code=status.HTTP_200_OK)
+def desvincular_item_complemento(
+    complemento_id: int = Path(..., description="ID do complemento"),
+    item_id: int = Path(..., description="ID do item"),
+    db: Session = Depends(get_db),
+):
+    """Remove a vinculação de um item com um complemento."""
+    logger.info(f"[Complementos] Desvincular item - complemento={complemento_id} item={item_id}")
+    service = ComplementoService(db)
+    service.desvincular_item_complemento(complemento_id, item_id)
+    return {"message": "Item desvinculado com sucesso"}
+
+
+@router.get("/{complemento_id}/itens", response_model=List[AdicionalResponse])
+def listar_itens_complemento(
+    complemento_id: int = Path(..., description="ID do complemento"),
+    apenas_ativos: bool = True,
+    db: Session = Depends(get_db),
+):
+    """Lista todos os itens vinculados a um complemento."""
+    logger.info(f"[Complementos] Listar itens - complemento={complemento_id}")
+    service = ComplementoService(db)
+    return service.listar_itens_complemento(complemento_id, apenas_ativos)
+
+
+@router.put("/{complemento_id}/itens/ordem", status_code=status.HTTP_200_OK)
+def atualizar_ordem_itens(
+    complemento_id: int = Path(..., description="ID do complemento"),
+    req: AtualizarOrdemItensRequest = Depends(),
+    db: Session = Depends(get_db),
+):
+    """Atualiza a ordem dos itens em um complemento."""
+    logger.info(f"[Complementos] Atualizar ordem itens - complemento={complemento_id}")
+    service = ComplementoService(db)
+    service.atualizar_ordem_itens(complemento_id, req)
+    return {"message": "Ordem dos itens atualizada com sucesso"}
 
