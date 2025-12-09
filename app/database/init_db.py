@@ -200,7 +200,15 @@ def criar_enums():
                 ("balcao", "tipooperacaopedidobalcao", ["PEDIDO_CRIADO", "STATUS_ALTERADO", "ITEM_ADICIONADO", "ITEM_REMOVIDO", "PEDIDO_CONFIRMADO", "PEDIDO_CANCELADO", "PEDIDO_FECHADO", "PEDIDO_REABERTO", "CLIENTE_ASSOCIADO", "CLIENTE_DESASSOCIADO", "MESA_ASSOCIADA", "MESA_DESASSOCIADA"]),
             ]
             
-            all_enums = enums_cardapio + enums_cadastros + enums_cadastros_caixas + enums_mesas + enums_balcao
+            # ENUMs do schema notifications
+            enums_notifications = [
+                ("notifications", "notificationstatus", ["pending", "sent", "failed", "retrying", "cancelled"]),
+                ("notifications", "notificationchannel", ["email", "whatsapp", "push", "webhook", "in_app", "sms", "telegram"]),
+                ("notifications", "notificationpriority", ["low", "normal", "high", "urgent"]),
+                ("notifications", "messagetype", ["marketing", "utility", "transactional", "promotional", "alert", "system", "news"]),
+            ]
+            
+            all_enums = enums_cardapio + enums_cadastros + enums_cadastros_caixas + enums_mesas + enums_balcao + enums_notifications
             
             for schema, enum_name, values in all_enums:
                 try:
@@ -265,6 +273,8 @@ def importar_models():
     from app.api.cadastros.models.model_parceiros import ParceiroModel, BannerParceiroModel
     from app.api.cadastros.models.model_regiao_entrega import RegiaoEntregaModel
     from app.api.catalogo.models.model_adicional import AdicionalModel
+    # ─── Models Notifications ───────────────────────────────────────────
+    from app.api.notifications.models.notification import Notification, NotificationLog
     logger.info("📦 Models importados com sucesso.")
 
 
