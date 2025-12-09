@@ -23,35 +23,61 @@ class NotificationRepository:
             
             # Converte status (string -> enum se necessário)
             if 'status' in notification_data:
-                if isinstance(notification_data['status'], str):
-                    # Normaliza para minúsculas antes de converter para enum
-                    status_value = notification_data['status'].lower()
-                    notification_data['status'] = NotificationStatus(status_value)
-                # Se já for enum, mantém
+                status = notification_data['status']
+                # Extrai o valor do enum se for um enum, senão usa a string diretamente
+                if hasattr(status, 'value'):
+                    status_value = str(status.value).lower()
+                elif isinstance(status, str):
+                    status_value = status.lower()
+                else:
+                    status_value = str(status).lower()
+                notification_data['status'] = NotificationStatus(status_value)
             else:
                 notification_data['status'] = NotificationStatus.PENDING
             
             # Converte channel (string -> enum se necessário)
-            if 'channel' in notification_data and isinstance(notification_data['channel'], str):
-                # Normaliza para minúsculas antes de converter para enum
-                channel_value = notification_data['channel'].lower()
+            if 'channel' in notification_data:
+                channel = notification_data['channel']
+                # Extrai o valor do enum se for um enum, senão usa a string diretamente
+                if hasattr(channel, 'value'):
+                    # É um enum (Python ou Pydantic), extrai o valor
+                    channel_value = str(channel.value).lower()
+                elif isinstance(channel, str):
+                    # É uma string, normaliza
+                    channel_value = channel.lower()
+                else:
+                    # Outro tipo, converte para string e normaliza
+                    channel_value = str(channel).lower()
+                
+                # Converte para o enum do modelo
                 notification_data['channel'] = NotificationChannel(channel_value)
+                logger.debug(f"Channel convertido: {channel} -> {channel_value} -> {notification_data['channel']}")
             
             # Converte priority (string -> enum se necessário)
             if 'priority' in notification_data:
-                if isinstance(notification_data['priority'], str):
-                    # Normaliza para minúsculas antes de converter para enum
-                    priority_value = notification_data['priority'].lower()
-                    notification_data['priority'] = NotificationPriority(priority_value)
+                priority = notification_data['priority']
+                # Extrai o valor do enum se for um enum, senão usa a string diretamente
+                if hasattr(priority, 'value'):
+                    priority_value = str(priority.value).lower()
+                elif isinstance(priority, str):
+                    priority_value = priority.lower()
+                else:
+                    priority_value = str(priority).lower()
+                notification_data['priority'] = NotificationPriority(priority_value)
             else:
                 notification_data['priority'] = NotificationPriority.NORMAL
             
             # Converte message_type (string -> enum se necessário)
             if 'message_type' in notification_data:
-                if isinstance(notification_data['message_type'], str):
-                    # Normaliza para minúsculas antes de converter para enum
-                    message_type_value = notification_data['message_type'].lower()
-                    notification_data['message_type'] = MessageType(message_type_value)
+                message_type = notification_data['message_type']
+                # Extrai o valor do enum se for um enum, senão usa a string diretamente
+                if hasattr(message_type, 'value'):
+                    message_type_value = str(message_type.value).lower()
+                elif isinstance(message_type, str):
+                    message_type_value = message_type.lower()
+                else:
+                    message_type_value = str(message_type).lower()
+                notification_data['message_type'] = MessageType(message_type_value)
             else:
                 notification_data['message_type'] = MessageType.UTILITY
             
