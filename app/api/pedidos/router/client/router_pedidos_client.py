@@ -72,7 +72,13 @@ async def finalizar_checkout(
         return await svc.finalizar_pedido(payload, cliente_id=cliente.id)
 
     if payload.tipo_pedido == TipoPedidoCheckoutEnum.MESA:
-        mesa_service = PedidoMesaService(db, produto_contract=produto_contract)
+        from app.api.catalogo.adapters.complemento_adapter import ComplementoAdapter
+        complemento_contract = ComplementoAdapter(db)
+        mesa_service = PedidoMesaService(
+            db, 
+            produto_contract=produto_contract,
+            complemento_contract=complemento_contract
+        )
         try:
             mesa_codigo = int(str(payload.mesa_codigo))
         except (TypeError, ValueError):
@@ -99,7 +105,13 @@ async def finalizar_checkout(
         return mesa_service.criar_pedido(mesa_payload)
 
     if payload.tipo_pedido == TipoPedidoCheckoutEnum.BALCAO:
-        balcao_service = PedidoBalcaoService(db, produto_contract=produto_contract)
+        from app.api.catalogo.adapters.complemento_adapter import ComplementoAdapter
+        complemento_contract = ComplementoAdapter(db)
+        balcao_service = PedidoBalcaoService(
+            db, 
+            produto_contract=produto_contract,
+            complemento_contract=complemento_contract
+        )
         mesa_codigo = None
         if payload.mesa_codigo is not None:
             try:

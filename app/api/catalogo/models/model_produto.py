@@ -22,7 +22,15 @@ class ProdutoModel(Base):
     # Relacionamentos
     produtos_empresa = relationship("ProdutoEmpModel", back_populates="produto", cascade="all, delete-orphan")
     
-    # Relacionamento N:N com adicionais
+    # Relacionamento N:N com complementos
+    complementos = relationship(
+        "ComplementoModel",
+        secondary="catalogo.produto_complemento_link",
+        back_populates="produtos",
+        viewonly=True,
+    )
+    
+    # Relacionamento N:N com adicionais (DEPRECADO - usar complementos)
     adicionais = relationship(
         "AdicionalModel",
         secondary="catalogo.produto_adicional_link",

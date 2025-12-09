@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field, model_validator
 from app.api.pedidos.schemas.schema_pedido import (
     EditarPedidoRequest,
     FinalizarPedidoRequest,
-    ItemAdicionalRequest,
+    ItemComplementoRequest,
     ItemPedidoRequest,
     MeioPagamentoParcialRequest,
 )
@@ -103,13 +103,9 @@ class PedidoItemMutationRequest(BaseModel):
     combo_id: Optional[int] = Field(default=None, description="Identificador do combo (mesa/balcão).")
     quantidade: Optional[int] = Field(default=None, ge=1, description="Quantidade para adicionar/atualizar.")
     observacao: Optional[str] = Field(default=None, description="Observação livre.")
-    adicionais: Optional[List[ItemAdicionalRequest]] = Field(
+    complementos: Optional[List[ItemComplementoRequest]] = Field(
         default=None,
-        description="Adicionais estruturados do item (mesa/balcão).",
-    )
-    adicionais_ids: Optional[List[int]] = Field(
-        default=None,
-        description="Lista legada de IDs de adicionais (mesa/balcão).",
+        description="Complementos do item com seus adicionais selecionados (mesa/balcão).",
     )
 
     def to_item_pedido_request(self) -> ItemPedidoRequest:
@@ -118,8 +114,7 @@ class PedidoItemMutationRequest(BaseModel):
             produto_cod_barras=self.produto_cod_barras or "",
             quantidade=self.quantidade or 1,
             observacao=self.observacao,
-            adicionais=self.adicionais,
-            adicionais_ids=self.adicionais_ids,
+            complementos=self.complementos,
         )
 
 

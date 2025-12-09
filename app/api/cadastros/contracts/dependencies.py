@@ -9,6 +9,7 @@ from app.api.catalogo.contracts.produto_contract import IProdutoContract
 from .cliente_contract import IClienteContract
 from .entregador_contract import IEntregadorContract
 from app.api.catalogo.contracts.adicional_contract import IAdicionalContract
+from app.api.catalogo.contracts.complemento_contract import IComplementoContract
 from app.api.catalogo.contracts.combo_contract import IComboContract
 
 from app.api.empresas.adapters.empresa_adapter import EmpresaAdapter
@@ -17,6 +18,7 @@ from app.api.catalogo.adapters.produto_adapter import ProdutoAdapter
 from app.api.cadastros.adapters.cliente_adapter import ClienteAdapter
 from app.api.cadastros.adapters.entregador_adapter import EntregadorAdapter
 from app.api.catalogo.adapters.adicional_adapter import AdicionalAdapter
+from app.api.catalogo.adapters.complemento_adapter import ComplementoAdapter
 from app.api.catalogo.adapters.combo_adapter import ComboAdapter
 
 
@@ -42,6 +44,10 @@ def get_entregador_contract(db: Session = Depends(get_db)) -> IEntregadorContrac
 
 def get_adicional_contract(db: Session = Depends(get_db)) -> IAdicionalContract:
     return AdicionalAdapter(db)
+
+
+def get_complemento_contract(db: Session = Depends(get_db)) -> IComplementoContract:
+    return ComplementoAdapter(db)
 
 
 def get_combo_contract(db: Session = Depends(get_db)) -> IComboContract:

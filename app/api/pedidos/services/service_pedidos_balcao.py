@@ -13,6 +13,7 @@ from app.api.cadastros.repositories.repo_mesas import MesaRepository
 from app.api.pedidos.models.model_pedido_unificado import TipoEntrega
 from app.api.catalogo.contracts.produto_contract import IProdutoContract
 from app.api.catalogo.contracts.adicional_contract import IAdicionalContract
+from app.api.catalogo.contracts.complemento_contract import IComplementoContract
 from app.api.catalogo.contracts.combo_contract import IComboContract
 from app.api.pedidos.models.model_pedido_historico_unificado import TipoOperacaoPedido
 from app.api.pedidos.models.model_pedido_item_unificado import PedidoItemUnificadoModel
@@ -21,7 +22,7 @@ from app.api.pedidos.schemas.schema_pedido import (
     ReceitaPedidoRequest,
     ComboPedidoRequest,
     PedidoResponseCompleto,
-    ItemAdicionalRequest,
+    ItemComplementoRequest,
 )
 from app.api.pedidos.services.service_pedido_responses import PedidoResponseBuilder
 from app.api.shared.schemas.schema_shared_enums import PedidoStatusEnum
@@ -52,8 +53,7 @@ class AdicionarProdutoGenericoRequest(BaseModel):
     combo_id: Optional[int] = None
     quantidade: int = 1
     observacao: Optional[str] = None
-    adicionais: Optional[List[ItemAdicionalRequest]] = None
-    adicionais_ids: Optional[List[int]] = None
+    complementos: Optional[List[ItemComplementoRequest]] = None
 
 
 class RemoverItemResponse(BaseModel):
@@ -72,8 +72,7 @@ class AtualizarStatusPedidoRequest(BaseModel):
 
 from app.api.catalogo.models.model_receita import ReceitaModel
 from app.api.catalogo.models.model_combo import ComboModel
-from app.api.catalogo.models.model_adicional import AdicionalModel
-from app.api.pedidos.utils.adicionais import resolve_produto_adicionais
+from app.api.pedidos.utils.complementos import resolve_produto_complementos, resolve_complementos_diretos
 from app.api.pedidos.services.service_pedido_helpers import _dec
 
 
@@ -83,6 +82,7 @@ class PedidoBalcaoService:
         db: Session,
         produto_contract: IProdutoContract | None = None,
         adicional_contract: IAdicionalContract | None = None,
+        complemento_contract: IComplementoContract | None = None,
         combo_contract: IComboContract | None = None,
     ):
         self.db = db
@@ -90,6 +90,7 @@ class PedidoBalcaoService:
         self.repo = PedidoRepository(db, produto_contract=produto_contract)
         self.produto_contract = produto_contract
         self.adicional_contract = adicional_contract
+        self.complemento_contract = complemento_contract
         self.combo_contract = combo_contract
 
     @staticmethod
@@ -201,13 +202,19 @@ class PedidoBalcaoService:
         # Identifica e processa o tipo de produto
         if body.produto_cod_barras:
             # Item normal (produto com código de barras)
-            adicionais_total, adicionais_snapshot = resolve_produto_adicionais(
-                adicional_contract=self.adicional_contract,
-                produto_cod_barras=body.produto_cod_barras,
-                adicionais_request=body.adicionais,
-                adicionais_ids=body.adicionais_ids,
-                quantidade_item=qtd,
-            )
+            adicionais_total = Decimal("0")
+            adicionais_snapshot = []
+            
+            # Usa complementos
+            if body.complementos:
+                complementos_total, complementos_snapshot = resolve_produto_complementos(
+                    complemento_contract=self.complemento_contract,
+                    produto_cod_barras=body.produto_cod_barras,
+                    complementos_request=body.complementos,
+                    quantidade_item=qtd,
+                )
+                adicionais_total = complementos_total
+                adicionais_snapshot = complementos_snapshot
             
             pedido = self.repo.add_item(
                 pedido_id,
@@ -234,48 +241,13 @@ class PedidoBalcaoService:
             
             preco_rec = _dec(receita.preco_venda)
             
-            # Processa adicionais da receita
-            adicionais_req = body.adicionais or []
-            if body.adicionais_ids:
-                # Converte formato legado para novo formato
-                from types import SimpleNamespace
-                adicionais_req = [
-                    SimpleNamespace(adicional_id=ad_id, quantidade=1) 
-                    for ad_id in body.adicionais_ids
-                ]
-            
-            # Calcula total de adicionais e monta snapshot
-            adicionais_total = Decimal("0")
-            adicionais_snapshot = []
-            if adicionais_req:
-                adicionais_db = (
-                    self.db.query(AdicionalModel)
-                    .filter(
-                        AdicionalModel.id.in_([a.adicional_id for a in adicionais_req if hasattr(a, 'adicional_id')]),
-                        AdicionalModel.empresa_id == empresa_id,
-                        AdicionalModel.ativo.is_(True),
-                    )
-                    .all()
-                )
-                
-                for req in adicionais_req:
-                    ad_id = getattr(req, "adicional_id", None)
-                    if not ad_id:
-                        continue
-                    qtd_adicional = max(int(getattr(req, "quantidade", 1) or 1), 1)
-                    adicional = next((a for a in adicionais_db if a.id == ad_id), None)
-                    if not adicional:
-                        continue
-                    preco_adicional = _dec(adicional.preco)
-                    total_adicional = preco_adicional * qtd_adicional * qtd
-                    adicionais_total += total_adicional
-                    adicionais_snapshot.append({
-                        "adicional_id": ad_id,
-                        "nome": adicional.nome,
-                        "quantidade": qtd_adicional,
-                        "preco_unitario": float(preco_adicional),
-                        "total": float(total_adicional),
-                    })
+            # Processa complementos da receita
+            adicionais_total, adicionais_snapshot = resolve_complementos_diretos(
+                complemento_contract=self.complemento_contract,
+                empresa_id=empresa_id,
+                complementos_request=body.complementos,
+                quantidade_item=qtd,
+            )
             
             # Cria item de receita no banco
             preco_unit_com_receita = preco_rec + (adicionais_total / qtd)
@@ -307,47 +279,13 @@ class PedidoBalcaoService:
             
             preco_combo = _dec(combo.preco_total)
             
-            # Processa adicionais do combo
-            adicionais_req = body.adicionais or []
-            if body.adicionais_ids:
-                from types import SimpleNamespace
-                adicionais_req = [
-                    SimpleNamespace(adicional_id=ad_id, quantidade=1) 
-                    for ad_id in body.adicionais_ids
-                ]
-            
-            # Calcula total de adicionais
-            adicionais_total = Decimal("0")
-            adicionais_snapshot = []
-            if adicionais_req:
-                adicionais_db = (
-                    self.db.query(AdicionalModel)
-                    .filter(
-                        AdicionalModel.id.in_([a.adicional_id for a in adicionais_req if hasattr(a, 'adicional_id')]),
-                        AdicionalModel.empresa_id == empresa_id,
-                        AdicionalModel.ativo.is_(True),
-                    )
-                    .all()
-                )
-                
-                for req in adicionais_req:
-                    ad_id = getattr(req, "adicional_id", None)
-                    if not ad_id:
-                        continue
-                    qtd_adicional = max(int(getattr(req, "quantidade", 1) or 1), 1)
-                    adicional = next((a for a in adicionais_db if a.id == ad_id), None)
-                    if not adicional:
-                        continue
-                    preco_adicional = _dec(adicional.preco)
-                    total_adicional = preco_adicional * qtd_adicional * qtd
-                    adicionais_total += total_adicional
-                    adicionais_snapshot.append({
-                        "adicional_id": ad_id,
-                        "nome": adicional.nome,
-                        "quantidade": qtd_adicional,
-                        "preco_unitario": float(preco_adicional),
-                        "total": float(total_adicional),
-                    })
+            # Processa complementos do combo
+            adicionais_total, adicionais_snapshot = resolve_complementos_diretos(
+                complemento_contract=self.complemento_contract,
+                empresa_id=empresa_id,
+                complementos_request=body.complementos,
+                quantidade_item=qtd,
+            )
             
             # Cria item de combo no banco (um item por combo, não itens individuais)
             preco_unit_combo = preco_combo + (adicionais_total / qtd)

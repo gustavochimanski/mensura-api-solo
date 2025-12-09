@@ -944,7 +944,7 @@ class PedidoService:
                 )
             )
 
-        mesa_service = PedidoMesaService(self.db)
+        mesa_service = PedidoMesaService(self.db, complemento_contract=None)
         pedidos_mesa = mesa_service.list_pedidos_by_cliente(
             cliente_id=cliente_id,
             empresa_id=None,
@@ -966,7 +966,7 @@ class PedidoService:
                 )
             )
 
-        balcao_service = PedidoBalcaoService(self.db)
+        balcao_service = PedidoBalcaoService(self.db, complemento_contract=None)
         pedidos_balcao = balcao_service.list_pedidos_by_cliente(
             cliente_id=cliente_id,
             skip=0,
@@ -1816,33 +1816,26 @@ class PedidoService:
     # --------------- Itens auxiliares ---------------
     def _montar_observacao_item(self, item_req):
         obs = item_req.observacao or None
-        # Suporta tanto o formato novo (adicionais com quantidade)
-        # quanto o legado (apenas lista de IDs).
-        adicionais_request = getattr(item_req, "adicionais", None)
-        adicional_ids = None
-        if adicionais_request:
-            # Novo formato: objetos com adicional_id
-            adicional_ids = [a.adicional_id for a in adicionais_request]
-        else:
-            # Formato legado: lista simples de IDs
-            adicional_ids = getattr(item_req, "adicionais_ids", None)
-
-        if adicional_ids and self.adicional_contract:
-            adicionais = self.adicional_contract.buscar_por_ids_para_produto(
-                item_req.produto_cod_barras,
-                adicional_ids,
-            )
-            if adicionais:
-                nomes = ", ".join(a.nome for a in adicionais)
-                obs = (obs + " | " if obs else "") + f"Adicionais: {nomes}"
+        # Processa complementos
+        complementos = getattr(item_req, "complementos", None)
+        if complementos and self.complemento_contract:
+            nomes_complementos = []
+            for comp in complementos:
+                comp_nome = getattr(comp, "complemento_id", None)
+                adicionais = getattr(comp, "adicionais", []) or []
+                if adicionais:
+                    adic_nomes = [f"{getattr(a, 'adicional_id', '')}" for a in adicionais]
+                    nomes_complementos.append(f"Comp {comp_nome}: {', '.join(adic_nomes)}")
+            if nomes_complementos:
+                obs = (obs + " | " if obs else "") + f"Complementos: {'; '.join(nomes_complementos)}"
         return obs
 
     def _resolver_adicionais_item_snapshot(self, item_req):
-        return resolve_produto_adicionais(
-            adicional_contract=self.adicional_contract,
+        from app.api.pedidos.utils.complementos import resolve_produto_complementos
+        return resolve_produto_complementos(
+            complemento_contract=self.complemento_contract,
             produto_cod_barras=getattr(item_req, "produto_cod_barras", None),
-            adicionais_request=getattr(item_req, "adicionais", None),
-            adicionais_ids=getattr(item_req, "adicionais_ids", None),
+            complementos_request=getattr(item_req, "complementos", None),
             quantidade_item=getattr(item_req, "quantidade", 1),
         )
 
