@@ -31,11 +31,12 @@ class ProdutoModel(Base):
     )
     
     # Relacionamento N:N com adicionais (DEPRECADO - usar complementos)
-    adicionais = relationship(
-        "AdicionalModel",
-        secondary="catalogo.produto_adicional_link",
-        viewonly=True,
-    )
+    # Mantido apenas para compatibilidade durante migração
+    # adicionais = relationship(
+    #     "AdicionalModel",
+    #     secondary="catalogo.produto_adicional_link",
+    #     viewonly=True,
+    # )
     
     # Relacionamento N:N com vitrines (global, sem separação por empresa)
     vitrines = relationship(
