@@ -153,20 +153,10 @@ class EnderecosService:
         """
         from app.api.pedidos.models.model_pedido_unificado import PedidoUnificadoModel
         from geoalchemy2 import WKTElement
-        from sqlalchemy.orm import load_only
         
         # Busca pedidos ativos que usam este endereço
-        # Usa load_only para carregar apenas as colunas necessárias, evitando colunas que podem não existir no banco
         pedidos_ativos = (
             self.db.query(PedidoUnificadoModel)
-            .options(
-                load_only(
-                    PedidoUnificadoModel.id,
-                    PedidoUnificadoModel.endereco_snapshot,
-                    PedidoUnificadoModel.endereco_geo,
-                    PedidoUnificadoModel.status
-                )
-            )
             .filter(
                 PedidoUnificadoModel.endereco_id == endereco_id,
                 PedidoUnificadoModel.status.in_(["P", "I", "R", "S", "D"])  # Pendente, Pendente Impressão, Em preparo, Saiu para entrega, Em edição
