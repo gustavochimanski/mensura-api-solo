@@ -110,7 +110,7 @@ def relatorio_detalhado_entregador(
     """
     Retorna um relatório detalhado do entregador no período informado:
     - quantidade de pedidos, valor total, ticket médio
-    - tempo médio de entrega (aprox.), médias por dia
+    - tempo médio de entrega (do status 'Saiu para entrega' até 'Entregue'), médias por dia
     - métricas de acerto (pedidos acertados e valor por dia).
     """
     inicio_dt = _parse_any_date_or_datetime(inicio, True)

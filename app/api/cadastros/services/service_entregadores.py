@@ -5,7 +5,7 @@ from typing import List
 
 from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import func, case, cast, Date
 
 from app.api.empresas.repositories.empresa_repo import EmpresaRepository
@@ -17,7 +17,11 @@ from app.api.cadastros.schemas.schema_entregador import (
     EntregadorRelatorioDiaOut,
     EntregadorRelatorioDiaAcertoOut,
 )
-from app.api.pedidos.models.model_pedido_unificado import PedidoUnificadoModel, TipoEntrega, StatusPedido
+from app.api.pedidos.models.model_pedido_unificado import (
+    PedidoUnificadoModel,
+    TipoEntrega,
+    StatusPedido,
+)
 from app.utils.logger import logger
 
 class EntregadoresService:
@@ -314,12 +318,28 @@ class EntregadoresService:
 
         dias_acerto = max(len(acertos_rows), 1) if acertos_rows else 0
 
-        # tempo médio de entrega (aprox: updated_at - created_at para pedidos entregues)
-        pedidos_entregues = (
+        # pendente de acerto: pedidos ENTREGUES ainda não acertados no período
+        pendentes_row = (
             self.db.query(
-                PedidoUnificadoModel.created_at,
-                PedidoUnificadoModel.updated_at,
+                func.count(PedidoUnificadoModel.id).label("qtd"),
+                func.sum(PedidoUnificadoModel.valor_total).label("valor"),
             )
+            .filter(
+                *base_filter,
+                PedidoUnificadoModel.status == StatusPedido.ENTREGUE.value,
+                PedidoUnificadoModel.acertado_entregador.is_(False),
+            )
+            .one()
+        )
+        total_pedidos_pendentes_acerto = int(pendentes_row.qtd or 0)
+        total_valor_pendente_acerto = self._to_money(pendentes_row.valor)
+
+        # tempo médio de entrega:
+        # do momento em que o pedido muda para "Saiu para entrega" (S)
+        # até o momento em que muda para "Entregue" (E), usando o histórico.
+        pedidos_entregues = (
+            self.db.query(PedidoUnificadoModel)
+            .options(selectinload(PedidoUnificadoModel.historico))
             .filter(
                 *base_filter,
                 PedidoUnificadoModel.status == StatusPedido.ENTREGUE.value,
@@ -331,12 +351,36 @@ class EntregadoresService:
         if pedidos_entregues:
             soma_segundos = 0.0
             validos = 0
-            for p in pedidos_entregues:
-                if p.created_at and p.updated_at:
-                    delta = p.updated_at - p.created_at
-                    if isinstance(delta, timedelta):
-                        soma_segundos += delta.total_seconds()
-                        validos += 1
+            for pedido in pedidos_entregues:
+                historico = getattr(pedido, "historico", []) or []
+
+                ts_saiu = None
+                ts_entregue = None
+
+                for h in historico:
+                    status_novo_val = (
+                        h.status_novo.value
+                        if hasattr(h.status_novo, "value")
+                        else str(h.status_novo) if h.status_novo is not None
+                        else None
+                    )
+
+                    if (
+                        status_novo_val == StatusPedido.SAIU_PARA_ENTREGA.value
+                        and ts_saiu is None
+                    ):
+                        ts_saiu = h.created_at
+                    if (
+                        status_novo_val == StatusPedido.ENTREGUE.value
+                        and ts_entregue is None
+                    ):
+                        ts_entregue = h.created_at
+
+                if ts_saiu and ts_entregue and isinstance(ts_entregue - ts_saiu, timedelta):
+                    delta = ts_entregue - ts_saiu
+                    soma_segundos += delta.total_seconds()
+                    validos += 1
+
             if validos > 0:
                 tempo_medio_entrega_minutos = soma_segundos / validos / 60.0
 
@@ -377,6 +421,8 @@ class EntregadoresService:
             total_valor_acertado=total_valor_acertado_raw,
             media_pedidos_acertados_por_dia=media_pedidos_acertados_por_dia,
             media_valor_acertado_por_dia=media_valor_acertado_por_dia,
+            total_pedidos_pendentes_acerto=total_pedidos_pendentes_acerto,
+            total_valor_pendente_acerto=total_valor_pendente_acerto,
             resumo_por_dia=resumo_por_dia,
             resumo_acertos_por_dia=resumo_acertos_por_dia,
         )

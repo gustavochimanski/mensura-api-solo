@@ -602,15 +602,15 @@ await vincularItens(extras.id, [ketchup.id]); // Mesmo adicional!
    - Deletar complemento não deleta os adicionais
 4. **Ordem**: Específica por complemento (mesmo adicional pode ter ordens diferentes)
 5. **Empresa**: Adicionais e complementos devem pertencer à mesma empresa
-6. **Receitas x Itens**: O vínculo entre receitas e adicionais é feito pela tabela `catalogo.receita_itens`
+6. **Receitas x Itens**: O vínculo entre receitas e adicionais é feito pela tabela `catalogo.receita_adicional`
    (model `ReceitaAdicionalModel`), e é exposto pelos endpoints de **adicionais de receita** abaixo.
 
 ---
 
-## 🔧 Endpoints - Adicionais de Receita (`catalogo.receita_itens`)
+## 🔧 Endpoints - Adicionais de Receita (`catalogo.receita_adicional`)
 
 Esses endpoints gerenciam os **itens (adicionais) vinculados a uma receita**, usando a tabela
-`catalogo.receita_itens` como tabela de ligação (`ReceitaAdicionalModel`).
+`catalogo.receita_adicional` como tabela de ligação (`ReceitaAdicionalModel`).
 
 **Base URL**: `/api/catalogo/admin/receitas`
 
@@ -658,7 +658,7 @@ Authorization: Bearer {token}
 
 **Comportamento:**
 - Verifica se a receita existe
-- Busca todos os vínculos em `catalogo.receita_itens`
+- Busca todos os vínculos em `catalogo.receita_adicional`
 - Para cada vínculo, busca o preço atual do adicional em `catalogo.adicionais`
 
 **Response:** `200 OK` (List[AdicionalOut])
@@ -672,7 +672,7 @@ Authorization: Bearer {token}
 
 **Comportamento:**
 - Mantido por compatibilidade
-- Não altera dados na tabela `catalogo.receita_itens`
+- Não altera dados na tabela `catalogo.receita_adicional`
 - Apenas sincroniza/retorna o preço atual do adicional a partir do cadastro
 
 **Response (AdicionalOut):** `200 OK`
@@ -685,7 +685,7 @@ Authorization: Bearer {token}
 ```
 
 **Comportamento:**
-- Remove o vínculo na tabela `catalogo.receita_itens`
+- Remove o vínculo na tabela `catalogo.receita_adicional`
 - Não remove o registro da tabela `catalogo.adicionais`
 
 **Response:** `204 No Content`
