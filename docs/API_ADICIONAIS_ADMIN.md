@@ -602,6 +602,93 @@ await vincularItens(extras.id, [ketchup.id]); // Mesmo adicional!
    - Deletar complemento não deleta os adicionais
 4. **Ordem**: Específica por complemento (mesmo adicional pode ter ordens diferentes)
 5. **Empresa**: Adicionais e complementos devem pertencer à mesma empresa
+6. **Receitas x Itens**: O vínculo entre receitas e adicionais é feito pela tabela `catalogo.receita_itens`
+   (model `ReceitaAdicionalModel`), e é exposto pelos endpoints de **adicionais de receita** abaixo.
+
+---
+
+## 🔧 Endpoints - Adicionais de Receita (`catalogo.receita_itens`)
+
+Esses endpoints gerenciam os **itens (adicionais) vinculados a uma receita**, usando a tabela
+`catalogo.receita_itens` como tabela de ligação (`ReceitaAdicionalModel`).
+
+**Base URL**: `/api/catalogo/admin/receitas`
+
+### 1. Adicionar Adicional à Receita
+
+```http
+POST /api/catalogo/admin/receitas/adicionais
+Authorization: Bearer {token}
+Content-Type: application/json
+```
+
+**Request Body (AdicionalIn):**
+```json
+{
+  "receita_id": 1,
+  "adicional_id": 10
+}
+```
+
+**Comportamento:**
+- Valida se a receita existe e pertence à mesma empresa do adicional
+- Valida se o adicional existe e está cadastrado em `catalogo.adicionais`
+- Não permite duplicidade do mesmo adicional na mesma receita
+- O preço **não é armazenado na tabela de vínculo**; ele é sempre buscado do cadastro
+
+**Response (AdicionalOut):** `201 Created`
+```json
+{
+  "id": 1,
+  "receita_id": 1,
+  "adicional_id": 10,
+  "preco": 3.5
+}
+```
+
+### 2. Listar Adicionais de uma Receita
+
+```http
+GET /api/catalogo/admin/receitas/{receita_id}/adicionais
+Authorization: Bearer {token}
+```
+
+**Path Parameters:**
+- `receita_id` (required): ID da receita
+
+**Comportamento:**
+- Verifica se a receita existe
+- Busca todos os vínculos em `catalogo.receita_itens`
+- Para cada vínculo, busca o preço atual do adicional em `catalogo.adicionais`
+
+**Response:** `200 OK` (List[AdicionalOut])
+
+### 3. Atualizar Adicional de Receita (Sincronizar Preço)
+
+```http
+PUT /api/catalogo/admin/receitas/adicionais/{adicional_id}
+Authorization: Bearer {token}
+```
+
+**Comportamento:**
+- Mantido por compatibilidade
+- Não altera dados na tabela `catalogo.receita_itens`
+- Apenas sincroniza/retorna o preço atual do adicional a partir do cadastro
+
+**Response (AdicionalOut):** `200 OK`
+
+### 4. Remover Adicional de uma Receita
+
+```http
+DELETE /api/catalogo/admin/receitas/adicionais/{adicional_id}
+Authorization: Bearer {token}
+```
+
+**Comportamento:**
+- Remove o vínculo na tabela `catalogo.receita_itens`
+- Não remove o registro da tabela `catalogo.adicionais`
+
+**Response:** `204 No Content`
 
 ---
 

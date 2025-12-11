@@ -175,7 +175,7 @@ class ReceitasRepository:
         self.db.delete(obj)
         self.db.commit()
 
-    # Adicionais - Usa ReceitaAdicionalModel (receita_adicional)
+    # Adicionais - Usa ReceitaAdicionalModel (tabela catalogo.receita_itens)
     def add_adicional(self, data: AdicionalIn) -> ReceitaAdicionalModel:
         # Verifica se a receita existe
         receita = self.get_receita_by_id(data.receita_id)

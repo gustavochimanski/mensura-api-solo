@@ -193,7 +193,8 @@ class AdicionalService:
 
     def listar_adicionais_receita(self, receita_id: int, apenas_ativos: bool = True) -> List[AdicionalResponse]:
         """
-        Lista adicionais vinculados a uma receita (ReceitaAdicionalModel -> AdicionalModel).
+        Lista adicionais vinculados a uma receita através da tabela de ligação
+        `catalogo.receita_itens` (ReceitaAdicionalModel -> AdicionalModel).
         """
         receita = self.db.query(ReceitaModel).filter(ReceitaModel.id == receita_id).first()
         if not receita or not receita.ativo:

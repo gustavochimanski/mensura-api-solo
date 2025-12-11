@@ -23,6 +23,7 @@ class ReceitaModel(Base):
 
     # Relacionamentos
     ingredientes = relationship("ReceitaIngredienteModel", back_populates="receita", cascade="all, delete-orphan")
+    # Itens adicionais vinculados à receita (tabela catalogo.receita_itens)
     adicionais = relationship("ReceitaAdicionalModel", back_populates="receita", cascade="all, delete-orphan")
 
 
@@ -43,8 +44,8 @@ class ReceitaIngredienteModel(Base):
 
 
 class ReceitaAdicionalModel(Base):
-    """Modelo de Adicional de Receita"""
-    __tablename__ = "receita_adicional"
+    """Modelo de itens adicionais de Receita (tabela catalogo.receita_itens)"""
+    __tablename__ = "receita_itens"
     __table_args__ = ({"schema": "catalogo"},)
 
     id = Column(Integer, primary_key=True, autoincrement=True)

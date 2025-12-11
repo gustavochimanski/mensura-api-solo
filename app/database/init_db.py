@@ -248,7 +248,7 @@ def importar_models():
     from app.api.catalogo.models.model_produto import ProdutoModel
     from app.api.catalogo.models.model_produto_emp import ProdutoEmpModel
     from app.api.catalogo.models.model_combo import ComboModel
-    # Receitas (tabela receitas no schema catalogo)
+    # Receitas (tabela receitas no schema catalogo e itens adicionais em catalogo.receita_itens)
     from app.api.catalogo.models.model_receita import ReceitaModel, ReceitaIngredienteModel, ReceitaAdicionalModel
     from app.api.financeiro.models.model_caixa_conferencia import CaixaConferenciaModel
     from app.api.caixas.models.model_caixa import CaixaModel
