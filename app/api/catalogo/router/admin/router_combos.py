@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, Query, Path, HTTPException
 from fastapi import status, UploadFile, Form
 from sqlalchemy.orm import Session
 import json
+from typing import Optional
 
 from app.api.catalogo.schemas.schema_combo import (
     CriarComboRequest,
@@ -22,10 +23,16 @@ def listar_combos(
     cod_empresa: int = Query(...),
     page: int = Query(1, ge=1),
     limit: int = Query(30, ge=1, le=100),
+    search: Optional[str] = Query(None, description="Termo de busca no título/descrição do combo"),
     db: Session = Depends(get_db),
 ):
+    """
+    Lista combos de uma empresa com paginação e busca opcional.
+
+    - `search`: termo aplicado em título/descrição (case-insensitive).
+    """
     svc = CombosService(db)
-    return svc.listar(cod_empresa, page, limit)
+    return svc.listar(cod_empresa, page, limit, search=search)
 
 
 @router.get("/{combo_id}", response_model=ComboDTO)

@@ -19,8 +19,11 @@ from app.api.catalogo.schemas.schema_complemento import (
     VincularComplementosProdutoResponse,
     VincularItensComplementoRequest,
     VincularItensComplementoResponse,
+    VincularItemComplementoRequest,
+    VincularItemComplementoResponse,
     AtualizarOrdemItensRequest,
     ComplementoResumidoResponse,
+    AtualizarPrecoItemComplementoRequest,
 )
 from app.api.empresas.repositories.empresa_repo import EmpresaRepository
 from app.api.catalogo.repositories.repo_produto import ProdutoMensuraRepository
@@ -57,6 +60,8 @@ class ComplementoService:
             obrigatorio=req.obrigatorio,
             quantitativo=req.quantitativo,
             permite_multipla_escolha=req.permite_multipla_escolha,
+            minimo_itens=req.minimo_itens,
+            maximo_itens=req.maximo_itens,
             ordem=req.ordem,
         )
         
@@ -120,6 +125,8 @@ class ComplementoService:
                 obrigatorio=c.obrigatorio,
                 quantitativo=c.quantitativo,
                 permite_multipla_escolha=c.permite_multipla_escolha,
+                minimo_itens=c.minimo_itens,
+                maximo_itens=c.maximo_itens,
                 ordem=c.ordem,
             )
             for c in complementos
@@ -164,7 +171,7 @@ class ComplementoService:
         self.repo_item.vincular_itens_complemento(
             complemento_id=complemento_id,
             item_ids=[item.id],
-            ordens=[ordem]
+            ordens=[ordem],
         )
         
         return self._adicional_to_response(item, ordem=ordem)
@@ -215,10 +222,13 @@ class ComplementoService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Complemento {complemento_id} não encontrado."
             )
-        
+
         # Usa o relacionamento N:N via tabela de associação
         itens = self.repo_item.listar_itens_complemento(complemento_id, apenas_ativos)
-        return [self._adicional_to_response(item) for item in itens]
+        return [
+            self._adicional_to_response(item, ordem=ordem)
+            for item, ordem in itens
+        ]
 
     # ------ Itens de Complemento (Independentes) ------
     def criar_item(self, req: CriarItemRequest) -> AdicionalResponse:
@@ -252,14 +262,18 @@ class ComplementoService:
         itens = self.repo_item.listar_por_empresa(empresa_id, apenas_ativos)
         return [self._adicional_to_response(item) for item in itens]
 
-    def buscar_adicionais(self, empresa_id: int, termo: str, apenas_ativos: bool = True) -> List[AdicionalResponse]:
-        """Busca adicionais por termo (nome ou descrição)."""
+    def buscar_adicionais(self, empresa_id: int, search: str, apenas_ativos: bool = True) -> List[AdicionalResponse]:
+        """
+        Busca adicionais por termo (nome ou descrição).
+
+        - Implementação performática: filtro direto no banco usando ILIKE.
+        """
         self._empresa_or_404(empresa_id)
-        if not termo or not termo.strip():
+        if not search or not search.strip():
             # Se termo vazio, retorna lista completa
             return self.listar_itens(empresa_id, apenas_ativos)
         
-        itens = self.repo_item.buscar_por_termo(empresa_id, termo.strip(), apenas_ativos)
+        itens = self.repo_item.buscar_por_termo(empresa_id, search.strip(), apenas_ativos)
         return [self._adicional_to_response(item) for item in itens]
 
     def atualizar_item(self, item_id: int, req: AtualizarAdicionalRequest) -> AdicionalResponse:
@@ -322,7 +336,8 @@ class ComplementoService:
         self.repo_item.vincular_itens_complemento(
             complemento_id=complemento_id,
             item_ids=req.item_ids,
-            ordens=req.ordens
+            ordens=req.ordens,
+            precos=req.precos,
         )
         
         # Busca os itens vinculados para retornar
@@ -332,6 +347,60 @@ class ComplementoService:
             complemento_id=complemento_id,
             itens_vinculados=[self._adicional_to_response(item, ordem=ordem) for item, ordem in itens_com_ordem],
             message="Itens vinculados com sucesso"
+        )
+
+    def vincular_item_complemento(self, complemento_id: int, req: VincularItemComplementoRequest) -> VincularItemComplementoResponse:
+        """Vincula um único item adicional a um complemento."""
+        complemento = self.repo.buscar_por_id(complemento_id)
+        if not complemento:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Complemento {complemento_id} não encontrado."
+            )
+        
+        # Valida se o item existe e pertence à mesma empresa
+        item = self.repo_item.buscar_por_id(req.item_id)
+        if not item:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Item {req.item_id} não encontrado."
+            )
+        
+        if item.empresa_id != complemento.empresa_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Item {req.item_id} pertence a empresa diferente do complemento."
+            )
+        
+        # Converte preco_complemento para Decimal se fornecido
+        preco_complemento = None
+        if req.preco_complemento is not None:
+            preco_complemento = Decimal(str(req.preco_complemento))
+        
+        # Vincula o item
+        self.repo_item.vincular_item_complemento(
+            complemento_id=complemento_id,
+            item_id=req.item_id,
+            ordem=req.ordem,
+            preco_complemento=preco_complemento
+        )
+        
+        # Busca o item vinculado para retornar (com ordem e preço atualizados)
+        itens_com_ordem = self.repo_item.listar_itens_complemento(complemento_id, apenas_ativos=False)
+        item_vinculado = None
+        for item_result, ordem_result in itens_com_ordem:
+            if item_result.id == req.item_id:
+                item_vinculado = self._adicional_to_response(item_result, ordem=ordem_result)
+                break
+        
+        if not item_vinculado:
+            # Fallback: busca o item diretamente
+            item_vinculado = self._adicional_to_response(item, ordem=req.ordem or 0)
+        
+        return VincularItemComplementoResponse(
+            complemento_id=complemento_id,
+            item_vinculado=item_vinculado,
+            message="Item vinculado com sucesso"
         )
 
     def desvincular_item_complemento(self, complemento_id: int, item_id: int):
@@ -394,12 +463,70 @@ class ComplementoService:
         
         self.repo_item.atualizar_ordem_itens(complemento_id, item_ordens_dict)
 
+    def atualizar_preco_item_complemento(
+        self,
+        complemento_id: int,
+        item_id: int,
+        req: AtualizarPrecoItemComplementoRequest,
+    ) -> AdicionalResponse:
+        """Atualiza o preço específico de um item dentro de um complemento.
+
+        - Não altera o preço base do adicional.
+        - O preço definido aqui vale apenas para este complemento.
+        """
+        complemento = self.repo.buscar_por_id(complemento_id)
+        if not complemento:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Complemento {complemento_id} não encontrado."
+            )
+
+        item = self.repo_item.buscar_por_id(item_id)
+        if not item:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Item {item_id} não encontrado."
+            )
+
+        # Garante que o item está vinculado ao complemento
+        itens_com_ordem = self.repo_item.listar_itens_complemento(complemento_id, apenas_ativos=False)
+        vinculado = False
+        ordem_item = 0
+        for it, ordem in itens_com_ordem:
+            if it.id == item_id:
+                vinculado = True
+                ordem_item = ordem
+                break
+
+        if not vinculado:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Item {item_id} não está vinculado ao complemento {complemento_id}."
+            )
+
+        # Atualiza o preço específico na tabela de associação
+        preco_decimal = Decimal(str(req.preco))
+        self.repo_item.atualizar_preco_item_complemento(
+            complemento_id=complemento_id,
+            item_id=item_id,
+            preco_complemento=preco_decimal,
+        )
+
+        # Recarrega o item com o preço aplicado neste complemento
+        itens_atualizados = self.repo_item.listar_itens_complemento(complemento_id, apenas_ativos=False)
+        for it, ordem in itens_atualizados:
+            if it.id == item_id:
+                return self._adicional_to_response(it, ordem=ordem)
+
+        # Fallback (não deveria acontecer se tudo estiver consistente)
+        return self._adicional_to_response(item, ordem=ordem_item)
+
     # ------ Helpers ------
     def complemento_to_response(self, complemento: ComplementoModel) -> ComplementoResponse:
         """Converte ComplementoModel para ComplementoResponse."""
         # Busca os itens vinculados via relacionamento N:N (retorna tuplas (item, ordem))
         itens_com_ordem = self.repo_item.listar_itens_complemento(complemento.id, apenas_ativos=False)
-        
+
         adicionais = [
             self._adicional_to_response(item, ordem=ordem)
             for item, ordem in itens_com_ordem
@@ -422,11 +549,13 @@ class ComplementoService:
 
     def _adicional_to_response(self, adicional: AdicionalModel, ordem: Optional[int] = None) -> AdicionalResponse:
         """Converte AdicionalModel para AdicionalResponse."""
+        # Se houver preço específico aplicado para este complemento, ele vem em adicional.preco_aplicado
+        preco_aplicado = getattr(adicional, "preco_aplicado", adicional.preco)
         return AdicionalResponse(
             id=adicional.id,
             nome=adicional.nome,
             descricao=adicional.descricao,
-            preco=float(adicional.preco),
+            preco=float(preco_aplicado),
             custo=float(adicional.custo),
             ativo=adicional.ativo,
             ordem=ordem if ordem is not None else getattr(adicional, 'ordem', 0),

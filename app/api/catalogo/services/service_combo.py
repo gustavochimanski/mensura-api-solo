@@ -1,5 +1,5 @@
 from decimal import Decimal
-from typing import List
+from typing import List, Optional
 
 from fastapi import HTTPException, status, UploadFile
 from sqlalchemy.orm import Session
@@ -82,11 +82,16 @@ class CombosService:
         self.repo.deletar_combo(combo)
         self.db.commit()
 
-    def listar(self, empresa_id: int, page: int, limit: int) -> ListaCombosResponse:
+    def listar(self, empresa_id: int, page: int, limit: int, search: Optional[str] = None) -> ListaCombosResponse:
+        """
+        Lista combos de uma empresa com paginação e busca opcional.
+
+        - `search`: termo aplicado em título/descrição (filtrado no banco).
+        """
         self._empresa_or_404(empresa_id)
         offset = (page - 1) * limit
-        combos = self.repo.list_paginado(empresa_id, offset, limit)
-        total = self.repo.count_total(empresa_id)
+        combos = self.repo.list_paginado(empresa_id, offset, limit, search=search)
+        total = self.repo.count_total(empresa_id, search=search)
         return ListaCombosResponse(
             data=[self._to_dto(c) for c in combos],
             total=total,

@@ -1,6 +1,19 @@
 # app/api/catalogo/models/association_tables.py
-from sqlalchemy import Table, Column, Integer, ForeignKey, UniqueConstraint, Index, DateTime, func, \
-    PrimaryKeyConstraint, String, Boolean, ForeignKeyConstraint
+from sqlalchemy import (
+    Table,
+    Column,
+    Integer,
+    ForeignKey,
+    UniqueConstraint,
+    Index,
+    DateTime,
+    func,
+    PrimaryKeyConstraint,
+    String,
+    Boolean,
+    ForeignKeyConstraint,
+    Numeric,
+)
 from app.database.db_connection import Base
 
 # Tabela de associação Produto-Complemento
@@ -23,6 +36,8 @@ complemento_item_link = Table(
     Column("complemento_id", Integer, ForeignKey("catalogo.complemento_produto.id", ondelete="CASCADE"), primary_key=True),
     Column("item_id", Integer, ForeignKey("catalogo.adicionais.id", ondelete="CASCADE"), primary_key=True),
     Column("ordem", Integer, nullable=False, default=0),
+    # Preço específico do item dentro deste complemento (override do preço padrão do adicional)
+    Column("preco_complemento", Numeric(18, 2), nullable=True),
     Column("created_at", DateTime(timezone=True), server_default=func.now(), nullable=False),
     schema="catalogo",
     info={"description": "Tabela de relacionamento N:N entre complementos e adicionais"}

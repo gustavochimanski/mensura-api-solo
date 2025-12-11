@@ -16,10 +16,19 @@ credentials_exception = HTTPException(
     headers={"WWW-Authenticate": "Bearer"},
 )
 
+forbidden_exception = HTTPException(
+    status_code=status.HTTP_403_FORBIDDEN,
+    detail="Você não tem permissão para acessar este recurso",
+)
+
+
 def get_current_user(
     request: Request,
     db: Session = Depends(get_db),
 ) -> UserModel:
+    """
+    Recupera o usuário autenticado a partir do header Authorization (Bearer <token>).
+    """
     # 1. Pega o token do header Authorization
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
@@ -50,3 +59,40 @@ def get_current_user(
         raise credentials_exception
 
     return user
+
+
+def require_type_user(allowed_types: list[str]):
+    """
+    Dependency factory para restringir acesso por tipo de usuário.
+    Exemplo de uso em rota:
+
+        @router.get(..., dependencies=[Depends(require_type_user(['admin']))])
+        def rota_somente_admin(...):
+            ...
+    """
+
+    def dependency(current_user: UserModel = Depends(get_current_user)) -> UserModel:
+        if current_user.type_user not in allowed_types:
+            logger.warning(
+                "[AUTH] Acesso negado. type_user=%s, permitido=%s",
+                current_user.type_user,
+                allowed_types,
+            )
+            raise forbidden_exception
+        return current_user
+
+    return dependency
+
+
+def require_admin(current_user: UserModel = Depends(get_current_user)) -> UserModel:
+    """
+    Atalho para rotas que só podem ser acessadas por usuários type_user='admin'.
+    """
+    if current_user.type_user != "admin":
+        logger.warning(
+            "[AUTH] Acesso negado. type_user=%s tentou acessar rota admin.",
+            current_user.type_user,
+        )
+        raise forbidden_exception
+    return current_user
+

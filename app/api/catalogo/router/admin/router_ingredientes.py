@@ -1,5 +1,5 @@
-from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 
 from app.api.catalogo.schemas.schema_ingrediente import (
@@ -21,14 +21,20 @@ router = APIRouter(
 
 @router.get("/", response_model=List[IngredienteResponse])
 def listar_ingredientes(
-    empresa_id: int,
-    apenas_ativos: bool = True,
+    empresa_id: int = Query(..., description="ID da empresa"),
+    apenas_ativos: bool = Query(True, description="Apenas ingredientes ativos"),
+    search: Optional[str] = Query(None, description="Termo de busca (nome ou descrição)"),
     db: Session = Depends(get_db),
 ):
-    """Lista todos os ingredientes de uma empresa."""
-    logger.info(f"[Ingredientes] Listar - empresa={empresa_id} apenas_ativos={apenas_ativos}")
+    """
+    Lista todos os ingredientes de uma empresa.
+
+    - Se `search` for informado, filtra por nome/descrição contendo o termo (case-insensitive).
+    - Caso contrário, retorna a listagem completa (respeitando `apenas_ativos`).
+    """
+    logger.info(f"[Ingredientes] Listar - empresa={empresa_id} apenas_ativos={apenas_ativos} search={search!r}")
     service = IngredienteService(db)
-    return service.listar_ingredientes(empresa_id, apenas_ativos)
+    return service.listar_ingredientes(empresa_id, apenas_ativos, search=search)
 
 
 @router.post("/", response_model=IngredienteResponse, status_code=status.HTTP_201_CREATED)

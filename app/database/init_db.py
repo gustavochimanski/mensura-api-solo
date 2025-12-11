@@ -508,6 +508,45 @@ def criar_tabelas():
         else:
             logger.info("✅ Todas as tabelas do schema cardapio já existem")
 
+        # Garante coluna de preço específico por complemento na tabela de associação
+        try:
+            with engine.begin() as conn:
+                conn.execute(
+                    text(
+                        """
+                        ALTER TABLE catalogo.complemento_item_link
+                        ADD COLUMN IF NOT EXISTS preco_complemento numeric(18,2)
+                        """
+                    )
+                )
+            logger.info("✅ Coluna catalogo.complemento_item_link.preco_complemento criada/verificada com sucesso")
+        except Exception as e:
+            logger.error(
+                "❌ Erro ao garantir coluna catalogo.complemento_item_link.preco_complemento: %s",
+                e,
+                exc_info=True,
+            )
+
+        # Garante colunas de mínimo/máximo de itens em complementos
+        try:
+            with engine.begin() as conn:
+                conn.execute(
+                    text(
+                        """
+                        ALTER TABLE catalogo.complemento_produto
+                        ADD COLUMN IF NOT EXISTS minimo_itens integer,
+                        ADD COLUMN IF NOT EXISTS maximo_itens integer
+                        """
+                    )
+                )
+            logger.info("✅ Colunas minimo_itens/maximo_itens em catalogo.complemento_produto criadas/verificadas com sucesso")
+        except Exception as e:
+            logger.error(
+                "❌ Erro ao garantir colunas minimo_itens/maximo_itens em catalogo.complemento_produto: %s",
+                e,
+                exc_info=True,
+            )
+
         logger.info("✅ Processo de criação de tabelas concluído.")
     except Exception as e:
         logger.error(f"❌ Erro geral ao criar tabelas: {e}", exc_info=True)
