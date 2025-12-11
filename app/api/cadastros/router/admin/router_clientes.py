@@ -1,11 +1,18 @@
 from typing import List, Optional
+from datetime import datetime, date, time
 
 from fastapi import APIRouter, Depends, status, HTTPException, Path, Query
 from sqlalchemy.orm import Session
 
 from app.api.cadastros.models.user_model import UserModel
 from app.api.cadastros.repositories.repo_cliente import ClienteRepository
-from app.api.cadastros.schemas.schema_cliente import ClienteOut, ClienteAdminUpdate, ClienteUpdate, ClienteCreate
+from app.api.cadastros.schemas.schema_cliente import (
+    ClienteOut,
+    ClienteAdminUpdate,
+    ClienteUpdate,
+    ClienteCreate,
+    ClienteRelatorioDetalhadoOut,
+)
 from app.api.cadastros.schemas.schema_endereco import EnderecoOut, EnderecoCreate
 from app.api.cadastros.services.service_cliente import ClienteService
 from app.core.admin_dependencies import get_current_user
@@ -271,3 +278,50 @@ def get_enderecos_cliente(
     
     # Converte para o schema de resposta
     return [EnderecoOut.model_validate(endereco) for endereco in enderecos]
+
+
+def _parse_any_date_or_datetime(value: str, is_start: bool) -> datetime:
+    """
+    Aceita 'YYYY-MM-DD' ou datetime ISO completo e converte para datetime.
+    Mesmo comportamento utilizado em rotas de relatório/acerto.
+    """
+    try:
+        return datetime.fromisoformat(value)
+    except Exception:
+        d = date.fromisoformat(value)
+        return datetime.combine(d, time.min if is_start else time.max)
+
+
+@router.get(
+    "/{cliente_id}/relatorio-detalhado",
+    response_model=ClienteRelatorioDetalhadoOut,
+    status_code=status.HTTP_200_OK,
+)
+def relatorio_detalhado_cliente(
+    cliente_id: int = Path(..., description="ID do cliente"),
+    inicio: str = Query(..., description="Início do período (YYYY-MM-DD ou ISO datetime)"),
+    fim: str = Query(..., description="Fim do período (YYYY-MM-DD ou ISO datetime)"),
+    current_user: UserModel = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Retorna um relatório BI detalhado de um cliente, considerando todos os pedidos
+    (todas as empresas) no período informado:
+    - total de pedidos, valor total, ticket médio
+    - primeira/última compra, recência, tempo de relacionamento
+    - distribuição por tipo de entrega, canal e por empresa.
+    """
+    inicio_dt = _parse_any_date_or_datetime(inicio, True)
+    fim_dt = _parse_any_date_or_datetime(fim, False)
+
+    logger.info(
+        f"[Cliente Admin] Relatório detalhado - cliente_id={cliente_id}, "
+        f"inicio={inicio_dt}, fim={fim_dt}, admin={current_user.id}"
+    )
+
+    service = ClienteService(db)
+    return service.relatorio_detalhado(
+        cliente_id=cliente_id,
+        inicio=inicio_dt,
+        fim=fim_dt,
+    )

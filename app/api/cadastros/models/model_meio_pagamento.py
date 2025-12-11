@@ -4,10 +4,14 @@ from app.utils.database_utils import now_trimmed
 
 # Enum para tipos genéricos (para agrupar métodos semelhantes)
 MeioPagamentoTipo = SAEnum(
-    "CARTAO_ENTREGA", "PIX_ENTREGA", "DINHEIRO", "CARTAO_ONLINE", "PIX_ONLINE",
+    "CARTAO_ENTREGA",
+    "PIX_ENTREGA",
+    "DINHEIRO",
+    "PIX_ONLINE",
+    "OUTROS",
     name="meio_pagamento_tipo_enum",
     create_type=False,
-    schema="cadastros"
+    schema="cadastros",
 )
 
 class MeioPagamentoModel(Base):

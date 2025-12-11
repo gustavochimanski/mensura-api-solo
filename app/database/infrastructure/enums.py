@@ -27,7 +27,11 @@ def criar_enums():
             
             # ENUMs do schema cadastros
             enums_cadastros = [
-                ("cadastros", "meio_pagamento_tipo_enum", ["CARTAO_ENTREGA", "PIX_ENTREGA", "DINHEIRO", "CARTAO_ONLINE", "PIX_ONLINE"]),
+                (
+                    "cadastros",
+                    "meio_pagamento_tipo_enum",
+                    ["CARTAO_ENTREGA", "PIX_ENTREGA", "DINHEIRO", "PIX_ONLINE", "OUTROS"],
+                ),
             ]
             
             # ENUMs do schema cadastros (caixa_status está aqui pois CaixaModel está em cadastros)

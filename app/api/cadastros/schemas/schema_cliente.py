@@ -2,6 +2,7 @@ from datetime import date, datetime
 from typing import Optional, List, Literal, Union
 from pydantic import BaseModel, EmailStr, constr, ConfigDict, field_validator, model_validator
 
+
 class ClienteOut(BaseModel):
     id: int
     nome: str
@@ -154,6 +155,72 @@ class ClienteAdminUpdate(BaseModel):
         if v == "" or v is None:
             return None
         return v
+
+
+class ClienteRelatorioCanalOut(BaseModel):
+    canal: Optional[str] = None  # WEB, APP, BALCAO ou null
+    total_pedidos: int
+    valor_total: float
+    ticket_medio: float
+
+
+class ClienteRelatorioTipoEntregaOut(BaseModel):
+    tipo_entrega: str  # DELIVERY, RETIRADA, BALCAO, MESA
+    total_pedidos: int
+    valor_total: float
+    ticket_medio: float
+
+
+class ClienteRelatorioEmpresaOut(BaseModel):
+    empresa_id: int
+    empresa_nome: Optional[str] = None
+
+    total_pedidos: int
+    total_pedidos_entregues: int
+    total_pedidos_cancelados: int
+    total_pedidos_pagos: int
+
+    valor_total: float
+    ticket_medio: float
+    ticket_medio_entregues: float
+
+    primeira_compra_em: Optional[datetime] = None
+    ultima_compra_em: Optional[datetime] = None
+
+
+class ClienteRelatorioDetalhadoOut(BaseModel):
+    cliente_id: int
+    nome: str
+    cpf: Optional[str]
+    telefone: Optional[str]
+    email: Optional[EmailStr]
+    data_nascimento: Optional[date]
+    ativo: bool
+    created_at: datetime
+
+    inicio: datetime
+    fim: datetime
+
+    total_pedidos: int
+    total_pedidos_entregues: int
+    total_pedidos_cancelados: int
+    total_pedidos_pagos: int
+
+    valor_total: float
+    ticket_medio: float
+
+    primeira_compra_em: Optional[datetime] = None
+    ultima_compra_em: Optional[datetime] = None
+    recencia_dias: Optional[int] = None
+    tempo_cliente_dias: Optional[int] = None
+
+    qtd_empresas: int
+    total_pedidos_com_cupom: int
+    valor_total_descontos: float
+
+    canais: List[ClienteRelatorioCanalOut] = []
+    tipos_entrega: List[ClienteRelatorioTipoEntregaOut] = []
+    empresas: List[ClienteRelatorioEmpresaOut] = []
 
 
 from pydantic import BaseModel, constr

@@ -7,8 +7,8 @@ class MeioPagamentoTipoEnum(str, Enum):
     CARTAO_ENTREGA = "CARTAO_ENTREGA"
     PIX_ENTREGA = "PIX_ENTREGA"
     DINHEIRO = "DINHEIRO"
-    CARTAO_ONLINE = "CARTAO_ONLINE"
     PIX_ONLINE = "PIX_ONLINE"
+    OUTROS = "OUTROS"
 
 class MeioPagamentoBase(BaseModel):
     nome: str
