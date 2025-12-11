@@ -83,6 +83,9 @@ class EntregadorRelatorioDetalhadoOut(BaseModel):
     media_pedidos_acertados_por_dia: float
     media_valor_acertado_por_dia: float
 
+    total_pedidos_pendentes_acerto: int
+    total_valor_pendente_acerto: float
+
     resumo_por_dia: List[EntregadorRelatorioDiaOut] = []
     resumo_acertos_por_dia: List[EntregadorRelatorioDiaAcertoOut] = []
 
