@@ -1,12 +1,23 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta
+from typing import List
+
 from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from sqlalchemy import func, case, cast, Date
 
 from app.api.empresas.repositories.empresa_repo import EmpresaRepository
 from app.api.cadastros.repositories.repo_entregadores import EntregadorRepository
-from app.api.cadastros.schemas.schema_entregador import EntregadorCreate, EntregadorUpdate
+from app.api.cadastros.schemas.schema_entregador import (
+    EntregadorCreate,
+    EntregadorUpdate,
+    EntregadorRelatorioDetalhadoOut,
+    EntregadorRelatorioDiaOut,
+    EntregadorRelatorioDiaAcertoOut,
+)
+from app.api.pedidos.models.model_pedido_unificado import PedidoUnificadoModel, TipoEntrega, StatusPedido
 from app.utils.logger import logger
 
 class EntregadoresService:
@@ -14,6 +25,35 @@ class EntregadoresService:
         self.db = db
         self.repo = EntregadorRepository(db)
         self.empresa_repo = EmpresaRepository(db)
+
+    @staticmethod
+    def _to_money(value) -> float:
+        if value is None:
+            return 0.0
+        try:
+            return float(value)
+        except Exception:
+            try:
+                from decimal import Decimal
+                return float(Decimal(str(value)))
+            except Exception:
+                return 0.0
+
+    @staticmethod
+    def _normalize_period(inicio: datetime, fim: datetime) -> tuple[datetime, datetime]:
+        # mesmo comportamento usado em AcertoEntregadoresService
+        from datetime import timedelta as _td
+
+        if (
+            getattr(fim, "hour", 0) == 0
+            and getattr(fim, "minute", 0) == 0
+            and getattr(fim, "second", 0) == 0
+            and getattr(fim, "microsecond", 0) == 0
+        ):
+            fim_exclusive = fim + _td(days=1)
+        else:
+            fim_exclusive = fim + _td(microseconds=1)
+        return inicio, fim_exclusive
 
     def list(self):
         return self.repo.list()
@@ -144,4 +184,200 @@ class EntregadoresService:
         obj = self.get(id_)
         self.repo.delete(obj)
         return {"ok": True}
+
+    # ------------------- Relatório detalhado -------------------
+    def relatorio_detalhado(
+        self,
+        *,
+        entregador_id: int,
+        empresa_id: int,
+        inicio: datetime,
+        fim: datetime,
+    ) -> EntregadorRelatorioDetalhadoOut:
+        inicio, fim_exclusive = self._normalize_period(inicio, fim)
+
+        entregador = self.repo.get(entregador_id)
+        if not entregador:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Entregador não encontrado")
+
+        logger.info(
+            f"[EntregadoresService] Relatório detalhado - entregador_id={entregador_id}, "
+            f"empresa_id={empresa_id}, inicio={inicio}, fim={fim}"
+        )
+
+        base_filter = [
+            PedidoUnificadoModel.empresa_id == empresa_id,
+            PedidoUnificadoModel.tipo_entrega == TipoEntrega.DELIVERY.value,
+            PedidoUnificadoModel.entregador_id == entregador_id,
+            PedidoUnificadoModel.created_at >= inicio,
+            PedidoUnificadoModel.created_at < fim_exclusive,
+        ]
+
+        # agregados gerais
+        total_row = (
+            self.db.query(
+                func.count(PedidoUnificadoModel.id).label("total_pedidos"),
+                func.sum(
+                    case(
+                        (PedidoUnificadoModel.status == StatusPedido.ENTREGUE.value, 1),
+                        else_=0,
+                    )
+                ).label("total_pedidos_entregues"),
+                func.sum(
+                    case(
+                        (PedidoUnificadoModel.status == StatusPedido.CANCELADO.value, 1),
+                        else_=0,
+                    )
+                ).label("total_pedidos_cancelados"),
+                func.sum(
+                    case(
+                        (PedidoUnificadoModel.pago.is_(True), 1),
+                        else_=0,
+                    )
+                ).label("total_pedidos_pagos"),
+                func.sum(PedidoUnificadoModel.valor_total).label("valor_total"),
+                func.min(PedidoUnificadoModel.created_at).label("primeiro_pedido"),
+                func.max(PedidoUnificadoModel.created_at).label("ultimo_pedido"),
+            )
+            .filter(*base_filter)
+            .one()
+        )
+
+        total_pedidos = int(total_row.total_pedidos or 0)
+        total_pedidos_entregues = int(total_row.total_pedidos_entregues or 0)
+        total_pedidos_cancelados = int(total_row.total_pedidos_cancelados or 0)
+        total_pedidos_pagos = int(total_row.total_pedidos_pagos or 0)
+        valor_total = self._to_money(total_row.valor_total)
+
+        dias_no_periodo = max((fim - inicio).days, 1)
+
+        # pedidos por dia (criação)
+        resumo_por_dia_rows: List[tuple] = (
+            self.db.query(
+                cast(PedidoUnificadoModel.created_at, Date).label("dia"),
+                func.count(PedidoUnificadoModel.id).label("qtd"),
+                func.sum(PedidoUnificadoModel.valor_total).label("valor"),
+            )
+            .filter(*base_filter)
+            .group_by(cast(PedidoUnificadoModel.created_at, Date))
+            .order_by("dia")
+            .all()
+        )
+
+        resumo_por_dia: List[EntregadorRelatorioDiaOut] = []
+        for r in resumo_por_dia_rows:
+            resumo_por_dia.append(
+                EntregadorRelatorioDiaOut(
+                    data=r.dia,
+                    qtd_pedidos=int(r.qtd or 0),
+                    valor_total=self._to_money(r.valor),
+                )
+            )
+
+        dias_ativos = len(resumo_por_dia_rows)
+
+        # acertos por dia (acertado_entregador_em)
+        acertos_rows: List[tuple] = (
+            self.db.query(
+                cast(PedidoUnificadoModel.acertado_entregador_em, Date).label("dia"),
+                func.count(PedidoUnificadoModel.id).label("qtd"),
+                func.sum(PedidoUnificadoModel.valor_total).label("valor"),
+            )
+            .filter(
+                PedidoUnificadoModel.empresa_id == empresa_id,
+                PedidoUnificadoModel.tipo_entrega == TipoEntrega.DELIVERY.value,
+                PedidoUnificadoModel.entregador_id == entregador_id,
+                PedidoUnificadoModel.acertado_entregador.is_(True),
+                PedidoUnificadoModel.acertado_entregador_em >= inicio,
+                PedidoUnificadoModel.acertado_entregador_em < fim_exclusive,
+            )
+            .group_by(cast(PedidoUnificadoModel.acertado_entregador_em, Date))
+            .order_by("dia")
+            .all()
+        )
+
+        resumo_acertos_por_dia: List[EntregadorRelatorioDiaAcertoOut] = []
+        total_pedidos_acertados = 0
+        total_valor_acertado_raw = 0.0
+        for r in acertos_rows:
+            qtd = int(r.qtd or 0)
+            valor = self._to_money(r.valor)
+            resumo_acertos_por_dia.append(
+                EntregadorRelatorioDiaAcertoOut(
+                    data=r.dia,
+                    qtd_pedidos_acertados=qtd,
+                    valor_total_acertado=valor,
+                )
+            )
+            total_pedidos_acertados += qtd
+            total_valor_acertado_raw += valor
+
+        dias_acerto = max(len(acertos_rows), 1) if acertos_rows else 0
+
+        # tempo médio de entrega (aprox: updated_at - created_at para pedidos entregues)
+        pedidos_entregues = (
+            self.db.query(
+                PedidoUnificadoModel.created_at,
+                PedidoUnificadoModel.updated_at,
+            )
+            .filter(
+                *base_filter,
+                PedidoUnificadoModel.status == StatusPedido.ENTREGUE.value,
+            )
+            .all()
+        )
+
+        tempo_medio_entrega_minutos = 0.0
+        if pedidos_entregues:
+            soma_segundos = 0.0
+            validos = 0
+            for p in pedidos_entregues:
+                if p.created_at and p.updated_at:
+                    delta = p.updated_at - p.created_at
+                    if isinstance(delta, timedelta):
+                        soma_segundos += delta.total_seconds()
+                        validos += 1
+            if validos > 0:
+                tempo_medio_entrega_minutos = soma_segundos / validos / 60.0
+
+        ticket_medio = valor_total / total_pedidos if total_pedidos > 0 else 0.0
+        ticket_medio_entregues = (
+            valor_total / total_pedidos_entregues if total_pedidos_entregues > 0 else 0.0
+        )
+
+        pedidos_medio_por_dia = total_pedidos / dias_no_periodo if dias_no_periodo > 0 else 0.0
+        valor_medio_por_dia = valor_total / dias_no_periodo if dias_no_periodo > 0 else 0.0
+
+        media_pedidos_acertados_por_dia = (
+            (total_pedidos_acertados / dias_acerto) if dias_acerto > 0 else 0.0
+        )
+        media_valor_acertado_por_dia = (
+            (total_valor_acertado_raw / dias_acerto) if dias_acerto > 0 else 0.0
+        )
+
+        return EntregadorRelatorioDetalhadoOut(
+            entregador_id=entregador_id,
+            entregador_nome=getattr(entregador, "nome", None),
+            empresa_id=empresa_id,
+            inicio=inicio,
+            fim=fim,
+            total_pedidos=total_pedidos,
+            total_pedidos_entregues=total_pedidos_entregues,
+            total_pedidos_cancelados=total_pedidos_cancelados,
+            total_pedidos_pagos=total_pedidos_pagos,
+            valor_total=valor_total,
+            ticket_medio=ticket_medio,
+            ticket_medio_entregues=ticket_medio_entregues,
+            tempo_medio_entrega_minutos=tempo_medio_entrega_minutos,
+            dias_no_periodo=dias_no_periodo,
+            dias_ativos=dias_ativos,
+            pedidos_medio_por_dia=pedidos_medio_por_dia,
+            valor_medio_por_dia=valor_medio_por_dia,
+            total_pedidos_acertados=total_pedidos_acertados,
+            total_valor_acertado=total_valor_acertado_raw,
+            media_pedidos_acertados_por_dia=media_pedidos_acertados_por_dia,
+            media_valor_acertado_por_dia=media_valor_acertado_por_dia,
+            resumo_por_dia=resumo_por_dia,
+            resumo_acertos_por_dia=resumo_acertos_por_dia,
+        )
 

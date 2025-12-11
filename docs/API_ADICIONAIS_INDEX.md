@@ -51,7 +51,6 @@ Documentação para **clientes** com endpoints de leitura:
 - **Tabela**: `catalogo.adicionais` - Armazena os adicionais (itens independentes)
 - **Tabela**: `catalogo.complemento_produto` - Armazena os complementos (grupos)
 - **Tabela**: `catalogo.complemento_item_link` - Vínculo N:N entre complementos e adicionais
-- **Tabela**: `catalogo.receita_itens` - Vínculo N:N entre receitas e adicionais (itens da receita)
 
 ---
 
