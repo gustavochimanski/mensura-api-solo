@@ -16,6 +16,7 @@ from app.api.cadastros.schemas.schema_entregador import (
     EntregadorRelatorioDetalhadoOut,
     EntregadorRelatorioDiaOut,
     EntregadorRelatorioDiaAcertoOut,
+    EntregadorRelatorioEmpresaOut,
 )
 from app.api.pedidos.models.model_pedido_unificado import (
     PedidoUnificadoModel,
@@ -194,7 +195,6 @@ class EntregadoresService:
         self,
         *,
         entregador_id: int,
-        empresa_id: int,
         inicio: datetime,
         fim: datetime,
     ) -> EntregadorRelatorioDetalhadoOut:
@@ -204,13 +204,16 @@ class EntregadoresService:
         if not entregador:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Entregador não encontrado")
 
+        empresa_ids = [e.id for e in getattr(entregador, "empresas", [])]
+        empresa_nome_map = {e.id: getattr(e, "nome", None) for e in getattr(entregador, "empresas", [])}
+
         logger.info(
             f"[EntregadoresService] Relatório detalhado - entregador_id={entregador_id}, "
-            f"empresa_id={empresa_id}, inicio={inicio}, fim={fim}"
+            f"empresas={empresa_ids}, inicio={inicio}, fim={fim}"
         )
 
         base_filter = [
-            PedidoUnificadoModel.empresa_id == empresa_id,
+            PedidoUnificadoModel.empresa_id.in_(empresa_ids) if empresa_ids else False,
             PedidoUnificadoModel.tipo_entrega == TipoEntrega.DELIVERY.value,
             PedidoUnificadoModel.entregador_id == entregador_id,
             PedidoUnificadoModel.created_at >= inicio,
@@ -280,7 +283,7 @@ class EntregadoresService:
 
         dias_ativos = len(resumo_por_dia_rows)
 
-        # acertos por dia (acertado_entregador_em)
+        # acertos por dia (acertado_entregador_em) - geral (todas as empresas vinculadas)
         acertos_rows: List[tuple] = (
             self.db.query(
                 cast(PedidoUnificadoModel.acertado_entregador_em, Date).label("dia"),
@@ -288,7 +291,7 @@ class EntregadoresService:
                 func.sum(PedidoUnificadoModel.valor_total).label("valor"),
             )
             .filter(
-                PedidoUnificadoModel.empresa_id == empresa_id,
+                PedidoUnificadoModel.empresa_id.in_(empresa_ids) if empresa_ids else False,
                 PedidoUnificadoModel.tipo_entrega == TipoEntrega.DELIVERY.value,
                 PedidoUnificadoModel.entregador_id == entregador_id,
                 PedidoUnificadoModel.acertado_entregador.is_(True),
@@ -318,7 +321,7 @@ class EntregadoresService:
 
         dias_acerto = max(len(acertos_rows), 1) if acertos_rows else 0
 
-        # pendente de acerto: pedidos ENTREGUES ainda não acertados no período
+        # pendente de acerto: pedidos ENTREGUES ainda não acertados no período (geral)
         pendentes_row = (
             self.db.query(
                 func.count(PedidoUnificadoModel.id).label("qtd"),
@@ -348,6 +351,7 @@ class EntregadoresService:
         )
 
         tempo_medio_entrega_minutos = 0.0
+        tempo_por_empresa: dict[int, dict[str, float]] = {}
         if pedidos_entregues:
             soma_segundos = 0.0
             validos = 0
@@ -381,8 +385,19 @@ class EntregadoresService:
                     soma_segundos += delta.total_seconds()
                     validos += 1
 
+                    emp_id = getattr(pedido, "empresa_id", None)
+                    if emp_id is not None:
+                        agg = tempo_por_empresa.setdefault(emp_id, {"soma": 0.0, "qtd": 0})
+                        agg["soma"] += delta.total_seconds()
+                        agg["qtd"] += 1
+
             if validos > 0:
                 tempo_medio_entrega_minutos = soma_segundos / validos / 60.0
+
+        tempo_medio_por_empresa: dict[int, float] = {}
+        for emp_id, data in tempo_por_empresa.items():
+            if data["qtd"] > 0:
+                tempo_medio_por_empresa[emp_id] = data["soma"] / data["qtd"] / 60.0
 
         ticket_medio = valor_total / total_pedidos if total_pedidos > 0 else 0.0
         ticket_medio_entregues = (
@@ -399,10 +414,164 @@ class EntregadoresService:
             (total_valor_acertado_raw / dias_acerto) if dias_acerto > 0 else 0.0
         )
 
+        # ------------- métricas por empresa -------------
+        # totais por empresa (pedidos, valores, dias ativos)
+        stats_por_empresa_rows = (
+            self.db.query(
+                PedidoUnificadoModel.empresa_id.label("empresa_id"),
+                func.count(PedidoUnificadoModel.id).label("total_pedidos"),
+                func.sum(
+                    case(
+                        (PedidoUnificadoModel.status == StatusPedido.ENTREGUE.value, 1),
+                        else_=0,
+                    )
+                ).label("total_pedidos_entregues"),
+                func.sum(
+                    case(
+                        (PedidoUnificadoModel.status == StatusPedido.CANCELADO.value, 1),
+                        else_=0,
+                    )
+                ).label("total_pedidos_cancelados"),
+                func.sum(
+                    case(
+                        (PedidoUnificadoModel.pago.is_(True), 1),
+                        else_=0,
+                    )
+                ).label("total_pedidos_pagos"),
+                func.sum(PedidoUnificadoModel.valor_total).label("valor_total"),
+                func.count(
+                    func.distinct(cast(PedidoUnificadoModel.created_at, Date))
+                ).label("dias_ativos"),
+            )
+            .filter(*base_filter)
+            .group_by(PedidoUnificadoModel.empresa_id)
+            .all()
+        )
+
+        stats_map = {row.empresa_id: row for row in stats_por_empresa_rows}
+
+        # acertos por empresa (totais e dias com acerto)
+        acertos_por_empresa_rows = (
+            self.db.query(
+                PedidoUnificadoModel.empresa_id.label("empresa_id"),
+                func.count(PedidoUnificadoModel.id).label("total_pedidos_acertados"),
+                func.sum(PedidoUnificadoModel.valor_total).label("total_valor_acertado"),
+                func.count(
+                    func.distinct(cast(PedidoUnificadoModel.acertado_entregador_em, Date))
+                ).label("dias_acerto"),
+            )
+            .filter(
+                PedidoUnificadoModel.empresa_id.in_(empresa_ids) if empresa_ids else False,
+                PedidoUnificadoModel.tipo_entrega == TipoEntrega.DELIVERY.value,
+                PedidoUnificadoModel.entregador_id == entregador_id,
+                PedidoUnificadoModel.acertado_entregador.is_(True),
+                PedidoUnificadoModel.acertado_entregador_em >= inicio,
+                PedidoUnificadoModel.acertado_entregador_em < fim_exclusive,
+            )
+            .group_by(PedidoUnificadoModel.empresa_id)
+            .all()
+        )
+        acertos_map = {row.empresa_id: row for row in acertos_por_empresa_rows}
+
+        # pendentes por empresa
+        pendentes_por_empresa_rows = (
+            self.db.query(
+                PedidoUnificadoModel.empresa_id.label("empresa_id"),
+                func.count(PedidoUnificadoModel.id).label("qtd"),
+                func.sum(PedidoUnificadoModel.valor_total).label("valor"),
+            )
+            .filter(
+                *base_filter,
+                PedidoUnificadoModel.status == StatusPedido.ENTREGUE.value,
+                PedidoUnificadoModel.acertado_entregador.is_(False),
+            )
+            .group_by(PedidoUnificadoModel.empresa_id)
+            .all()
+        )
+        pendentes_map = {row.empresa_id: row for row in pendentes_por_empresa_rows}
+
+        empresas_out: list[EntregadorRelatorioEmpresaOut] = []
+        for emp_id in empresa_ids:
+            stats = stats_map.get(emp_id)
+            if not stats:
+                continue
+
+            total_pedidos_emp = int(stats.total_pedidos or 0)
+            total_pedidos_entregues_emp = int(stats.total_pedidos_entregues or 0)
+            total_pedidos_cancelados_emp = int(stats.total_pedidos_cancelados or 0)
+            total_pedidos_pagos_emp = int(stats.total_pedidos_pagos or 0)
+            valor_total_emp = self._to_money(stats.valor_total)
+            dias_ativos_emp = int(stats.dias_ativos or 0)
+
+            ticket_medio_emp = valor_total_emp / total_pedidos_emp if total_pedidos_emp > 0 else 0.0
+            ticket_medio_entregues_emp = (
+                valor_total_emp / total_pedidos_entregues_emp
+                if total_pedidos_entregues_emp > 0
+                else 0.0
+            )
+
+            pedidos_medio_por_dia_emp = (
+                total_pedidos_emp / dias_ativos_emp if dias_ativos_emp > 0 else 0.0
+            )
+            valor_medio_por_dia_emp = (
+                valor_total_emp / dias_ativos_emp if dias_ativos_emp > 0 else 0.0
+            )
+
+            acertos_emp = acertos_map.get(emp_id)
+            if acertos_emp:
+                total_pedidos_acertados_emp = int(acertos_emp.total_pedidos_acertados or 0)
+                total_valor_acertado_emp = self._to_money(acertos_emp.total_valor_acertado)
+                dias_acerto_emp = int(acertos_emp.dias_acerto or 0)
+            else:
+                total_pedidos_acertados_emp = 0
+                total_valor_acertado_emp = 0.0
+                dias_acerto_emp = 0
+
+            media_pedidos_acertados_por_dia_emp = (
+                total_pedidos_acertados_emp / dias_acerto_emp if dias_acerto_emp > 0 else 0.0
+            )
+            media_valor_acertado_por_dia_emp = (
+                total_valor_acertado_emp / dias_acerto_emp if dias_acerto_emp > 0 else 0.0
+            )
+
+            pendentes_emp = pendentes_map.get(emp_id)
+            if pendentes_emp:
+                total_pedidos_pendentes_emp = int(pendentes_emp.qtd or 0)
+                total_valor_pendente_emp = self._to_money(pendentes_emp.valor)
+            else:
+                total_pedidos_pendentes_emp = 0
+                total_valor_pendente_emp = 0.0
+
+            tempo_medio_emp = tempo_medio_por_empresa.get(emp_id, 0.0)
+
+            empresas_out.append(
+                EntregadorRelatorioEmpresaOut(
+                    empresa_id=emp_id,
+                    empresa_nome=empresa_nome_map.get(emp_id),
+                    total_pedidos=total_pedidos_emp,
+                    total_pedidos_entregues=total_pedidos_entregues_emp,
+                    total_pedidos_cancelados=total_pedidos_cancelados_emp,
+                    total_pedidos_pagos=total_pedidos_pagos_emp,
+                    valor_total=valor_total_emp,
+                    ticket_medio=ticket_medio_emp,
+                    ticket_medio_entregues=ticket_medio_entregues_emp,
+                    tempo_medio_entrega_minutos=tempo_medio_emp,
+                    dias_ativos=dias_ativos_emp,
+                    pedidos_medio_por_dia=pedidos_medio_por_dia_emp,
+                    valor_medio_por_dia=valor_medio_por_dia_emp,
+                    total_pedidos_acertados=total_pedidos_acertados_emp,
+                    total_valor_acertado=total_valor_acertado_emp,
+                    media_pedidos_acertados_por_dia=media_pedidos_acertados_por_dia_emp,
+                    media_valor_acertado_por_dia=media_valor_acertado_por_dia_emp,
+                    total_pedidos_pendentes_acerto=total_pedidos_pendentes_emp,
+                    total_valor_pendente_acerto=total_valor_pendente_emp,
+                )
+            )
+
         return EntregadorRelatorioDetalhadoOut(
             entregador_id=entregador_id,
             entregador_nome=getattr(entregador, "nome", None),
-            empresa_id=empresa_id,
+            empresa_id=None,
             inicio=inicio,
             fim=fim,
             total_pedidos=total_pedidos,
@@ -425,5 +594,6 @@ class EntregadoresService:
             total_valor_pendente_acerto=total_valor_pendente_acerto,
             resumo_por_dia=resumo_por_dia,
             resumo_acertos_por_dia=resumo_acertos_por_dia,
+            empresas=empresas_out,
         )
 

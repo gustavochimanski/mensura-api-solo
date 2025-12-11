@@ -102,7 +102,6 @@ def _parse_any_date_or_datetime(value: str, is_start: bool) -> datetime:
 )
 def relatorio_detalhado_entregador(
     entregador_id: int = Path(..., description="ID do entregador"),
-    empresa_id: int = Query(..., gt=0, description="ID da empresa para filtrar os pedidos"),
     inicio: str = Query(..., description="Início do período (YYYY-MM-DD ou ISO datetime)"),
     fim: str = Query(..., description="Fim do período (YYYY-MM-DD ou ISO datetime)"),
     db: Session = Depends(get_db),
@@ -111,19 +110,19 @@ def relatorio_detalhado_entregador(
     Retorna um relatório detalhado do entregador no período informado:
     - quantidade de pedidos, valor total, ticket médio
     - tempo médio de entrega (do status 'Saiu para entrega' até 'Entregue'), médias por dia
-    - métricas de acerto (pedidos acertados e valor por dia).
+    - métricas de acerto (pedidos acertados e valor por dia)
+    - consolidados gerais (todas as empresas vinculadas) e também detalhados por empresa.
     """
     inicio_dt = _parse_any_date_or_datetime(inicio, True)
     fim_dt = _parse_any_date_or_datetime(fim, False)
 
     logger.info(
         f"[Entregadores] Relatório detalhado - entregador_id={entregador_id}, "
-        f"empresa_id={empresa_id}, inicio={inicio_dt}, fim={fim_dt}"
+        f"inicio={inicio_dt}, fim={fim_dt}"
     )
     svc = EntregadoresService(db)
     return svc.relatorio_detalhado(
         entregador_id=entregador_id,
-        empresa_id=empresa_id,
         inicio=inicio_dt,
         fim=fim_dt,
     )

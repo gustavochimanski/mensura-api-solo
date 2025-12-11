@@ -55,10 +55,38 @@ class EntregadorRelatorioDiaAcertoOut(BaseModel):
     valor_total_acertado: float
 
 
+class EntregadorRelatorioEmpresaOut(BaseModel):
+    empresa_id: int
+    empresa_nome: Optional[str] = None
+
+    total_pedidos: int
+    total_pedidos_entregues: int
+    total_pedidos_cancelados: int
+    total_pedidos_pagos: int
+
+    valor_total: float
+    ticket_medio: float
+    ticket_medio_entregues: float
+
+    tempo_medio_entrega_minutos: float
+
+    dias_ativos: int
+    pedidos_medio_por_dia: float
+    valor_medio_por_dia: float
+
+    total_pedidos_acertados: int
+    total_valor_acertado: float
+    media_pedidos_acertados_por_dia: float
+    media_valor_acertado_por_dia: float
+
+    total_pedidos_pendentes_acerto: int
+    total_valor_pendente_acerto: float
+
+
 class EntregadorRelatorioDetalhadoOut(BaseModel):
     entregador_id: int
     entregador_nome: Optional[str] = None
-    empresa_id: int
+    empresa_id: Optional[int] = None
     inicio: datetime
     fim: datetime
 
@@ -88,4 +116,6 @@ class EntregadorRelatorioDetalhadoOut(BaseModel):
 
     resumo_por_dia: List[EntregadorRelatorioDiaOut] = []
     resumo_acertos_por_dia: List[EntregadorRelatorioDiaAcertoOut] = []
+
+    empresas: List[EntregadorRelatorioEmpresaOut] = []
 
