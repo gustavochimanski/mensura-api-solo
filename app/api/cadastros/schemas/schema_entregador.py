@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, date
 from typing import Optional, List
 from pydantic import BaseModel, ConfigDict, constr
 
@@ -41,3 +41,48 @@ class EntregadorOut(BaseModel):
     empresas: List[EmpresaMiniOut] = []
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class EntregadorRelatorioDiaOut(BaseModel):
+    data: date
+    qtd_pedidos: int
+    valor_total: float
+
+
+class EntregadorRelatorioDiaAcertoOut(BaseModel):
+    data: date
+    qtd_pedidos_acertados: int
+    valor_total_acertado: float
+
+
+class EntregadorRelatorioDetalhadoOut(BaseModel):
+    entregador_id: int
+    entregador_nome: Optional[str] = None
+    empresa_id: int
+    inicio: datetime
+    fim: datetime
+
+    total_pedidos: int
+    total_pedidos_entregues: int
+    total_pedidos_cancelados: int
+    total_pedidos_pagos: int
+
+    valor_total: float
+    ticket_medio: float
+    ticket_medio_entregues: float
+
+    tempo_medio_entrega_minutos: float
+
+    dias_no_periodo: int
+    dias_ativos: int
+    pedidos_medio_por_dia: float
+    valor_medio_por_dia: float
+
+    total_pedidos_acertados: int
+    total_valor_acertado: float
+    media_pedidos_acertados_por_dia: float
+    media_valor_acertado_por_dia: float
+
+    resumo_por_dia: List[EntregadorRelatorioDiaOut] = []
+    resumo_acertos_por_dia: List[EntregadorRelatorioDiaAcertoOut] = []
+
