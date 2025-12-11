@@ -541,6 +541,54 @@ def criar_usuario_admin_padrao():
     except Exception as e:
         logger.error(f"❌ Erro ao criar usuário admin: {e}", exc_info=True)
 
+
+def criar_meios_pagamento_padrao():
+    """Cria os meios de pagamento padrão na tabela cadastros.meios_pagamento."""
+    try:
+        from app.api.cadastros.models.model_meio_pagamento import MeioPagamentoModel
+
+        dados_meios_pagamento = [
+            {
+                "nome": "Cartão Entrega",
+                "tipo": "CARTAO_ENTREGA",
+                "ativo": True,
+            },
+            {
+                "nome": "Dinheiro",
+                "tipo": "DINHEIRO",
+                "ativo": True,
+            },
+            {
+                "nome": "Outros",
+                "tipo": "OUTROS",
+                "ativo": True,
+            },
+            {
+                "nome": "PIX - Online",
+                "tipo": "PIX_ONLINE",
+                "ativo": True,
+            },
+            {
+                "nome": "Pix - POS",
+                "tipo": "OUTROS",
+                "ativo": True,
+            },
+        ]
+
+        with SessionLocal() as session:
+            for dados in dados_meios_pagamento:
+                stmt = (
+                    insert(MeioPagamentoModel)
+                    .values(**dados)
+                    .on_conflict_do_nothing(index_elements=[MeioPagamentoModel.nome])
+                )
+                session.execute(stmt)
+            session.commit()
+
+        logger.info("✅ Meios de pagamento padrão criados/verificados com sucesso.")
+    except Exception as e:
+        logger.error(f"❌ Erro ao criar meios de pagamento padrão: {e}", exc_info=True)
+
 def inicializar_banco():
     logger.info("🚀 Iniciando processo de inicialização do banco de dados...")
     
@@ -566,5 +614,9 @@ def inicializar_banco():
     
     logger.info("👤 Passo 6/7: Garantindo usuário admin padrão...")
     criar_usuario_admin_padrao()
+    
+    # Dados iniciais de meios de pagamento
+    logger.info("💳 Criando/verificando meios de pagamento padrão...")
+    criar_meios_pagamento_padrao()
     
     logger.info("✅ Banco inicializado com sucesso.")
