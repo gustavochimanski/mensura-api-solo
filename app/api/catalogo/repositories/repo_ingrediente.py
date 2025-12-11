@@ -3,6 +3,8 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 from decimal import Decimal
 
+from sqlalchemy import or_
+
 from app.api.catalogo.models.model_ingrediente import IngredienteModel
 from app.api.catalogo.models.model_receita import ReceitaIngredienteModel
 
@@ -30,6 +32,29 @@ class IngredienteRepository:
         query = self.db.query(IngredienteModel).filter_by(empresa_id=empresa_id)
         if apenas_ativos:
             query = query.filter_by(ativo=True)
+        return query.order_by(IngredienteModel.nome).all()
+
+    def buscar_por_termo(
+        self,
+        empresa_id: int,
+        termo: str,
+        apenas_ativos: bool = True,
+    ) -> List[IngredienteModel]:
+        """
+        Busca ingredientes por termo (nome ou descrição).
+        Usa ILIKE para busca case-insensitive e filtra diretamente no banco.
+        """
+        termo_like = f"%{termo.lower()}%"
+        query = self.db.query(IngredienteModel).filter_by(empresa_id=empresa_id)
+        if apenas_ativos:
+            query = query.filter_by(ativo=True)
+
+        query = query.filter(
+            or_(
+                IngredienteModel.nome.ilike(termo_like),
+                IngredienteModel.descricao.ilike(termo_like),
+            )
+        )
         return query.order_by(IngredienteModel.nome).all()
 
     def atualizar_ingrediente(self, ingrediente_id: int, **data) -> IngredienteModel:

@@ -1,6 +1,6 @@
 from typing import List, Optional
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from fastapi import HTTPException, status
 from decimal import Decimal
 
@@ -55,7 +55,15 @@ class ReceitasRepository:
     def get_receita_by_id(self, receita_id: int) -> Optional[ReceitaModel]:
         return self.db.query(ReceitaModel).filter_by(id=receita_id).first()
 
-    def list_receitas(self, empresa_id: Optional[int] = None, ativo: Optional[bool] = None) -> List[ReceitaModel]:
+    def list_receitas(
+        self,
+        empresa_id: Optional[int] = None,
+        ativo: Optional[bool] = None,
+        search: Optional[str] = None,
+    ) -> List[ReceitaModel]:
+        """
+        Lista receitas com filtros opcionais e suporte a busca textual em nome/descrição.
+        """
         query = self.db.query(ReceitaModel)
         
         if empresa_id is not None:
@@ -63,11 +71,25 @@ class ReceitasRepository:
         
         if ativo is not None:
             query = query.filter_by(ativo=ativo)
+
+        if search and search.strip():
+            termo = f"%{search.lower()}%"
+            query = query.filter(
+                or_(
+                    ReceitaModel.nome.ilike(termo),
+                    ReceitaModel.descricao.ilike(termo),
+                )
+            )
         
         return query.order_by(ReceitaModel.nome).all()
     
-    def list_receitas_com_ingredientes(self, empresa_id: Optional[int] = None, ativo: Optional[bool] = None) -> List[ReceitaModel]:
-        """Lista receitas com seus ingredientes carregados"""
+    def list_receitas_com_ingredientes(
+        self,
+        empresa_id: Optional[int] = None,
+        ativo: Optional[bool] = None,
+        search: Optional[str] = None,
+    ) -> List[ReceitaModel]:
+        """Lista receitas com seus ingredientes carregados e suporte a busca textual."""
         query = (
             self.db.query(ReceitaModel)
             .options(joinedload(ReceitaModel.ingredientes).joinedload(ReceitaIngredienteModel.ingrediente))
@@ -78,6 +100,15 @@ class ReceitasRepository:
         
         if ativo is not None:
             query = query.filter_by(ativo=ativo)
+
+        if search and search.strip():
+            termo = f"%{search.lower()}%"
+            query = query.filter(
+                or_(
+                    ReceitaModel.nome.ilike(termo),
+                    ReceitaModel.descricao.ilike(termo),
+                )
+            )
         
         return query.order_by(ReceitaModel.nome).all()
 

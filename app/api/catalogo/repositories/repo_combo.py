@@ -1,6 +1,6 @@
 from typing import List, Optional
 
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.catalogo.models.model_combo import ComboModel, ComboItemModel
@@ -19,23 +19,43 @@ class ComboRepository:
             .first()
         )
 
-    def list_paginado(self, empresa_id: int, offset: int, limit: int) -> List[ComboModel]:
-        return (
+    def list_paginado(self, empresa_id: int, offset: int, limit: int, search: Optional[str] = None) -> List[ComboModel]:
+        query = (
             self.db.query(ComboModel)
             .options(joinedload(ComboModel.itens))
             .filter(ComboModel.empresa_id == empresa_id)
+        )
+
+        if search and search.strip():
+            termo = f"%{search.lower()}%"
+            query = query.filter(
+                or_(
+                    ComboModel.titulo.ilike(termo),
+                    ComboModel.descricao.ilike(termo),
+                )
+            )
+
+        return (
+            query
             .order_by(ComboModel.created_at.desc())
             .offset(offset)
             .limit(limit)
             .all()
         )
 
-    def count_total(self, empresa_id: int) -> int:
-        return int(
-            self.db.query(func.count(ComboModel.id))
-            .filter(ComboModel.empresa_id == empresa_id)
-            .scalar() or 0
-        )
+    def count_total(self, empresa_id: int, search: Optional[str] = None) -> int:
+        query = self.db.query(func.count(ComboModel.id)).filter(ComboModel.empresa_id == empresa_id)
+
+        if search and search.strip():
+            termo = f"%{search.lower()}%"
+            query = query.filter(
+                or_(
+                    ComboModel.titulo.ilike(termo),
+                    ComboModel.descricao.ilike(termo),
+                )
+            )
+
+        return int(query.scalar() or 0)
 
     def criar_combo(
         self,

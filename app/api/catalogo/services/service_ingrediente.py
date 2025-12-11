@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 
 from app.api.catalogo.repositories.repo_ingrediente import IngredienteRepository
 from app.api.catalogo.schemas.schema_ingrediente import (
@@ -15,9 +15,22 @@ class IngredienteService:
     def __init__(self, db: Session):
         self.repo = IngredienteRepository(db)
 
-    def listar_ingredientes(self, empresa_id: int, apenas_ativos: bool = True) -> List[IngredienteResponse]:
-        """Lista todos os ingredientes de uma empresa."""
-        ingredientes = self.repo.listar_por_empresa(empresa_id, apenas_ativos)
+    def listar_ingredientes(
+        self,
+        empresa_id: int,
+        apenas_ativos: bool = True,
+        search: Optional[str] = None,
+    ) -> List[IngredienteResponse]:
+        """
+        Lista ingredientes de uma empresa.
+
+        - Sem `search`: retorna todos os ingredientes (respeitando `apenas_ativos`).
+        - Com `search`: aplica filtro performático no banco por nome/descrição.
+        """
+        if search and search.strip():
+            ingredientes = self.repo.buscar_por_termo(empresa_id, search.strip(), apenas_ativos)
+        else:
+            ingredientes = self.repo.listar_por_empresa(empresa_id, apenas_ativos)
         return [IngredienteResponse.model_validate(ing) for ing in ingredientes]
 
     def criar_ingrediente(self, req: CriarIngredienteRequest) -> IngredienteResponse:

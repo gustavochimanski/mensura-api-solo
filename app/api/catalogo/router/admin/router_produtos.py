@@ -24,29 +24,13 @@ class SetDisponibilidadeRequest(BaseModel):
   disponivel: bool
 
 # ---------- Endpoints ----------
-@router.get("/search")
-def search_produtos(
-        db: Session = Depends(get_db),
-        cod_empresa: int = Query(..., description="Empresa dona dos vínculos"),
-        q: Optional[str] = Query(None, description="Termo de busca (descrição ou código de barras)"),
-        page: int = Query(1, ge=1),
-        limit: int = Query(30, ge=1, le=100),
-        apenas_disponiveis: bool = Query(False, description="Somente ativos+disponíveis"),
-):
-  logger.info(
-    f"[Produtos] Search - empresa={cod_empresa} q={q!r} page={page} limit={limit} disp={apenas_disponiveis}"
-  )
-  svc = ProdutosMensuraService(db)
-  return svc.buscar_paginado(
-    empresa_id=cod_empresa,
-    q=q,
-    page=page,
-    limit=limit,
-    apenas_disponiveis=apenas_disponiveis,
-  )
-
-
-@router.get(path="/", response_model=ProdutosPaginadosResponse, summary="Lista produtos ERP", description="Retorna produtos com todas as colunas inclusas para exibição")
+@router.get(
+  path="/",
+  response_model=ProdutosPaginadosResponse,
+  summary="Lista produtos ERP",
+  description="Retorna produtos com todas as colunas inclusas para exibição. "
+              "Suporta busca por termo via parâmetro 'search'.",
+)
 def listar_delivery(
   db: Session = Depends(get_db),
   cod_empresa: int = Query(...),
@@ -57,11 +41,16 @@ def listar_delivery(
 ):
   logger.info(f"[Produtos] Listar - empresa={cod_empresa} page={page} limit={limit} disp={apenas_disponiveis} search={search}")
   service = ProdutosMensuraService(db)
-  
-  if search:
-    return service.buscar_produtos(cod_empresa, search, page, limit, apenas_disponiveis=apenas_disponiveis)
-  else:
-    return service.listar_paginado(cod_empresa, page, limit, apenas_disponiveis=apenas_disponiveis)
+
+  # Se veio termo de busca, delega para busca paginada (performática).
+  # Caso contrário, usa listagem padrão paginada.
+  return service.buscar_paginado(
+    empresa_id=cod_empresa,
+    q=search,
+    page=page,
+    limit=limit,
+    apenas_disponiveis=apenas_disponiveis,
+  )
 
 
 @router.post("/", response_model=CriarNovoProdutoResponse)

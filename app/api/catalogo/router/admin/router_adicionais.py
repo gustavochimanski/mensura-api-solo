@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from fastapi import APIRouter, Depends, status, Path, Query
 from sqlalchemy.orm import Session
 
@@ -35,22 +35,22 @@ def criar_adicional(
 def listar_adicionais(
     empresa_id: int = Query(..., description="ID da empresa"),
     apenas_ativos: bool = Query(True, description="Apenas adicionais ativos"),
-    termo: str = Query(None, description="Termo de busca (nome ou descrição)"),
+    search: Optional[str] = Query(None, description="Termo de busca (nome ou descrição)"),
     db: Session = Depends(get_db),
 ):
     """
     Lista todos os adicionais de uma empresa.
     
-    Se 'termo' for fornecido, busca adicionais cujo nome ou descrição contenham o termo.
+    - Sem `search`: retorna todos os adicionais (respeitando `apenas_ativos`).
+    - Com `search`: busca por nome/descrição contendo o termo (case-insensitive).
     """
-    if termo:
-        logger.info(f"[Adicionais] Buscar - empresa={empresa_id} termo={termo} apenas_ativos={apenas_ativos}")
-        service = ComplementoService(db)
-        return service.buscar_adicionais(empresa_id, termo, apenas_ativos)
-    else:
-        logger.info(f"[Adicionais] Listar - empresa={empresa_id} apenas_ativos={apenas_ativos}")
-        service = ComplementoService(db)
-        return service.listar_itens(empresa_id, apenas_ativos)
+    service = ComplementoService(db)
+    if search and search.strip():
+        logger.info(f"[Adicionais] Buscar - empresa={empresa_id} search={search} apenas_ativos={apenas_ativos}")
+        return service.buscar_adicionais(empresa_id, search, apenas_ativos)
+
+    logger.info(f"[Adicionais] Listar - empresa={empresa_id} apenas_ativos={apenas_ativos}")
+    return service.listar_itens(empresa_id, apenas_ativos)
 
 
 @router.get("/{adicional_id}", response_model=AdicionalResponse)

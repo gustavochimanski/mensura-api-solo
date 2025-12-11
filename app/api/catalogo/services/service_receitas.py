@@ -33,17 +33,32 @@ class ReceitasService:
             receita.custo_total = custo_total
         return receita
 
-    def list_receitas(self, empresa_id: Optional[int] = None, ativo: Optional[bool] = None):
-        receitas = self.repo.list_receitas(empresa_id=empresa_id, ativo=ativo)
+    def list_receitas(
+        self,
+        empresa_id: Optional[int] = None,
+        ativo: Optional[bool] = None,
+        search: Optional[str] = None,
+    ):
+        """
+        Lista receitas com filtros opcionais e suporte a busca textual.
+
+        - `search`: termo aplicado em nome/descrição (case-insensitive, filtrado no banco).
+        """
+        receitas = self.repo.list_receitas(empresa_id=empresa_id, ativo=ativo, search=search)
         # Calcula o custo_total para cada receita baseado no custo dos ingredientes
         for receita in receitas:
             custo_total = self.repo.calcular_custo_receita(receita.id)
             receita.custo_total = custo_total
         return receitas
     
-    def list_receitas_com_ingredientes(self, empresa_id: Optional[int] = None, ativo: Optional[bool] = None) -> List[ReceitaComIngredientesOut]:
-        """Lista receitas com seus ingredientes incluídos"""
-        receitas = self.repo.list_receitas_com_ingredientes(empresa_id=empresa_id, ativo=ativo)
+    def list_receitas_com_ingredientes(
+        self,
+        empresa_id: Optional[int] = None,
+        ativo: Optional[bool] = None,
+        search: Optional[str] = None,
+    ) -> List[ReceitaComIngredientesOut]:
+        """Lista receitas com seus ingredientes incluídos, com suporte a busca textual."""
+        receitas = self.repo.list_receitas_com_ingredientes(empresa_id=empresa_id, ativo=ativo, search=search)
         
         resultado = []
         for receita in receitas:

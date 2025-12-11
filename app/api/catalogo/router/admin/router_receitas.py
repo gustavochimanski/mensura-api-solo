@@ -44,22 +44,36 @@ def create_receita(
 def list_receitas(
     empresa_id: Optional[int] = Query(None, description="Filtrar por empresa"),
     ativo: Optional[bool] = Query(None, description="Filtrar por status ativo"),
+    search: Optional[str] = Query(None, description="Termo de busca em nome/descrição da receita"),
     db: Session = Depends(get_db),
 ):
-    """Lista todas as receitas, com filtros opcionais"""
-    logger.info(f"[Receitas] Listar - empresa_id={empresa_id} ativo={ativo}")
-    return ReceitasService(db).list_receitas(empresa_id=empresa_id, ativo=ativo)
+    """
+    Lista todas as receitas, com filtros opcionais.
+
+    - `empresa_id`: filtra por empresa.
+    - `ativo`: filtra por status ativo.
+    - `search`: termo de busca em nome/descrição (case-insensitive).
+    """
+    logger.info(f"[Receitas] Listar - empresa_id={empresa_id} ativo={ativo} search={search!r}")
+    return ReceitasService(db).list_receitas(empresa_id=empresa_id, ativo=ativo, search=search)
 
 
 @router.get("/com-ingredientes", response_model=list[ReceitaComIngredientesOut])
 def list_receitas_com_ingredientes(
     empresa_id: Optional[int] = Query(None, description="Filtrar por empresa"),
     ativo: Optional[bool] = Query(None, description="Filtrar por status ativo"),
+    search: Optional[str] = Query(None, description="Termo de busca em nome/descrição da receita"),
     db: Session = Depends(get_db),
 ):
-    """Lista todas as receitas com seus ingredientes incluídos, com filtros opcionais"""
-    logger.info(f"[Receitas] Listar com ingredientes - empresa_id={empresa_id} ativo={ativo}")
-    return ReceitasService(db).list_receitas_com_ingredientes(empresa_id=empresa_id, ativo=ativo)
+    """
+    Lista todas as receitas com seus ingredientes incluídos, com filtros opcionais.
+
+    - `empresa_id`: filtra por empresa.
+    - `ativo`: filtra por status ativo.
+    - `search`: termo de busca em nome/descrição (case-insensitive).
+    """
+    logger.info(f"[Receitas] Listar com ingredientes - empresa_id={empresa_id} ativo={ativo} search={search!r}")
+    return ReceitasService(db).list_receitas_com_ingredientes(empresa_id=empresa_id, ativo=ativo, search=search)
 
 
 @router.get("/{receita_id}", response_model=ReceitaOut)
