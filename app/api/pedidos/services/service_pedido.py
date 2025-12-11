@@ -746,9 +746,9 @@ class PedidoService:
                     elif mp_obj.tipo == MeioPagamentoTipoEnum.PIX_ENTREGA or str(mp_obj.tipo) == "PIX_ENTREGA":
                         metodo = PagamentoMetodoEnum.PIX
                         gateway = PagamentoGatewayEnum.PIX_INTERNO
-                    elif mp_obj.tipo == MeioPagamentoTipoEnum.CARTAO_ONLINE or str(mp_obj.tipo) == "CARTAO_ONLINE":
-                        metodo = PagamentoMetodoEnum.CREDITO
-                        gateway = PagamentoGatewayEnum.MERCADOPAGO
+                    elif mp_obj.tipo == MeioPagamentoTipoEnum.OUTROS or str(mp_obj.tipo) == "OUTROS":
+                        metodo = PagamentoMetodoEnum.OUTRO
+                        gateway = PagamentoGatewayEnum.PIX_INTERNO
                     elif mp_obj.tipo == MeioPagamentoTipoEnum.CARTAO_ENTREGA or str(mp_obj.tipo) == "CARTAO_ENTREGA":
                         metodo = PagamentoMetodoEnum.CREDITO
                         gateway = PagamentoGatewayEnum.PIX_INTERNO
