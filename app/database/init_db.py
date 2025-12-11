@@ -574,7 +574,7 @@ def criar_meios_pagamento_padrao():
                 "ativo": True,
             },
         ]
-
+#
         with SessionLocal() as session:
             for dados in dados_meios_pagamento:
                 stmt = (
