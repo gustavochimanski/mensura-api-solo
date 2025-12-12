@@ -71,6 +71,11 @@ def listar_complementos_combo(
     service = ComplementoService(db)
     complementos = service.repo.listar_por_combo(combo_id, apenas_ativos=apenas_ativos, carregar_adicionais=True)
     
+    logger.info(f"[Complementos Client] Encontrados {len(complementos)} complementos para combo {combo_id}")
+    
+    if not complementos:
+        logger.warning(f"[Complementos Client] Nenhum complemento encontrado para combo {combo_id} (apenas_ativos={apenas_ativos})")
+    
     return [service.complemento_to_response(c) for c in complementos]
 
 
@@ -104,6 +109,11 @@ def listar_complementos_receita(
     # Busca complementos vinculados diretamente à receita
     service = ComplementoService(db)
     complementos = service.repo.listar_por_receita(receita_id, apenas_ativos=apenas_ativos, carregar_adicionais=True)
+    
+    logger.info(f"[Complementos Client] Encontrados {len(complementos)} complementos para receita {receita_id}")
+    
+    if not complementos:
+        logger.warning(f"[Complementos Client] Nenhum complemento encontrado para receita {receita_id} (apenas_ativos={apenas_ativos})")
     
     return [service.complemento_to_response(c) for c in complementos]
 
