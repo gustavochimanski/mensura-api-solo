@@ -7,9 +7,7 @@ logger = logging.getLogger(__name__)
 
 # Lista de schemas gerenciados pela aplicação
 SCHEMAS = [
-    "mesas",
     "notifications",
-    "balcao",
     "cadastros",
     "cardapio",
     "receitas",

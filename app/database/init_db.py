@@ -18,7 +18,7 @@ def verificar_banco_inicializado():
             # Verifica se existem tabelas principais dos schemas
             result = conn.execute(text("""
                 SELECT COUNT(*) FROM information_schema.tables 
-                    WHERE table_schema IN ('cardapio', 'cadastros', 'mesas', 'notifications', 'balcao', 'catalogo', 'financeiro', 'pedidos')
+                    WHERE table_schema IN ('cardapio', 'cadastros', 'notifications', 'catalogo', 'financeiro', 'pedidos')
                 AND table_name IN (
                     'usuarios', 'empresas', 'produtos', 'produtos_empresa', 'categorias',
                     'clientes', 'pedidos', 'enderecos', 'regioes_entrega',
@@ -168,7 +168,7 @@ def criar_enums():
             enums_cardapio = [
                 ("cardapio", "pedido_status_enum", ["P", "I", "R", "S", "E", "C", "D", "X", "A"]),
                 ("cardapio", "tipo_entrega_enum", ["DELIVERY", "RETIRADA"]),
-                ("cardapio", "origem_pedido_enum", ["WEB", "APP", "BALCAO"]),
+                ("cardapio", "origem_pedido_enum", ["WEB", "APP"]),
                 ("cardapio", "pagamento_gateway_enum", ["MERCADOPAGO", "PAGSEGURO", "STRIPE", "PIX_INTERNO", "OUTRO"]),
                 ("cardapio", "pagamento_metodo_enum", ["PIX", "PIX_ONLINE", "CREDITO", "DEBITO", "DINHEIRO", "ONLINE", "OUTRO"]),
                 ("cardapio", "pagamento_status_enum", ["PENDENTE", "AUTORIZADO", "PAGO", "RECUSADO", "CANCELADO", "ESTORNADO"]),
@@ -188,22 +188,6 @@ def criar_enums():
                 ("cadastros", "caixa_status_enum", ["ABERTO", "FECHADO"]),
             ]
             
-            # ENUMs do schema mesas
-            # P = PENDENTE, I = EM IMPRESSÃO, R = EM PREPARO, E = ENTREGUE, C = CANCELADO,
-            # D = EDITADO, X = EM EDIÇÃO, A = AGUARDANDO PAGAMENTO
-            enums_mesas = [
-                ("mesas", "statuspedidomesa", ["P", "I", "R", "E", "C", "D", "X", "A"]),
-                ("mesas", "tipooperacaomesa", ["STATUS_ALTERADO", "MESA_CRIADA", "MESA_ATUALIZADA", "MESA_OCUPADA", "MESA_LIBERADA", "MESA_RESERVADA", "CLIENTE_ASSOCIADO", "CLIENTE_DESASSOCIADO", "PEDIDO_CRIADO", "PEDIDO_FINALIZADO", "MESA_DELETADA"]),
-            ]
-            
-            # ENUMs do schema balcao
-            # P = PENDENTE, I = EM IMPRESSÃO, R = EM PREPARO, E = ENTREGUE, C = CANCELADO,
-            # D = EDITADO, X = EM EDIÇÃO, A = AGUARDANDO PAGAMENTO
-            enums_balcao = [
-                ("balcao", "statuspedidobalcao", ["P", "I", "R", "E", "C", "D", "X", "A"]),
-                ("balcao", "tipooperacaopedidobalcao", ["PEDIDO_CRIADO", "STATUS_ALTERADO", "ITEM_ADICIONADO", "ITEM_REMOVIDO", "PEDIDO_CONFIRMADO", "PEDIDO_CANCELADO", "PEDIDO_FECHADO", "PEDIDO_REABERTO", "CLIENTE_ASSOCIADO", "CLIENTE_DESASSOCIADO", "MESA_ASSOCIADA", "MESA_DESASSOCIADA"]),
-            ]
-            
             # ENUMs do schema notifications
             enums_notifications = [
                 ("notifications", "notificationstatus", ["pending", "sent", "failed", "retrying", "cancelled"]),
@@ -212,7 +196,7 @@ def criar_enums():
                 ("notifications", "messagetype", ["marketing", "utility", "transactional", "promotional", "alert", "system", "news"]),
             ]
             
-            all_enums = enums_cardapio + enums_cadastros + enums_cadastros_caixas + enums_mesas + enums_balcao + enums_notifications
+            all_enums = enums_cardapio + enums_cadastros + enums_cadastros_caixas + enums_notifications
             
             for schema, enum_name, values in all_enums:
                 try:

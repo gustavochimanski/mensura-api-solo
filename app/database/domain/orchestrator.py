@@ -44,7 +44,7 @@ class DatabaseOrchestrator:
                 # Verifica se existem tabelas principais dos schemas
                 result = conn.execute(text("""
                     SELECT COUNT(*) FROM information_schema.tables 
-                    WHERE table_schema IN ('cardapio', 'cadastros', 'mesas', 'notifications', 'balcao', 'receitas', 'produtos', 'financeiro', 'pedidos')
+                    WHERE table_schema IN ('cardapio', 'cadastros', 'notifications', 'receitas', 'produtos', 'financeiro', 'pedidos')
                     AND table_name IN (
                         'usuarios', 'empresas', 'produtos', 'produtos_empresa', 'categorias',
                         'clientes', 'pedidos_dv', 'enderecos', 'regioes_entrega',
