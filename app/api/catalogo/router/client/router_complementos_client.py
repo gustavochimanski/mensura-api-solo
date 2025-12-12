@@ -67,14 +67,6 @@ def listar_complementos_combo(
             detail=f"Combo {combo_id} não encontrado ou inativo"
         )
     
-    # Verifica se o combo pertence à empresa do cliente
-    if combo.empresa_id != cliente.empresa_id:
-        from fastapi import HTTPException, status
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Combo {combo_id} não pertence à empresa do cliente"
-        )
-    
     # Busca complementos vinculados diretamente ao combo
     service = ComplementoService(db)
     complementos = service.repo.listar_por_combo(combo_id, apenas_ativos=apenas_ativos, carregar_adicionais=True)
@@ -107,14 +99,6 @@ def listar_complementos_receita(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Receita {receita_id} não encontrada ou inativa"
-        )
-    
-    # Verifica se a receita pertence à empresa do cliente
-    if receita.empresa_id != cliente.empresa_id:
-        from fastapi import HTTPException, status
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Receita {receita_id} não pertence à empresa do cliente"
         )
     
     # Busca complementos vinculados diretamente à receita
