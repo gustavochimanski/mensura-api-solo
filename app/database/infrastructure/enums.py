@@ -19,7 +19,7 @@ def criar_enums():
             enums_cardapio = [
                 ("cardapio", "pedido_status_enum", ["P", "I", "R", "S", "E", "C", "D", "X", "A"]),
                 ("cardapio", "tipo_entrega_enum", ["DELIVERY", "RETIRADA"]),
-                ("cardapio", "origem_pedido_enum", ["WEB", "APP", "BALCAO"]),
+                ("cardapio", "origem_pedido_enum", ["WEB", "APP"]),
                 ("cardapio", "pagamento_gateway_enum", ["MERCADOPAGO", "PAGSEGURO", "STRIPE", "PIX_INTERNO", "OUTRO"]),
                 ("cardapio", "pagamento_metodo_enum", ["PIX", "PIX_ONLINE", "CREDITO", "DEBITO", "DINHEIRO", "ONLINE", "OUTRO"]),
                 ("cardapio", "pagamento_status_enum", ["PENDENTE", "AUTORIZADO", "PAGO", "RECUSADO", "CANCELADO", "ESTORNADO"]),
@@ -37,19 +37,7 @@ def criar_enums():
             # ENUMs do schema cadastros (caixa_status está aqui pois CaixaModel está em cadastros)
             # O enum já está em enums_cadastros acima via modelo CaixaModel
             
-            # ENUMs do schema mesas
-            enums_mesas = [
-                ("mesas", "statuspedidomesa", ["P", "I", "R", "E", "C", "D", "X", "A"]),
-                ("mesas", "tipooperacaomesa", ["STATUS_ALTERADO", "MESA_CRIADA", "MESA_ATUALIZADA", "MESA_OCUPADA", "MESA_LIBERADA", "MESA_RESERVADA", "CLIENTE_ASSOCIADO", "CLIENTE_DESASSOCIADO", "PEDIDO_CRIADO", "PEDIDO_FINALIZADO", "MESA_DELETADA"]),
-            ]
-            
-            # ENUMs do schema balcao
-            enums_balcao = [
-                ("balcao", "statuspedidobalcao", ["P", "I", "R", "E", "C", "D", "X", "A"]),
-                ("balcao", "tipooperacaopedidobalcao", ["PEDIDO_CRIADO", "STATUS_ALTERADO", "ITEM_ADICIONADO", "ITEM_REMOVIDO", "PEDIDO_CONFIRMADO", "PEDIDO_CANCELADO", "PEDIDO_FECHADO", "PEDIDO_REABERTO", "CLIENTE_ASSOCIADO", "CLIENTE_DESASSOCIADO", "MESA_ASSOCIADA", "MESA_DESASSOCIADA"]),
-            ]
-            
-            all_enums = enums_cardapio + enums_cadastros + enums_mesas + enums_balcao
+            all_enums = enums_cardapio + enums_cadastros
             
             for schema, enum_name, values in all_enums:
                 try:
