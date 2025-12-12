@@ -17,6 +17,8 @@ from app.api.catalogo.schemas.schema_complemento import (
     AtualizarAdicionalRequest,
     VincularComplementosProdutoRequest,
     VincularComplementosProdutoResponse,
+    VincularComplementosReceitaRequest,
+    VincularComplementosReceitaResponse,
     VincularItensComplementoRequest,
     VincularItensComplementoResponse,
     VincularItemComplementoRequest,
@@ -140,6 +142,45 @@ class ComplementoService:
     def listar_complementos_produto(self, cod_barras: str, apenas_ativos: bool = True) -> List[ComplementoResponse]:
         """Lista todos os complementos de um produto específico."""
         complementos = self.repo.listar_por_produto(cod_barras, apenas_ativos=apenas_ativos, carregar_adicionais=True)
+        return [self.complemento_to_response(c) for c in complementos]
+
+    def vincular_complementos_receita(self, receita_id: int, req: VincularComplementosReceitaRequest) -> VincularComplementosReceitaResponse:
+        """Vincula múltiplos complementos a uma receita."""
+        from app.api.catalogo.models.model_receita import ReceitaModel
+        
+        receita = self.db.query(ReceitaModel).filter_by(id=receita_id).first()
+        if not receita:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Receita {receita_id} não encontrada."
+            )
+        
+        self.repo.vincular_complementos_receita(receita_id, req.complemento_ids)
+        
+        # Busca os complementos vinculados para retornar
+        complementos = self.repo.listar_por_receita(receita_id, apenas_ativos=True, carregar_adicionais=False)
+        complementos_vinculados = [
+            ComplementoResumidoResponse(
+                id=c.id,
+                nome=c.nome,
+                obrigatorio=c.obrigatorio,
+                quantitativo=c.quantitativo,
+                permite_multipla_escolha=c.permite_multipla_escolha,
+                minimo_itens=c.minimo_itens,
+                maximo_itens=c.maximo_itens,
+                ordem=c.ordem,
+            )
+            for c in complementos
+        ]
+        
+        return VincularComplementosReceitaResponse(
+            receita_id=receita_id,
+            complementos_vinculados=complementos_vinculados,
+        )
+
+    def listar_complementos_receita(self, receita_id: int, apenas_ativos: bool = True) -> List[ComplementoResponse]:
+        """Lista todos os complementos de uma receita específica."""
+        complementos = self.repo.listar_por_receita(receita_id, apenas_ativos=apenas_ativos, carregar_adicionais=True)
         return [self.complemento_to_response(c) for c in complementos]
 
     # ------ Adicionais dentro de complementos (DEPRECADO - usar criar_item + vincular) ------
