@@ -156,9 +156,10 @@ class ComplementoService:
             )
         
         self.repo.vincular_complementos_receita(receita_id, req.complemento_ids)
+        self.db.commit()  # Garante que as vinculações sejam persistidas
         
-        # Busca os complementos vinculados para retornar
-        complementos = self.repo.listar_por_receita(receita_id, apenas_ativos=True, carregar_adicionais=False)
+        # Busca os complementos vinculados para retornar (sem filtro de ativos para garantir que retorne os vinculados)
+        complementos = self.repo.listar_por_receita(receita_id, apenas_ativos=False, carregar_adicionais=False)
         complementos_vinculados = [
             ComplementoResumidoResponse(
                 id=c.id,
