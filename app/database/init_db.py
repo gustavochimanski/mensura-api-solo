@@ -8,7 +8,7 @@ from app.core.security import hash_password
 from app.api.cadastros.models.user_model import UserModel
 
 logger = logging.getLogger(__name__)
-SCHEMAS = ["mesas", "notifications", "balcao", "cadastros", "cardapio", "catalogo", "financeiro", "pedidos"]
+SCHEMAS = ["notifications", "cadastros", "cardapio", "catalogo", "financeiro", "pedidos"]
 
 #
 def verificar_banco_inicializado():
