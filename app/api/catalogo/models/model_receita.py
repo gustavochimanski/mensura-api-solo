@@ -23,7 +23,15 @@ class ReceitaModel(Base):
 
     # Relacionamentos
     ingredientes = relationship("ReceitaIngredienteModel", back_populates="receita", cascade="all, delete-orphan")
+    # DEPRECATED: Usar complementos ao invés de adicionais diretos
     adicionais = relationship("ReceitaAdicionalModel", back_populates="receita", cascade="all, delete-orphan")
+    # NOVO: Complementos que contêm adicionais
+    complementos = relationship(
+        "ComplementoModel",
+        secondary="catalogo.receita_complemento_link",
+        back_populates="receitas",
+        viewonly=True,  # Leitura apenas, pois a relação real é no link
+    )
 
 
 class ReceitaIngredienteModel(Base):
@@ -43,7 +51,14 @@ class ReceitaIngredienteModel(Base):
 
 
 class ReceitaAdicionalModel(Base):
-    """Modelo de Adicional de Receita"""
+    """
+    Modelo de Adicional de Receita
+    
+    DEPRECATED: Este modelo está obsoleto. 
+    Agora receitas devem usar complementos que contêm adicionais.
+    Use receita_complemento_link para vincular complementos a receitas.
+    Mantido apenas para compatibilidade com dados legados.
+    """
     __tablename__ = "receita_adicional"
     __table_args__ = ({"schema": "catalogo"},)
 

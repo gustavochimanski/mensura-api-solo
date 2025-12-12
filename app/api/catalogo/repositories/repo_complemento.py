@@ -107,3 +107,127 @@ class ComplementoRepository:
         )
         self.db.flush()
 
+    def listar_por_receita(self, receita_id: int, apenas_ativos: bool = True, carregar_adicionais: bool = False) -> List[ComplementoModel]:
+        """Lista todos os complementos vinculados a uma receita."""
+        from app.api.catalogo.models.association_tables import receita_complemento_link
+        
+        query = (
+            self.db.query(ComplementoModel)
+            .join(receita_complemento_link, ComplementoModel.id == receita_complemento_link.c.complemento_id)
+            .filter(receita_complemento_link.c.receita_id == receita_id)
+        )
+        if apenas_ativos:
+            query = query.filter(ComplementoModel.ativo == True)
+        if carregar_adicionais:
+            query = query.options(joinedload(ComplementoModel.adicionais))
+        return query.order_by(receita_complemento_link.c.ordem, ComplementoModel.nome).all()
+
+    def vincular_complementos_receita(self, receita_id: int, complemento_ids: List[int]):
+        """Vincula múltiplos complementos a uma receita."""
+        from app.api.catalogo.models.association_tables import receita_complemento_link
+        from app.api.catalogo.models.model_receita import ReceitaModel
+        
+        receita = self.db.query(ReceitaModel).filter_by(id=receita_id).first()
+        if not receita:
+            raise ValueError(f"Receita {receita_id} não encontrada")
+        
+        # Busca os complementos
+        complementos = (
+            self.db.query(ComplementoModel)
+            .filter(ComplementoModel.id.in_(complemento_ids))
+            .all()
+        )
+        
+        # Remove vinculações existentes
+        self.db.execute(
+            receita_complemento_link.delete().where(
+                receita_complemento_link.c.receita_id == receita_id
+            )
+        )
+        
+        # Adiciona novas vinculações
+        for i, complemento in enumerate(complementos):
+            self.db.execute(
+                receita_complemento_link.insert().values(
+                    receita_id=receita_id,
+                    complemento_id=complemento.id,
+                    ordem=i
+                )
+            )
+        
+        self.db.flush()
+
+    def desvincular_complemento_receita(self, receita_id: int, complemento_id: int):
+        """Remove a vinculação de um complemento com uma receita."""
+        from app.api.catalogo.models.association_tables import receita_complemento_link
+        
+        self.db.execute(
+            receita_complemento_link.delete().where(
+                receita_complemento_link.c.receita_id == receita_id,
+                receita_complemento_link.c.complemento_id == complemento_id
+            )
+        )
+        self.db.flush()
+
+    def listar_por_combo(self, combo_id: int, apenas_ativos: bool = True, carregar_adicionais: bool = False) -> List[ComplementoModel]:
+        """Lista todos os complementos vinculados a um combo."""
+        from app.api.catalogo.models.association_tables import combo_complemento_link
+        
+        query = (
+            self.db.query(ComplementoModel)
+            .join(combo_complemento_link, ComplementoModel.id == combo_complemento_link.c.complemento_id)
+            .filter(combo_complemento_link.c.combo_id == combo_id)
+        )
+        if apenas_ativos:
+            query = query.filter(ComplementoModel.ativo == True)
+        if carregar_adicionais:
+            query = query.options(joinedload(ComplementoModel.adicionais))
+        return query.order_by(combo_complemento_link.c.ordem, ComplementoModel.nome).all()
+
+    def vincular_complementos_combo(self, combo_id: int, complemento_ids: List[int]):
+        """Vincula múltiplos complementos a um combo."""
+        from app.api.catalogo.models.association_tables import combo_complemento_link
+        from app.api.catalogo.models.model_combo import ComboModel
+        
+        combo = self.db.query(ComboModel).filter_by(id=combo_id).first()
+        if not combo:
+            raise ValueError(f"Combo {combo_id} não encontrado")
+        
+        # Busca os complementos
+        complementos = (
+            self.db.query(ComplementoModel)
+            .filter(ComplementoModel.id.in_(complemento_ids))
+            .all()
+        )
+        
+        # Remove vinculações existentes
+        self.db.execute(
+            combo_complemento_link.delete().where(
+                combo_complemento_link.c.combo_id == combo_id
+            )
+        )
+        
+        # Adiciona novas vinculações
+        for i, complemento in enumerate(complementos):
+            self.db.execute(
+                combo_complemento_link.insert().values(
+                    combo_id=combo_id,
+                    complemento_id=complemento.id,
+                    ordem=i
+                )
+            )
+        
+        self.db.flush()
+
+    def desvincular_complemento_combo(self, combo_id: int, complemento_id: int):
+        """Remove a vinculação de um complemento com um combo."""
+        from app.api.catalogo.models.association_tables import combo_complemento_link
+        
+        self.db.execute(
+            combo_complemento_link.delete().where(
+                combo_complemento_link.c.combo_id == combo_id,
+                combo_complemento_link.c.complemento_id == complemento_id
+            )
+        )
+        self.db.flush()
+

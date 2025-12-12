@@ -9,6 +9,7 @@ from app.api.catalogo.services.service_complemento import ComplementoService
 from app.api.catalogo.repositories.repo_complemento import ComplementoRepository
 from app.api.catalogo.repositories.repo_combo import ComboRepository
 from app.api.catalogo.models.model_receita import ReceitaModel
+from app.api.catalogo.models.model_combo import ComboModel
 from app.core.client_dependecies import get_cliente_by_super_token
 from app.database.db_connection import get_db
 from app.utils.logger import logger
@@ -48,17 +49,16 @@ def listar_complementos_combo(
     """
     Lista todos os complementos disponíveis para um combo específico.
 
-    A lista é construída a partir dos produtos que compõem o combo,
-    agregando os complementos vinculados a cada produto.
+    Os complementos são obtidos diretamente da vinculação combo-complemento.
+    Se não houver complementos vinculados diretamente, retorna lista vazia.
 
     Requer autenticação via header `X-Super-Token` do cliente.
     Retorna apenas complementos ativos (a menos que apenas_ativos=false).
     """
     logger.info(f"[Complementos Client] Listar por combo - combo_id={combo_id} cliente={cliente.id}")
     
-    # Busca o combo e seus produtos
-    repo_combo = ComboRepository(db)
-    combo = repo_combo.get_by_id(combo_id)
+    # Busca o combo
+    combo = db.query(ComboModel).filter(ComboModel.id == combo_id).first()
     
     if not combo or not combo.ativo:
         from fastapi import HTTPException, status
@@ -67,23 +67,19 @@ def listar_complementos_combo(
             detail=f"Combo {combo_id} não encontrado ou inativo"
         )
     
-    # Coleta todos os complementos dos produtos do combo
-    repo_complemento = ComplementoRepository(db)
-    complementos_unicos = {}
+    # Verifica se o combo pertence à empresa do cliente
+    if combo.empresa_id != cliente.empresa_id:
+        from fastapi import HTTPException, status
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Combo {combo_id} não pertence à empresa do cliente"
+        )
     
-    for item in combo.itens:
-        if item.produto_cod_barras:
-            complementos = repo_complemento.listar_por_produto(
-                item.produto_cod_barras,
-                apenas_ativos=apenas_ativos,
-                carregar_adicionais=True
-            )
-            for comp in complementos:
-                if comp.id not in complementos_unicos:
-                    complementos_unicos[comp.id] = comp
-    
+    # Busca complementos vinculados diretamente ao combo
     service = ComplementoService(db)
-    return [service.complemento_to_response(c) for c in complementos_unicos.values()]
+    complementos = service.repo.listar_por_combo(combo_id, apenas_ativos=apenas_ativos, carregar_adicionais=True)
+    
+    return [service.complemento_to_response(c) for c in complementos]
 
 
 @router.get("/receita/{receita_id}", response_model=List[ComplementoResponse])
@@ -96,8 +92,7 @@ def listar_complementos_receita(
     """
     Lista todos os complementos disponíveis para uma receita específica.
 
-    Os complementos são obtidos a partir dos produtos vinculados à receita
-    através dos ingredientes.
+    Os complementos são obtidos diretamente da vinculação receita-complemento.
 
     Requer autenticação via header `X-Super-Token` do cliente.
     Retorna apenas complementos ativos (a menos que apenas_ativos=false).
@@ -114,9 +109,17 @@ def listar_complementos_receita(
             detail=f"Receita {receita_id} não encontrada ou inativa"
         )
     
-    # Receitas não têm produtos diretamente vinculados
-    # Complementos de receitas devem ser gerenciados separadamente
-    # Por enquanto, retorna lista vazia - pode ser expandido no futuro
-    # se houver necessidade de vincular complementos diretamente a receitas
-    return []
+    # Verifica se a receita pertence à empresa do cliente
+    if receita.empresa_id != cliente.empresa_id:
+        from fastapi import HTTPException, status
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Receita {receita_id} não pertence à empresa do cliente"
+        )
+    
+    # Busca complementos vinculados diretamente à receita
+    service = ComplementoService(db)
+    complementos = service.repo.listar_por_receita(receita_id, apenas_ativos=apenas_ativos, carregar_adicionais=True)
+    
+    return [service.complemento_to_response(c) for c in complementos]
 
