@@ -44,6 +44,22 @@ class ComplementoModel(Base):
         viewonly=True,  # Leitura apenas, pois a relação real é no link
     )
     
+    # Relacionamento N:N com receitas
+    receitas = relationship(
+        "ReceitaModel",
+        secondary="catalogo.receita_complemento_link",
+        back_populates="complementos",
+        viewonly=True,  # Leitura apenas, pois a relação real é no link
+    )
+    
+    # Relacionamento N:N com combos
+    combos = relationship(
+        "ComboModel",
+        secondary="catalogo.combo_complemento_link",
+        back_populates="complementos",
+        viewonly=True,  # Leitura apenas, pois a relação real é no link
+    )
+    
     # Relacionamento N:N com itens de complemento (via tabela de associação)
     # Um complemento pode ter vários itens e um item pode pertencer a vários complementos
     itens = relationship(

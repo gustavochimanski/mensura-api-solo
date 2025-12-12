@@ -25,6 +25,13 @@ class ComboModel(Base):
 
     itens = relationship("ComboItemModel", back_populates="combo", cascade="all, delete-orphan")
     empresa = relationship("EmpresaModel")
+    # Complementos que contêm adicionais
+    complementos = relationship(
+        "ComplementoModel",
+        secondary="catalogo.combo_complemento_link",
+        back_populates="combos",
+        viewonly=True,  # Leitura apenas, pois a relação real é no link
+    )
 
     model_config = ConfigDict(from_attributes=True)
 
