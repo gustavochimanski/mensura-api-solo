@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from typing import Optional
 
 from app.api.catalogo.services.service_receitas import ReceitasService
+from app.api.catalogo.services.service_complemento import ComplementoService
 from app.api.catalogo.schemas.schema_receitas import (
     ReceitaIn,
     ReceitaOut,
@@ -12,6 +13,10 @@ from app.api.catalogo.schemas.schema_receitas import (
     ReceitaComIngredientesOut,
     AdicionalIn,
     AdicionalOut,
+)
+from app.api.catalogo.schemas.schema_complemento import (
+    VincularComplementosReceitaRequest,
+    VincularComplementosReceitaResponse,
 )
 from app.api.catalogo.router.admin.router_ingredientes import router as router_ingredientes
 from app.core.admin_dependencies import get_current_user
@@ -194,4 +199,17 @@ def list_adicionais(
 ):
     """Lista todos os adicionais de uma receita"""
     return ReceitasService(db).list_adicionais(receita_id)
+
+
+# Complementos (vinculação a receitas)
+@router.put("/{receita_id}/complementos", response_model=VincularComplementosReceitaResponse, status_code=status.HTTP_200_OK)
+def vincular_complementos_receita(
+    receita_id: int = Path(..., description="ID da receita"),
+    req: VincularComplementosReceitaRequest = Body(...),
+    db: Session = Depends(get_db),
+):
+    """Vincula múltiplos complementos a uma receita."""
+    logger.info(f"[Receitas] Vincular complementos - receita={receita_id} complementos={req.complemento_ids}")
+    service = ComplementoService(db)
+    return service.vincular_complementos_receita(receita_id, req)
 
