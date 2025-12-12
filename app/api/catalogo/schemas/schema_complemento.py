@@ -169,6 +169,21 @@ class VincularComplementosProdutoResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+# ------ Vincular complementos a receitas ------
+class VincularComplementosReceitaRequest(BaseModel):
+    """Request para vincular múltiplos complementos a uma receita"""
+    complemento_ids: List[int] = Field(..., description="IDs dos complementos a vincular")
+
+
+class VincularComplementosReceitaResponse(BaseModel):
+    """Response após vincular complementos a uma receita"""
+    receita_id: int
+    complementos_vinculados: List[ComplementoResumidoResponse]
+    message: str = "Complementos vinculados com sucesso"
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 # ------ Vincular itens a complementos (N:N) ------
 class VincularItensComplementoRequest(BaseModel):
     """Request para vincular múltiplos itens a um complemento"""

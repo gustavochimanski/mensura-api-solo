@@ -443,7 +443,113 @@ function calcularPrecoItem(item: CartItem): number {
 }
 ```
 
-#### 3. Agrupamento de Itens Idênticos
+#### 3. Adicionar Receita com Complementos
+
+```typescript
+// ANTES (DEPRECATED) - Receitas com adicionais diretos
+function addReceita(receita: Receita, adicionaisSelecionados: Adicional[]) {
+  const cartReceita: CartReceita = {
+    receita_id: receita.id,
+    nome: receita.nome,
+    quantidade: 1,
+    preco: receita.preco_venda,
+    adicionais: adicionaisSelecionados.map(ad => ({
+      id: ad.id,
+      nome: ad.nome,
+      preco: ad.preco,
+    })),
+  };
+  // ... adicionar ao carrinho
+}
+
+// AGORA (NOVO) - Receitas com complementos
+function addReceita(
+  receita: Receita,
+  complementosSelecionados: Map<number, CartItemComplemento>
+) {
+  const complementos = Array.from(complementosSelecionados.values());
+  
+  const cartReceita: CartReceita = {
+    receita_id: receita.id,
+    nome: receita.nome,
+    quantidade: 1,
+    preco: receita.preco_venda,
+    complementos: complementos, // ✅ NOVO: Complementos em vez de adicionais diretos
+  };
+  // ... adicionar ao carrinho
+}
+```
+
+#### 4. Adicionar Combo com Complementos
+
+```typescript
+// ANTES (DEPRECATED) - Combos sem complementos/adicionais
+function addCombo(combo: Combo) {
+  const cartCombo: CartCombo = {
+    combo_id: combo.id,
+    nome: combo.titulo,
+    quantidade: 1,
+    preco: combo.preco_total,
+    // Sem complementos ou adicionais
+  };
+  // ... adicionar ao carrinho
+}
+
+// AGORA (NOVO) - Combos com complementos
+function addCombo(
+  combo: Combo,
+  complementosSelecionados: Map<number, CartItemComplemento>
+) {
+  const complementos = Array.from(complementosSelecionados.values());
+  
+  const cartCombo: CartCombo = {
+    combo_id: combo.id,
+    nome: combo.titulo,
+    quantidade: 1,
+    preco: combo.preco_total,
+    complementos: complementos, // ✅ NOVO: Complementos diretamente vinculados
+  };
+  // ... adicionar ao carrinho
+}
+```
+
+#### 5. Calcular Preço de Receita/Combo com Complementos
+
+```typescript
+function calcularPrecoReceita(receita: CartReceita): number {
+  let precoBase = receita.preco * receita.quantidade;
+  let precoComplementos = 0;
+  
+  if (receita.complementos && receita.complementos.length > 0) {
+    receita.complementos.forEach(complemento => {
+      complemento.adicionais.forEach(adicional => {
+        precoComplementos += (adicional.adicional_preco || 0) * adicional.quantidade;
+      });
+    });
+    precoComplementos *= receita.quantidade;
+  }
+  
+  return precoBase + precoComplementos;
+}
+
+function calcularPrecoCombo(combo: CartCombo): number {
+  let precoBase = combo.preco * combo.quantidade;
+  let precoComplementos = 0;
+  
+  if (combo.complementos && combo.complementos.length > 0) {
+    combo.complementos.forEach(complemento => {
+      complemento.adicionais.forEach(adicional => {
+        precoComplementos += (adicional.adicional_preco || 0) * adicional.quantidade;
+      });
+    });
+    precoComplementos *= combo.quantidade;
+  }
+  
+  return precoBase + precoComplementos;
+}
+```
+
+#### 6. Agrupamento de Itens Idênticos
 
 ```typescript
 function encontrarItemIdentico(
@@ -707,8 +813,8 @@ function renderizarAdicional(
 ### Passo 2: Criar Serviços de Busca de Complementos
 
 1. Criar `src/services/complementos/buscar-complementos-produto.ts`
-2. Criar `src/services/complementos/buscar-complementos-receita.ts`
-3. Criar `src/services/complementos/buscar-complementos-combo.ts`
+2. Criar `src/services/complementos/buscar-complementos-receita.ts` - **IMPORTANTE**: Receitas agora têm complementos diretamente vinculados
+3. Criar `src/services/complementos/buscar-complementos-combo.ts` - **IMPORTANTE**: Combos agora têm complementos diretamente vinculados
 
 ### Passo 3: Atualizar Componentes de Seleção
 
@@ -718,10 +824,15 @@ function renderizarAdicional(
    - Validar complementos obrigatórios antes de adicionar ao carrinho
 
 2. Atualizar `SheetAddReceita.tsx`:
-   - Mesmas mudanças que no SheetAddProduto
+   - **IMPORTANTE**: Receitas agora usam complementos diretamente vinculados (não mais adicionais diretos)
+   - Buscar complementos usando: `GET /api/catalogo/client/complementos/receita/{receita_id}`
+   - Remover código de adicionais diretos
+   - Mesmas mudanças que no SheetAddProduto (buscar, renderizar e validar complementos)
 
 3. Atualizar `SheetAddCombo.tsx`:
-   - Mesmas mudanças que no SheetAddProduto
+   - **IMPORTANTE**: Combos agora têm complementos diretamente vinculados
+   - Buscar complementos usando: `GET /api/catalogo/client/complementos/combo/{combo_id}`
+   - Mesmas mudanças que no SheetAddProduto (buscar, renderizar e validar complementos)
 
 ### Passo 4: Atualizar Store do Carrinho
 
@@ -805,6 +916,142 @@ function useComplementosProduto(
   useEffect(() => {
     buscar();
   }, [codBarras, apenasAtivos]);
+  
+  return {
+    complementos,
+    loading,
+    error,
+    refetch: buscar,
+  };
+}
+```
+
+### Exemplo 1.1: Hook para Buscar Complementos de Receita
+
+```typescript
+import { useState, useEffect } from 'react';
+
+interface UseComplementosReceitaReturn {
+  complementos: ComplementoResponse[];
+  loading: boolean;
+  error: string | null;
+  refetch: () => void;
+}
+
+function useComplementosReceita(
+  receitaId: number | null,
+  apenasAtivos: boolean = true
+): UseComplementosReceitaReturn {
+  const [complementos, setComplementos] = useState<ComplementoResponse[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  
+  const buscar = async () => {
+    if (!receitaId) {
+      setComplementos([]);
+      return;
+    }
+    
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const token = localStorage.getItem('super_token');
+      const response = await fetch(
+        `/api/catalogo/client/complementos/receita/${receitaId}?apenas_ativos=${apenasAtivos}`,
+        {
+          method: 'GET',
+          headers: {
+            'X-Super-Token': token || '',
+          },
+        }
+      );
+      
+      if (!response.ok) {
+        throw new Error('Erro ao buscar complementos da receita');
+      }
+      
+      const resultado = await response.json();
+      setComplementos(resultado);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao buscar complementos');
+      setComplementos([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  useEffect(() => {
+    buscar();
+  }, [receitaId, apenasAtivos]);
+  
+  return {
+    complementos,
+    loading,
+    error,
+    refetch: buscar,
+  };
+}
+```
+
+### Exemplo 1.2: Hook para Buscar Complementos de Combo
+
+```typescript
+import { useState, useEffect } from 'react';
+
+interface UseComplementosComboReturn {
+  complementos: ComplementoResponse[];
+  loading: boolean;
+  error: string | null;
+  refetch: () => void;
+}
+
+function useComplementosCombo(
+  comboId: number | null,
+  apenasAtivos: boolean = true
+): UseComplementosComboReturn {
+  const [complementos, setComplementos] = useState<ComplementoResponse[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  
+  const buscar = async () => {
+    if (!comboId) {
+      setComplementos([]);
+      return;
+    }
+    
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const token = localStorage.getItem('super_token');
+      const response = await fetch(
+        `/api/catalogo/client/complementos/combo/${comboId}?apenas_ativos=${apenasAtivos}`,
+        {
+          method: 'GET',
+          headers: {
+            'X-Super-Token': token || '',
+          },
+        }
+      );
+      
+      if (!response.ok) {
+        throw new Error('Erro ao buscar complementos do combo');
+      }
+      
+      const resultado = await response.json();
+      setComplementos(resultado);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao buscar complementos');
+      setComplementos([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  useEffect(() => {
+    buscar();
+  }, [comboId, apenasAtivos]);
   
   return {
     complementos,
@@ -1102,8 +1349,21 @@ function useGerenciamentoComplementos(
 Em caso de dúvidas ou problemas durante a migração:
 
 1. Consulte a documentação completa em `docs/API_COMBOS_CRUD.md`
-2. Verifique os exemplos de código neste documento
-3. Entre em contato com a equipe de backend para esclarecimentos sobre a API
+2. Consulte o guia específico de migração: `docs/MIGRACAO_FRONTEND_RECEITAS_COMBOS_COMPLEMENTOS.md`
+3. Verifique os exemplos de código neste documento
+4. Entre em contato com a equipe de backend para esclarecimentos sobre a API
+
+## ⚠️ Mudanças Importantes (v2.0.0)
+
+### Receitas
+- **ANTES**: Receitas tinham adicionais diretos via `POST /api/catalogo/admin/receitas/adicionais`
+- **AGORA**: Receitas têm complementos diretamente vinculados via `GET /api/catalogo/client/complementos/receita/{receita_id}`
+- **AÇÃO**: Remover código de adicionais diretos e usar complementos
+
+### Combos
+- **ANTES**: Combos não tinham complementos/adicionais
+- **AGORA**: Combos têm complementos diretamente vinculados via `GET /api/catalogo/client/complementos/combo/{combo_id}`
+- **AÇÃO**: Implementar busca e seleção de complementos para combos
 
 ---
 
@@ -1111,6 +1371,7 @@ Em caso de dúvidas ou problemas durante a migração:
 
 - **v1.0.0** (Janeiro 2024): Migração inicial para sistema de complementos hierárquicos
 - **v1.1.0** (Janeiro 2024): Adicionado suporte a `minimo_itens` e `maximo_itens`
+- **v2.0.0** (Dezembro 2024): Receitas e combos agora usam complementos diretamente vinculados (não mais adicionais diretos)
 
 ---
 

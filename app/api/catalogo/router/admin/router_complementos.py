@@ -9,6 +9,8 @@ from app.api.catalogo.schemas.schema_complemento import (
     AdicionalResponse,
     VincularComplementosProdutoRequest,
     VincularComplementosProdutoResponse,
+    VincularComplementosReceitaRequest,
+    VincularComplementosReceitaResponse,
     VincularItensComplementoRequest,
     VincularItensComplementoResponse,
     VincularItemComplementoRequest,
@@ -133,6 +135,30 @@ def listar_complementos_produto(
     logger.info(f"[Complementos] Listar por produto - produto={cod_barras}")
     service = ComplementoService(db)
     return service.listar_complementos_produto(cod_barras, apenas_ativos)
+
+
+@router.post("/receita/{receita_id}/vincular", response_model=VincularComplementosReceitaResponse, status_code=status.HTTP_200_OK)
+def vincular_complementos_receita(
+    receita_id: int,
+    req: VincularComplementosReceitaRequest,
+    db: Session = Depends(get_db),
+):
+    """Vincula múltiplos complementos a uma receita."""
+    logger.info(f"[Complementos] Vincular - receita={receita_id} complementos={req.complemento_ids}")
+    service = ComplementoService(db)
+    return service.vincular_complementos_receita(receita_id, req)
+
+
+@router.get("/receita/{receita_id}", response_model=List[ComplementoResponse])
+def listar_complementos_receita(
+    receita_id: int,
+    apenas_ativos: bool = True,
+    db: Session = Depends(get_db),
+):
+    """Lista todos os complementos de uma receita específica."""
+    logger.info(f"[Complementos] Listar por receita - receita={receita_id}")
+    service = ComplementoService(db)
+    return service.listar_complementos_receita(receita_id, apenas_ativos)
 
 
 # ------ Vincular Itens a Complementos (N:N) ------
