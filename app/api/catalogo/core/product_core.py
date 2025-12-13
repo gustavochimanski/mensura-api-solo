@@ -355,7 +355,7 @@ class ProductCore:
                 int(product.identifier),
                 apenas_ativos=apenas_ativos,
             )
-        
+        #
         return []
     
     def calcular_preco_com_complementos(
