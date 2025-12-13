@@ -344,29 +344,17 @@ class ProductCore:
                 apenas_ativos=apenas_ativos,
             )
         elif product.product_type == ProductType.COMBO:
-            # Para combos, usa buscar_por_ids se tiver acesso ao repositório
-            # O contract atual não tem método específico para combos
-            if db and hasattr(self.complemento_contract, '_build_complemento_dto'):
-                try:
-                    from app.api.catalogo.repositories.repo_complemento import ComplementoRepository
-                    repo = ComplementoRepository(db)
-                    # Verifica se o método existe no repositório
-                    if hasattr(repo, 'listar_por_combo'):
-                        complementos = repo.listar_por_combo(int(product.identifier), apenas_ativos=apenas_ativos, carregar_adicionais=True)
-                        return [self.complemento_contract._build_complemento_dto(c) for c in complementos]
-                except Exception:
-                    pass
-            return []
+            # Para combos, usa método do adapter
+            return self.complemento_contract.listar_por_combo(
+                int(product.identifier),
+                apenas_ativos=apenas_ativos,
+            )
         elif product.product_type == ProductType.RECEITA:
-            # Para receitas, usa buscar_por_ids se tiver acesso ao repositório
-            if db:
-                from app.api.catalogo.repositories.repo_complemento import ComplementoRepository
-                repo = ComplementoRepository(db)
-                complementos = repo.listar_por_receita(int(product.identifier), apenas_ativos=apenas_ativos, carregar_adicionais=True)
-                # Converte para DTO usando o adapter
-                if hasattr(self.complemento_contract, '_build_complemento_dto'):
-                    return [self.complemento_contract._build_complemento_dto(c) for c in complementos]
-            return []
+            # Para receitas, usa método do adapter
+            return self.complemento_contract.listar_por_receita(
+                int(product.identifier),
+                apenas_ativos=apenas_ativos,
+            )
         
         return []
     

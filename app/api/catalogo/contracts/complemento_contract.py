@@ -44,4 +44,16 @@ class IComplementoContract(ABC):
     def buscar_por_ids(self, empresa_id: int, complemento_ids: List[int]) -> List[ComplementoDTO]:
         """Retorna complementos por IDs diretamente (sem precisar de código de barras)."""
         raise NotImplementedError
+    
+    def listar_por_receita(self, receita_id: int, apenas_ativos: bool = True) -> List[ComplementoDTO]:
+        """Lista todos os complementos vinculados a uma receita, com seus adicionais."""
+        # Método opcional - não é abstrato para manter compatibilidade
+        # Implementações devem fornecer este método se quiserem suportar receitas
+        return []
+    
+    def listar_por_combo(self, combo_id: int, apenas_ativos: bool = True) -> List[ComplementoDTO]:
+        """Lista todos os complementos vinculados a um combo, com seus adicionais."""
+        # Método opcional - não é abstrato para manter compatibilidade
+        # Implementações devem fornecer este método se quiserem suportar combos
+        return []
 

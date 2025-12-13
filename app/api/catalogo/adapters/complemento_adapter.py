@@ -64,4 +64,22 @@ class ComplementoAdapter(IComplementoContract):
         ids_set = set(complemento_ids or [])
         filtrados = [c for c in complementos if c.id in ids_set]
         return [self._build_complemento_dto(c) for c in filtrados]
+    
+    def listar_por_receita(self, receita_id: int, apenas_ativos: bool = True) -> List[ComplementoDTO]:
+        """Lista todos os complementos vinculados a uma receita."""
+        complementos = self.repo.listar_por_receita(
+            receita_id,
+            apenas_ativos=apenas_ativos,
+            carregar_adicionais=False,
+        )
+        return [self._build_complemento_dto(c) for c in complementos]
+    
+    def listar_por_combo(self, combo_id: int, apenas_ativos: bool = True) -> List[ComplementoDTO]:
+        """Lista todos os complementos vinculados a um combo."""
+        complementos = self.repo.listar_por_combo(
+            combo_id,
+            apenas_ativos=apenas_ativos,
+            carregar_adicionais=False,
+        )
+        return [self._build_complemento_dto(c) for c in complementos]
 
