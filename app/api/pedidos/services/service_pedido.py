@@ -67,6 +67,10 @@ from app.utils.database_utils import now_trimmed
 
 from app.api.catalogo.models.model_receita import ReceitaModel
 from app.api.catalogo.models.model_combo import ComboModel
+from app.api.catalogo.core import ProductCore
+from app.api.catalogo.adapters.produto_adapter import ProdutoAdapter
+from app.api.catalogo.adapters.combo_adapter import ComboAdapter
+from app.api.catalogo.adapters.complemento_adapter import ComplementoAdapter
 
 if TYPE_CHECKING:
     from app.api.pedidos.schemas.schema_pedido_cliente import PedidoClienteListItem
@@ -99,6 +103,18 @@ class PedidoService:
         self.adicional_contract = adicional_contract
         self.complemento_contract = complemento_contract
         self.combo_contract = combo_contract
+        
+        # Inicializa ProductCore com os adapters
+        # Se os contracts não foram fornecidos, cria os adapters
+        produto_adapter = produto_contract if produto_contract else ProdutoAdapter(db)
+        combo_adapter = combo_contract if combo_contract else ComboAdapter(db)
+        complemento_adapter = complemento_contract if complemento_contract else ComplementoAdapter(db)
+        
+        self.product_core = ProductCore(
+            produto_contract=produto_adapter,
+            combo_contract=combo_adapter,
+            complemento_contract=complemento_adapter,
+        )
         self.response_builder = PedidoResponseBuilder()
         self.kanban_service = KanbanService(
             db,
@@ -597,77 +613,101 @@ class PedidoService:
 
             # Receitas (sem produto_cod_barras no payload, usam apenas receita_id)
             for rec in receitas_req:
-                receita = self.db.query(ReceitaModel).filter(ReceitaModel.id == rec.receita_id).first()
-                if not receita or not receita.ativo or not receita.disponivel:
+                qtd_rec = max(int(getattr(rec, "quantidade", 1) or 1), 1)
+                
+                # Busca receita do banco
+                receita_model = self.db.query(ReceitaModel).filter(ReceitaModel.id == rec.receita_id).first()
+                
+                # Usa ProductCore para buscar e validar
+                product = self.product_core.buscar_receita(
+                    receita_id=rec.receita_id,
+                    empresa_id=empresa_id,
+                    receita_model=receita_model,
+                )
+                
+                if not product:
                     raise HTTPException(
                         status.HTTP_404_NOT_FOUND,
                         f"Receita {rec.receita_id} não encontrada ou inativa",
                     )
-                if receita.empresa_id != empresa_id:
+                
+                if not self.product_core.validar_disponivel(product, qtd_rec):
+                    raise HTTPException(
+                        status.HTTP_400_BAD_REQUEST,
+                        f"Receita {rec.receita_id} não disponível",
+                    )
+                
+                if not self.product_core.validar_empresa(product, empresa_id):
                     raise HTTPException(
                         status.HTTP_400_BAD_REQUEST,
                         f"Receita {rec.receita_id} não pertence à empresa {empresa_id}",
                     )
 
-                qtd_rec = max(int(getattr(rec, "quantidade", 1) or 1), 1)
-                preco_rec = _dec(receita.preco_venda)
-                subtotal += preco_rec * qtd_rec
-
-                # Complementos da receita
+                # Calcula preço com complementos usando ProductCore
                 complementos_rec = getattr(rec, "complementos", None) or []
-                adicionais_total_rec, adicionais_snapshot_rec = resolve_complementos_diretos(
-                    complemento_contract=self.complemento_contract,
-                    empresa_id=receita.empresa_id,
+                preco_total_rec, adicionais_snapshot_rec = self.product_core.calcular_preco_com_complementos(
+                    product=product,
+                    quantidade=qtd_rec,
                     complementos_request=complementos_rec,
-                    quantidade_item=qtd_rec,
                 )
-                subtotal += adicionais_total_rec
+                subtotal += preco_total_rec
 
                 # Cria item de receita no banco
+                preco_unit_rec = preco_total_rec / qtd_rec
                 self.repo.adicionar_item(
                     pedido_id=pedido.id,
                     receita_id=rec.receita_id,
                     quantidade=qtd_rec,
-                    preco_unitario=preco_rec + (adicionais_total_rec / qtd_rec),
+                    preco_unitario=preco_unit_rec,
                     observacao=self._montar_observacao_item(rec) if hasattr(rec, 'observacao') else None,
-                    produto_descricao_snapshot=receita.nome or receita.descricao,
+                    produto_descricao_snapshot=product.nome or product.descricao,
                     adicionais_snapshot=adicionais_snapshot_rec,
                 )
 
             # Combos opcionais: adiciona ao subtotal, cria item de combo e aplica adicionais de combo (se existirem)
             for cb in combos_req or []:
-                combo = self.combo_contract.buscar_por_id(cb.combo_id) if self.combo_contract else None
-                if not combo or not combo.ativo:
+                qtd_combo = max(int(getattr(cb, "quantidade", 1) or 1), 1)
+                
+                # Usa ProductCore para buscar e validar
+                product = self.product_core.buscar_combo(cb.combo_id)
+                
+                if not product:
                     raise HTTPException(status.HTTP_404_NOT_FOUND, f"Combo {cb.combo_id} não encontrado ou inativo")
-                if combo.empresa_id != empresa_id:
+                
+                if not self.product_core.validar_disponivel(product, qtd_combo):
+                    raise HTTPException(
+                        status.HTTP_400_BAD_REQUEST,
+                        f"Combo {cb.combo_id} não disponível",
+                    )
+                
+                if not self.product_core.validar_empresa(product, empresa_id):
                     raise HTTPException(
                         status.HTTP_400_BAD_REQUEST,
                         f"Combo {cb.combo_id} não pertence à empresa {empresa_id}",
                     )
 
-                # Atualiza subtotal pelo valor base do combo
-                qtd_combo = max(int(getattr(cb, "quantidade", 1) or 1), 1)
-                preco_combo = _dec(combo.preco_total)
-
-                # Complementos do combo
+                # Calcula preço com complementos usando ProductCore
                 complementos_combo = getattr(cb, "complementos", None) or []
-                adicionais_total_combo, adicionais_snapshot_combo = resolve_complementos_diretos(
-                    complemento_contract=self.complemento_contract,
-                    empresa_id=combo.empresa_id,
+                preco_total_combo, adicionais_snapshot_combo = self.product_core.calcular_preco_com_complementos(
+                    product=product,
+                    quantidade=qtd_combo,
                     complementos_request=complementos_combo,
-                    quantidade_item=qtd_combo,
                 )
-                subtotal += preco_combo * qtd_combo + adicionais_total_combo
+                subtotal += preco_total_combo
 
                 # Cria item de combo no banco (um item por combo, não itens individuais)
-                preco_unit_combo = preco_combo + (adicionais_total_combo / qtd_combo)
+                preco_unit_combo = preco_total_combo / qtd_combo
+                observacao_combo = f"Combo #{product.identifier} - {product.nome}"
+                if hasattr(cb, 'observacao') and cb.observacao:
+                    observacao_combo += f" | {cb.observacao}"
+                
                 self.repo.adicionar_item(
                     pedido_id=pedido.id,
                     combo_id=cb.combo_id,
                     quantidade=qtd_combo,
                     preco_unitario=preco_unit_combo,
-                    observacao=f"Combo #{combo.id} - {combo.titulo}" + (f" | {cb.observacao}" if hasattr(cb, 'observacao') and cb.observacao else ""),
-                    produto_descricao_snapshot=combo.titulo or combo.descricao,
+                    observacao=observacao_combo,
+                    produto_descricao_snapshot=product.nome or product.descricao,
                     adicionais_snapshot=adicionais_snapshot_combo,
                 )
             desconto = self._aplicar_cupom(
@@ -1732,53 +1772,63 @@ class PedidoService:
 
         # Receitas no preview
         for rec in receitas_req:
-            receita = self.db.query(ReceitaModel).filter(ReceitaModel.id == rec.receita_id).first()
-            if not receita or not receita.ativo or not receita.disponivel:
+            qtd_rec = max(int(getattr(rec, "quantidade", 1) or 1), 1)
+            
+            # Busca receita do banco
+            receita_model = self.db.query(ReceitaModel).filter(ReceitaModel.id == rec.receita_id).first()
+            
+            # Usa ProductCore para buscar e validar
+            product = self.product_core.buscar_receita(
+                receita_id=rec.receita_id,
+                empresa_id=empresa_id,
+                receita_model=receita_model,
+            )
+            
+            if not product:
                 raise HTTPException(
                     status.HTTP_404_NOT_FOUND,
                     f"Receita {rec.receita_id} não encontrada ou inativa",
                 )
-            if receita.empresa_id != empresa_id:
+            
+            if not self.product_core.validar_empresa(product, empresa_id):
                 raise HTTPException(
                     status.HTTP_400_BAD_REQUEST,
                     f"Receita {rec.receita_id} não pertence à empresa {empresa_id}",
                 )
 
-            qtd_rec = max(int(getattr(rec, "quantidade", 1) or 1), 1)
-            preco_rec = _dec(receita.preco_venda)
-            subtotal += preco_rec * qtd_rec
-
+            # Calcula preço com complementos usando ProductCore
             complementos_rec = getattr(rec, "complementos", None) or []
-            total_complementos_rec, _ = resolve_complementos_diretos(
-                complemento_contract=self.complemento_contract,
-                empresa_id=receita.empresa_id,
+            preco_total_rec, _ = self.product_core.calcular_preco_com_complementos(
+                product=product,
+                quantidade=qtd_rec,
                 complementos_request=complementos_rec,
-                quantidade_item=qtd_rec,
             )
-            subtotal += total_complementos_rec
+            subtotal += preco_total_rec
 
         # Combos opcionais no preview (base + adicionais de combo, se existirem)
         for cb in combos_req or []:
-            combo = self.combo_contract.buscar_por_id(cb.combo_id) if self.combo_contract else None
-            if not combo or not combo.ativo:
+            qtd_combo = max(int(getattr(cb, "quantidade", 1) or 1), 1)
+            
+            # Usa ProductCore para buscar e validar
+            product = self.product_core.buscar_combo(cb.combo_id)
+            
+            if not product:
                 raise HTTPException(status.HTTP_404_NOT_FOUND, f"Combo {cb.combo_id} não encontrado ou inativo")
-            if combo.empresa_id != empresa_id:
+            
+            if not self.product_core.validar_empresa(product, empresa_id):
                 raise HTTPException(
                     status.HTTP_400_BAD_REQUEST,
                     f"Combo {cb.combo_id} não pertence à empresa {empresa_id}",
                 )
 
-            qtd_combo = max(int(getattr(cb, "quantidade", 1) or 1), 1)
-            subtotal += _dec(combo.preco_total) * qtd_combo
-
+            # Calcula preço com complementos usando ProductCore
             complementos_combo = getattr(cb, "complementos", None) or []
-            total_complementos_combo, _ = resolve_complementos_diretos(
-                complemento_contract=self.complemento_contract,
-                empresa_id=combo.empresa_id,
+            preco_total_combo, _ = self.product_core.calcular_preco_com_complementos(
+                product=product,
+                quantidade=qtd_combo,
                 complementos_request=complementos_combo,
-                quantidade_item=qtd_combo,
             )
-            subtotal += total_complementos_combo
+            subtotal += preco_total_combo
 
         desconto = self._aplicar_cupom(
             cupom_id=payload.cupom_id,

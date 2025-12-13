@@ -78,6 +78,10 @@ from app.api.pedidos.models.model_pedido_item_unificado import PedidoItemUnifica
 from app.api.pedidos.utils.complementos import resolve_produto_complementos, resolve_complementos_diretos
 from app.api.pedidos.services.service_pedido_helpers import _dec
 from app.utils.logger import logger
+from app.api.catalogo.core import ProductCore
+from app.api.catalogo.adapters.produto_adapter import ProdutoAdapter
+from app.api.catalogo.adapters.combo_adapter import ComboAdapter
+from app.api.catalogo.adapters.complemento_adapter import ComplementoAdapter
 
 
 class PedidoMesaService:
@@ -96,6 +100,18 @@ class PedidoMesaService:
         self.adicional_contract = adicional_contract
         self.complemento_contract = complemento_contract
         self.combo_contract = combo_contract
+        
+        # Inicializa ProductCore com os adapters
+        # Se os contracts não foram fornecidos, cria os adapters
+        produto_adapter = produto_contract if produto_contract else ProdutoAdapter(db)
+        combo_adapter = combo_contract if combo_contract else ComboAdapter(db)
+        complemento_adapter = complemento_contract if complemento_contract else ComplementoAdapter(db)
+        
+        self.product_core = ProductCore(
+            produto_contract=produto_adapter,
+            combo_contract=combo_adapter,
+            complemento_contract=complemento_adapter,
+        )
 
     # -------- Pedido --------
     def criar_pedido(self, payload: PedidoMesaCreate) -> PedidoResponseCompleto:
@@ -169,6 +185,8 @@ class PedidoMesaService:
         """
         Adiciona um produto genérico ao pedido (produto normal, receita ou combo).
         Identifica automaticamente o tipo baseado nos campos preenchidos.
+        
+        Usa ProductCore para unificar o tratamento de diferentes tipos de produtos.
         """
         pedido = self.repo.get(pedido_id, TipoEntrega.MESA)
         if pedido.status in ("C", "E"):
@@ -177,115 +195,99 @@ class PedidoMesaService:
         empresa_id = pedido.empresa_id
         qtd = max(int(body.quantidade or 1), 1)
         
-        # Identifica e processa o tipo de produto
-        if body.produto_cod_barras:
-            # Item normal (produto com código de barras)
-            adicionais_total = Decimal("0")
-            adicionais_snapshot = []
-            
-            # Usa complementos
-            if body.complementos:
-                complementos_total, complementos_snapshot = resolve_produto_complementos(
-                    complemento_contract=self.complemento_contract,
-                    produto_cod_barras=body.produto_cod_barras,
-                    complementos_request=body.complementos,
-                    quantidade_item=qtd,
-                )
-                adicionais_total = complementos_total
-                adicionais_snapshot = complementos_snapshot
-            
-            pedido = self.repo.add_item(
-                pedido_id,
-                produto_cod_barras=body.produto_cod_barras,
-                quantidade=qtd,
-                observacao=body.observacao,
-                adicionais_snapshot=adicionais_snapshot,
+        # Busca receita do banco se necessário (para passar ao ProductCore)
+        receita_model = None
+        if body.receita_id:
+            receita_model = self.db.query(ReceitaModel).filter(ReceitaModel.id == body.receita_id).first()
+        
+        # Usa ProductCore para buscar e validar qualquer tipo de produto
+        product = self.product_core.buscar_qualquer(
+            empresa_id=empresa_id,
+            cod_barras=body.produto_cod_barras,
+            combo_id=body.combo_id,
+            receita_id=body.receita_id,
+            receita_model=receita_model,
+        )
+        
+        if not product:
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND,
+                "Produto não encontrado"
             )
-            
-        elif body.receita_id:
-            # Receita - cria item com receita_id
-            receita = self.db.query(ReceitaModel).filter(ReceitaModel.id == body.receita_id).first()
-            if not receita or not receita.ativo or not receita.disponivel:
-                raise HTTPException(
-                    status.HTTP_404_NOT_FOUND,
-                    f"Receita {body.receita_id} não encontrada ou inativa"
-                )
-            if receita.empresa_id != empresa_id:
-                raise HTTPException(
-                    status.HTTP_400_BAD_REQUEST,
-                    f"Receita {body.receita_id} não pertence à empresa {empresa_id}"
-                )
-            
-            preco_rec = _dec(receita.preco_venda)
-            
-            # Processa complementos da receita
-            adicionais_total, adicionais_snapshot = resolve_complementos_diretos(
-                complemento_contract=self.complemento_contract,
-                empresa_id=empresa_id,
-                complementos_request=body.complementos,
-                quantidade_item=qtd,
+        
+        # Valida disponibilidade usando ProductCore
+        if not self.product_core.validar_disponivel(product, qtd):
+            tipo_nome = product.product_type.value
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                f"{tipo_nome.capitalize()} não disponível"
             )
-            
-            observacao_completa = f"Receita #{receita.id} - {receita.nome}"
+        
+        # Valida empresa usando ProductCore
+        if not self.product_core.validar_empresa(product, empresa_id):
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                f"Produto não pertence à empresa {empresa_id}"
+            )
+        
+        # Calcula preço com complementos usando ProductCore
+        preco_total, adicionais_snapshot = self.product_core.calcular_preco_com_complementos(
+            product=product,
+            quantidade=qtd,
+            complementos_request=body.complementos,
+        )
+        
+        # Prepara dados para adicionar item
+        preco_unitario = preco_total / qtd
+        descricao_produto = product.nome or product.descricao or ""
+        
+        # Monta observação completa
+        observacao_completa = body.observacao
+        if product.product_type.value == "combo":
+            observacao_completa = f"Combo #{product.identifier} - {descricao_produto}"
             if body.observacao:
                 observacao_completa += f" | {body.observacao}"
-            
-            # Cria item de receita no banco
-            preco_unit_com_receita = preco_rec + (adicionais_total / qtd)
+        elif product.product_type.value == "receita":
+            observacao_completa = f"Receita #{product.identifier} - {descricao_produto}"
+            if body.observacao:
+                observacao_completa += f" | {body.observacao}"
+        
+        # Adiciona item ao pedido baseado no tipo
+        if product.product_type.value == "produto":
             pedido = self.repo.add_item(
                 pedido_id,
-                receita_id=body.receita_id,
+                produto_cod_barras=str(product.identifier),
                 quantidade=qtd,
-                preco_unitario=preco_unit_com_receita,
                 observacao=observacao_completa,
-                produto_descricao_snapshot=receita.nome or receita.descricao,
                 adicionais_snapshot=adicionais_snapshot if adicionais_snapshot else None,
             )
             
-        elif body.combo_id:
-            # Combo - mesma lógica do balcão
-            combo = self.combo_contract.buscar_por_id(body.combo_id) if self.combo_contract else None
-            if not combo or not combo.ativo:
-                raise HTTPException(
-                    status.HTTP_404_NOT_FOUND,
-                    f"Combo {body.combo_id} não encontrado ou inativo"
-                )
-            if combo.empresa_id != empresa_id:
-                raise HTTPException(
-                    status.HTTP_400_BAD_REQUEST,
-                    f"Combo {body.combo_id} não pertence à empresa {empresa_id}"
-                )
-            
-            preco_combo = _dec(combo.preco_total)
-            
-            # Processa complementos do combo
-            adicionais_total, adicionais_snapshot = resolve_complementos_diretos(
-                complemento_contract=self.complemento_contract,
-                empresa_id=empresa_id,
-                complementos_request=body.complementos,
-                quantidade_item=qtd,
-            )
-            
-            # Cria item de combo no banco (um item por combo, não itens individuais)
-            preco_unit_combo = preco_combo + (adicionais_total / qtd)
-            observacao_completa = f"Combo #{combo.id} - {combo.titulo or combo.descricao}"
-            if body.observacao:
-                observacao_completa += f" | {body.observacao}"
-            
+        elif product.product_type.value == "receita":
             pedido = self.repo.add_item(
                 pedido_id,
-                combo_id=body.combo_id,
+                receita_id=int(product.identifier),
                 quantidade=qtd,
-                preco_unitario=preco_unit_combo,
+                preco_unitario=preco_unitario,
                 observacao=observacao_completa,
-                produto_descricao_snapshot=combo.titulo or combo.descricao,
+                produto_descricao_snapshot=descricao_produto,
+                adicionais_snapshot=adicionais_snapshot if adicionais_snapshot else None,
+            )
+            
+        elif product.product_type.value == "combo":
+            pedido = self.repo.add_item(
+                pedido_id,
+                combo_id=int(product.identifier),
+                quantidade=qtd,
+                preco_unitario=preco_unitario,
+                observacao=observacao_completa,
+                produto_descricao_snapshot=descricao_produto,
                 adicionais_snapshot=adicionais_snapshot if adicionais_snapshot else None,
             )
         
         else:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                "É obrigatório informar 'produto_cod_barras', 'receita_id' ou 'combo_id'"
+                "Tipo de produto não suportado"
             )
         
         return PedidoResponseBuilder.pedido_to_response_completo(pedido)
