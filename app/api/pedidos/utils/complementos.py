@@ -121,7 +121,6 @@ def resolve_produto_complementos(
                 "complemento_nome": complemento.nome,
                 "obrigatorio": complemento.obrigatorio,
                 "quantitativo": complemento.quantitativo,
-                "permite_multipla_escolha": complemento.permite_multipla_escolha,
                 "total": float(complemento_total),
                 "adicionais": complemento_snapshot,
             })
@@ -236,7 +235,6 @@ def resolve_complementos_diretos(
                 "complemento_nome": complemento.nome,
                 "obrigatorio": complemento.obrigatorio,
                 "quantitativo": complemento.quantitativo,
-                "permite_multipla_escolha": complemento.permite_multipla_escolha,
                 "total": float(complemento_total),
                 "adicionais": complemento_snapshot,
             })

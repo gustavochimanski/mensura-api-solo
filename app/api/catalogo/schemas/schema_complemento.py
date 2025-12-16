@@ -10,7 +10,6 @@ class CriarComplementoRequest(BaseModel):
     descricao: Optional[str] = Field(None, max_length=255)
     obrigatorio: bool = False
     quantitativo: bool = False
-    permite_multipla_escolha: bool = True
     minimo_itens: Optional[int] = Field(
         None,
         ge=0,
@@ -31,7 +30,6 @@ class AtualizarComplementoRequest(BaseModel):
     descricao: Optional[str] = Field(None, max_length=255)
     obrigatorio: Optional[bool] = None
     quantitativo: Optional[bool] = None
-    permite_multipla_escolha: Optional[bool] = None
     minimo_itens: Optional[int] = Field(
         None,
         ge=0,
@@ -122,7 +120,6 @@ class ComplementoResponse(BaseModel):
     descricao: Optional[str] = None
     obrigatorio: bool
     quantitativo: bool
-    permite_multipla_escolha: bool
     minimo_itens: Optional[int] = Field(
         None,
         description="Mínimo de itens que o cliente deve escolher neste complemento (aplicado só quando > 0).",
@@ -146,7 +143,6 @@ class ComplementoResumidoResponse(BaseModel):
     nome: str
     obrigatorio: bool
     quantitativo: bool
-    permite_multipla_escolha: bool
     minimo_itens: Optional[int] = None
     maximo_itens: Optional[int] = None
     ordem: int

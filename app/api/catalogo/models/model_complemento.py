@@ -21,8 +21,7 @@ class ComplementoModel(Base):
     # Configurações do complemento
     ativo = Column(Boolean, nullable=False, default=True)
     obrigatorio = Column(Boolean, nullable=False, default=False)  # Se o complemento é obrigatório
-    quantitativo = Column(Boolean, nullable=False, default=False)  # Se permite quantidade (ex: 2x bacon)
-    permite_multipla_escolha = Column(Boolean, nullable=False, default=True)  # Se pode escolher múltiplos adicionais
+    quantitativo = Column(Boolean, nullable=False, default=False)  # Se permite quantidade (ex: 2x bacon) e múltipla escolha
 
     # Limites de seleção de itens pelo cliente
     # Exemplo: minimo_itens=1, maximo_itens=3 -> cliente deve escolher entre 1 e 3 itens

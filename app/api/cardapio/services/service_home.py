@@ -39,7 +39,6 @@ class HomeService:
                         "descricao": a.nome,
                         "preco": float(a.preco),
                         "obrigatorio": a.obrigatorio,
-                        "permite_multipla_escolha": a.permite_multipla_escolha,
                         "ordem": a.ordem,
                         "ativo": a.ativo,
                     }

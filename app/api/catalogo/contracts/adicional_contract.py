@@ -12,7 +12,6 @@ class AdicionalDTO(BaseModel):
     nome: str
     preco: Decimal
     obrigatorio: bool
-    permite_multipla_escolha: bool
 
 
 class IAdicionalContract(ABC):

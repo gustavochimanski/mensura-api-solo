@@ -32,7 +32,6 @@ class ComplementoAdapter(IComplementoContract):
             descricao=complemento.descricao,
             obrigatorio=complemento.obrigatorio,
             quantitativo=complemento.quantitativo,
-            permite_multipla_escolha=complemento.permite_multipla_escolha,
             ordem=complemento.ordem,
             adicionais=adicionais_dto,
         )

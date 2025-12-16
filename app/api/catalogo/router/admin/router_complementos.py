@@ -58,8 +58,7 @@ def criar_complemento(
     - `minimo_itens`: Quantidade mínima de itens que o cliente deve escolher (None = sem mínimo)
     - `maximo_itens`: Quantidade máxima de itens que o cliente pode escolher (None = sem limite)
     - `obrigatorio`: Se o complemento é obrigatório para o produto
-    - `quantitativo`: Se permite quantidade (ex: 2x bacon)
-    - `permite_multipla_escolha`: Se pode escolher múltiplos itens
+    - `quantitativo`: Se permite quantidade (ex: 2x bacon) e múltipla escolha
     """
     logger.info(f"[Complementos] Criar - empresa={req.empresa_id} nome={req.nome}")
     service = ComplementoService(db)
@@ -90,8 +89,7 @@ def atualizar_complemento(
     - `minimo_itens`: Quantidade mínima de itens que o cliente deve escolher
     - `maximo_itens`: Quantidade máxima de itens que o cliente pode escolher
     - `obrigatorio`: Se o complemento é obrigatório
-    - `quantitativo`: Se permite quantidade
-    - `permite_multipla_escolha`: Se permite múltipla escolha
+    - `quantitativo`: Se permite quantidade e múltipla escolha
     - `ativo`: Status ativo/inativo
     
     Todos os campos são opcionais (apenas os fornecidos serão atualizados).
