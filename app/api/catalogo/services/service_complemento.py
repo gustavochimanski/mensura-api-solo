@@ -224,15 +224,6 @@ class ComplementoService:
         
         # Busca os complementos vinculados para retornar (sem filtro de ativos para garantir que retorne os vinculados)
         complementos = self.repo.listar_por_combo(combo_id, apenas_ativos=False, carregar_adicionais=False)
-        
-        # Log para debug
-        from app.utils.logger import logger
-        logger.info(f"[Complementos] Após vincular combo {combo_id}: encontrados {len(complementos)} complementos")
-        if complementos:
-            logger.info(f"[Complementos] IDs encontrados: {[c.id for c in complementos]}")
-        else:
-            logger.warning(f"[Complementos] Nenhum complemento encontrado após vincular combo {combo_id} com IDs {req.complemento_ids}")
-        
         complementos_vinculados = [
             ComplementoResumidoResponse(
                 id=c.id,
