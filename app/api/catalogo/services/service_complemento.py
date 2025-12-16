@@ -19,6 +19,8 @@ from app.api.catalogo.schemas.schema_complemento import (
     VincularComplementosProdutoResponse,
     VincularComplementosReceitaRequest,
     VincularComplementosReceitaResponse,
+    VincularComplementosComboRequest,
+    VincularComplementosComboResponse,
     VincularItensComplementoRequest,
     VincularItensComplementoResponse,
     VincularItemComplementoRequest,
@@ -180,6 +182,45 @@ class ComplementoService:
     def listar_complementos_receita(self, receita_id: int, apenas_ativos: bool = True) -> List[ComplementoResponse]:
         """Lista todos os complementos de uma receita específica."""
         complementos = self.repo.listar_por_receita(receita_id, apenas_ativos=apenas_ativos, carregar_adicionais=True)
+        return [self.complemento_to_response(c) for c in complementos]
+
+    def vincular_complementos_combo(self, combo_id: int, req: VincularComplementosComboRequest) -> VincularComplementosComboResponse:
+        """Vincula múltiplos complementos a um combo."""
+        from app.api.catalogo.models.model_combo import ComboModel
+        
+        combo = self.db.query(ComboModel).filter_by(id=combo_id).first()
+        if not combo:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Combo {combo_id} não encontrado."
+            )
+        
+        self.repo.vincular_complementos_combo(combo_id, req.complemento_ids)
+        self.db.commit()  # Garante que as vinculações sejam persistidas
+        
+        # Busca os complementos vinculados para retornar (sem filtro de ativos para garantir que retorne os vinculados)
+        complementos = self.repo.listar_por_combo(combo_id, apenas_ativos=False, carregar_adicionais=False)
+        complementos_vinculados = [
+            ComplementoResumidoResponse(
+                id=c.id,
+                nome=c.nome,
+                obrigatorio=c.obrigatorio,
+                quantitativo=c.quantitativo,
+                minimo_itens=c.minimo_itens,
+                maximo_itens=c.maximo_itens,
+                ordem=c.ordem,
+            )
+            for c in complementos
+        ]
+        
+        return VincularComplementosComboResponse(
+            combo_id=combo_id,
+            complementos_vinculados=complementos_vinculados,
+        )
+
+    def listar_complementos_combo(self, combo_id: int, apenas_ativos: bool = True) -> List[ComplementoResponse]:
+        """Lista todos os complementos de um combo específico."""
+        complementos = self.repo.listar_por_combo(combo_id, apenas_ativos=apenas_ativos, carregar_adicionais=True)
         return [self.complemento_to_response(c) for c in complementos]
 
     # ------ Adicionais dentro de complementos (DEPRECADO - usar criar_item + vincular) ------

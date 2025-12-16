@@ -180,6 +180,21 @@ class VincularComplementosReceitaResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+# ------ Vincular complementos a combos ------
+class VincularComplementosComboRequest(BaseModel):
+    """Request para vincular múltiplos complementos a um combo"""
+    complemento_ids: List[int] = Field(..., description="IDs dos complementos a vincular")
+
+
+class VincularComplementosComboResponse(BaseModel):
+    """Response após vincular complementos a um combo"""
+    combo_id: int
+    complementos_vinculados: List[ComplementoResumidoResponse]
+    message: str = "Complementos vinculados com sucesso"
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 # ------ Vincular itens a complementos (N:N) ------
 class VincularItensComplementoRequest(BaseModel):
     """Request para vincular múltiplos itens a um complemento"""
