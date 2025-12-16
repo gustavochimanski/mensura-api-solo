@@ -95,6 +95,7 @@ class ComplementoService:
             )
         
         self.repo.atualizar_complemento(complemento, **req.model_dump(exclude_unset=True))
+        self.db.commit()  # Garante que as mudanças sejam persistidas
         return self.buscar_por_id(complemento_id)
 
     def deletar_complemento(self, complemento_id: int):
@@ -582,6 +583,8 @@ class ComplementoService:
             obrigatorio=complemento.obrigatorio,
             quantitativo=complemento.quantitativo,
             permite_multipla_escolha=complemento.permite_multipla_escolha,
+            minimo_itens=complemento.minimo_itens,
+            maximo_itens=complemento.maximo_itens,
             ordem=complemento.ordem,
             ativo=complemento.ativo,
             adicionais=adicionais,
