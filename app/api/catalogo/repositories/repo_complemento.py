@@ -193,12 +193,27 @@ class ComplementoRepository:
         if not combo:
             raise ValueError(f"Combo {combo_id} não encontrado")
         
+        # Se lista vazia, apenas remove vinculações existentes
+        if not complemento_ids:
+            self.db.execute(
+                combo_complemento_link.delete().where(
+                    combo_complemento_link.c.combo_id == combo_id
+                )
+            )
+            self.db.flush()
+            return
+        
         # Busca os complementos
         complementos = (
             self.db.query(ComplementoModel)
             .filter(ComplementoModel.id.in_(complemento_ids))
             .all()
         )
+        
+        if len(complementos) != len(complemento_ids):
+            encontrados_ids = {c.id for c in complementos}
+            nao_encontrados = [cid for cid in complemento_ids if cid not in encontrados_ids]
+            raise ValueError(f"Complementos não encontrados: {nao_encontrados}")
         
         # Remove vinculações existentes
         self.db.execute(

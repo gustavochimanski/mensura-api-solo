@@ -195,11 +195,44 @@ class ComplementoService:
                 detail=f"Combo {combo_id} não encontrado."
             )
         
+        # Valida se os complementos existem e pertencem à mesma empresa
+        if req.complemento_ids:
+            complementos_existentes = (
+                self.db.query(ComplementoModel)
+                .filter(ComplementoModel.id.in_(req.complemento_ids))
+                .all()
+            )
+            
+            if len(complementos_existentes) != len(req.complemento_ids):
+                encontrados_ids = {c.id for c in complementos_existentes}
+                nao_encontrados = [cid for cid in req.complemento_ids if cid not in encontrados_ids]
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Complementos não encontrados: {nao_encontrados}"
+                )
+            
+            # Valida se todos os complementos pertencem à mesma empresa do combo
+            for complemento in complementos_existentes:
+                if complemento.empresa_id != combo.empresa_id:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Complemento {complemento.id} pertence a empresa diferente do combo."
+                    )
+        
         self.repo.vincular_complementos_combo(combo_id, req.complemento_ids)
         self.db.commit()  # Garante que as vinculações sejam persistidas
         
         # Busca os complementos vinculados para retornar (sem filtro de ativos para garantir que retorne os vinculados)
         complementos = self.repo.listar_por_combo(combo_id, apenas_ativos=False, carregar_adicionais=False)
+        
+        # Log para debug
+        from app.utils.logger import logger
+        logger.info(f"[Complementos] Após vincular combo {combo_id}: encontrados {len(complementos)} complementos")
+        if complementos:
+            logger.info(f"[Complementos] IDs encontrados: {[c.id for c in complementos]}")
+        else:
+            logger.warning(f"[Complementos] Nenhum complemento encontrado após vincular combo {combo_id} com IDs {req.complemento_ids}")
+        
         complementos_vinculados = [
             ComplementoResumidoResponse(
                 id=c.id,
