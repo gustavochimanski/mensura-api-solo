@@ -22,7 +22,6 @@ class ComplementoDTO(BaseModel):
     descricao: Optional[str]
     obrigatorio: bool
     quantitativo: bool
-    permite_multipla_escolha: bool
     ordem: int
     adicionais: List[AdicionalDTO]
 

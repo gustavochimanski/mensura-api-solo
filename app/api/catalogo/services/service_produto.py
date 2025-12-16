@@ -117,7 +117,6 @@ class ProdutosMensuraService:
                         "nome": a.nome,
                         "preco": float(a.preco),
                         "obrigatorio": a.obrigatorio,
-                        "permite_multipla_escolha": a.permite_multipla_escolha,
                     }
                     for a in adicionais_list
                 ]
@@ -261,7 +260,6 @@ class ProdutosMensuraService:
                         "nome": a.nome,
                         "preco": float(a.preco),
                         "obrigatorio": a.obrigatorio,
-                        "permite_multipla_escolha": a.permite_multipla_escolha,
                     }
                     for a in adicionais_list
                 ]

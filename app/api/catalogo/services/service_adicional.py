@@ -49,7 +49,6 @@ class AdicionalService:
             custo=Decimal(str(req.custo)),
             ativo=req.ativo,
             obrigatorio=req.obrigatorio,
-            permite_multipla_escolha=req.permite_multipla_escolha,
             ordem=req.ordem,
         )
         
@@ -97,8 +96,6 @@ class AdicionalService:
             update_data["ativo"] = req.ativo
         if req.obrigatorio is not None:
             update_data["obrigatorio"] = req.obrigatorio
-        if req.permite_multipla_escolha is not None:
-            update_data["permite_multipla_escolha"] = req.permite_multipla_escolha
         if req.ordem is not None:
             update_data["ordem"] = req.ordem
         

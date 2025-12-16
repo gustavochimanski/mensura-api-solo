@@ -19,7 +19,6 @@ class AdicionalAdapter(IAdicionalContract):
                 nome=i.nome,
                 preco=i.preco,
                 obrigatorio=i.obrigatorio,
-                permite_multipla_escolha=i.permite_multipla_escolha,
             )
             for i in itens
         ]
@@ -34,7 +33,6 @@ class AdicionalAdapter(IAdicionalContract):
                 nome=i.nome,
                 preco=i.preco,
                 obrigatorio=i.obrigatorio,
-                permite_multipla_escolha=i.permite_multipla_escolha,
             )
             for i in filtrados
         ]

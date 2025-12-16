@@ -12,7 +12,6 @@ class CriarAdicionalRequest(BaseModel):
     custo: condecimal(max_digits=18, decimal_places=2) = Field(default=0)
     ativo: bool = True
     obrigatorio: bool = False
-    permite_multipla_escolha: bool = True
     ordem: int = 0
 
     model_config = ConfigDict(from_attributes=True)
@@ -25,7 +24,6 @@ class AtualizarAdicionalRequest(BaseModel):
     custo: Optional[condecimal(max_digits=18, decimal_places=2)] = None
     ativo: Optional[bool] = None
     obrigatorio: Optional[bool] = None
-    permite_multipla_escolha: Optional[bool] = None
     ordem: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True)
@@ -41,7 +39,6 @@ class AdicionalResponse(BaseModel):
     custo: float
     ativo: bool
     obrigatorio: bool
-    permite_multipla_escolha: bool
     ordem: int
     created_at: datetime
     updated_at: datetime
@@ -55,7 +52,6 @@ class AdicionalResumidoResponse(BaseModel):
     nome: str
     preco: float
     obrigatorio: bool
-    permite_multipla_escolha: bool
 
     model_config = ConfigDict(from_attributes=True)
 
