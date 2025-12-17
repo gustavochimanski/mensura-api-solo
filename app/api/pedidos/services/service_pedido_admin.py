@@ -398,9 +398,13 @@ class PedidoAdminService:
             observacoes += f". Troco para: R$ {payload.troco_para:.2f}"
         
         # Atualiza status para ENTREGUE e registra no histórico
-        self.repo.atualizar_status_pedido(
-            pedido=pedido,
-            novo_status=PedidoStatusEnum.E.value,
+        status_anterior = pedido.status
+        pedido.status = PedidoStatusEnum.E.value
+        
+        # Registra no histórico
+        self.repo.add_status_historico(
+            pedido.id,
+            PedidoStatusEnum.E.value,
             motivo="Conta fechada",
             observacoes=observacoes,
             criado_por_id=None,
