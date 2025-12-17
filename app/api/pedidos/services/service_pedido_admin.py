@@ -371,7 +371,7 @@ class PedidoAdminService:
         )
     
     def _fechar_conta_delivery(self, pedido_id: int, payload: PedidoFecharContaRequest | None) -> PedidoResponseCompleto:
-        """Fecha conta de pedido delivery/retirada marcando como pago."""
+        """Fecha conta de pedido delivery/retirada marcando como pago e entregue."""
         pedido = self.repo.get_pedido(pedido_id)
         if not pedido:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
@@ -391,15 +391,16 @@ class PedidoAdminService:
         # Marca como pago
         pedido.pago = True
         
-        # Registra no histórico sem alterar status
+        # Prepara observações para o histórico
         meio_pagamento_nome = pedido.meio_pagamento.nome if pedido.meio_pagamento else "N/A"
         observacoes = f"Conta fechada. Meio de pagamento: {meio_pagamento_nome}"
         if payload and payload.troco_para is not None:
             observacoes += f". Troco para: R$ {payload.troco_para:.2f}"
         
-        self.repo.add_status_historico(
-            pedido.id,
-            pedido.status,  # Mantém o status atual
+        # Atualiza status para ENTREGUE e registra no histórico
+        self.repo.atualizar_status_pedido(
+            pedido=pedido,
+            novo_status=PedidoStatusEnum.E.value,
             motivo="Conta fechada",
             observacoes=observacoes,
             criado_por_id=None,
