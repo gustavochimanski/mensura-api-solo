@@ -410,6 +410,8 @@ class PedidoAdminService:
             criado_por_id=None,
         )
         
+        # Força flush para garantir que as alterações sejam enviadas ao banco
+        self.db.flush()
         self.db.commit()
         self.db.refresh(pedido)
         
