@@ -414,4 +414,73 @@ class GoogleMapsAdapter:
         
         # Fallback: usa o formatted_address do Google Maps
         return formatted_address if formatted_address else "Endereço não disponível"
+    
+    def geocodificar_reversa(self, latitude: float, longitude: float) -> Optional[Dict]:
+        """
+        Geocodificação reversa: converte coordenadas (lat/lng) em endereço usando Google Maps Geocoding API.
+        
+        Args:
+            latitude: Latitude do ponto
+            longitude: Longitude do ponto
+            
+        Returns:
+            Dicionário com informações do endereço ou None se não encontrar
+        """
+        if not self.api_key:
+            logger.warning("[GoogleMapsAdapter] API key não configurada")
+            return None
+        
+        try:
+            with httpx.Client(timeout=10.0) as client:
+                response = client.get(
+                    self.BASE_URL,
+                    params={
+                        "latlng": f"{latitude},{longitude}",
+                        "key": self.api_key,
+                        "region": "br",  # Dá preferência ao Brasil
+                        "language": "pt-BR"
+                    }
+                )
+            response.raise_for_status()
+            data = response.json()
+            status_code = data.get("status")
+            
+            if status_code == "REQUEST_DENIED":
+                error_message = data.get("error_message", "Acesso negado")
+                logger.error(
+                    f"[GoogleMapsAdapter] Acesso negado na geocodificação reversa para ({latitude}, {longitude}). "
+                    f"Erro: {error_message}"
+                )
+                return None
+            elif status_code == "OVER_QUERY_LIMIT":
+                logger.error(
+                    f"[GoogleMapsAdapter] Limite de requisições excedido na geocodificação reversa."
+                )
+                return None
+            elif status_code == "INVALID_REQUEST":
+                logger.warning(
+                    f"[GoogleMapsAdapter] Requisição inválida na geocodificação reversa: {data.get('error_message', '')}"
+                )
+                return None
+            elif status_code == "ZERO_RESULTS":
+                logger.info(f"[GoogleMapsAdapter] Nenhum resultado encontrado para coordenadas ({latitude}, {longitude})")
+                return None
+            elif status_code != "OK" or not data.get("results"):
+                logger.warning(
+                    f"[GoogleMapsAdapter] Status inesperado na geocodificação reversa: {status_code}. "
+                    f"Mensagem: {data.get('error_message', 'N/A')}"
+                )
+                return None
+            
+            # Pega o primeiro resultado (mais relevante)
+            result = data["results"][0]
+            endereco_info = self._extrair_endereco_formatado(result)
+            
+            return endereco_info
+        except httpx.HTTPStatusError as e:
+            logger.error(f"[GoogleMapsAdapter] Erro HTTP na geocodificação reversa: Status {e.response.status_code}")
+            return None
+        except Exception as e:
+            logger.error(f"[GoogleMapsAdapter] Erro na geocodificação reversa para ({latitude}, {longitude}): {e}")
+            return None
 
