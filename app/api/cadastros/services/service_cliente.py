@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import func, case
 from sqlalchemy.orm import Session
@@ -162,13 +162,23 @@ class ClienteService:
 
         ticket_medio = valor_total / total_pedidos if total_pedidos > 0 else 0.0
 
-        agora = datetime.utcnow()
+        # Usa datetime aware para compatibilidade com datetimes do banco
+        agora = datetime.now(timezone.utc)
         recencia_dias = None
         if ultima_compra:
+            # Garante que ultima_compra seja aware para fazer a subtração
+            if ultima_compra.tzinfo is None:
+                # Se for naive, assume UTC
+                ultima_compra = ultima_compra.replace(tzinfo=timezone.utc)
             recencia_dias = (agora - ultima_compra).days
         tempo_cliente_dias = None
         if getattr(cliente, "created_at", None):
-            tempo_cliente_dias = (agora - cliente.created_at).days
+            cliente_created_at = cliente.created_at
+            # Garante que created_at seja aware para fazer a subtração
+            if cliente_created_at.tzinfo is None:
+                # Se for naive, assume UTC
+                cliente_created_at = cliente_created_at.replace(tzinfo=timezone.utc)
+            tempo_cliente_dias = (agora - cliente_created_at).days
 
         # por canal (WEB, APP, BALCAO)
         canais_rows = (
