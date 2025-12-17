@@ -24,6 +24,11 @@ class CoordenadasInput(BaseModel):
     longitude: float
 
 
+class GeocodificarReversaRequest(BaseModel):
+    latitude: float
+    longitude: float
+
+
 class CalcularDistanciaRequest(BaseModel):
     origem: CoordenadasInput
     destino: CoordenadasInput
@@ -169,6 +174,37 @@ def buscar_endereco_client(
     # Sempre retorna uma lista (array), mesmo que vazia, para o front renderizar
     logger.info(f"[Localizacao] [CLIENT] Retornando {len(resultados)} resultado(s) para: {text}")
     return resultados
+
+
+@router.post("/client/geocodificar-reversa", status_code=status.HTTP_200_OK)
+def geocodificar_reversa_client(
+    payload: GeocodificarReversaRequest = Body(...),
+    google_adapter: GoogleMapsAdapter = Depends(get_google_maps_adapter),
+    _cliente = Depends(get_cliente_by_super_token),
+):
+    """
+    Geocodificação reversa: converte coordenadas (latitude/longitude) em endereço.
+    
+    Útil quando o usuário arrasta o marcador no mapa e você precisa obter o endereço correspondente.
+    
+    Requer autenticação via header `X-Super-Token` do cliente.
+    """
+    logger.info(f"[Localizacao] [CLIENT] Geocodificação reversa para: ({payload.latitude}, {payload.longitude})")
+    
+    if not google_adapter.api_key:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Serviço de geolocalização não configurado. Verifique a configuração da API key do Google Maps."
+        )
+    
+    endereco = google_adapter.geocodificar_reversa(payload.latitude, payload.longitude)
+    if endereco is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Não foi possível obter o endereço para as coordenadas ({payload.latitude}, {payload.longitude})"
+        )
+    
+    return endereco
 
 
 
