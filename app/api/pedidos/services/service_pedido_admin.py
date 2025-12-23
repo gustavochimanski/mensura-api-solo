@@ -438,6 +438,29 @@ class PedidoAdminService:
         tipo = self._to_tipo_entrega_enum(pedido.tipo_entrega)
 
         if tipo == TipoEntregaEnum.DELIVERY:
+            # Valida que delivery não aceita receitas ou combos
+            if payload.acao == PedidoItemMutationAction.ADD:
+                if payload.receita_id:
+                    raise HTTPException(
+                        status.HTTP_400_BAD_REQUEST,
+                        "Receitas não são suportadas para pedidos de delivery. Use apenas produtos simples (produto_cod_barras)."
+                    )
+                if payload.combo_id:
+                    raise HTTPException(
+                        status.HTTP_400_BAD_REQUEST,
+                        "Combos não são suportados para pedidos de delivery. Use apenas produtos simples (produto_cod_barras)."
+                    )
+                if payload.complementos:
+                    raise HTTPException(
+                        status.HTTP_400_BAD_REQUEST,
+                        "Complementos não são suportados para pedidos de delivery."
+                    )
+                if not payload.produto_cod_barras:
+                    raise HTTPException(
+                        status.HTTP_400_BAD_REQUEST,
+                        "produto_cod_barras é obrigatório para adicionar item em pedidos de delivery."
+                    )
+            
             acao_map = {
                 PedidoItemMutationAction.ADD: "adicionar",
                 PedidoItemMutationAction.UPDATE: "atualizar",

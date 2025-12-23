@@ -6,6 +6,10 @@
 
 Adiciona, atualiza ou remove itens de um pedido existente. Funciona para pedidos de **Delivery**, **Mesa** e **Balcão**.
 
+**⚠️ IMPORTANTE - Limitações por Tipo de Pedido:**
+- **Delivery**: Aceita apenas **produtos simples** (`produto_cod_barras`). ❌ Não aceita receitas, combos ou complementos.
+- **Mesa/Balcão**: Aceita **qualquer tipo** (produto, receita ou combo) com complementos opcionais.
+
 ---
 
 ## 🔐 Autenticação
@@ -446,6 +450,30 @@ Authorization: Bearer {token}
 }
 ```
 
+### 400 Bad Request - Receita/Combo não suportado em Delivery
+
+```json
+{
+  "detail": "Receitas não são suportadas para pedidos de delivery. Use apenas produtos simples (produto_cod_barras)."
+}
+```
+
+ou
+
+```json
+{
+  "detail": "Combos não são suportados para pedidos de delivery. Use apenas produtos simples (produto_cod_barras)."
+}
+```
+
+ou
+
+```json
+{
+  "detail": "Complementos não são suportados para pedidos de delivery."
+}
+```
+
 ### 400 Bad Request - Pedido fechado/cancelado
 
 ```json
@@ -468,7 +496,8 @@ Authorization: Bearer {token}
    - ✅ `quantidade` deve ser >= 1
    - ✅ Produto deve existir e estar disponível
    - ✅ Pedido não pode estar fechado/cancelado
-   - ❌ **NÃO** envie `receita_id` ou `combo_id` para delivery
+   - ❌ **NÃO** envie `receita_id` ou `combo_id` para delivery (causará erro 400)
+   - ❌ **NÃO** envie `complementos` para delivery (causará erro 400)
 
 2. **Receita (Mesa/Balcão):**
    - ✅ `acao` deve ser `"ADD"` (não `"adicionar"`)
@@ -514,15 +543,29 @@ Authorization: Bearer {token}
 
 1. **Tipo de Pedido:**
    - O endpoint detecta automaticamente o tipo de pedido (Delivery, Mesa, Balcão)
-   - Comportamento pode variar conforme o tipo
+   - Comportamento e validações variam conforme o tipo
 
-2. **Complementos:**
-   - Apenas disponíveis para pedidos de **Mesa** e **Balcão**
-   - Não aplicável para **Delivery**
+2. **Limitações por Tipo:**
+   - **Delivery**: 
+     - ✅ Aceita apenas produtos simples (`produto_cod_barras`)
+     - ❌ **NÃO aceita** receitas (`receita_id`)
+     - ❌ **NÃO aceita** combos (`combo_id`)
+     - ❌ **NÃO aceita** complementos
+     - Se tentar enviar receita/combo/complementos, retornará erro 400
+   
+   - **Mesa/Balcão**:
+     - ✅ Aceita produtos simples (`produto_cod_barras`)
+     - ✅ Aceita receitas (`receita_id`)
+     - ✅ Aceita combos (`combo_id`)
+     - ✅ Aceita complementos (opcional)
 
-3. **Receitas e Combos:**
+3. **Complementos:**
    - Apenas disponíveis para pedidos de **Mesa** e **Balcão**
-   - Não aplicáveis para **Delivery**
+   - Não aplicável para **Delivery** (causará erro se enviado)
+
+4. **Receitas e Combos:**
+   - Apenas disponíveis para pedidos de **Mesa** e **Balcão**
+   - Não aplicáveis para **Delivery** (causará erro se enviado)
 
 4. **Preço:**
    - O preço unitário é obtido automaticamente do produto/receita/combo
