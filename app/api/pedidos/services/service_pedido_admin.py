@@ -518,16 +518,9 @@ class PedidoAdminService:
                             produto_descricao_snapshot=product.nome or product.descricao,
                         )
                     
-                    # Atualiza totais do pedido
+                    # Atualiza totais do pedido usando o método de recálculo do PedidoService
                     pedido_atualizado = self.repo.get_pedido(pedido_id)
-                    self.repo.atualizar_totais(
-                        pedido_atualizado,
-                        subtotal=None,  # Recalcula automaticamente
-                        desconto=None,
-                        taxa_entrega=None,
-                        taxa_servico=None,
-                    )
-                    self.db.commit()
+                    self.pedido_service._recalcular_pedido(pedido_atualizado)
                     pedido_atualizado = self.repo.get_pedido(pedido_id)
                     return self._build_pedido_response(pedido_atualizado)
                 else:
