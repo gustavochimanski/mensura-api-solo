@@ -64,6 +64,20 @@ def init_database(db: Session):
             )
         """))
 
+        # Tabela de status do bot por número (ativo/pausado)
+        db.execute(text(f"""
+            CREATE TABLE IF NOT EXISTS {CHATBOT_SCHEMA}.bot_status (
+                id SERIAL PRIMARY KEY,
+                phone_number VARCHAR(50) UNIQUE NOT NULL,
+                is_active BOOLEAN DEFAULT TRUE,
+                paused_at TIMESTAMP,
+                paused_by VARCHAR(255),
+                empresa_id INTEGER,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+
         # Índices para performance
         db.execute(text(f"CREATE INDEX IF NOT EXISTS idx_conversations_session ON {CHATBOT_SCHEMA}.conversations(session_id)"))
         db.execute(text(f"CREATE INDEX IF NOT EXISTS idx_conversations_user ON {CHATBOT_SCHEMA}.conversations(user_id)"))
@@ -71,6 +85,7 @@ def init_database(db: Session):
         db.execute(text(f"CREATE INDEX IF NOT EXISTS idx_messages_conversation ON {CHATBOT_SCHEMA}.messages(conversation_id)"))
         db.execute(text(f"CREATE INDEX IF NOT EXISTS idx_prompts_key ON {CHATBOT_SCHEMA}.prompts(key)"))
         db.execute(text(f"CREATE INDEX IF NOT EXISTS idx_prompts_empresa ON {CHATBOT_SCHEMA}.prompts(empresa_id)"))
+        db.execute(text(f"CREATE INDEX IF NOT EXISTS idx_bot_status_phone ON {CHATBOT_SCHEMA}.bot_status(phone_number)"))
 
         db.commit()
         print("✅ Schema e tabelas do chatbot criadas no PostgreSQL!")
@@ -386,7 +401,8 @@ def get_messages(db: Session, conversation_id: int) -> List[Dict]:
             "conversation_id": row[1],
             "role": row[2],
             "content": row[3],
-            "created_at": row[4]
+            "created_at": row[4],
+            "timestamp": row[4]  # Alias para compatibilidade com frontend
         }
         for row in result.fetchall()
     ]
@@ -500,3 +516,128 @@ Lembre-se: você é Alex, um humano real ajudando outro humano. Seja genuíno e 
                 is_default=True
             )
             print(f"✅ Prompt padrão '{prompt_data['name']}' inserido")
+
+
+# ==================== BOT STATUS (PAUSAR/ATIVAR) ====================
+
+def get_bot_status(db: Session, phone_number: str) -> Optional[Dict]:
+    """Verifica se o bot está ativo para um número específico"""
+    try:
+        query = text(f"""
+            SELECT id, phone_number, is_active, paused_at, paused_by, empresa_id
+            FROM {CHATBOT_SCHEMA}.bot_status
+            WHERE phone_number = :phone
+        """)
+        result = db.execute(query, {"phone": phone_number}).fetchone()
+
+        if result:
+            return {
+                "id": result[0],
+                "phone_number": result[1],
+                "is_active": result[2],
+                "paused_at": result[3].isoformat() if result[3] else None,
+                "paused_by": result[4],
+                "empresa_id": result[5]
+            }
+        # Se não existe registro, o bot está ativo por padrão
+        return {"phone_number": phone_number, "is_active": True}
+    except Exception as e:
+        print(f"Erro ao verificar status do bot: {e}")
+        return {"phone_number": phone_number, "is_active": True}
+
+
+def is_bot_active_for_phone(db: Session, phone_number: str) -> bool:
+    """Retorna True se o bot está ativo para o número, False se pausado"""
+    status = get_bot_status(db, phone_number)
+    return status.get("is_active", True)
+
+
+def set_bot_status(db: Session, phone_number: str, is_active: bool, paused_by: str = None, empresa_id: int = None) -> Dict:
+    """Define o status do bot para um número específico"""
+    try:
+        # Verifica se já existe
+        existing = db.execute(
+            text(f"SELECT id FROM {CHATBOT_SCHEMA}.bot_status WHERE phone_number = :phone"),
+            {"phone": phone_number}
+        ).fetchone()
+
+        if existing:
+            # Atualiza
+            query = text(f"""
+                UPDATE {CHATBOT_SCHEMA}.bot_status
+                SET is_active = :is_active,
+                    paused_at = CASE WHEN :is_active = false THEN CURRENT_TIMESTAMP ELSE NULL END,
+                    paused_by = CASE WHEN :is_active = false THEN :paused_by ELSE NULL END,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE phone_number = :phone
+                RETURNING id, phone_number, is_active, paused_at, paused_by
+            """)
+        else:
+            # Insere novo
+            query = text(f"""
+                INSERT INTO {CHATBOT_SCHEMA}.bot_status (phone_number, is_active, paused_at, paused_by, empresa_id)
+                VALUES (
+                    :phone,
+                    :is_active,
+                    CASE WHEN :is_active = false THEN CURRENT_TIMESTAMP ELSE NULL END,
+                    CASE WHEN :is_active = false THEN :paused_by ELSE NULL END,
+                    :empresa_id
+                )
+                RETURNING id, phone_number, is_active, paused_at, paused_by
+            """)
+
+        result = db.execute(query, {
+            "phone": phone_number,
+            "is_active": is_active,
+            "paused_by": paused_by,
+            "empresa_id": empresa_id
+        }).fetchone()
+        db.commit()
+
+        return {
+            "success": True,
+            "id": result[0],
+            "phone_number": result[1],
+            "is_active": result[2],
+            "paused_at": result[3].isoformat() if result[3] else None,
+            "paused_by": result[4]
+        }
+    except Exception as e:
+        db.rollback()
+        print(f"Erro ao definir status do bot: {e}")
+        return {"success": False, "error": str(e)}
+
+
+def get_all_bot_statuses(db: Session, empresa_id: int = None) -> List[Dict]:
+    """Lista todos os status de bot (números pausados)"""
+    try:
+        if empresa_id:
+            query = text(f"""
+                SELECT id, phone_number, is_active, paused_at, paused_by, empresa_id
+                FROM {CHATBOT_SCHEMA}.bot_status
+                WHERE empresa_id = :empresa_id
+                ORDER BY updated_at DESC
+            """)
+            result = db.execute(query, {"empresa_id": empresa_id})
+        else:
+            query = text(f"""
+                SELECT id, phone_number, is_active, paused_at, paused_by, empresa_id
+                FROM {CHATBOT_SCHEMA}.bot_status
+                ORDER BY updated_at DESC
+            """)
+            result = db.execute(query)
+
+        return [
+            {
+                "id": row[0],
+                "phone_number": row[1],
+                "is_active": row[2],
+                "paused_at": row[3].isoformat() if row[3] else None,
+                "paused_by": row[4],
+                "empresa_id": row[5]
+            }
+            for row in result.fetchall()
+        ]
+    except Exception as e:
+        print(f"Erro ao listar status do bot: {e}")
+        return []
