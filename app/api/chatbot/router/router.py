@@ -3,6 +3,7 @@ Router do módulo de Chatbot
 Todas as rotas relacionadas ao chatbot com IA (Ollama)
 """
 from fastapi import APIRouter, HTTPException, Request, Depends
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import httpx
@@ -374,6 +375,17 @@ async def update_conversation_settings(
         raise HTTPException(status_code=500, detail=f"Erro ao atualizar: {str(e)}")
 
 
+@router.get("/conversations/{conversation_id}/messages")
+async def get_conversation_messages(conversation_id: int, db: Session = Depends(get_db)):
+    """Lista todas as mensagens de uma conversa"""
+    conversation = chatbot_db.get_conversation(db, conversation_id)
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversa não encontrada")
+
+    messages = chatbot_db.get_messages(db, conversation_id)
+    return {"messages": messages}
+
+
 @router.post("/conversations/{conversation_id}/messages")
 async def add_message_to_conversation(conversation_id: int, message: MessageCreate, db: Session = Depends(get_db)):
     """Adiciona uma mensagem à conversa"""
@@ -412,6 +424,37 @@ async def get_database_stats(db: Session = Depends(get_db), empresa_id: Optional
     """Retorna estatísticas do banco de dados"""
     stats = chatbot_db.get_stats(db, empresa_id)
     return stats
+
+
+# ==================== BOT STATUS (PAUSAR/ATIVAR) ====================
+
+@router.get("/bot-status/{phone_number}")
+async def get_bot_status_for_phone(phone_number: str, db: Session = Depends(get_db)):
+    """Verifica se o bot está ativo para um número específico"""
+    status = chatbot_db.get_bot_status(db, phone_number)
+    return status
+
+
+@router.put("/bot-status/{phone_number}")
+async def toggle_bot_status(
+    phone_number: str,
+    is_active: bool,
+    paused_by: Optional[str] = None,
+    empresa_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """Ativa ou desativa o bot para um número específico"""
+    result = chatbot_db.set_bot_status(db, phone_number, is_active, paused_by, empresa_id)
+    if not result.get("success"):
+        raise HTTPException(status_code=500, detail=result.get("error", "Erro ao atualizar status"))
+    return result
+
+
+@router.get("/bot-status")
+async def list_all_bot_statuses(db: Session = Depends(get_db), empresa_id: Optional[int] = None):
+    """Lista todos os status de bot (útil para ver quais números estão pausados)"""
+    statuses = chatbot_db.get_all_bot_statuses(db, empresa_id)
+    return {"statuses": statuses}
 
 
 # ==================== NOTIFICAÇÕES ====================
@@ -579,6 +622,21 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
     """
     try:
         print(f"\n🤖 Processando mensagem de {phone_number}: {message_text}")
+
+        # VERIFICA SE O BOT ESTÁ ATIVO PARA ESTE NÚMERO
+        if not chatbot_db.is_bot_active_for_phone(db, phone_number):
+            print(f"   ⏸️ Bot PAUSADO para {phone_number} - mensagem ignorada")
+            # Salva a mensagem no histórico mesmo pausado (para ver no preview)
+            user_id = phone_number
+            conversations = chatbot_db.get_conversations_by_user(db, user_id)
+            if conversations:
+                chatbot_db.create_message(
+                    db=db,
+                    conversation_id=conversations[0]['id'],
+                    role="user",
+                    content=message_text
+                )
+            return  # Não responde, apenas registra
 
         # OPÇÃO: Usar SalesHandler para conversas de vendas
         # Você pode adicionar lógica para detectar se é venda ou suporte
@@ -905,4 +963,86 @@ async def test_whatsapp_token(config: WhatsAppConfigUpdate):
         raise HTTPException(
             status_code=500,
             detail=f"Erro ao testar token: {str(e)}"
+        )
+
+
+# ==================== ENDPOINT DE TESTE (SIMULAÇÃO) ====================
+
+class SimulateMessageRequest(BaseModel):
+    """Request para simular mensagem do chatbot"""
+    phone_number: str
+    message: str
+
+class SimulateMessageResponse(BaseModel):
+    """Response da simulação"""
+    success: bool
+    response: str
+    phone_number: str
+    message_sent: str
+
+@router.post("/simulate", response_model=SimulateMessageResponse)
+async def simulate_chatbot_message(
+    request: SimulateMessageRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Endpoint de TESTE para simular mensagem do chatbot.
+    Usa o mesmo handler do WhatsApp (Groq Sales Handler) mas retorna a resposta
+    ao invés de enviar via WhatsApp.
+    """
+    try:
+        phone_number = request.phone_number
+        message_text = request.message
+
+        print(f"\n🧪 SIMULAÇÃO: Mensagem de {phone_number}: {message_text}")
+
+        # Verifica se bot está ativo
+        if not chatbot_db.is_bot_active_for_phone(db, phone_number):
+            return SimulateMessageResponse(
+                success=False,
+                response="[BOT PAUSADO] O bot está pausado para este número.",
+                phone_number=phone_number,
+                message_sent=message_text
+            )
+
+        # Cria conversa se não existir
+        user_id = phone_number
+        conversations = chatbot_db.get_conversations_by_user(db, user_id)
+
+        if not conversations:
+            conversation_id = chatbot_db.create_conversation(
+                db=db,
+                session_id=f"simulate_{phone_number}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                user_id=user_id,
+                prompt_key="default",
+                model="llm-sales"
+            )
+            print(f"   ✅ Nova conversa criada: {conversation_id}")
+
+        # Importa e usa o Groq Sales Handler
+        from ..core.groq_sales_handler import processar_mensagem_groq
+
+        resposta = await processar_mensagem_groq(
+            db=db,
+            user_id=phone_number,
+            mensagem=message_text,
+            empresa_id=1
+        )
+
+        print(f"   💬 Resposta: {resposta[:100]}...")
+
+        return SimulateMessageResponse(
+            success=True,
+            response=resposta,
+            phone_number=phone_number,
+            message_sent=message_text
+        )
+
+    except Exception as e:
+        print(f"❌ Erro na simulação: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao processar mensagem: {str(e)}"
         )
