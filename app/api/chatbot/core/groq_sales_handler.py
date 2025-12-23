@@ -13,6 +13,12 @@ from datetime import datetime
 
 from .sales_prompts import SALES_SYSTEM_PROMPT
 from .address_service import ChatbotAddressService
+from .ingredientes_service import (
+    IngredientesService,
+    detectar_remocao_ingrediente,
+    detectar_adicao_extra,
+    detectar_pergunta_ingredientes
+)
 
 # Configuração do Groq - API Key deve ser configurada via variável de ambiente
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
@@ -123,6 +129,49 @@ AI_FUNCTIONS = [
     {
         "type": "function",
         "function": {
+            "name": "personalizar_produto",
+            "description": "Cliente quer PERSONALIZAR um produto removendo ingrediente ou adicionando extra. Exemplos: 'sem cebola', 'tira o tomate', 'com queijo extra', 'adiciona bacon', 'pizza sem azeitona'",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "produto_busca": {
+                        "type": "string",
+                        "description": "Nome do produto a personalizar (pode ser vazio se for o último adicionado)"
+                    },
+                    "acao": {
+                        "type": "string",
+                        "enum": ["remover_ingrediente", "adicionar_extra"],
+                        "description": "Tipo de personalização"
+                    },
+                    "item": {
+                        "type": "string",
+                        "description": "Nome do ingrediente a remover ou adicional a incluir"
+                    }
+                },
+                "required": ["acao", "item"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "ver_adicionais",
+            "description": "Cliente quer ver os ADICIONAIS disponíveis para um produto. Exemplos: 'quais adicionais tem?', 'posso colocar mais alguma coisa?', 'tem extra de queijo?', 'quais bordas tem?'",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "produto_busca": {
+                        "type": "string",
+                        "description": "Nome do produto para ver adicionais (pode ser vazio se for o último adicionado)"
+                    }
+                },
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "conversar",
             "description": "Para QUALQUER conversa casual, saudações, perguntas vagas ou quando não souber o que fazer. Exemplos: 'oi', 'eae', 'tudo bem?', 'o que eu quero?', 'não sei', 'hum', 'que que tem ai de bom?', 'me ajuda', 'sugestão'",
             "parameters": {
@@ -139,6 +188,18 @@ AI_FUNCTIONS = [
                     }
                 },
                 "required": ["tipo_conversa"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "ver_combos",
+            "description": "Cliente quer ver os COMBOS disponíveis. Exemplos: 'tem combo?', 'quais combos tem?', 'mostra os combos', 'promoção', 'combo família', 'combos', 'tem promoção?'",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": []
             }
         }
     }
@@ -187,6 +248,27 @@ REGRA DE OURO: Na dúvida, use "conversar". É melhor conversar do que fazer aç
 ✅ remover_produto - Quando quer TIRAR algo do carrinho:
    - "tira a coca", "remove a pizza", "não quero mais o hamburguer"
 
+✅ personalizar_produto - Quando quer CUSTOMIZAR um produto (tirar ingrediente ou adicionar extra):
+   - "sem cebola" → personalizar_produto(acao="remover_ingrediente", item="cebola")
+   - "tira o tomate" → personalizar_produto(acao="remover_ingrediente", item="tomate")
+   - "com queijo extra" → personalizar_produto(acao="adicionar_extra", item="queijo extra")
+   - "adiciona bacon" → personalizar_produto(acao="adicionar_extra", item="bacon")
+   - "pizza sem azeitona" → personalizar_produto(produto_busca="pizza", acao="remover_ingrediente", item="azeitona")
+   - "borda recheada" → personalizar_produto(acao="adicionar_extra", item="borda recheada")
+
+✅ ver_adicionais - Quando quer ver os EXTRAS disponíveis:
+   - "quais adicionais tem?" → ver_adicionais
+   - "tem borda recheada?" → ver_adicionais
+   - "posso colocar mais queijo?" → ver_adicionais
+
+✅ ver_combos - Quando quer ver os COMBOS/PROMOÇÕES disponíveis:
+   - "tem combo?" → ver_combos
+   - "quais combos tem?" → ver_combos
+   - "mostra os combos" → ver_combos
+   - "tem promoção?" → ver_combos
+   - "combo família" → ver_combos
+   - "combos" → ver_combos
+
 === PRODUTOS DISPONÍVEIS ===
 {produtos_lista}
 
@@ -197,6 +279,7 @@ Analise a mensagem e escolha a função correta. NA DÚVIDA, USE "conversar"!"""
 
 # Estados da conversa
 STATE_WELCOME = "welcome"
+STATE_CONVERSANDO = "conversando"  # NOVO: IA conversacional livre
 STATE_AGUARDANDO_PEDIDO = "aguardando_pedido"
 STATE_AGUARDANDO_QUANTIDADE = "aguardando_quantidade"
 STATE_AGUARDANDO_MAIS_ITENS = "aguardando_mais_itens"
@@ -221,6 +304,121 @@ class GroqSalesHandler:
         self.db = db
         self.empresa_id = empresa_id
         self.address_service = ChatbotAddressService(db, empresa_id)
+        self.ingredientes_service = IngredientesService(db, empresa_id)
+
+    def _interpretar_intencao_regras(self, mensagem: str, produtos: List[Dict], carrinho: List[Dict]) -> Optional[Dict[str, Any]]:
+        """
+        Interpretação de intenção usando regras simples (fallback quando Groq não disponível)
+        Retorna None se não conseguir interpretar, ou dict com funcao e params
+        """
+        import re
+        msg = mensagem.lower().strip()
+
+        # Saudações
+        if re.match(r'^(oi|ola|olá|eae|e ai|eaí|bom dia|boa tarde|boa noite|hey|hi)[\s!?]*$', msg):
+            return {"funcao": "conversar", "params": {"tipo_conversa": "saudacao"}}
+
+        # Ver cardápio - perguntas sobre o que tem, quais produtos, etc.
+        if re.search(r'(cardapio|cardápio|menu|lista|catalogo|catálogo)', msg):
+            return {"funcao": "ver_cardapio", "params": {}}
+
+        # Perguntas sobre o que tem disponível (DEVE vir ANTES de adicionar produto)
+        if re.search(r'(o\s*que\s*(mais\s*)?(tem|vende|vocês? tem|vcs tem)|quais?\s*(que\s*)?(tem|produto|opç[oõ]es)|mostra\s*(ai|aí|os\s*produto)|que\s*produto|tem\s*o\s*que)', msg):
+            return {"funcao": "ver_cardapio", "params": {}}
+
+        # Ver combos
+        if re.search(r'(combo|combos|promoção|promocao|promoções|promocoes)', msg):
+            return {"funcao": "ver_combos", "params": {}}
+
+        # Ver carrinho
+        if re.search(r'(quanto\s*(ta|tá|está)|meu\s*pedido|carrinho|o\s*que\s*(eu\s*)?pedi)', msg):
+            return {"funcao": "ver_carrinho", "params": {}}
+
+        # Finalizar pedido (explícito)
+        if re.search(r'(finalizar|fechar|so\s*isso|só\s*isso|pronto|é\s*isso|acabou|era\s*isso|só$|so$)', msg):
+            return {"funcao": "finalizar_pedido", "params": {}}
+
+        # "nao", "não", "nao quero", "não quero" = CONTEXTUAL
+        # - Se tem carrinho com itens → finalizar pedido (resposta a "mais alguma coisa?")
+        # - Se carrinho vazio → perguntar o que deseja
+        if re.match(r'^(n[aã]o|nao|não)(\s+quero)?[\s!.]*$', msg):
+            if carrinho and len(carrinho) > 0:
+                # Tem itens no carrinho, "não" = não quero mais nada = finalizar
+                return {"funcao": "finalizar_pedido", "params": {}}
+            else:
+                # Carrinho vazio, "não" pode ser resposta a uma pergunta
+                return {"funcao": "conversar", "params": {"tipo_conversa": "nao_entendi"}}
+
+        # Remover produto
+        if re.search(r'(tira|remove|cancela|retira)\s+(?:a|o)?\s*(.+)', msg):
+            match = re.search(r'(tira|remove|cancela|retira)\s+(?:a|o)?\s*(.+)', msg)
+            if match:
+                return {"funcao": "remover_produto", "params": {"produto_busca": match.group(2).strip()}}
+
+        # Personalização (sem/tira ingrediente)
+        if re.search(r'sem\s+(\w+)', msg):
+            match = re.search(r'sem\s+(\w+)', msg)
+            if match:
+                return {"funcao": "personalizar_produto", "params": {"acao": "remover_ingrediente", "item": match.group(1)}}
+
+        # Adicional extra
+        if re.search(r'(mais|extra|adiciona)\s+(\w+)', msg):
+            match = re.search(r'(mais|extra|adiciona)\s+(\w+)', msg)
+            if match:
+                return {"funcao": "personalizar_produto", "params": {"acao": "adicionar_extra", "item": match.group(2)}}
+
+        # Ver adicionais
+        if re.search(r'(adicionais|extras|o\s*que\s*posso\s*adicionar)', msg):
+            return {"funcao": "ver_adicionais", "params": {}}
+
+        # Informação sobre produto (o que tem, o q tem, ingredientes, etc.)
+        if re.search(r'(o\s*q(ue)?\s*(vem|tem|ve|é)\s*(n[oa]|d[oa])?|qu?al.*(ingrediente|composi[çc][aã]o)|ingredientes?\s*(d[oa])|composi[çc][aã]o)', msg):
+            match = re.search(r'(n[oa]|d[oa]|da|do)\s+(.+?)(\?|$)', msg)
+            if match:
+                return {"funcao": "informar_sobre_produto", "params": {"produto_busca": match.group(2).strip()}}
+            # Tenta extrair produto de outra forma
+            match2 = re.search(r'(pizza|x-\w+|coca|guarana|agua|cerveja|batata|onion)[\w\s]*', msg)
+            if match2:
+                return {"funcao": "informar_sobre_produto", "params": {"produto_busca": match2.group(0).strip()}}
+
+        # Adicionar produto (padrões: "quero X", "me ve X", "manda X", "X por favor")
+        patterns_pedido = [
+            r'(?:quero|qro)\s+(?:uma?|duas?|dois|\d+)?\s*(.+)',
+            r'(?:me\s+)?(?:ve|vê|manda|traz)\s+(?:uma?|duas?|dois|\d+)?\s*(.+)',
+            r'(?:uma?|duas?|dois|\d+)\s+(.+?)(?:\s+por\s+favor)?$',
+            r'(?:pode\s+ser|vou\s+querer)\s+(?:uma?|duas?|dois|\d+)?\s*(.+)',
+        ]
+
+        for pattern in patterns_pedido:
+            match = re.search(pattern, msg)
+            if match:
+                produto = match.group(1).strip()
+                # Extrai quantidade se houver
+                qtd_match = re.search(r'^(\d+)\s*x?\s*', produto)
+                quantidade = int(qtd_match.group(1)) if qtd_match else 1
+                if qtd_match:
+                    produto = produto[qtd_match.end():].strip()
+                return {"funcao": "adicionar_produto", "params": {"produto_busca": produto, "quantidade": quantidade}}
+
+        # ÚLTIMO RECURSO: Verifica se a mensagem é um nome de produto direto
+        # Isso captura casos como "coca", "pizza calabresa"
+        if len(msg) >= 2 and len(msg) <= 50:
+            # Verifica se não é uma pergunta ou frase comum
+            palavras_ignorar = [
+                'sim', 'ok', 'obrigado', 'obrigada', 'valeu', 'blz', 'beleza', 'certo', 'ta', 'tá',
+                'nao', 'não', 'qual', 'quais', 'que', 'como', 'onde', 'quando', 'porque', 'por que'
+            ]
+            # Verifica se não é uma pergunta (termina com ?)
+            if msg.endswith('?'):
+                return None
+            # Verifica se não contém palavras interrogativas
+            if any(p in msg for p in palavras_ignorar):
+                return None
+            # Tenta como pedido de produto
+            return {"funcao": "adicionar_produto", "params": {"produto_busca": msg, "quantidade": 1}}
+
+        # Se não encontrou padrão específico, retorna None para tentar Groq ou fallback
+        return None
 
     async def _interpretar_intencao_ia(self, mensagem: str, produtos: List[Dict], carrinho: List[Dict]) -> Dict[str, Any]:
         """
@@ -232,6 +430,17 @@ class GroqSalesHandler:
         {"funcao": "finalizar_pedido", "params": {}}
         {"funcao": "responder_conversa", "params": {"resposta": "Olá! Como posso ajudar?"}}
         """
+        # PRIMEIRO: Tenta interpretação por regras (mais rápido e não precisa de API)
+        resultado_regras = self._interpretar_intencao_regras(mensagem, produtos, carrinho)
+        if resultado_regras:
+            print(f"🎯 Regras interpretaram: {resultado_regras['funcao']}({resultado_regras['params']})")
+            return resultado_regras
+
+        # SE GROQ_API_KEY não estiver configurado, usa fallback
+        if not GROQ_API_KEY:
+            print(f"⚠️ GROQ_API_KEY não configurado, usando fallback")
+            return {"funcao": "conversar", "params": {"tipo_conversa": "pergunta_vaga"}}
+
         # Monta lista de produtos para o prompt
         produtos_lista = "\n".join([f"- {p['nome']} (R$ {p['preco']:.2f})" for p in produtos[:30]])
 
@@ -405,14 +614,372 @@ class GroqSalesHandler:
 
         return mensagem
 
+    def _gerar_mensagem_boas_vindas_conversacional(self) -> str:
+        """Gera mensagem de boas-vindas para modo conversacional"""
+        produtos = self._buscar_promocoes()
+
+        mensagem = "Olá! 😊 Bem-vindo ao nosso delivery!\n\n"
+        mensagem += "Estou aqui para te ajudar a fazer seu pedido.\n\n"
+
+        if produtos:
+            destaques = produtos[:3]
+            mensagem += "🔥 *Destaques de hoje:*\n"
+            for p in destaques:
+                mensagem += f"• {p['nome']} - R$ {p['preco']:.2f}\n"
+            mensagem += "\n"
+
+        mensagem += "Me conta o que você gostaria! Pode perguntar sobre qualquer produto, ver o cardápio, tirar dúvidas... Estou à disposição! 😊"
+
+        return mensagem
+
+    async def _processar_conversa_ia(self, user_id: str, mensagem: str, dados: dict) -> str:
+        """
+        Processa mensagem no modo conversacional usando IA livre.
+        A IA conversa naturalmente, tira dúvidas e anota o pedido.
+        """
+        import json
+        import re
+
+        # Atualiza histórico
+        historico = dados.get('historico', [])
+        historico.append({"role": "user", "content": mensagem})
+
+        # Busca dados do cardápio
+        todos_produtos = self._buscar_todos_produtos()
+        pedido_contexto = dados.get('pedido_contexto', [])
+
+        # Verifica se cliente está pedindo cardápio - responde direto sem IA
+        msg_lower = mensagem.lower().strip()
+        if re.search(r'(cardapio|cardápio|menu)', msg_lower) and re.search(r'(qual|ver|mostrar|quero|me\s*(da|dá|mostra)|^cardapio$|^menu$)', msg_lower):
+            dados['historico'] = historico
+            self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
+            return self._gerar_lista_produtos(todos_produtos, pedido_contexto)
+
+        # Também aceita só "cardapio" ou "menu"
+        if msg_lower in ['cardapio', 'cardápio', 'menu']:
+            dados['historico'] = historico
+            self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
+            return self._gerar_lista_produtos(todos_produtos, pedido_contexto)
+
+        # Monta cardápio formatado
+        cardapio_texto = self._formatar_cardapio_para_ia(todos_produtos)
+
+        # Monta contexto do pedido atual
+        pedido_atual = ""
+        if pedido_contexto:
+            pedido_atual = "\n📝 PEDIDO ANOTADO ATÉ AGORA:\n"
+            total = 0
+            for item in pedido_contexto:
+                preco_item = item.get('preco', 0) * item.get('quantidade', 1)
+                total += preco_item
+                pedido_atual += f"- {item.get('quantidade', 1)}x {item['nome']} - R$ {preco_item:.2f}"
+                if item.get('removidos'):
+                    pedido_atual += f" (SEM: {', '.join(item['removidos'])})"
+                if item.get('adicionais'):
+                    pedido_atual += f" (COM: {', '.join(item['adicionais'])})"
+                pedido_atual += "\n"
+            pedido_atual += f"💰 Total parcial: R$ {total:.2f}\n"
+        else:
+            pedido_atual = "\n📝 PEDIDO: Nenhum item anotado ainda.\n"
+
+        # Prompt do sistema para IA conversacional
+        system_prompt = f"""Você é um atendente de delivery simpático e prestativo. Seu nome é Assistente Virtual.
+
+SUAS RESPONSABILIDADES:
+1. Conversar naturalmente com o cliente
+2. Tirar dúvidas sobre produtos (ingredientes, preços, tamanhos)
+3. Anotar os pedidos do cliente mentalmente
+4. Quando o cliente quiser finalizar, perguntar se pode prosseguir para entrega
+
+CARDÁPIO COMPLETO:
+{cardapio_texto}
+
+{pedido_atual}
+
+REGRAS IMPORTANTES:
+- Seja DIRETO e objetivo. NÃO peça confirmação do pedido, apenas anote e pergunte se quer mais algo
+- Quando o cliente PEDIR produtos, ANOTE IMEDIATAMENTE e diga "Anotado! [itens]. Quer mais algo?"
+- NÃO pergunte "certo?", "é isso?", "confirma?" - apenas anote e siga em frente
+- Quando o cliente PERGUNTAR sobre um produto (ingredientes, preço), responda a dúvida SEM adicionar ao pedido
+- Se o cliente quiser personalizar (sem cebola, com bacon extra), anote a personalização
+- Quando o cliente disser "só isso", "não quero mais nada", "pode fechar", use acao "prosseguir_entrega"
+- NÃO invente produtos ou preços, use apenas o que está no cardápio
+- Respostas CURTAS (máximo 2-3 linhas)
+
+EXEMPLOS DE COMPORTAMENTO CORRETO:
+- Cliente: "quero 1 pizza calabresa e 1 coca" → "Anotado! 1 Pizza Calabresa e 1 Coca-Cola. Quer mais algo? 😊" (acao: adicionar)
+- Cliente: "o que tem na pizza?" → [responde ingredientes] (acao: nenhuma)
+- Cliente: "só isso" → "Perfeito! Podemos prosseguir para a entrega? 🚗" (acao: prosseguir_entrega)
+- Cliente: "sim" (após perguntar se quer finalizar) → use acao "prosseguir_entrega"
+
+FORMATO DE RESPOSTA - SEMPRE RETORNE JSON VÁLIDO, SEM EXCEÇÃO:
+{{
+    "resposta": "sua mensagem curta para o cliente",
+    "acao": "nenhuma" | "adicionar" | "remover" | "prosseguir_entrega",
+    "itens": [
+        {{
+            "nome": "nome exato do produto do cardápio",
+            "quantidade": 1,
+            "removidos": [],
+            "adicionais": []
+        }}
+    ]
+}}
+
+REGRAS CRÍTICAS:
+1. SEMPRE retorne APENAS JSON válido, nunca texto puro
+2. Se cliente pedir MÚLTIPLOS produtos: coloque TODOS no array "itens"
+3. Se cliente PERSONALIZAR (tirar/adicionar ingrediente): use "acao": "adicionar" com o item e removidos/adicionais preenchidos
+4. Se não houver ação: use "acao": "nenhuma" e "itens": []
+
+EXEMPLOS DE PERSONALIZAÇÃO:
+- Cliente: "tira o molho da pizza" → {{"resposta": "Anotado! Pizza sem molho.", "acao": "adicionar", "itens": [{{"nome": "Pizza Calabresa", "quantidade": 1, "removidos": ["Molho de Tomate"], "adicionais": []}}]}}
+- Cliente: "quero pizza sem cebola" → {{"resposta": "Pizza sem cebola, anotado!", "acao": "adicionar", "itens": [{{"nome": "Pizza Calabresa", "quantidade": 1, "removidos": ["Cebola"], "adicionais": []}}]}}"""
+
+        # Monta mensagens para a API
+        messages = [{"role": "system", "content": system_prompt}]
+
+        # Adiciona últimas mensagens do histórico (máximo 10)
+        for msg in historico[-10:]:
+            messages.append(msg)
+
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                payload = {
+                    "model": MODEL_NAME,
+                    "messages": messages,
+                    "temperature": 0.7,
+                    "max_tokens": 500,
+                }
+
+                headers = {
+                    "Authorization": f"Bearer {GROQ_API_KEY}",
+                    "Content-Type": "application/json"
+                }
+
+                response = await client.post(GROQ_API_URL, json=payload, headers=headers)
+
+                if response.status_code == 200:
+                    result = response.json()
+                    resposta_ia = result["choices"][0]["message"]["content"].strip()
+
+                    # Tenta parsear JSON
+                    try:
+                        # Remove possíveis marcadores de código
+                        resposta_limpa = resposta_ia.replace("```json", "").replace("```", "").strip()
+                        print(f"📨 Resposta IA (primeiros 200 chars): {resposta_limpa[:200]}")
+                        resposta_json = json.loads(resposta_limpa)
+
+                        resposta_texto = resposta_json.get("resposta", resposta_ia)
+                        acao = resposta_json.get("acao", "nenhuma")
+                        print(f"🎯 Ação: {acao}")
+
+                        # Suporta tanto "itens" (array) quanto "item" (singular) para compatibilidade
+                        itens = resposta_json.get("itens", [])
+                        item_singular = resposta_json.get("item")
+                        if item_singular and not itens:
+                            itens = [item_singular]
+                        print(f"📦 Itens recebidos: {itens}")
+
+                        # Processa ação
+                        mostrar_resumo = False
+                        if acao == "adicionar" and itens:
+                            # Processa cada item da lista
+                            for item in itens:
+                                # Busca produto no cardápio para pegar preço correto
+                                produto_encontrado = self._buscar_produto_por_termo(item.get("nome", ""), todos_produtos)
+                                if produto_encontrado:
+                                    nome_produto = produto_encontrado["nome"]
+                                    removidos = item.get("removidos", [])
+                                    adicionais = item.get("adicionais", [])
+
+                                    # Verifica se o item já existe no contexto
+                                    item_existente = None
+                                    for p in pedido_contexto:
+                                        if p["nome"].lower() == nome_produto.lower():
+                                            item_existente = p
+                                            break
+
+                                    if item_existente:
+                                        # Atualiza item existente (personalização ou quantidade)
+                                        if removidos:
+                                            item_existente["removidos"] = removidos
+                                        if adicionais:
+                                            item_existente["adicionais"] = adicionais
+                                        # Atualiza quantidade se for diferente
+                                        nova_qtd = item.get("quantidade", 1)
+                                        if nova_qtd != item_existente.get("quantidade", 1):
+                                            item_existente["quantidade"] = nova_qtd
+                                        print(f"✏️ Item atualizado no contexto: {item_existente}")
+                                    else:
+                                        # Adiciona novo item
+                                        novo_item = {
+                                            "id": produto_encontrado.get("id", ""),
+                                            "nome": nome_produto,
+                                            "quantidade": item.get("quantidade", 1),
+                                            "preco": produto_encontrado["preco"],
+                                            "removidos": removidos,
+                                            "adicionais": adicionais
+                                        }
+                                        pedido_contexto.append(novo_item)
+                                        print(f"🛒 Item adicionado ao contexto: {novo_item}")
+                                    mostrar_resumo = True
+
+                        elif acao == "remover" and itens:
+                            # Remove itens do contexto
+                            for item in itens:
+                                nome_remover = item.get("nome", "").lower()
+                                pedido_contexto = [p for p in pedido_contexto if nome_remover not in p["nome"].lower()]
+                                print(f"🗑️ Item removido do contexto: {nome_remover}")
+
+                        elif acao == "personalizar" and itens:
+                            # Personaliza itens (geralmente o último pedido)
+                            if pedido_contexto:
+                                for item in itens:
+                                    # Busca o item no pedido pelo nome, ou pega o último
+                                    nome_item = item.get("nome", "").lower()
+                                    item_para_personalizar = None
+                                    for p in reversed(pedido_contexto):
+                                        if nome_item in p["nome"].lower():
+                                            item_para_personalizar = p
+                                            break
+                                    if not item_para_personalizar:
+                                        item_para_personalizar = pedido_contexto[-1]
+
+                                    if item.get("removidos"):
+                                        item_para_personalizar["removidos"] = item["removidos"]
+                                    if item.get("adicionais"):
+                                        item_para_personalizar["adicionais"] = item["adicionais"]
+                                    print(f"✏️ Item personalizado: {item_para_personalizar}")
+
+                        elif acao == "prosseguir_entrega":
+                            # Cliente quer finalizar - converter contexto em carrinho
+                            if pedido_contexto:
+                                print(f"🚗 Prosseguindo para entrega com {len(pedido_contexto)} itens")
+                                dados['carrinho'] = self._converter_contexto_para_carrinho(pedido_contexto)
+                                dados['pedido_contexto'] = pedido_contexto
+                                self._salvar_estado_conversa(user_id, STATE_PERGUNTANDO_ENTREGA_RETIRADA, dados)
+                                # Retorna mensagem padrão do fluxo de entrega
+                                return self._perguntar_entrega_ou_retirada(user_id, dados)
+                            else:
+                                return "Você ainda não pediu nada! O que vai querer? 😊"
+
+                        # Salva estado atualizado
+                        dados['pedido_contexto'] = pedido_contexto
+                        dados['historico'] = historico
+                        dados['historico'].append({"role": "assistant", "content": resposta_texto})
+                        self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
+
+                        # Remove qualquer JSON residual da resposta
+                        resposta_limpa = resposta_texto
+                        # Se a resposta começa com { é JSON bruto, usa só o campo "resposta"
+                        if resposta_limpa.strip().startswith('{'):
+                            resposta_limpa = re.sub(r'\{[\s\S]*\}', '', resposta_limpa).strip()
+                        # Remove qualquer JSON no meio do texto
+                        resposta_limpa = re.sub(r'\{[^}]*"resposta"[^}]*\}', '', resposta_limpa).strip()
+                        resposta_limpa = re.sub(r'\{[^}]*"acao"[^}]*\}', '', resposta_limpa).strip()
+                        # Se ficou vazio, usa a resposta extraída do JSON
+                        if not resposta_limpa:
+                            resposta_limpa = resposta_json.get("resposta", "Anotado! Quer mais algo? 😊")
+
+                        # Se adicionou item, mostra resumo do pedido
+                        if mostrar_resumo and pedido_contexto:
+                            total = sum(item.get('preco', 0) * item.get('quantidade', 1) for item in pedido_contexto)
+                            resumo = f"\n\n📋 *Seu pedido até agora:*\n"
+                            for item in pedido_contexto:
+                                qtd = item.get('quantidade', 1)
+                                nome = item.get('nome', '')
+                                preco_unit = item.get('preco', 0)
+                                preco_total = preco_unit * qtd
+                                resumo += f"• {qtd}x {nome} - R$ {preco_total:.2f}\n"
+                                if item.get('removidos'):
+                                    resumo += f"  _Sem: {', '.join(item['removidos'])}_\n"
+                                if item.get('adicionais'):
+                                    resumo += f"  _Com: {', '.join(item['adicionais'])}_\n"
+                            resumo += f"\n💰 *Total: R$ {total:.2f}*"
+                            resposta_limpa += resumo
+
+                        return resposta_limpa
+
+                    except json.JSONDecodeError:
+                        # Se não conseguiu parsear JSON, tenta extrair texto limpo
+                        # Remove qualquer coisa que pareça JSON
+                        resposta_limpa = re.sub(r'\{[\s\S]*\}', '', resposta_ia).strip()
+                        if not resposta_limpa:
+                            resposta_limpa = resposta_ia
+
+                        dados['historico'] = historico
+                        dados['historico'].append({"role": "assistant", "content": resposta_limpa})
+                        self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
+                        return resposta_limpa
+
+                else:
+                    print(f"❌ Erro Groq: {response.status_code}")
+                    return "Desculpe, tive um problema. Pode repetir?"
+
+        except Exception as e:
+            print(f"❌ Erro na conversa IA: {e}")
+            return "Ops, algo deu errado. Tenta de novo? 😅"
+
+    def _formatar_cardapio_para_ia(self, produtos: List[Dict]) -> str:
+        """Formata cardápio completo para o prompt da IA"""
+        # Agrupa por categoria
+        categorias = {}
+        for p in produtos:
+            cat = p.get('categoria', 'Outros')
+            if cat not in categorias:
+                categorias[cat] = []
+
+            # Busca ingredientes
+            ingredientes = self.ingredientes_service.buscar_ingredientes_por_nome_receita(p['nome'])
+            ing_texto = ""
+            if ingredientes:
+                ing_texto = f" (Ingredientes: {', '.join([i['nome'] for i in ingredientes])})"
+
+            categorias[cat].append(f"• {p['nome']} - R$ {p['preco']:.2f}{ing_texto}")
+
+        # Busca adicionais
+        adicionais = self.ingredientes_service.buscar_todos_adicionais()
+
+        texto = ""
+        for cat, items in categorias.items():
+            texto += f"\n{cat}:\n"
+            texto += "\n".join(items) + "\n"
+
+        if adicionais:
+            texto += "\n➕ ADICIONAIS DISPONÍVEIS:\n"
+            for add in adicionais:
+                texto += f"• {add['nome']} - +R$ {add['preco']:.2f}\n"
+
+        return texto
+
+    def _converter_contexto_para_carrinho(self, pedido_contexto: List[Dict]) -> List[Dict]:
+        """Converte o contexto da conversa para formato de carrinho"""
+        carrinho = []
+        for item in pedido_contexto:
+            carrinho_item = {
+                "id": item.get("id", ""),
+                "nome": item["nome"],
+                "preco": item["preco"],
+                "quantidade": item.get("quantidade", 1),
+                "personalizacoes": {
+                    "removidos": item.get("removidos", []),
+                    "adicionais": item.get("adicionais", []),
+                    "preco_adicionais": 0.0
+                }
+            }
+            carrinho.append(carrinho_item)
+        return carrinho
+
     def _eh_primeira_mensagem(self, mensagem: str) -> bool:
         """Detecta se é uma mensagem inicial/saudação"""
         msg_lower = mensagem.lower().strip()
         saudacoes = [
             'oi', 'ola', 'olá', 'hey', 'eai', 'e ai', 'opa', 'oie',
             'bom dia', 'boa tarde', 'boa noite', 'hello', 'hi',
-            'menu', 'cardapio', 'cardápio', 'início', 'inicio', 'começar'
+            'início', 'inicio', 'começar'
         ]
+        # Nota: 'cardapio', 'menu' removidos para permitir ver cardápio sem resetar conversa
         return any(msg_lower == s or msg_lower.startswith(s + ' ') for s in saudacoes)
 
     def _detectar_confirmacao_pedido(self, mensagem: str) -> bool:
@@ -771,29 +1338,130 @@ class GroqSalesHandler:
 
     def _adicionar_ao_carrinho(self, dados: Dict, produto: Dict, quantidade: int = 1) -> bool:
         """
-        Adiciona um produto ao carrinho
+        Adiciona um produto ao carrinho com suporte a personalizações
         """
         carrinho = dados.get('carrinho', [])
 
-        # Verifica se produto já está no carrinho
+        # Verifica se produto já está no carrinho (sem personalizações)
         for item in carrinho:
-            if item['id'] == produto['id']:
+            if item['id'] == produto['id'] and not item.get('personalizacoes'):
                 item['quantidade'] = item.get('quantidade', 1) + quantidade
                 dados['carrinho'] = carrinho
                 print(f"🛒 Quantidade atualizada: {item['nome']} x{item['quantidade']}")
                 return True
 
-        # Adiciona novo item
+        # Adiciona novo item com estrutura para personalizações
         novo_item = {
             'id': produto['id'],
             'nome': produto['nome'],
             'preco': produto['preco'],
-            'quantidade': quantidade
+            'quantidade': quantidade,
+            'personalizacoes': {
+                'removidos': [],      # Ingredientes removidos
+                'adicionais': [],     # Adicionais incluídos [{'nome': x, 'preco': y}]
+                'preco_adicionais': 0.0  # Soma dos adicionais
+            }
         }
         carrinho.append(novo_item)
         dados['carrinho'] = carrinho
+        dados['ultimo_produto_adicionado'] = produto['nome']  # Para referência
         print(f"🛒 Produto adicionado: {produto['nome']} - R$ {produto['preco']:.2f}")
         return True
+
+    def _personalizar_item_carrinho(
+        self,
+        dados: Dict,
+        acao: str,
+        item_nome: str,
+        produto_busca: str = None
+    ) -> Tuple[bool, str]:
+        """
+        Personaliza um item no carrinho (remove ingrediente ou adiciona extra)
+
+        Args:
+            dados: Dados da conversa com carrinho
+            acao: 'remover_ingrediente' ou 'adicionar_extra'
+            item_nome: Nome do ingrediente/adicional
+            produto_busca: Nome do produto (opcional, usa último adicionado)
+
+        Returns:
+            (sucesso, mensagem)
+        """
+        carrinho = dados.get('carrinho', [])
+
+        if not carrinho:
+            return (False, "Seu carrinho está vazio! Primeiro adicione um produto 😊")
+
+        # Encontra o produto no carrinho
+        produto_alvo = None
+        if produto_busca:
+            # Busca pelo nome
+            for item in carrinho:
+                if produto_busca.lower() in item['nome'].lower():
+                    produto_alvo = item
+                    break
+        else:
+            # Usa o último adicionado
+            produto_alvo = carrinho[-1]
+
+        if not produto_alvo:
+            return (False, f"Não encontrei '{produto_busca}' no seu carrinho 🤔")
+
+        # Inicializa personalizacoes se não existir
+        if 'personalizacoes' not in produto_alvo:
+            produto_alvo['personalizacoes'] = {
+                'removidos': [],
+                'adicionais': [],
+                'preco_adicionais': 0.0
+            }
+
+        personalizacoes = produto_alvo['personalizacoes']
+
+        if acao == "remover_ingrediente":
+            # Verifica se o ingrediente existe na receita
+            ingrediente = self.ingredientes_service.verificar_ingrediente_na_receita_por_nome(
+                produto_alvo['nome'], item_nome
+            )
+
+            if ingrediente:
+                if ingrediente['nome'] not in personalizacoes['removidos']:
+                    personalizacoes['removidos'].append(ingrediente['nome'])
+                    dados['carrinho'] = carrinho
+                    return (True, f"✅ Ok! *{produto_alvo['nome']}* SEM {ingrediente['nome']} 👍")
+                else:
+                    return (True, f"Esse já tá sem {ingrediente['nome']}! 😊")
+            else:
+                return (False, f"Hmm, {produto_alvo['nome']} não leva {item_nome} 🤔")
+
+        elif acao == "adicionar_extra":
+            # Busca o adicional
+            adicional = self.ingredientes_service.buscar_adicional_por_nome(item_nome)
+
+            if adicional:
+                # Verifica se já foi adicionado
+                for add in personalizacoes['adicionais']:
+                    if add['nome'].lower() == adicional['nome'].lower():
+                        return (True, f"Já adicionei {adicional['nome']}! 😊")
+
+                # Adiciona
+                personalizacoes['adicionais'].append({
+                    'id': adicional['id'],
+                    'nome': adicional['nome'],
+                    'preco': adicional['preco']
+                })
+                personalizacoes['preco_adicionais'] += adicional['preco']
+                dados['carrinho'] = carrinho
+
+                return (True, f"✅ Adicionei *{adicional['nome']}* (+R$ {adicional['preco']:.2f}) no seu *{produto_alvo['nome']}* 👍")
+            else:
+                # Lista os adicionais disponíveis
+                todos_adicionais = self.ingredientes_service.buscar_todos_adicionais()
+                if todos_adicionais:
+                    nomes = [a['nome'] for a in todos_adicionais[:5]]
+                    return (False, f"Não encontrei esse adicional 🤔\n\nTemos disponível: {', '.join(nomes)}")
+                return (False, f"Não encontrei esse adicional 🤔")
+
+        return (False, "Não entendi a personalização 😅")
 
     def _detectar_remocao_produto(self, mensagem: str) -> bool:
         """Detecta se o cliente quer remover um produto do carrinho"""
@@ -846,7 +1514,7 @@ class GroqSalesHandler:
         return False, f"Hmm, não encontrei *{produto['nome']}* no seu carrinho 🤔"
 
     def _formatar_carrinho(self, carrinho: List[Dict]) -> str:
-        """Formata o carrinho para exibição"""
+        """Formata o carrinho para exibição, incluindo personalizações"""
         if not carrinho:
             return "🛒 Seu carrinho está vazio!"
 
@@ -854,9 +1522,24 @@ class GroqSalesHandler:
         total = 0
         for item in carrinho:
             qtd = item.get('quantidade', 1)
-            subtotal = item['preco'] * qtd
+            preco_base = item['preco']
+            preco_adicionais = item.get('personalizacoes', {}).get('preco_adicionais', 0.0)
+            subtotal = (preco_base + preco_adicionais) * qtd
             total += subtotal
+
             msg += f"• {qtd}x {item['nome']} - R$ {subtotal:.2f}\n"
+
+            # Mostra personalizações se houver
+            personalizacoes = item.get('personalizacoes', {})
+            removidos = personalizacoes.get('removidos', [])
+            adicionais = personalizacoes.get('adicionais', [])
+
+            if removidos:
+                msg += f"  └ _SEM: {', '.join(removidos)}_\n"
+
+            if adicionais:
+                for add in adicionais:
+                    msg += f"  └ _+ {add['nome']} (+R$ {add['preco']:.2f})_\n"
 
         msg += f"\n💰 *Total: R$ {total:.2f}*"
         return msg
@@ -950,30 +1633,56 @@ class GroqSalesHandler:
             return []
 
     def _buscar_promocoes(self) -> List[Dict[str, Any]]:
-        """Busca produtos em promoção/destaque usando SQL direto"""
+        """Busca produtos em promoção/destaque usando SQL direto (prioriza receitas)"""
         try:
             from sqlalchemy import text
 
-            query = text("""
-                SELECT p.cod_barras, p.descricao, pe.preco_venda
-                FROM catalogo.produtos p
-                JOIN catalogo.produtos_empresa pe ON p.cod_barras = pe.cod_barras
-                WHERE pe.empresa_id = :empresa_id
-                AND p.ativo = true
-                AND pe.disponivel = true
-                ORDER BY p.descricao
-                LIMIT 5
-            """)
-            result = self.db.execute(query, {"empresa_id": self.empresa_id})
+            produtos = []
 
-            return [
-                {
-                    "id": row[0],
+            # Primeiro busca receitas (pizzas, lanches) - são os destaques
+            query_receitas = text("""
+                SELECT id, nome, preco_venda
+                FROM catalogo.receitas
+                WHERE empresa_id = :empresa_id
+                AND ativo = true
+                AND disponivel = true
+                ORDER BY nome
+                LIMIT 3
+            """)
+            result_receitas = self.db.execute(query_receitas, {"empresa_id": self.empresa_id})
+
+            for row in result_receitas.fetchall():
+                produtos.append({
+                    "id": f"receita_{row[0]}",
                     "nome": row[1],
-                    "preco": float(row[2])
-                }
-                for row in result.fetchall()
-            ]
+                    "preco": float(row[2]) if row[2] else 0.0
+                })
+
+            # Se não tiver receitas suficientes, busca produtos
+            if len(produtos) < 3:
+                query_produtos = text("""
+                    SELECT p.cod_barras, p.descricao, pe.preco_venda
+                    FROM catalogo.produtos p
+                    JOIN catalogo.produtos_empresa pe ON p.cod_barras = pe.cod_barras
+                    WHERE pe.empresa_id = :empresa_id
+                    AND p.ativo = true
+                    AND pe.disponivel = true
+                    ORDER BY p.descricao
+                    LIMIT :limit
+                """)
+                result_produtos = self.db.execute(query_produtos, {
+                    "empresa_id": self.empresa_id,
+                    "limit": 5 - len(produtos)
+                })
+
+                for row in result_produtos.fetchall():
+                    produtos.append({
+                        "id": row[0],
+                        "nome": row[1],
+                        "preco": float(row[2])
+                    })
+
+            return produtos[:5]
         except Exception as e:
             print(f"Erro ao buscar promoções: {e}")
             return []
@@ -1069,11 +1778,14 @@ class GroqSalesHandler:
             self.db.rollback()
 
     def _buscar_todos_produtos(self) -> List[Dict[str, Any]]:
-        """Busca TODOS os produtos disponíveis no banco usando SQL direto"""
+        """Busca TODOS os produtos disponíveis no banco usando SQL direto (produtos + receitas)"""
         try:
             from sqlalchemy import text
 
-            query = text("""
+            produtos = []
+
+            # 1. Busca produtos simples (bebidas, etc)
+            query_produtos = text("""
                 SELECT p.cod_barras, p.descricao, pe.preco_venda
                 FROM catalogo.produtos p
                 JOIN catalogo.produtos_empresa pe ON p.cod_barras = pe.cod_barras
@@ -1082,18 +1794,41 @@ class GroqSalesHandler:
                 AND pe.disponivel = true
                 ORDER BY p.descricao
             """)
-            result = self.db.execute(query, {"empresa_id": self.empresa_id})
+            result_produtos = self.db.execute(query_produtos, {"empresa_id": self.empresa_id})
 
-            return [
-                {
+            for row in result_produtos.fetchall():
+                produtos.append({
                     "id": row[0],
                     "nome": row[1],
-                    "preco": float(row[2])
-                }
-                for row in result.fetchall()
-            ]
+                    "preco": float(row[2]),
+                    "tipo": "produto"
+                })
+
+            # 2. Busca receitas (pizzas, lanches, etc)
+            query_receitas = text("""
+                SELECT id, nome, preco_venda, descricao
+                FROM catalogo.receitas
+                WHERE empresa_id = :empresa_id
+                AND ativo = true
+                AND disponivel = true
+                ORDER BY nome
+            """)
+            result_receitas = self.db.execute(query_receitas, {"empresa_id": self.empresa_id})
+
+            for row in result_receitas.fetchall():
+                produtos.append({
+                    "id": f"receita_{row[0]}",  # Prefixo para diferenciar
+                    "nome": row[1],
+                    "preco": float(row[2]) if row[2] else 0.0,
+                    "descricao": row[3],
+                    "tipo": "receita"
+                })
+
+            return produtos
         except Exception as e:
             print(f"Erro ao buscar todos produtos: {e}")
+            import traceback
+            traceback.print_exc()
             return []
 
     def _montar_contexto(self, user_id: str, mensagem: str, estado: str, dados: Dict) -> Tuple[str, List[Dict]]:
@@ -1562,23 +2297,44 @@ Qual vai ser?"""
                 tipo_entrega_enum = "RETIRADA"
 
             # Montar payload do checkout
-            # Formato: produtos.itens com produto_cod_barras e quantidade
+            # Separa produtos (cod_barras) de receitas (receita_ID)
             itens_checkout = []
+            receitas_checkout = []
+
             for item in carrinho:
-                itens_checkout.append({
-                    "produto_cod_barras": item.get('id'),  # O 'id' no carrinho é o cod_barras
-                    "quantidade": item.get('quantidade', 1),
-                    "observacao": item.get('observacoes')
-                })
+                item_id = item.get('id', '')
+                quantidade = item.get('quantidade', 1)
+                observacao = item.get('observacoes')
+
+                # Se o ID começa com "receita_", é uma receita
+                if isinstance(item_id, str) and item_id.startswith('receita_'):
+                    receita_id = int(item_id.replace('receita_', ''))
+                    receitas_checkout.append({
+                        "receita_id": receita_id,
+                        "quantidade": quantidade,
+                        "observacao": observacao
+                    })
+                else:
+                    # É um produto com código de barras
+                    itens_checkout.append({
+                        "produto_cod_barras": item_id,
+                        "quantidade": quantidade,
+                        "observacao": observacao
+                    })
+
+            # Monta o payload com itens e/ou receitas
+            produtos_payload = {}
+            if itens_checkout:
+                produtos_payload["itens"] = itens_checkout
+            if receitas_checkout:
+                produtos_payload["receitas"] = receitas_checkout
 
             payload = {
                 "empresa_id": self.empresa_id,
                 "tipo_pedido": tipo_pedido,
                 "tipo_entrega": tipo_entrega_enum,
                 "origem": "APP",  # WhatsApp = APP
-                "produtos": {
-                    "itens": itens_checkout
-                }
+                "produtos": produtos_payload
             }
 
             # Adiciona endereço apenas se for entrega
@@ -1603,7 +2359,7 @@ Qual vai ser?"""
                 }
 
                 # URL do checkout (localhost pois estamos no mesmo servidor)
-                checkout_url = "http://localhost:8001/api/cardapio/client/pedidos/checkout"
+                checkout_url = "http://localhost:8002/api/pedidos/client/checkout"
 
                 print(f"[Checkout] Chamando {checkout_url}")
                 response = await client.post(checkout_url, json=payload, headers=headers)
@@ -1731,7 +2487,8 @@ Responda de forma natural e curta:"""
             "pergunta_vaga": "Temos várias opções! Quer uma pizza, lanche ou bebida?",
             "pedido_sugestao": "Recomendo nosso X-Bacon, tá fazendo sucesso! Ou prefere pizza?",
             "duvida_geral": "Como posso te ajudar?",
-            "resposta_generica": "Entendi! O que você gostaria de pedir?"
+            "resposta_generica": "Entendi! O que você gostaria de pedir?",
+            "nao_entendi": "Hmm, não entendi. 🤔 Quer ver o cardápio ou prefere uma sugestão?"
         }
         return fallbacks.get(tipo_conversa, "O que você gostaria de pedir?")
 
@@ -1744,8 +2501,31 @@ Responda de forma natural e curta:"""
     ) -> str:
         """
         Gera resposta sobre um produto específico.
-        Explica ingredientes, tamanho, etc.
+        Usa ingredientes REAIS do banco de dados!
         """
+        # Busca ingredientes reais do banco de dados
+        ingredientes = self.ingredientes_service.buscar_ingredientes_por_nome_receita(produto['nome'])
+        adicionais = self.ingredientes_service.buscar_adicionais_por_nome_receita(produto['nome'])
+
+        # Se encontrou ingredientes, usa dados reais
+        if ingredientes:
+            nomes_ingredientes = [ing['nome'] for ing in ingredientes]
+
+            # Monta resposta com ingredientes reais
+            msg = f"*{produto['nome']}* - R$ {produto['preco']:.2f}\n\n"
+            msg += "📋 *Ingredientes:*\n"
+            for ing in ingredientes:
+                msg += f"• {ing['nome']}\n"
+
+            if adicionais:
+                msg += "\n➕ *Adicionais disponíveis:*\n"
+                for add in adicionais[:4]:  # Mostra até 4 adicionais
+                    msg += f"• {add['nome']} (+R$ {add['preco']:.2f})\n"
+
+            msg += "\nQuer pedir? 😊"
+            return msg
+
+        # Se não encontrou ingredientes no banco, usa IA para resposta genérica
         prompt = f"""Você é um atendente de delivery. O cliente quer saber sobre:
 
 PRODUTO: {produto['nome']} - R$ {produto['preco']:.2f}
@@ -1795,13 +2575,18 @@ Responda:"""
             estado, dados = self._obter_estado_conversa(user_id)
             print(f"📊 Estado atual: {estado}")
 
-            # Se for primeira mensagem (saudação), retorna boas-vindas padronizadas
+            # Se for primeira mensagem (saudação), entra no modo conversacional
             if self._eh_primeira_mensagem(mensagem):
                 dados['historico'] = [{"role": "user", "content": mensagem}]
                 dados['carrinho'] = []
+                dados['pedido_contexto'] = []  # Lista de itens mencionados na conversa
                 dados['produtos_encontrados'] = self._buscar_promocoes()
-                self._salvar_estado_conversa(user_id, STATE_AGUARDANDO_PEDIDO, dados)
-                return self._gerar_mensagem_boas_vindas()
+                self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
+                return self._gerar_mensagem_boas_vindas_conversacional()
+
+            # ========== MODO CONVERSACIONAL (IA LIVRE) ==========
+            if estado == STATE_CONVERSANDO:
+                return await self._processar_conversa_ia(user_id, mensagem, dados)
 
             # ========== FLUXO DE ENTREGA/RETIRADA ==========
 
@@ -1951,10 +2736,65 @@ Responda:"""
                 produto = self._buscar_produto_por_termo(produto_busca, todos_produtos)
 
                 if produto:
-                    # Gera resposta contextual sobre o produto
+                    # Gera resposta contextual sobre o produto com ingredientes reais
                     return await self._gerar_resposta_sobre_produto(user_id, produto, pergunta, dados)
                 else:
                     return "Qual produto você quer saber mais? Me fala o nome!"
+
+            # PERSONALIZAR PRODUTO (remover ingrediente ou adicionar extra)
+            elif funcao == "personalizar_produto":
+                acao = params.get("acao", "")
+                item_nome = params.get("item", "")
+                produto_busca = params.get("produto_busca", "")
+
+                print(f"🔧 Personalizando: acao={acao}, item={item_nome}, produto={produto_busca}")
+
+                if not acao or not item_nome:
+                    return "Não entendi a personalização 😅 Tenta de novo!"
+
+                sucesso, mensagem_resposta = self._personalizar_item_carrinho(
+                    dados, acao, item_nome, produto_busca
+                )
+                self._salvar_estado_conversa(user_id, STATE_AGUARDANDO_PEDIDO, dados)
+
+                if sucesso:
+                    mensagem_resposta += "\n\nMais alguma coisa? 😊"
+                return mensagem_resposta
+
+            # VER ADICIONAIS DISPONÍVEIS
+            elif funcao == "ver_adicionais":
+                produto_busca = params.get("produto_busca", "")
+
+                # Se não especificou produto, usa o último do carrinho
+                if not produto_busca and carrinho:
+                    produto_busca = carrinho[-1]['nome']
+
+                if produto_busca:
+                    # Busca adicionais específicos para este produto
+                    adicionais = self.ingredientes_service.buscar_adicionais_por_nome_receita(produto_busca)
+
+                    if adicionais:
+                        msg = f"➕ *Adicionais para {produto_busca}:*\n\n"
+                        for add in adicionais:
+                            msg += f"• {add['nome']} - +R$ {add['preco']:.2f}\n"
+                        msg += "\nQuer adicionar algum? 😊"
+                        return msg
+
+                # Se não encontrou específicos, mostra todos
+                todos_adicionais = self.ingredientes_service.buscar_todos_adicionais()
+                if todos_adicionais:
+                    msg = "➕ *Adicionais disponíveis:*\n\n"
+                    for add in todos_adicionais:
+                        msg += f"• {add['nome']} - +R$ {add['preco']:.2f}\n"
+                    msg += "\nQuer adicionar algum? 😊"
+                    return msg
+                else:
+                    return "No momento não temos adicionais extras disponíveis 😅"
+
+            # VER COMBOS DISPONÍVEIS
+            elif funcao == "ver_combos":
+                print("🎁 Cliente pediu para ver os combos")
+                return self.ingredientes_service.formatar_combos_para_chat()
 
             # CONVERSAR (função principal para interação natural)
             elif funcao == "conversar":
@@ -1994,6 +2834,36 @@ async def processar_mensagem_groq(
 ) -> str:
     """
     Processa mensagem usando Groq API com LLaMA 3.1
+    Também salva as mensagens no banco para exibição no Preview WhatsApp
     """
+    from . import database as chatbot_db
+    from datetime import datetime
+
+    # 1. Busca ou cria conversa no banco chatbot.conversations
+    conversations = chatbot_db.get_conversations_by_user(db, user_id, empresa_id)
+
+    if conversations:
+        conversation_id = conversations[0]['id']
+    else:
+        # Cria nova conversa
+        conversation_id = chatbot_db.create_conversation(
+            db=db,
+            session_id=f"whatsapp_{user_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
+            user_id=user_id,
+            prompt_key="default",
+            model="groq-sales",
+            empresa_id=empresa_id
+        )
+        print(f"   ✅ Nova conversa criada no banco: {conversation_id}")
+
+    # 2. Salva mensagem do usuário no banco
+    chatbot_db.create_message(db, conversation_id, "user", mensagem)
+
+    # 3. Processa mensagem com o handler
     handler = GroqSalesHandler(db, empresa_id)
-    return await handler.processar_mensagem(user_id, mensagem)
+    resposta = await handler.processar_mensagem(user_id, mensagem)
+
+    # 4. Salva resposta do bot no banco
+    chatbot_db.create_message(db, conversation_id, "assistant", resposta)
+
+    return resposta
