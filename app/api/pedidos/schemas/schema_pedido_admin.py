@@ -99,8 +99,8 @@ class PedidoItemMutationRequest(BaseModel):
     produto_cod_barras: Optional[str] = Field(
         default=None, description="Código de barras do produto (obrigatório para adicionar item simples)."
     )
-    receita_id: Optional[int] = Field(default=None, description="Identificador da receita (mesa/balcão).")
-    combo_id: Optional[int] = Field(default=None, description="Identificador do combo (mesa/balcão).")
+    receita_id: Optional[int] = Field(default=None, description="Identificador da receita (suportado em delivery, mesa e balcão).")
+    combo_id: Optional[int] = Field(default=None, description="Identificador do combo (suportado em delivery, mesa e balcão).")
     quantidade: Optional[int] = Field(default=None, ge=1, description="Quantidade para adicionar/atualizar.")
     observacao: Optional[str] = Field(default=None, description="Observação livre.")
     complementos: Optional[List[ItemComplementoRequest]] = Field(

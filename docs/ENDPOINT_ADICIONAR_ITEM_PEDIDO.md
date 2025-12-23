@@ -7,7 +7,7 @@
 Adiciona, atualiza ou remove itens de um pedido existente. Funciona para pedidos de **Delivery**, **Mesa** e **Balcão**.
 
 **⚠️ IMPORTANTE - Limitações por Tipo de Pedido:**
-- **Delivery**: Aceita apenas **produtos simples** (`produto_cod_barras`). ❌ Não aceita receitas, combos ou complementos.
+- **Delivery**: Aceita **produtos simples**, **receitas** e **combos** (`produto_cod_barras`, `receita_id` ou `combo_id`). ❌ Não aceita complementos.
 - **Mesa/Balcão**: Aceita **qualquer tipo** (produto, receita ou combo) com complementos opcionais.
 
 ---
@@ -187,7 +187,7 @@ enum PedidoItemMutationAction {
 
 ## 📝 Exemplos de Uso
 
-### 1. Adicionar Item Simples (Delivery)
+### 1. Adicionar Produto Simples (Delivery)
 
 ```http
 POST /api/pedidos/admin/21/itens
@@ -202,7 +202,7 @@ Authorization: Bearer {token}
 }
 ```
 
-### 2. Adicionar Item com Receita (Mesa/Balcão)
+### 2. Adicionar Receita (Delivery ou Mesa/Balcão)
 
 ```http
 POST /api/pedidos/admin/21/itens
@@ -237,7 +237,7 @@ Authorization: Bearer {token}
 - Os `adicionais` devem estar **dentro** de `complementos`, não no nível raiz
 - O campo `observacao` deve ser `null` ou string válida (não `"$undefined"` ou `undefined`)
 
-### 3. Adicionar Combo (Mesa/Balcão)
+### 3. Adicionar Combo (Delivery ou Mesa/Balcão)
 
 ```http
 POST /api/pedidos/admin/21/itens
@@ -450,29 +450,15 @@ Authorization: Bearer {token}
 }
 ```
 
-### 400 Bad Request - Receita/Combo não suportado em Delivery
-
-```json
-{
-  "detail": "Receitas não são suportadas para pedidos de delivery. Use apenas produtos simples (produto_cod_barras)."
-}
-```
-
-ou
-
-```json
-{
-  "detail": "Combos não são suportados para pedidos de delivery. Use apenas produtos simples (produto_cod_barras)."
-}
-```
-
-ou
+### 400 Bad Request - Complementos não suportados em Delivery
 
 ```json
 {
   "detail": "Complementos não são suportados para pedidos de delivery."
 }
 ```
+
+**Nota:** Receitas e combos são suportados em delivery, apenas complementos não são permitidos.
 
 ### 400 Bad Request - Pedido fechado/cancelado
 
@@ -490,14 +476,13 @@ ou
 
 ### Para Adicionar Item (`acao: "ADD"`)
 
-1. **Item Simples (Delivery):**
+1. **Delivery (Produto, Receita ou Combo):**
    - ✅ `acao` deve ser `"ADD"` (não `"adicionar"`)
-   - ✅ `produto_cod_barras` é **obrigatório**
+   - ✅ Deve informar **exatamente um** dos seguintes: `produto_cod_barras`, `receita_id` ou `combo_id`
    - ✅ `quantidade` deve ser >= 1
-   - ✅ Produto deve existir e estar disponível
+   - ✅ Produto/Receita/Combo deve existir e estar disponível
    - ✅ Pedido não pode estar fechado/cancelado
-   - ❌ **NÃO** envie `receita_id` ou `combo_id` para delivery (causará erro 400)
-   - ❌ **NÃO** envie `complementos` para delivery (causará erro 400)
+   - ❌ **NÃO** envie `complementos` para delivery (não suportado)
 
 2. **Receita (Mesa/Balcão):**
    - ✅ `acao` deve ser `"ADD"` (não `"adicionar"`)
@@ -547,11 +532,11 @@ ou
 
 2. **Limitações por Tipo:**
    - **Delivery**: 
-     - ✅ Aceita apenas produtos simples (`produto_cod_barras`)
-     - ❌ **NÃO aceita** receitas (`receita_id`)
-     - ❌ **NÃO aceita** combos (`combo_id`)
+     - ✅ Aceita produtos simples (`produto_cod_barras`)
+     - ✅ Aceita receitas (`receita_id`)
+     - ✅ Aceita combos (`combo_id`)
      - ❌ **NÃO aceita** complementos
-     - Se tentar enviar receita/combo/complementos, retornará erro 400
+     - Se tentar enviar complementos, retornará erro 400
    
    - **Mesa/Balcão**:
      - ✅ Aceita produtos simples (`produto_cod_barras`)
@@ -564,8 +549,8 @@ ou
    - Não aplicável para **Delivery** (causará erro se enviado)
 
 4. **Receitas e Combos:**
-   - Apenas disponíveis para pedidos de **Mesa** e **Balcão**
-   - Não aplicáveis para **Delivery** (causará erro se enviado)
+   - ✅ Disponíveis para pedidos de **Delivery**, **Mesa** e **Balcão**
+   - Funcionam da mesma forma em todos os tipos de pedido
 
 4. **Preço:**
    - O preço unitário é obtido automaticamente do produto/receita/combo
