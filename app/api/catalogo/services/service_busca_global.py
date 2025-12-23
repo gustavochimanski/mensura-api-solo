@@ -42,6 +42,10 @@ class BuscaGlobalService:
         termo_lower = termo.lower().strip() if termo else ""
         termo_vazio = not termo_lower
         
+        # Normaliza o termo removendo hífens e espaços para busca mais flexível
+        # "x bacon" e "x-bacon" se tornam "xbacon"
+        termo_normalizado = termo_lower.replace("-", "").replace(" ", "") if termo_lower else ""
+        
         # Calcula range para paginação baseada em WHERE
         offset_id = (page - 1) * limit
         max_id = page * limit
@@ -96,9 +100,13 @@ class BuscaGlobalService:
             )
         else:
             # Busca por termo (descrição ou código de barras)
-            # Usa func.lower para garantir busca case-insensitive e normalizar ambos os lados
+            # Normaliza removendo hífens e espaços de ambos os lados para busca mais flexível
+            # "x bacon" encontra "x-bacon" e vice-versa
             produtos_query = produtos_query.filter(
                 or_(
+                    func.replace(func.replace(func.lower(ProdutoModel.descricao), "-", ""), " ", "").contains(termo_normalizado),
+                    func.replace(func.replace(func.lower(ProdutoModel.cod_barras), "-", ""), " ", "").contains(termo_normalizado),
+                    # Também mantém busca original para termos que não tenham hífen/espaço
                     func.lower(ProdutoModel.descricao).contains(termo_lower),
                     func.lower(ProdutoModel.cod_barras).contains(termo_lower),
                 )
@@ -127,11 +135,20 @@ class BuscaGlobalService:
             ).order_by(ReceitaModel.id.asc())
         else:
             # Busca por termo (nome ou descrição)
-            # Usa func.lower para garantir busca case-insensitive e normalizar ambos os lados
+            # Normaliza removendo hífens e espaços de ambos os lados para busca mais flexível
             condicoes = [
+                # Busca normalizada (sem hífen/espaço)
+                func.replace(func.replace(func.lower(ReceitaModel.nome), "-", ""), " ", "").contains(termo_normalizado),
+                # Busca original
                 func.lower(ReceitaModel.nome).contains(termo_lower),
             ]
             # Adiciona busca na descrição apenas se o campo não for NULL
+            condicoes.append(
+                and_(
+                    ReceitaModel.descricao.isnot(None),
+                    func.replace(func.replace(func.lower(ReceitaModel.descricao), "-", ""), " ", "").contains(termo_normalizado)
+                )
+            )
             condicoes.append(
                 and_(
                     ReceitaModel.descricao.isnot(None),
@@ -160,9 +177,15 @@ class BuscaGlobalService:
             ).order_by(ComboModel.id.asc())
         else:
             # Busca por termo (título ou descrição)
-            # Usa func.lower para garantir busca case-insensitive e normalizar ambos os lados
+            # Normaliza removendo hífens e espaços de ambos os lados para busca mais flexível
             condicoes = []
             # Adiciona busca no título apenas se o campo não for NULL
+            condicoes.append(
+                and_(
+                    ComboModel.titulo.isnot(None),
+                    func.replace(func.replace(func.lower(ComboModel.titulo), "-", ""), " ", "").contains(termo_normalizado)
+                )
+            )
             condicoes.append(
                 and_(
                     ComboModel.titulo.isnot(None),
@@ -170,6 +193,9 @@ class BuscaGlobalService:
                 )
             )
             # Descrição sempre existe (não é NULL)
+            condicoes.append(
+                func.replace(func.replace(func.lower(ComboModel.descricao), "-", ""), " ", "").contains(termo_normalizado)
+            )
             condicoes.append(func.lower(ComboModel.descricao).contains(termo_lower))
             combos_query = combos_query.filter(or_(*condicoes)).order_by(ComboModel.id.asc())
 
