@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Iterable, List, Optional
 
 from fastapi import HTTPException, status
@@ -495,7 +496,7 @@ class PedidoAdminService:
                         quantidade=qtd,
                         complementos_request=None,  # Delivery não tem complementos
                     )
-                    preco_unitario = preco_total / qtd
+                    preco_unitario = preco_total / Decimal(str(qtd))
                     
                     # Adiciona item usando repositório
                     if payload.receita_id:
@@ -503,7 +504,7 @@ class PedidoAdminService:
                             pedido_id=pedido_id,
                             receita_id=payload.receita_id,
                             quantidade=qtd,
-                            preco_unitario=float(preco_unitario),
+                            preco_unitario=preco_unitario,
                             observacao=payload.observacao,
                             produto_descricao_snapshot=product.nome or product.descricao,
                         )
@@ -512,7 +513,7 @@ class PedidoAdminService:
                             pedido_id=pedido_id,
                             combo_id=payload.combo_id,
                             quantidade=qtd,
-                            preco_unitario=float(preco_unitario),
+                            preco_unitario=preco_unitario,
                             observacao=payload.observacao,
                             produto_descricao_snapshot=product.nome or product.descricao,
                         )
