@@ -454,30 +454,25 @@ class PedidoAdminService:
 
         if tipo == TipoEntregaEnum.MESA:
             if payload.acao == PedidoItemMutationAction.ADD:
-                if payload.receita_id or payload.combo_id or payload.complementos:
-                    from app.api.pedidos.services.service_pedidos_mesa import AdicionarProdutoGenericoRequest
+                # Usa adicionar_produto_generico para aceitar qualquer tipo (produto, receita ou combo)
+                from app.api.pedidos.services.service_pedidos_mesa import AdicionarProdutoGenericoRequest
 
-                    body = AdicionarProdutoGenericoRequest(
-                        produto_cod_barras=payload.produto_cod_barras,
-                        receita_id=payload.receita_id,
-                        combo_id=payload.combo_id,
-                        quantidade=payload.quantidade or 1,
-                        observacao=payload.observacao,
-                        complementos=payload.complementos,
+                # Valida que pelo menos um identificador foi enviado
+                if not payload.produto_cod_barras and not payload.receita_id and not payload.combo_id:
+                    raise HTTPException(
+                        status.HTTP_400_BAD_REQUEST,
+                        "É necessário informar produto_cod_barras, receita_id ou combo_id"
                     )
-                    self.mesa_service.adicionar_produto_generico(pedido_id, body)
-                else:
-                    from app.api.pedidos.services.service_pedidos_mesa import AdicionarItemRequest
 
-                    if not payload.produto_cod_barras:
-                        raise HTTPException(status.HTTP_400_BAD_REQUEST, "produto_cod_barras é obrigatório para adicionar item simples")
-                    
-                    body = AdicionarItemRequest(
-                        produto_cod_barras=payload.produto_cod_barras,
-                        quantidade=payload.quantidade or 1,
-                        observacao=payload.observacao,
-                    )
-                    self.mesa_service.adicionar_item(pedido_id, body)
+                body = AdicionarProdutoGenericoRequest(
+                    produto_cod_barras=payload.produto_cod_barras,
+                    receita_id=payload.receita_id,
+                    combo_id=payload.combo_id,
+                    quantidade=payload.quantidade or 1,
+                    observacao=payload.observacao,
+                    complementos=payload.complementos,
+                )
+                self.mesa_service.adicionar_produto_generico(pedido_id, body)
             elif payload.acao == PedidoItemMutationAction.REMOVE:
                 if not payload.item_id:
                     raise HTTPException(status.HTTP_400_BAD_REQUEST, "item_id é obrigatório para remover item.")
@@ -488,32 +483,28 @@ class PedidoAdminService:
             return self._build_pedido_response(pedido_atualizado)
 
         if tipo == TipoEntregaEnum.BALCAO:
-            from app.api.pedidos.services.service_pedidos_balcao import (
-                AdicionarItemRequest as BalcaoAdicionarItemRequest,
-                AdicionarProdutoGenericoRequest as BalcaoProdutoGenericoRequest,
-            )
-
             if payload.acao == PedidoItemMutationAction.ADD:
-                if payload.receita_id or payload.combo_id or payload.complementos:
-                    body = BalcaoProdutoGenericoRequest(
-                        produto_cod_barras=payload.produto_cod_barras,
-                        receita_id=payload.receita_id,
-                        combo_id=payload.combo_id,
-                        quantidade=payload.quantidade or 1,
-                        observacao=payload.observacao,
-                        complementos=payload.complementos,
+                # Usa adicionar_produto_generico para aceitar qualquer tipo (produto, receita ou combo)
+                from app.api.pedidos.services.service_pedidos_balcao import (
+                    AdicionarProdutoGenericoRequest as BalcaoProdutoGenericoRequest,
+                )
+
+                # Valida que pelo menos um identificador foi enviado
+                if not payload.produto_cod_barras and not payload.receita_id and not payload.combo_id:
+                    raise HTTPException(
+                        status.HTTP_400_BAD_REQUEST,
+                        "É necessário informar produto_cod_barras, receita_id ou combo_id"
                     )
-                    self.balcao_service.adicionar_produto_generico(pedido_id, body)
-                else:
-                    if not payload.produto_cod_barras:
-                        raise HTTPException(status.HTTP_400_BAD_REQUEST, "produto_cod_barras é obrigatório para adicionar item simples")
-                    
-                    body = BalcaoAdicionarItemRequest(
-                        produto_cod_barras=payload.produto_cod_barras,
-                        quantidade=payload.quantidade or 1,
-                        observacao=payload.observacao,
-                    )
-                    self.balcao_service.adicionar_item(pedido_id, body)
+
+                body = BalcaoProdutoGenericoRequest(
+                    produto_cod_barras=payload.produto_cod_barras,
+                    receita_id=payload.receita_id,
+                    combo_id=payload.combo_id,
+                    quantidade=payload.quantidade or 1,
+                    observacao=payload.observacao,
+                    complementos=payload.complementos,
+                )
+                self.balcao_service.adicionar_produto_generico(pedido_id, body)
             elif payload.acao == PedidoItemMutationAction.REMOVE:
                 if not payload.item_id:
                     raise HTTPException(status.HTTP_400_BAD_REQUEST, "item_id é obrigatório para remover item.")
