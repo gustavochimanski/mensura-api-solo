@@ -90,7 +90,7 @@ class PedidoAdminService:
         return TipoEntregaEnum(str(tipo))
 
     def _build_pedido_response(self, pedido: PedidoUnificadoModel) -> PedidoResponse:
-        return self.pedido_service.response_builder.build_pedido_response(pedido)
+        return self.pedido_service.response_builder.pedido_to_response(pedido)
 
     # ------------------------------------------------------------------ #
     # Listagem e consulta
