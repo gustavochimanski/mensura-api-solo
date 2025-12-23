@@ -96,10 +96,11 @@ class BuscaGlobalService:
             )
         else:
             # Busca por termo (descrição ou código de barras)
+            # Usa func.lower para garantir busca case-insensitive e normalizar ambos os lados
             produtos_query = produtos_query.filter(
                 or_(
-                    ProdutoModel.descricao.ilike(f"%{termo_lower}%"),
-                    ProdutoModel.cod_barras.ilike(f"%{termo_lower}%"),
+                    func.lower(ProdutoModel.descricao).contains(termo_lower),
+                    func.lower(ProdutoModel.cod_barras).contains(termo_lower),
                 )
             ).order_by(ProdutoModel.created_at.asc())
 
@@ -126,12 +127,18 @@ class BuscaGlobalService:
             ).order_by(ReceitaModel.id.asc())
         else:
             # Busca por termo (nome ou descrição)
-            receitas_query = receitas_query.filter(
-                or_(
-                    ReceitaModel.nome.ilike(f"%{termo_lower}%"),
-                    ReceitaModel.descricao.ilike(f"%{termo_lower}%"),
+            # Usa func.lower para garantir busca case-insensitive e normalizar ambos os lados
+            condicoes = [
+                func.lower(ReceitaModel.nome).contains(termo_lower),
+            ]
+            # Adiciona busca na descrição apenas se o campo não for NULL
+            condicoes.append(
+                and_(
+                    ReceitaModel.descricao.isnot(None),
+                    func.lower(ReceitaModel.descricao).contains(termo_lower)
                 )
-            ).order_by(ReceitaModel.id.asc())
+            )
+            receitas_query = receitas_query.filter(or_(*condicoes)).order_by(ReceitaModel.id.asc())
 
         receitas_result = receitas_query.limit(limit).all()
 
@@ -153,12 +160,18 @@ class BuscaGlobalService:
             ).order_by(ComboModel.id.asc())
         else:
             # Busca por termo (título ou descrição)
-            combos_query = combos_query.filter(
-                or_(
-                    ComboModel.titulo.ilike(f"%{termo_lower}%"),
-                    ComboModel.descricao.ilike(f"%{termo_lower}%"),
+            # Usa func.lower para garantir busca case-insensitive e normalizar ambos os lados
+            condicoes = []
+            # Adiciona busca no título apenas se o campo não for NULL
+            condicoes.append(
+                and_(
+                    ComboModel.titulo.isnot(None),
+                    func.lower(ComboModel.titulo).contains(termo_lower)
                 )
-            ).order_by(ComboModel.id.asc())
+            )
+            # Descrição sempre existe (não é NULL)
+            condicoes.append(func.lower(ComboModel.descricao).contains(termo_lower))
+            combos_query = combos_query.filter(or_(*condicoes)).order_by(ComboModel.id.asc())
 
         combos_result = combos_query.limit(limit).all()
 
