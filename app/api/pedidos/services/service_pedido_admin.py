@@ -466,15 +466,19 @@ class PedidoAdminService:
                         complementos=payload.complementos,
                     )
                     self.mesa_service.adicionar_produto_generico(pedido_id, body)
-                from app.api.pedidos.services.service_pedidos_mesa import AdicionarItemRequest
+                else:
+                    from app.api.pedidos.services.service_pedidos_mesa import AdicionarItemRequest
 
-                body = AdicionarItemRequest(
-                    produto_cod_barras=payload.produto_cod_barras or "",
-                    quantidade=payload.quantidade or 1,
-                    observacao=payload.observacao,
-                )
-                self.mesa_service.adicionar_item(pedido_id, body)
-            if payload.acao == PedidoItemMutationAction.REMOVE:
+                    if not payload.produto_cod_barras:
+                        raise HTTPException(status.HTTP_400_BAD_REQUEST, "produto_cod_barras é obrigatório para adicionar item simples")
+                    
+                    body = AdicionarItemRequest(
+                        produto_cod_barras=payload.produto_cod_barras,
+                        quantidade=payload.quantidade or 1,
+                        observacao=payload.observacao,
+                    )
+                    self.mesa_service.adicionar_item(pedido_id, body)
+            elif payload.acao == PedidoItemMutationAction.REMOVE:
                 if not payload.item_id:
                     raise HTTPException(status.HTTP_400_BAD_REQUEST, "item_id é obrigatório para remover item.")
                 self.mesa_service.remover_item(pedido_id, payload.item_id)
@@ -500,13 +504,17 @@ class PedidoAdminService:
                         complementos=payload.complementos,
                     )
                     self.balcao_service.adicionar_produto_generico(pedido_id, body)
-                body = BalcaoAdicionarItemRequest(
-                    produto_cod_barras=payload.produto_cod_barras or "",
-                    quantidade=payload.quantidade or 1,
-                    observacao=payload.observacao,
-                )
-                self.balcao_service.adicionar_item(pedido_id, body)
-            if payload.acao == PedidoItemMutationAction.REMOVE:
+                else:
+                    if not payload.produto_cod_barras:
+                        raise HTTPException(status.HTTP_400_BAD_REQUEST, "produto_cod_barras é obrigatório para adicionar item simples")
+                    
+                    body = BalcaoAdicionarItemRequest(
+                        produto_cod_barras=payload.produto_cod_barras,
+                        quantidade=payload.quantidade or 1,
+                        observacao=payload.observacao,
+                    )
+                    self.balcao_service.adicionar_item(pedido_id, body)
+            elif payload.acao == PedidoItemMutationAction.REMOVE:
                 if not payload.item_id:
                     raise HTTPException(status.HTTP_400_BAD_REQUEST, "item_id é obrigatório para remover item.")
                 self.balcao_service.remover_item(pedido_id, payload.item_id)
