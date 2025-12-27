@@ -24,6 +24,10 @@ class ConnectionManager:
         """Aceita uma nova conexão WebSocket"""
         await websocket.accept()
         
+        # Normaliza IDs para string para evitar inconsistências
+        user_id = str(user_id)
+        empresa_id = str(empresa_id)
+        
         # Adiciona à lista de conexões do usuário
         if user_id not in self.active_connections:
             self.active_connections[user_id] = set()
@@ -86,12 +90,31 @@ class ConnectionManager:
     
     async def send_to_empresa(self, empresa_id: str, message: Dict[str, Any]) -> int:
         """Envia mensagem para todos os usuários de uma empresa"""
+        # Normaliza empresa_id para string para evitar inconsistências
+        empresa_id = str(empresa_id)
+        
+        # Verifica se a empresa tem conexões (tenta também como int caso esteja armazenado assim)
         if empresa_id not in self.empresa_connections:
-            logger.warning(f"Empresa {empresa_id} não tem conexões ativas")
-            return 0
+            # Tenta também verificar se há conexões com empresa_id como int
+            empresa_id_int = None
+            try:
+                empresa_id_int = str(int(empresa_id))
+            except (ValueError, TypeError):
+                pass
+            
+            if empresa_id_int and empresa_id_int in self.empresa_connections:
+                # Se encontrou com int, usa esse
+                empresa_id = empresa_id_int
+            else:
+                logger.warning(
+                    f"Empresa {empresa_id} não tem conexões ativas. "
+                    f"Empresas conectadas: {list(self.empresa_connections.keys())}"
+                )
+                return 0
         
         connections = self.empresa_connections[empresa_id].copy()
         if not connections:
+            logger.warning(f"Empresa {empresa_id} não tem conexões ativas (conjunto vazio)")
             return 0
         
         success_count = 0
@@ -150,6 +173,16 @@ class ConnectionManager:
     def get_user_connections(self, user_id: str) -> int:
         """Retorna número de conexões de um usuário"""
         return len(self.active_connections.get(user_id, set()))
+    
+    def is_empresa_connected(self, empresa_id: str) -> bool:
+        """Verifica se uma empresa tem conexões ativas"""
+        empresa_id = str(empresa_id)
+        return empresa_id in self.empresa_connections and len(self.empresa_connections[empresa_id]) > 0
+    
+    def get_empresa_connections(self, empresa_id: str) -> int:
+        """Retorna número de conexões de uma empresa"""
+        empresa_id = str(empresa_id)
+        return len(self.empresa_connections.get(empresa_id, set()))
 
 # Instância global do gerenciador de conexões
 websocket_manager = ConnectionManager()

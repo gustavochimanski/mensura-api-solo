@@ -49,7 +49,7 @@ class PedidoNotificationService:
             )
             
             # Envia notificação em tempo real via WebSocket
-            await self._send_realtime_notification(
+            sent_count = await self._send_realtime_notification(
                 empresa_id=empresa_id,
                 notification_type="novo_pedido",
                 title="Novo Pedido Recebido",
@@ -63,7 +63,11 @@ class PedidoNotificationService:
                 }
             )
             
-            logger.info(f"Notificação de novo pedido enviada: {pedido_id} para empresa {empresa_id}")
+            if sent_count > 0:
+                logger.info(f"Notificação de novo pedido enviada: {pedido_id} para empresa {empresa_id} ({sent_count} conexões)")
+            else:
+                logger.warning(f"Notificação de novo pedido criada mas não enviada: {pedido_id} para empresa {empresa_id} (nenhuma conexão ativa)")
+            
             return event_id
             
         except Exception as e:
@@ -201,9 +205,16 @@ class PedidoNotificationService:
         title: str,
         message: str,
         data: Dict[str, Any]
-    ):
-        """Envia notificação em tempo real via WebSocket"""
+    ) -> int:
+        """Envia notificação em tempo real via WebSocket
+        
+        Returns:
+            Número de conexões que receberam a notificação (0 se nenhuma)
+        """
         try:
+            # Normaliza empresa_id para string
+            empresa_id = str(empresa_id)
+            
             notification_data = {
                 "type": "notification",
                 "notification_type": notification_type,
@@ -217,11 +228,9 @@ class PedidoNotificationService:
             # Envia para todos os usuários da empresa conectados
             sent_count = await websocket_manager.send_to_empresa(empresa_id, notification_data)
             
-            if sent_count > 0:
-                logger.info(f"Notificação enviada para {sent_count} usuários da empresa {empresa_id}")
-            else:
-                logger.warning(f"Nenhum usuário conectado na empresa {empresa_id}")
+            return sent_count
                 
         except Exception as e:
-            logger.error(f"Erro ao enviar notificação em tempo real: {e}")
-            # Não propaga o erro para não quebrar o fluxo principal
+            logger.error(f"Erro ao enviar notificação em tempo real: {e}", exc_info=True)
+            # Retorna 0 em caso de erro
+            return 0
