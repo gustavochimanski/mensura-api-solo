@@ -834,6 +834,18 @@ class PedidoService:
             self.repo.rollback()
             raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Erro ao finalizar pedido: {e}")
 
+        # Notifica novo pedido em background
+        try:
+            import asyncio
+            from app.api.pedidos.utils.pedido_notification_helper import notificar_novo_pedido
+            # Recarrega pedido com todos os relacionamentos para a notificação
+            pedido_completo = self.repo.get_pedido(pedido.id)
+            if pedido_completo:
+                asyncio.create_task(notificar_novo_pedido(pedido_completo))
+        except Exception as e:
+            # Loga erro mas não quebra o fluxo
+            logger.error(f"Erro ao agendar notificação de novo pedido {pedido.id}: {e}")
+
         return self._pedido_to_response(pedido)
 
     async def confirmar_pagamento(

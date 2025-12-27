@@ -84,6 +84,21 @@ async def finalizar_checkout(
         except (TypeError, ValueError):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Código da mesa inválido")
 
+        # Extrai itens, receitas e combos do payload
+        produtos_payload = payload.produtos if payload.produtos else None
+        itens_list = (
+            (produtos_payload.itens if produtos_payload and produtos_payload.itens is not None else payload.itens)
+            or []
+        )
+        receitas_list = (
+            (produtos_payload.receitas if produtos_payload and produtos_payload.receitas is not None else payload.receitas)
+            or []
+        )
+        combos_list = (
+            (produtos_payload.combos if produtos_payload and produtos_payload.combos is not None else payload.combos)
+            or []
+        )
+        
         mesa_payload = PedidoMesaCreate(
             empresa_id=payload.empresa_id,
             mesa_id=mesa_codigo,
@@ -95,12 +110,12 @@ async def finalizar_checkout(
                     produto_cod_barras=item.produto_cod_barras,
                     quantidade=item.quantidade,
                     observacao=item.observacao,
+                    complementos=item.complementos if hasattr(item, 'complementos') else None,
                 )
-                for item in (
-                    (payload.produtos.itens if payload.produtos and payload.produtos.itens is not None else payload.itens)
-                    or []
-                )
-            ],
+                for item in itens_list
+            ] if itens_list else None,
+            receitas=receitas_list if receitas_list else None,
+            combos=combos_list if combos_list else None,
         )
         return mesa_service.criar_pedido(mesa_payload)
 
@@ -119,6 +134,21 @@ async def finalizar_checkout(
             except ValueError:
                 raise HTTPException(status.HTTP_400_BAD_REQUEST, "Código da mesa inválido")
 
+        # Extrai itens, receitas e combos do payload
+        produtos_payload = payload.produtos if payload.produtos else None
+        itens_list = (
+            (produtos_payload.itens if produtos_payload and produtos_payload.itens is not None else payload.itens)
+            or []
+        )
+        receitas_list = (
+            (produtos_payload.receitas if produtos_payload and produtos_payload.receitas is not None else payload.receitas)
+            or []
+        )
+        combos_list = (
+            (produtos_payload.combos if produtos_payload and produtos_payload.combos is not None else payload.combos)
+            or []
+        )
+        
         balcao_payload = PedidoBalcaoCreate(
             empresa_id=payload.empresa_id,
             mesa_id=mesa_codigo,
@@ -129,12 +159,12 @@ async def finalizar_checkout(
                     produto_cod_barras=item.produto_cod_barras,
                     quantidade=item.quantidade,
                     observacao=item.observacao,
+                    complementos=item.complementos if hasattr(item, 'complementos') else None,
                 )
-                for item in (
-                    (payload.produtos.itens if payload.produtos and payload.produtos.itens is not None else payload.itens)
-                    or []
-                )
-            ],
+                for item in itens_list
+            ] if itens_list else None,
+            receitas=receitas_list if receitas_list else None,
+            combos=combos_list if combos_list else None,
         )
         return balcao_service.criar_pedido(balcao_payload)
 
