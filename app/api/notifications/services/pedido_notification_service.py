@@ -49,10 +49,18 @@ class PedidoNotificationService:
             )
             
             # Verifica se há empresa e clientes conectados antes de enviar
-            if not websocket_manager.is_empresa_connected(empresa_id):
+            # Normaliza empresa_id para garantir consistência
+            empresa_id_normalized = str(empresa_id)
+            
+            # Obtém estatísticas para debug
+            stats = websocket_manager.get_connection_stats()
+            
+            if not websocket_manager.is_empresa_connected(empresa_id_normalized):
                 logger.info(
-                    f"Notificação kanban não enviada: empresa {empresa_id} não tem conexões ativas. "
-                    f"Pedido {pedido_id} criado mas nenhum cliente conectado."
+                    f"Notificação kanban não enviada: empresa {empresa_id_normalized} não tem conexões ativas. "
+                    f"Pedido {pedido_id} criado mas nenhum cliente conectado. "
+                    f"Empresas conectadas: {stats.get('empresas_with_connections', [])}, "
+                    f"Total de conexões: {stats.get('total_connections', 0)}"
                 )
                 return event_id
             
