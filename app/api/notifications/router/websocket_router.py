@@ -111,6 +111,19 @@ async def _handle_client_message(websocket: WebSocket, user_id: str, empresa_id:
             "timestamp": datetime.utcnow().isoformat()
         }
         await websocket.send_text(json.dumps(subscription_message))
+    
+    elif message_type == "set_route":
+        # Cliente informa que mudou de rota
+        route = message.get("route", "")
+        websocket_manager.set_route(websocket, route)
+        route_message = {
+            "type": "route_updated",
+            "message": f"Rota atualizada para: {route}",
+            "route": route,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        await websocket.send_text(json.dumps(route_message))
+        logger.info(f"Rota atualizada para usuário {user_id}, empresa {empresa_id}: {route}")
         
     elif message_type == "get_stats":
         # Cliente quer estatísticas da conexão

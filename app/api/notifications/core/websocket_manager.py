@@ -19,6 +19,8 @@ class ConnectionManager:
         self.websocket_to_user: Dict[WebSocket, str] = {}
         # Mapeia WebSocket para empresa_id
         self.websocket_to_empresa: Dict[WebSocket, str] = {}
+        # Mapeia WebSocket para rota atual do cliente
+        self.websocket_to_route: Dict[WebSocket, str] = {}
     
     async def connect(self, websocket: WebSocket, user_id: str, empresa_id: str):
         """Aceita uma nova conexão WebSocket"""
@@ -41,6 +43,8 @@ class ConnectionManager:
         # Mapeia WebSocket para identificadores
         self.websocket_to_user[websocket] = user_id
         self.websocket_to_empresa[websocket] = empresa_id
+        # Inicializa rota como vazia (cliente precisa informar a rota)
+        self.websocket_to_route[websocket] = ""
         
         logger.info(f"WebSocket conectado: usuário {user_id}, empresa {empresa_id}")
     
@@ -62,6 +66,7 @@ class ConnectionManager:
         # Remove mapeamentos
         self.websocket_to_user.pop(websocket, None)
         self.websocket_to_empresa.pop(websocket, None)
+        self.websocket_to_route.pop(websocket, None)
         
         logger.info(f"WebSocket desconectado: usuário {user_id}, empresa {empresa_id}")
     
@@ -183,6 +188,93 @@ class ConnectionManager:
         """Retorna número de conexões de uma empresa"""
         empresa_id = str(empresa_id)
         return len(self.empresa_connections.get(empresa_id, set()))
+    
+    def set_route(self, websocket: WebSocket, route: str):
+        """Define a rota atual de um cliente conectado"""
+        if websocket in self.websocket_to_user:
+            self.websocket_to_route[websocket] = route
+            user_id = self.websocket_to_user.get(websocket)
+            logger.debug(f"Rota atualizada para usuário {user_id}: {route}")
+    
+    def get_route(self, websocket: WebSocket) -> Optional[str]:
+        """Retorna a rota atual de um cliente"""
+        return self.websocket_to_route.get(websocket, "")
+    
+    async def send_to_empresa_on_route(
+        self, 
+        empresa_id: str, 
+        message: Dict[str, Any], 
+        required_route: str = "/pedidos"
+    ) -> int:
+        """
+        Envia mensagem apenas para usuários de uma empresa que estão em uma rota específica
+        
+        Args:
+            empresa_id: ID da empresa
+            message: Mensagem a ser enviada
+            required_route: Rota que o cliente deve estar para receber a mensagem (padrão: /pedidos)
+        
+        Returns:
+            Número de conexões que receberam a mensagem
+        """
+        # Normaliza empresa_id para string
+        empresa_id = str(empresa_id)
+        required_route = required_route.strip().lower()
+        
+        # Verifica se a empresa tem conexões
+        if empresa_id not in self.empresa_connections:
+            # Tenta também verificar se há conexões com empresa_id como int
+            empresa_id_int = None
+            try:
+                empresa_id_int = str(int(empresa_id))
+            except (ValueError, TypeError):
+                pass
+            
+            if empresa_id_int and empresa_id_int in self.empresa_connections:
+                empresa_id = empresa_id_int
+            else:
+                logger.warning(
+                    f"Empresa {empresa_id} não tem conexões ativas para rota {required_route}. "
+                    f"Empresas conectadas: {list(self.empresa_connections.keys())}"
+                )
+                return 0
+        
+        connections = self.empresa_connections[empresa_id].copy()
+        if not connections:
+            logger.warning(f"Empresa {empresa_id} não tem conexões ativas (conjunto vazio)")
+            return 0
+        
+        # Filtra conexões que estão na rota requerida
+        filtered_connections = []
+        for websocket in connections:
+            current_route = self.websocket_to_route.get(websocket, "").strip().lower()
+            if current_route == required_route or current_route.endswith(required_route):
+                filtered_connections.append(websocket)
+        
+        if not filtered_connections:
+            logger.info(
+                f"Nenhum cliente da empresa {empresa_id} está na rota {required_route}. "
+                f"Total de conexões: {len(connections)}, "
+                f"Rotas ativas: {[self.websocket_to_route.get(ws, '') for ws in connections]}"
+            )
+            return 0
+        
+        success_count = 0
+        for websocket in filtered_connections:
+            try:
+                await websocket.send_text(json.dumps(message))
+                success_count += 1
+            except Exception as e:
+                logger.error(f"Erro ao enviar mensagem para empresa {empresa_id} na rota {required_route}: {e}")
+                # Remove conexão inválida
+                self.disconnect(websocket)
+        
+        logger.info(
+            f"Mensagem enviada para {success_count}/{len(filtered_connections)} conexões "
+            f"da empresa {empresa_id} na rota {required_route} "
+            f"(total de conexões da empresa: {len(connections)})"
+        )
+        return success_count
 
 # Instância global do gerenciador de conexões
 websocket_manager = ConnectionManager()

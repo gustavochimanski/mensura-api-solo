@@ -148,8 +148,9 @@ class NotificationWebSocket {
         
         // Processa diferentes tipos de notificação
         switch (data.notification_type) {
-            case 'novo_pedido':
-                this.handleNovoPedido(data);
+            case 'kanban':
+            case 'novo_pedido': // Mantém compatibilidade com versão antiga
+                this.handleKanban(data);
                 break;
                 
             case 'pedido_aprovado':
@@ -170,10 +171,10 @@ class NotificationWebSocket {
     }
     
     /**
-     * Processa notificação de novo pedido
+     * Processa notificação kanban (novo pedido)
      */
-    handleNovoPedido(data) {
-        console.log('🎉 Novo pedido recebido!', data);
+    handleKanban(data) {
+        console.log('🎉 Notificação kanban recebida!', data);
         
         // Exibe notificação visual
         this.showNotification(data.title, data.message, 'success');
@@ -272,6 +273,22 @@ class NotificationWebSocket {
     }
     
     /**
+     * Informa ao servidor que o cliente mudou de rota
+     * IMPORTANTE: Chame este método sempre que o usuário navegar para /pedidos
+     * 
+     * @param {string} route - Rota atual (ex: "/pedidos")
+     */
+    setRoute(route) {
+        if (this.isConnected) {
+            this.send({
+                type: 'set_route',
+                route: route
+            });
+            console.log(`Rota atualizada para: ${route}`);
+        }
+    }
+    
+    /**
      * Define callbacks
      */
     onConnect(callback) {
@@ -319,6 +336,43 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Conecta
     notificationWS.connect();
+    
+    // IMPORTANTE: Informa a rota atual ao conectar
+    // Se já estiver na rota /pedidos, informe imediatamente
+    if (window.location.pathname.includes('/pedidos')) {
+        setTimeout(() => {
+            notificationWS.setRoute('/pedidos');
+        }, 1000); // Aguarda 1 segundo para garantir que a conexão está estabelecida
+    }
+    
+    // Monitora mudanças de rota (para SPAs com React Router, Vue Router, etc.)
+    // Exemplo para React Router:
+    // history.listen((location) => {
+    //     if (location.pathname.includes('/pedidos')) {
+    //         notificationWS.setRoute('/pedidos');
+    //     } else {
+    //         notificationWS.setRoute(''); // Limpa a rota se sair de /pedidos
+    //     }
+    // });
+    
+    // Exemplo para navegação tradicional:
+    const originalPushState = history.pushState;
+    history.pushState = function(...args) {
+        originalPushState.apply(history, args);
+        if (window.location.pathname.includes('/pedidos')) {
+            notificationWS.setRoute('/pedidos');
+        } else {
+            notificationWS.setRoute('');
+        }
+    };
+    
+    window.addEventListener('popstate', () => {
+        if (window.location.pathname.includes('/pedidos')) {
+            notificationWS.setRoute('/pedidos');
+        } else {
+            notificationWS.setRoute('');
+        }
+    });
     
     // Expõe globalmente para uso em outras partes da aplicação
     window.notificationWS = notificationWS;
