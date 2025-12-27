@@ -52,17 +52,37 @@ class PedidoNotificationService:
             # Normaliza empresa_id para garantir consistência
             empresa_id_normalized = str(empresa_id)
             
+            logger.debug(
+                f"[NOTIFY] Verificando conexões antes de enviar notificação kanban. "
+                f"pedido_id={pedido_id}, empresa_id={empresa_id} (normalized={empresa_id_normalized}), "
+                f"tipo_original={type(empresa_id)}"
+            )
+            
             # Obtém estatísticas para debug
             stats = websocket_manager.get_connection_stats()
+            logger.debug(
+                f"[NOTIFY] Estado atual das conexões: "
+                f"total_connections={stats.get('total_connections', 0)}, "
+                f"total_empresas={stats.get('total_empresas_connected', 0)}, "
+                f"empresas={stats.get('empresas_with_connections', [])}, "
+                f"detalhes={stats.get('empresas_details', {})}"
+            )
             
-            if not websocket_manager.is_empresa_connected(empresa_id_normalized):
-                logger.info(
-                    f"Notificação kanban não enviada: empresa {empresa_id_normalized} não tem conexões ativas. "
+            is_connected = websocket_manager.is_empresa_connected(empresa_id_normalized)
+            logger.debug(f"[NOTIFY] Resultado da verificação is_empresa_connected: {is_connected}")
+            
+            if not is_connected:
+                logger.warning(
+                    f"[NOTIFY] Notificação kanban não enviada: empresa {empresa_id_normalized} "
+                    f"(original: {empresa_id}, tipo: {type(empresa_id)}) não tem conexões ativas. "
                     f"Pedido {pedido_id} criado mas nenhum cliente conectado. "
                     f"Empresas conectadas: {stats.get('empresas_with_connections', [])}, "
-                    f"Total de conexões: {stats.get('total_connections', 0)}"
+                    f"Total de conexões: {stats.get('total_connections', 0)}, "
+                    f"Detalhes: {stats.get('empresas_details', {})}"
                 )
                 return event_id
+            
+            logger.debug(f"[NOTIFY] Empresa {empresa_id_normalized} tem conexões ativas. Prosseguindo com envio...")
             
             # Envia notificação em tempo real via WebSocket apenas para clientes na rota /pedidos
             sent_count = await self._send_realtime_notification(

@@ -30,15 +30,24 @@ class ConnectionManager:
         user_id = str(user_id)
         empresa_id = str(empresa_id)
         
+        logger.info(
+            f"[CONNECT] Iniciando conexão - user_id={user_id}, empresa_id={empresa_id}, "
+            f"websocket={id(websocket)}, client={websocket.client if hasattr(websocket, 'client') else 'N/A'}"
+        )
+        
         # Adiciona à lista de conexões do usuário
         if user_id not in self.active_connections:
             self.active_connections[user_id] = set()
+            logger.debug(f"[CONNECT] Criando novo conjunto de conexões para user_id={user_id}")
         self.active_connections[user_id].add(websocket)
+        logger.debug(f"[CONNECT] Adicionado ao active_connections[{user_id}]. Total: {len(self.active_connections[user_id])}")
         
         # Adiciona à lista de conexões da empresa
         if empresa_id not in self.empresa_connections:
             self.empresa_connections[empresa_id] = set()
+            logger.debug(f"[CONNECT] Criando novo conjunto de conexões para empresa_id={empresa_id}")
         self.empresa_connections[empresa_id].add(websocket)
+        logger.debug(f"[CONNECT] Adicionado ao empresa_connections[{empresa_id}]. Total: {len(self.empresa_connections[empresa_id])}")
         
         # Mapeia WebSocket para identificadores
         self.websocket_to_user[websocket] = user_id
@@ -46,29 +55,63 @@ class ConnectionManager:
         # Inicializa rota como vazia (cliente precisa informar a rota)
         self.websocket_to_route[websocket] = ""
         
-        logger.info(f"WebSocket conectado: usuário {user_id}, empresa {empresa_id}")
+        # Log do estado completo após conexão
+        stats = self.get_connection_stats()
+        logger.info(
+            f"[CONNECT] WebSocket conectado com sucesso - user_id={user_id}, empresa_id={empresa_id}. "
+            f"Estado atual: {stats['total_connections']} conexões totais, "
+            f"{stats['total_empresas_connected']} empresas conectadas, "
+            f"Empresas: {stats['empresas_with_connections']}"
+        )
     
     def disconnect(self, websocket: WebSocket):
         """Remove uma conexão WebSocket"""
         user_id = self.websocket_to_user.get(websocket)
         empresa_id = self.websocket_to_empresa.get(websocket)
+        route = self.websocket_to_route.get(websocket, "")
+        
+        logger.info(
+            f"[DISCONNECT] Iniciando desconexão - user_id={user_id}, empresa_id={empresa_id}, "
+            f"route={route}, websocket={id(websocket)}"
+        )
         
         if user_id and user_id in self.active_connections:
+            before_count = len(self.active_connections[user_id])
             self.active_connections[user_id].discard(websocket)
+            after_count = len(self.active_connections[user_id])
+            logger.debug(
+                f"[DISCONNECT] Removido de active_connections[{user_id}]. "
+                f"Antes: {before_count}, Depois: {after_count}"
+            )
             if not self.active_connections[user_id]:
                 del self.active_connections[user_id]
+                logger.debug(f"[DISCONNECT] Conjunto de conexões para user_id={user_id} foi removido (vazio)")
         
         if empresa_id and empresa_id in self.empresa_connections:
+            before_count = len(self.empresa_connections[empresa_id])
             self.empresa_connections[empresa_id].discard(websocket)
+            after_count = len(self.empresa_connections[empresa_id])
+            logger.debug(
+                f"[DISCONNECT] Removido de empresa_connections[{empresa_id}]. "
+                f"Antes: {before_count}, Depois: {after_count}"
+            )
             if not self.empresa_connections[empresa_id]:
                 del self.empresa_connections[empresa_id]
+                logger.debug(f"[DISCONNECT] Conjunto de conexões para empresa_id={empresa_id} foi removido (vazio)")
         
         # Remove mapeamentos
         self.websocket_to_user.pop(websocket, None)
         self.websocket_to_empresa.pop(websocket, None)
         self.websocket_to_route.pop(websocket, None)
         
-        logger.info(f"WebSocket desconectado: usuário {user_id}, empresa {empresa_id}")
+        # Log do estado completo após desconexão
+        stats = self.get_connection_stats()
+        logger.info(
+            f"[DISCONNECT] WebSocket desconectado - user_id={user_id}, empresa_id={empresa_id}. "
+            f"Estado atual: {stats['total_connections']} conexões totais, "
+            f"{stats['total_empresas_connected']} empresas conectadas, "
+            f"Empresas: {stats['empresas_with_connections']}"
+        )
     
     async def send_to_user(self, user_id: str, message: Dict[str, Any]) -> bool:
         """Envia mensagem para um usuário específico"""
@@ -191,7 +234,13 @@ class ConnectionManager:
     def is_empresa_connected(self, empresa_id: str) -> bool:
         """Verifica se uma empresa tem conexões ativas"""
         # Normaliza empresa_id para string
+        original_empresa_id = empresa_id
         empresa_id = str(empresa_id)
+        
+        logger.debug(
+            f"[CHECK] Verificando conexões para empresa_id={empresa_id} (original={original_empresa_id}). "
+            f"Empresas no dicionário: {list(self.empresa_connections.keys())}"
+        )
         
         # Verifica se a empresa tem conexões (tenta também como int caso esteja armazenado assim)
         if empresa_id not in self.empresa_connections:
@@ -199,22 +248,32 @@ class ConnectionManager:
             empresa_id_int = None
             try:
                 empresa_id_int = str(int(empresa_id))
+                logger.debug(f"[CHECK] Tentando empresa_id como int: {empresa_id_int}")
             except (ValueError, TypeError):
+                logger.debug(f"[CHECK] Não foi possível converter empresa_id para int")
                 pass
             
             if empresa_id_int and empresa_id_int in self.empresa_connections:
                 # Se encontrou com int, usa esse
+                logger.debug(f"[CHECK] Encontrado com empresa_id_int={empresa_id_int}")
                 empresa_id = empresa_id_int
             else:
-                logger.debug(
-                    f"Empresa {empresa_id} não tem conexões ativas. "
-                    f"Empresas conectadas: {list(self.empresa_connections.keys())}"
+                logger.warning(
+                    f"[CHECK] Empresa {empresa_id} (original: {original_empresa_id}) não tem conexões ativas. "
+                    f"Empresas conectadas: {list(self.empresa_connections.keys())}, "
+                    f"Tipo original: {type(original_empresa_id)}, "
+                    f"Tentou int: {empresa_id_int}"
                 )
                 return False
         
         # Verifica se há conexões válidas
         connections = self.empresa_connections.get(empresa_id, set())
-        return len(connections) > 0
+        connection_count = len(connections)
+        logger.debug(
+            f"[CHECK] Empresa {empresa_id} tem {connection_count} conexões ativas. "
+            f"Rotas: {[self.websocket_to_route.get(ws, '') for ws in connections]}"
+        )
+        return connection_count > 0
     
     def get_empresa_connections(self, empresa_id: str) -> int:
         """Retorna número de conexões de uma empresa"""

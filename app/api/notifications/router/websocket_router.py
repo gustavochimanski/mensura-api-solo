@@ -29,7 +29,11 @@ async def websocket_notifications(
         user_id = str(user_id)
         empresa_id = str(empresa_id)
         
-        logger.info(f"Tentando conectar WebSocket: usuário {user_id}, empresa {empresa_id}")
+        logger.info(
+            f"[WS_ROUTER] Tentando conectar WebSocket - user_id={user_id}, empresa_id={empresa_id}, "
+            f"tipo_user_id={type(user_id)}, tipo_empresa_id={type(empresa_id)}, "
+            f"websocket_id={id(websocket)}, client={websocket.client if hasattr(websocket, 'client') else 'N/A'}"
+        )
         
         # Conecta o WebSocket
         await websocket_manager.connect(websocket, user_id, empresa_id)
@@ -37,9 +41,11 @@ async def websocket_notifications(
         # Verifica se a conexão foi registrada
         stats = websocket_manager.get_connection_stats()
         logger.info(
-            f"WebSocket conectado: usuário {user_id}, empresa {empresa_id}. "
+            f"[WS_ROUTER] WebSocket conectado e registrado - user_id={user_id}, empresa_id={empresa_id}. "
             f"Total de conexões: {stats['total_connections']}, "
-            f"Empresas conectadas: {stats['empresas_with_connections']}"
+            f"Empresas conectadas: {stats['total_empresas_connected']}, "
+            f"Empresas: {stats['empresas_with_connections']}, "
+            f"Detalhes: {stats.get('empresas_details', {})}"
         )
         
         # Envia mensagem de boas-vindas
@@ -63,7 +69,10 @@ async def websocket_notifications(
                 await _handle_client_message(websocket, user_id, empresa_id, message)
                 
             except WebSocketDisconnect:
-                logger.info(f"WebSocket desconectado pelo cliente: usuário {user_id}, empresa {empresa_id}")
+                logger.info(
+                    f"[WS_ROUTER] WebSocket desconectado pelo cliente - user_id={user_id}, empresa_id={empresa_id}, "
+                    f"websocket_id={id(websocket)}"
+                )
                 break
             except json.JSONDecodeError:
                 logger.warning(f"Mensagem inválida recebida de {user_id}")
@@ -78,15 +87,24 @@ async def websocket_notifications(
                 break
                 
     except Exception as e:
-        logger.error(f"Erro ao conectar WebSocket para usuário {user_id}, empresa {empresa_id}: {e}", exc_info=True)
+        logger.error(
+            f"[WS_ROUTER] Erro ao conectar WebSocket - user_id={user_id}, empresa_id={empresa_id}, "
+            f"websocket_id={id(websocket)}, erro={e}", 
+            exc_info=True
+        )
     finally:
         # Remove a conexão quando desconectar
+        logger.info(
+            f"[WS_ROUTER] Executando cleanup - user_id={user_id}, empresa_id={empresa_id}, "
+            f"websocket_id={id(websocket)}"
+        )
         websocket_manager.disconnect(websocket)
         stats_after = websocket_manager.get_connection_stats()
         logger.info(
-            f"WebSocket desconectado: usuário {user_id}, empresa {empresa_id}. "
+            f"[WS_ROUTER] WebSocket desconectado e removido - user_id={user_id}, empresa_id={empresa_id}. "
             f"Conexões restantes: {stats_after['total_connections']}, "
-            f"Empresas conectadas: {stats_after['empresas_with_connections']}"
+            f"Empresas conectadas: {stats_after['total_empresas_connected']}, "
+            f"Empresas: {stats_after['empresas_with_connections']}"
         )
 
 async def _handle_client_message(websocket: WebSocket, user_id: str, empresa_id: str, message: Dict[str, Any]):
@@ -115,6 +133,10 @@ async def _handle_client_message(websocket: WebSocket, user_id: str, empresa_id:
     elif message_type == "set_route":
         # Cliente informa que mudou de rota
         route = message.get("route", "")
+        logger.info(
+            f"[WS_ROUTER] Recebida mensagem set_route - user_id={user_id}, empresa_id={empresa_id}, "
+            f"route={route}, websocket_id={id(websocket)}"
+        )
         websocket_manager.set_route(websocket, route)
         route_message = {
             "type": "route_updated",
@@ -123,7 +145,14 @@ async def _handle_client_message(websocket: WebSocket, user_id: str, empresa_id:
             "timestamp": datetime.utcnow().isoformat()
         }
         await websocket.send_text(json.dumps(route_message))
-        logger.info(f"Rota atualizada para usuário {user_id}, empresa {empresa_id}: {route}")
+        
+        # Log do estado após atualizar rota
+        stats = websocket_manager.get_connection_stats()
+        logger.info(
+            f"[WS_ROUTER] Rota atualizada - user_id={user_id}, empresa_id={empresa_id}, route={route}. "
+            f"Estado: {stats['total_connections']} conexões, "
+            f"Empresas: {stats['empresas_with_connections']}"
+        )
         
     elif message_type == "get_stats":
         # Cliente quer estatísticas da conexão
