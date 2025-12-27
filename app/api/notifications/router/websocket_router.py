@@ -25,9 +25,22 @@ async def websocket_notifications(
         empresa_id: ID da empresa
     """
     try:
+        # Normaliza IDs para garantir consistência
+        user_id = str(user_id)
+        empresa_id = str(empresa_id)
+        
+        logger.info(f"Tentando conectar WebSocket: usuário {user_id}, empresa {empresa_id}")
+        
         # Conecta o WebSocket
         await websocket_manager.connect(websocket, user_id, empresa_id)
-        logger.info(f"WebSocket conectado: usuário {user_id}, empresa {empresa_id}")
+        
+        # Verifica se a conexão foi registrada
+        stats = websocket_manager.get_connection_stats()
+        logger.info(
+            f"WebSocket conectado: usuário {user_id}, empresa {empresa_id}. "
+            f"Total de conexões: {stats['total_connections']}, "
+            f"Empresas conectadas: {stats['empresas_with_connections']}"
+        )
         
         # Envia mensagem de boas-vindas
         welcome_message = {
@@ -50,7 +63,7 @@ async def websocket_notifications(
                 await _handle_client_message(websocket, user_id, empresa_id, message)
                 
             except WebSocketDisconnect:
-                logger.info(f"WebSocket desconectado: usuário {user_id}")
+                logger.info(f"WebSocket desconectado pelo cliente: usuário {user_id}, empresa {empresa_id}")
                 break
             except json.JSONDecodeError:
                 logger.warning(f"Mensagem inválida recebida de {user_id}")
@@ -65,10 +78,16 @@ async def websocket_notifications(
                 break
                 
     except Exception as e:
-        logger.error(f"Erro ao conectar WebSocket para usuário {user_id}: {e}")
+        logger.error(f"Erro ao conectar WebSocket para usuário {user_id}, empresa {empresa_id}: {e}", exc_info=True)
     finally:
         # Remove a conexão quando desconectar
         websocket_manager.disconnect(websocket)
+        stats_after = websocket_manager.get_connection_stats()
+        logger.info(
+            f"WebSocket desconectado: usuário {user_id}, empresa {empresa_id}. "
+            f"Conexões restantes: {stats_after['total_connections']}, "
+            f"Empresas conectadas: {stats_after['empresas_with_connections']}"
+        )
 
 async def _handle_client_message(websocket: WebSocket, user_id: str, empresa_id: str, message: Dict[str, Any]):
     """Processa mensagens recebidas do cliente"""
@@ -117,9 +136,35 @@ async def get_connection_stats(current_user = Depends(get_current_user)):
     """Retorna estatísticas das conexões WebSocket"""
     try:
         stats = websocket_manager.get_connection_stats()
-        return stats
+        return {
+            **stats,
+            "message": "Use estas informações para verificar se há conexões WebSocket ativas"
+        }
     except Exception as e:
         logger.error(f"Erro ao obter estatísticas de conexões: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/connections/check/{empresa_id}")
+async def check_empresa_connections(
+    empresa_id: str,
+    current_user = Depends(get_current_user)
+):
+    """Verifica se uma empresa específica tem conexões WebSocket ativas"""
+    try:
+        empresa_id = str(empresa_id)
+        is_connected = websocket_manager.is_empresa_connected(empresa_id)
+        connection_count = websocket_manager.get_empresa_connections(empresa_id)
+        stats = websocket_manager.get_connection_stats()
+        
+        return {
+            "empresa_id": empresa_id,
+            "is_connected": is_connected,
+            "connection_count": connection_count,
+            "all_connected_empresas": stats["empresas_with_connections"],
+            "message": "Conecte-se ao WebSocket em /ws/notifications/{user_id}?empresa_id={empresa_id} para receber notificações"
+        }
+    except Exception as e:
+        logger.error(f"Erro ao verificar conexões da empresa {empresa_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/notifications/send")
