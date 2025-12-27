@@ -4,7 +4,7 @@ from datetime import datetime
 
 from ..core.websocket_manager import websocket_manager
 from ..core.event_publisher import EventPublisher
-from ..core.event_bus import event_bus
+from ..core.event_bus import event_bus, EventType
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ class PedidoNotificationService:
             cliente_data: Dados do cliente
             itens: Lista de itens do pedido
             valor_total: Valor total do pedido
-            metadata: Metadados adicionais
+            channel_metadata: Metadados adicionais (será passado como event_metadata)
         
         Returns:
             ID do evento criado
@@ -45,7 +45,7 @@ class PedidoNotificationService:
                 cliente_data=cliente_data,
                 itens=itens,
                 valor_total=valor_total,
-                channel_metadata=channel_metadata
+                event_metadata=channel_metadata
             )
             
             # Envia notificação em tempo real via WebSocket
@@ -84,7 +84,7 @@ class PedidoNotificationService:
                 empresa_id=empresa_id,
                 pedido_id=pedido_id,
                 aprovado_por=aprovado_por,
-                channel_metadata=channel_metadata
+                event_metadata=channel_metadata
             )
             
             # Envia notificação em tempo real
@@ -120,7 +120,7 @@ class PedidoNotificationService:
             # Publica o evento
             event_id = await self.event_publisher.publish_event(
                 empresa_id=empresa_id,
-                event_type="pedido_cancelado",
+                event_type=EventType.PEDIDO_CANCELADO,
                 data={
                     "pedido_id": pedido_id,
                     "motivo": motivo,
@@ -128,7 +128,7 @@ class PedidoNotificationService:
                     "status": "cancelado"
                 },
                 event_id=pedido_id,
-                channel_metadata=channel_metadata
+                event_metadata=channel_metadata
             )
             
             # Envia notificação em tempo real
@@ -171,7 +171,7 @@ class PedidoNotificationService:
                     "status": "entregue"
                 },
                 event_id=pedido_id,
-                channel_metadata=channel_metadata
+                event_metadata=channel_metadata
             )
             
             # Envia notificação em tempo real
