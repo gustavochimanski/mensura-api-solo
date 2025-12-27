@@ -48,10 +48,18 @@ class PedidoNotificationService:
                 event_metadata=channel_metadata
             )
             
-            # Envia notificação em tempo real via WebSocket
+            # Verifica se há empresa e clientes conectados antes de enviar
+            if not websocket_manager.is_empresa_connected(empresa_id):
+                logger.info(
+                    f"Notificação kanban não enviada: empresa {empresa_id} não tem conexões ativas. "
+                    f"Pedido {pedido_id} criado mas nenhum cliente conectado."
+                )
+                return event_id
+            
+            # Envia notificação em tempo real via WebSocket apenas para clientes na rota /pedidos
             sent_count = await self._send_realtime_notification(
                 empresa_id=empresa_id,
-                notification_type="novo_pedido",
+                notification_type="kanban",
                 title="Novo Pedido Recebido",
                 message=f"Pedido #{pedido_id} criado - Valor: R$ {valor_total:.2f}",
                 data={
@@ -60,13 +68,17 @@ class PedidoNotificationService:
                     "valor_total": valor_total,
                     "itens_count": len(itens),
                     "timestamp": datetime.utcnow().isoformat()
-                }
+                },
+                required_route="/pedidos"
             )
             
             if sent_count > 0:
-                logger.info(f"Notificação de novo pedido enviada: {pedido_id} para empresa {empresa_id} ({sent_count} conexões)")
+                logger.info(f"Notificação kanban enviada: {pedido_id} para empresa {empresa_id} ({sent_count} conexões na rota /pedidos)")
             else:
-                logger.warning(f"Notificação de novo pedido criada mas não enviada: {pedido_id} para empresa {empresa_id} (nenhuma conexão ativa)")
+                logger.info(
+                    f"Notificação kanban criada mas não enviada: {pedido_id} para empresa {empresa_id}. "
+                    f"Nenhum cliente conectado na rota /pedidos."
+                )
             
             return event_id
             
@@ -204,9 +216,18 @@ class PedidoNotificationService:
         notification_type: str,
         title: str,
         message: str,
-        data: Dict[str, Any]
+        data: Dict[str, Any],
+        required_route: Optional[str] = None
     ) -> int:
         """Envia notificação em tempo real via WebSocket
+        
+        Args:
+            empresa_id: ID da empresa
+            notification_type: Tipo da notificação
+            title: Título da notificação
+            message: Mensagem da notificação
+            data: Dados adicionais
+            required_route: Rota que o cliente deve estar para receber (None = envia para todos)
         
         Returns:
             Número de conexões que receberam a notificação (0 se nenhuma)
@@ -225,8 +246,16 @@ class PedidoNotificationService:
                 "timestamp": datetime.utcnow().isoformat()
             }
             
-            # Envia para todos os usuários da empresa conectados
-            sent_count = await websocket_manager.send_to_empresa(empresa_id, notification_data)
+            # Se uma rota é requerida, envia apenas para clientes nessa rota
+            if required_route:
+                sent_count = await websocket_manager.send_to_empresa_on_route(
+                    empresa_id, 
+                    notification_data, 
+                    required_route
+                )
+            else:
+                # Envia para todos os usuários da empresa conectados
+                sent_count = await websocket_manager.send_to_empresa(empresa_id, notification_data)
             
             return sent_count
                 
