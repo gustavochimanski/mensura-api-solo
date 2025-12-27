@@ -38,6 +38,8 @@ class PedidoMesaCreate(BaseModel):
     observacoes: Optional[str] = None
     num_pessoas: Optional[int] = None
     itens: Optional[List[ItemPedidoRequest]] = None
+    receitas: Optional[List[ReceitaPedidoRequest]] = None
+    combos: Optional[List[ComboPedidoRequest]] = None
 
 
 class AdicionarItemRequest(BaseModel):
@@ -152,16 +154,180 @@ class PedidoMesaService:
             num_pessoas=payload.num_pessoas,
         )
 
-        # itens iniciais
+        # itens iniciais (produtos normais)
         if payload.itens:
             for it in payload.itens:
+                empresa_id = payload.empresa_id
+                qtd = max(int(it.quantidade or 1), 1)
+                
+                # Busca produto usando ProductCore
+                product = self.product_core.buscar_qualquer(
+                    empresa_id=empresa_id,
+                    cod_barras=it.produto_cod_barras,
+                    combo_id=None,
+                    receita_id=None,
+                    receita_model=None,
+                )
+                
+                if not product:
+                    raise HTTPException(
+                        status.HTTP_404_NOT_FOUND,
+                        f"Produto não encontrado: {it.produto_cod_barras}"
+                    )
+                
+                # Valida disponibilidade
+                if not self.product_core.validar_disponivel(product, qtd):
+                    raise HTTPException(
+                        status.HTTP_400_BAD_REQUEST,
+                        "Produto não disponível"
+                    )
+                
+                # Calcula preço com complementos
+                preco_total, adicionais_snapshot = self.product_core.calcular_preco_com_complementos(
+                    product=product,
+                    quantidade=qtd,
+                    complementos_request=it.complementos,
+                )
+                
+                preco_unitario = preco_total / qtd
+                
+                # Adiciona item
                 self.repo.add_item(
                     pedido.id,
                     produto_cod_barras=it.produto_cod_barras,
-                    quantidade=it.quantidade,
+                    quantidade=qtd,
                     observacao=it.observacao,
+                    adicionais_snapshot=adicionais_snapshot if adicionais_snapshot else None,
                 )
-            pedido = self.repo.get(pedido.id, TipoEntrega.MESA)
+            self.repo.commit()
+        
+        # receitas iniciais
+        if payload.receitas:
+            for receita_req in payload.receitas:
+                empresa_id = payload.empresa_id
+                qtd = max(int(receita_req.quantidade or 1), 1)
+                
+                # Busca receita do banco
+                receita_model = self.db.query(ReceitaModel).filter(ReceitaModel.id == receita_req.receita_id).first()
+                if not receita_model:
+                    raise HTTPException(
+                        status.HTTP_404_NOT_FOUND,
+                        f"Receita não encontrada: {receita_req.receita_id}"
+                    )
+                
+                # Busca receita usando ProductCore
+                product = self.product_core.buscar_qualquer(
+                    empresa_id=empresa_id,
+                    cod_barras=None,
+                    combo_id=None,
+                    receita_id=receita_req.receita_id,
+                    receita_model=receita_model,
+                )
+                
+                if not product:
+                    raise HTTPException(
+                        status.HTTP_404_NOT_FOUND,
+                        f"Receita não encontrada: {receita_req.receita_id}"
+                    )
+                
+                # Valida disponibilidade
+                if not self.product_core.validar_disponivel(product, qtd):
+                    raise HTTPException(
+                        status.HTTP_400_BAD_REQUEST,
+                        "Receita não disponível"
+                    )
+                
+                # Calcula preço com complementos
+                preco_total, adicionais_snapshot = self.product_core.calcular_preco_com_complementos(
+                    product=product,
+                    quantidade=qtd,
+                    complementos_request=receita_req.complementos,
+                )
+                
+                preco_unitario = preco_total / qtd
+                descricao_produto = product.nome or product.descricao or ""
+                
+                # Adiciona item
+                self.repo.add_item(
+                    pedido.id,
+                    receita_id=receita_req.receita_id,
+                    quantidade=qtd,
+                    preco_unitario=preco_unitario,
+                    observacao=receita_req.observacao,
+                    produto_descricao_snapshot=descricao_produto,
+                    adicionais_snapshot=adicionais_snapshot if adicionais_snapshot else None,
+                )
+            self.repo.commit()
+        
+        # combos iniciais
+        if payload.combos:
+            for combo_req in payload.combos:
+                empresa_id = payload.empresa_id
+                qtd = max(int(combo_req.quantidade or 1), 1)
+                
+                # Busca combo usando ProductCore
+                product = self.product_core.buscar_qualquer(
+                    empresa_id=empresa_id,
+                    cod_barras=None,
+                    combo_id=combo_req.combo_id,
+                    receita_id=None,
+                    receita_model=None,
+                )
+                
+                if not product:
+                    raise HTTPException(
+                        status.HTTP_404_NOT_FOUND,
+                        f"Combo não encontrado: {combo_req.combo_id}"
+                    )
+                
+                # Valida disponibilidade
+                if not self.product_core.validar_disponivel(product, qtd):
+                    raise HTTPException(
+                        status.HTTP_400_BAD_REQUEST,
+                        "Combo não disponível"
+                    )
+                
+                # Calcula preço com complementos
+                preco_total, adicionais_snapshot = self.product_core.calcular_preco_com_complementos(
+                    product=product,
+                    quantidade=qtd,
+                    complementos_request=combo_req.complementos,
+                )
+                
+                preco_unitario = preco_total / qtd
+                descricao_produto = product.nome or product.descricao or ""
+                
+                # Monta observação completa para combos
+                observacao_completa = f"Combo #{product.identifier} - {descricao_produto}"
+                
+                # Adiciona item
+                self.repo.add_item(
+                    pedido.id,
+                    combo_id=combo_req.combo_id,
+                    quantidade=qtd,
+                    preco_unitario=preco_unitario,
+                    observacao=observacao_completa,
+                    produto_descricao_snapshot=descricao_produto,
+                    adicionais_snapshot=adicionais_snapshot if adicionais_snapshot else None,
+                )
+            self.repo.commit()
+        
+        # Recarrega pedido com todos os itens
+        pedido = self.repo.get(pedido.id, TipoEntrega.MESA)
+
+        # Notifica novo pedido em background
+        try:
+            import asyncio
+            from app.api.pedidos.utils.pedido_notification_helper import notificar_novo_pedido
+            # Recarrega pedido com todos os relacionamentos para a notificação
+            pedido_completo = self.repo.get(pedido.id, TipoEntrega.MESA)
+            if pedido_completo:
+                asyncio.create_task(notificar_novo_pedido(pedido_completo))
+        except Exception as e:
+            # Loga erro mas não quebra o fluxo
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Erro ao agendar notificação de novo pedido {pedido.id}: {e}")
 
         return PedidoResponseBuilder.pedido_to_response_completo(pedido)
 

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPException
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPException, Query
 from typing import Dict, Any
 import json
 import logging
@@ -12,7 +12,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ws", tags=["websocket"])
 
 @router.websocket("/notifications/{user_id}")
-async def websocket_notifications(websocket: WebSocket, user_id: str, empresa_id: str):
+async def websocket_notifications(
+    websocket: WebSocket, 
+    user_id: str, 
+    empresa_id: str = Query(..., description="ID da empresa")
+):
     """
     WebSocket endpoint para notificações em tempo real
     

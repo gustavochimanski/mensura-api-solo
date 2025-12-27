@@ -210,6 +210,9 @@ class PedidoAdminService:
         *,
         user_id: Optional[int] = None,
     ) -> PedidoResponseCompleto:
+        import asyncio
+        from app.api.pedidos.utils.pedido_notification_helper import notificar_novo_pedido
+        
         tipo = payload.tipo_pedido
         if tipo == TipoPedidoCheckoutEnum.DELIVERY:
             cliente_id = payload.cliente_id
@@ -220,6 +223,11 @@ class PedidoAdminService:
                 )
             created = await self.pedido_service.finalizar_pedido(payload, cliente_id=cliente_id)
             pedido_atualizado = self.repo.get_pedido(created.id)
+            
+            # Notifica novo pedido em background
+            if pedido_atualizado:
+                asyncio.create_task(notificar_novo_pedido(pedido_atualizado))
+            
             return self.pedido_service.response_builder.pedido_to_response_completo(pedido_atualizado)
 
         itens_payload = payload.produtos.itens if payload.produtos and payload.produtos.itens is not None else (
@@ -246,7 +254,14 @@ class PedidoAdminService:
                     for item in itens_payload
                 ],
             )
-            return self.mesa_service.criar_pedido(mesa_payload)
+            resultado = self.mesa_service.criar_pedido(mesa_payload)
+            
+            # Notifica novo pedido em background
+            pedido_model = self.repo.get_pedido(resultado.id)
+            if pedido_model:
+                asyncio.create_task(notificar_novo_pedido(pedido_model))
+            
+            return resultado
 
         if tipo == TipoPedidoCheckoutEnum.BALCAO:
             if payload.empresa_id is None:
@@ -273,7 +288,14 @@ class PedidoAdminService:
                     for item in itens_payload
                 ],
             )
-            return self.balcao_service.criar_pedido(balcao_payload)
+            resultado = self.balcao_service.criar_pedido(balcao_payload)
+            
+            # Notifica novo pedido em background
+            pedido_model = self.repo.get_pedido(resultado.id)
+            if pedido_model:
+                asyncio.create_task(notificar_novo_pedido(pedido_model))
+            
+            return resultado
 
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
