@@ -95,9 +95,10 @@ def listar_kanban(
 )
 def obter_pedido(
     pedido_id: int = Path(..., gt=0, description="Identificador do pedido"),
+    empresa_id: Optional[int] = Query(None, description="ID da empresa para validação (opcional)"),
     svc: PedidoAdminService = Depends(get_pedido_admin_service),
 ):
-    return svc.obter_pedido(pedido_id)
+    return svc.obter_pedido(pedido_id, empresa_id=empresa_id)
 
 
 @router.get(

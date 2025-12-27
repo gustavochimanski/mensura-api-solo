@@ -154,14 +154,22 @@ class PedidoAdminService:
             limit=limit,
         )
 
-    def obter_pedido(self, pedido_id: int) -> PedidoResponseCompletoTotal:
-        pedido = self.pedido_service.get_pedido_by_id_completo_total(pedido_id)
-        if not pedido:
+    def obter_pedido(self, pedido_id: int, empresa_id: Optional[int] = None) -> PedidoResponseCompletoTotal:
+        # Busca o modelo primeiro para validar empresa_id se necessário
+        pedido_model = self.repo.get_pedido(pedido_id)
+        if not pedido_model:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Pedido com ID {pedido_id} não encontrado",
             )
-        return pedido
+        # Valida empresa_id se fornecido
+        if empresa_id is not None and pedido_model.empresa_id != empresa_id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Pedido com ID {pedido_id} não encontrado para a empresa {empresa_id}",
+            )
+        # Converte para response completo
+        return self.pedido_service.get_pedido_by_id_completo_total(pedido_id)
 
     def obter_historico(self, pedido_id: int) -> HistoricoDoPedidoResponse:
         pedido = self.repo.get_pedido(pedido_id)
