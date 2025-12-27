@@ -562,7 +562,7 @@ class PedidoBalcaoService:
         if novo_status == PedidoStatusEnum.I:
             return self.confirmar(pedido_id, usuario_id=usuario_id)
 
-        pedido_atual = self.repo.get(pedido_id)
+        pedido_atual = self.repo.get(pedido_id, TipoEntrega.BALCAO)
         status_anterior = self._status_value(pedido_atual.status)
         pedido = self.repo.atualizar_status(pedido_id, novo_status)
         self.repo.add_historico(
