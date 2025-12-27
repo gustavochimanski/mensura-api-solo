@@ -31,9 +31,6 @@ python-slugify>=8.0.0
 # Armazenamento
 minio>=7.2.0
 
-# Mensageria
-aio-pika>=9.0.0
-
 # Monitoramento
 prometheus-client>=0.19.0
 
