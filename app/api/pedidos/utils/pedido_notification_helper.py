@@ -21,6 +21,15 @@ async def notificar_novo_pedido(pedido: PedidoUnificadoModel) -> None:
     Args:
         pedido: Instância do PedidoUnificadoModel com todos os relacionamentos carregados
     """
+    # Extrai o ID do pedido logo no início para evitar DetachedInstanceError
+    # caso o objeto seja desconectado da sessão durante operações assíncronas
+    try:
+        pedido_id = str(pedido.id)
+        empresa_id = str(pedido.empresa_id)
+    except Exception as e:
+        logger.error(f"Erro ao extrair IDs do pedido: {e}", exc_info=True)
+        return
+    
     try:
         from app.api.notifications.services.pedido_notification_service import PedidoNotificationService
         
@@ -54,15 +63,9 @@ async def notificar_novo_pedido(pedido: PedidoUnificadoModel) -> None:
         # Valor total do pedido
         valor_total = float(pedido.valor_total or 0)
         
-        # Empresa ID (string para compatibilidade com o serviço de notificação)
-        empresa_id = str(pedido.empresa_id)
-        
-        # Pedido ID (string para compatibilidade)
-        pedido_id = str(pedido.id)
-        
         # Informações adicionais sobre o pedido
         tipo_entrega = pedido.tipo_entrega.value if hasattr(pedido.tipo_entrega, "value") else str(pedido.tipo_entrega)
-        numero_pedido = pedido.numero_pedido or str(pedido.id)
+        numero_pedido = pedido.numero_pedido or pedido_id
         
         # Metadados adicionais
         channel_metadata = {
@@ -88,6 +91,7 @@ async def notificar_novo_pedido(pedido: PedidoUnificadoModel) -> None:
         
     except Exception as e:
         # Loga o erro mas não propaga para não quebrar o fluxo de criação do pedido
-        logger.error(f"Erro ao notificar novo pedido {pedido.id}: {e}", exc_info=True)
+        # Usa pedido_id extraído no início para evitar DetachedInstanceError
+        logger.error(f"Erro ao notificar novo pedido {pedido_id}: {e}", exc_info=True)
 
 
