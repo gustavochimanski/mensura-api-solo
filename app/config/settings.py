@@ -38,12 +38,3 @@ ENABLE_DOCS = os.getenv("ENABLE_DOCS", "true").lower() in ("1", "true", "yes")
 MERCADOPAGO_ACCESS_TOKEN = os.getenv("MERCADOPAGO_ACCESS_TOKEN")
 MERCADOPAGO_BASE_URL = os.getenv("MERCADOPAGO_BASE_URL", "https://api.mercadopago.com")
 MERCADOPAGO_TIMEOUT_SECONDS = int(os.getenv("MERCADOPAGO_TIMEOUT_SECONDS", 20))
-
-# RabbitMQ
-RABBITMQ_CONFIG = {
-    'host': os.getenv('RABBITMQ_HOST', 'teste2_rabbitmq'),
-    'port': int(os.getenv('RABBITMQ_PORT', 5672)),
-    'username': os.getenv('RABBITMQ_USERNAME', 'mensura'),
-    'password': os.getenv('RABBITMQ_PASSWORD', 'mensura123'),
-    'virtual_host': os.getenv('RABBITMQ_VHOST', '/mensura'),
-}

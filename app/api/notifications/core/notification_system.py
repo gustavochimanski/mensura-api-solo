@@ -5,9 +5,7 @@ from datetime import datetime
 
 from .event_bus import event_bus
 from .websocket_manager import websocket_manager
-from .rabbitmq_client import get_rabbitmq_client, close_rabbitmq_client
 from ..services.event_processor import EventProcessor
-from ..services.rabbitmq_notification_service import RabbitMQNotificationService
 from ..repositories.event_repository import EventRepository
 from ..repositories.subscription_repository import SubscriptionRepository
 from ..repositories.notification_repository import NotificationRepository
@@ -20,7 +18,6 @@ class NotificationSystem:
     def __init__(self, db_session):
         self.db_session = db_session
         self.event_processor: Optional[EventProcessor] = None
-        self.notification_service: Optional[RabbitMQNotificationService] = None
         self._running = False
     
     async def initialize(self):
@@ -32,14 +29,6 @@ class NotificationSystem:
             event_repo = EventRepository(self.db_session)
             subscription_repo = SubscriptionRepository(self.db_session)
             notification_repo = NotificationRepository(self.db_session)
-            
-            # Cria serviços
-            self.notification_service = RabbitMQNotificationService(
-                notification_repo, subscription_repo, event_repo
-            )
-            
-            # Inicializa o serviço RabbitMQ (pode falhar se RabbitMQ não estiver disponível)
-            await self.notification_service.initialize()
             
             # Cria processador de eventos
             self.event_processor = EventProcessor(
@@ -57,13 +46,6 @@ class NotificationSystem:
             
             # Inicia o event bus
             await event_bus.start()
-            
-            # Inicia consumidores RabbitMQ apenas se o serviço estiver rodando
-            if self.notification_service and self.notification_service._running:
-                asyncio.create_task(self.notification_service.start_consumers())
-            
-            # Inicia processamento de notificações pendentes
-            asyncio.create_task(self._process_notifications_loop())
             
             self._running = True
             logger.info("Sistema de notificações inicializado com sucesso")
@@ -83,35 +65,10 @@ class NotificationSystem:
             # Para o event bus
             await event_bus.stop()
             
-            # Para o serviço RabbitMQ
-            if self.notification_service:
-                await self.notification_service.stop()
-            
-            # Fecha conexão RabbitMQ
-            await close_rabbitmq_client()
-            
             logger.info("Sistema de notificações parado com sucesso")
             
         except Exception as e:
             logger.error(f"Erro ao parar sistema de notificações: {e}")
-    
-    async def _process_notifications_loop(self):
-        """Loop para processar notificações pendentes"""
-        while self._running:
-            try:
-                if self.notification_service:
-                    # Processa notificações pendentes
-                    await self.notification_service.process_pending_notifications(limit=50)
-                    
-                    # Tenta reenviar notificações que falharam
-                    await self.notification_service.retry_failed_notifications(limit=20)
-                
-                # Aguarda antes da próxima iteração
-                await asyncio.sleep(30)  # Processa a cada 30 segundos
-                
-            except Exception as e:
-                logger.error(f"Erro no loop de processamento de notificações: {e}")
-                await asyncio.sleep(60)  # Aguarda mais tempo em caso de erro
     
     def get_connection_stats(self):
         """Retorna estatísticas das conexões WebSocket"""

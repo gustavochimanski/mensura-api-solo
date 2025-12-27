@@ -7,8 +7,6 @@ import logging
 from dataclasses import dataclass
 from enum import Enum
 
-from .rabbitmq_client import get_rabbitmq_client
-
 logger = logging.getLogger(__name__)
 
 class EventType(str, Enum):
@@ -117,21 +115,15 @@ class EventHandler(ABC):
         pass
 
 class EventBus:
-    """Message broker usando RabbitMQ"""
+    """Sistema de eventos local para processamento de notificações"""
     
     def __init__(self):
         self._handlers: Dict[EventType, List[EventHandler]] = {}
         self._running = False
-        self._rabbitmq_client = None
     
     async def initialize(self):
-        """Inicializa o EventBus com RabbitMQ"""
-        try:
-            self._rabbitmq_client = await get_rabbitmq_client()
-            logger.info("EventBus inicializado com RabbitMQ")
-        except Exception as e:
-            logger.error(f"Erro ao inicializar EventBus: {e}")
-            raise
+        """Inicializa o EventBus"""
+        logger.info("EventBus inicializado")
     
     def subscribe(self, event_type: EventType, handler: EventHandler):
         """Registra um handler para um tipo de evento"""
@@ -150,81 +142,29 @@ class EventBus:
                 logger.warning(f"Handler não encontrado para evento: {event_type}")
     
     async def publish(self, event: Event):
-        """Publica um evento via RabbitMQ"""
+        """Publica um evento e processa localmente através dos handlers registrados"""
         try:
-            if not self._rabbitmq_client:
-                await self.initialize()
-            
-            # Prepara dados do evento para RabbitMQ
-            event_data = {
-                "id": event.id,
-                "empresa_id": event.empresa_id,
-                "event_type": event.event_type,
-                "event_id": event.event_id,
-                "data": event.data,
-                "event_metadata": event.event_metadata,
-                "created_at": event.created_at.isoformat(),
-                "processed": event.processed
-            }
-            
-            # Publica no RabbitMQ
-            success = await self._rabbitmq_client.publish_event(
-                event_type=event.event_type,
-                event_data=event_data
-            )
-            
-            if success:
-                logger.info(f"Evento publicado via RabbitMQ: {event.event_type} - {event.id}")
-            else:
-                logger.error(f"Falha ao publicar evento via RabbitMQ: {event.id}")
-                
+            logger.info(f"Publicando evento: {event.event_type} - {event.id}")
+            # Processa o evento localmente através dos handlers
+            await self._process_event(event)
+            logger.info(f"Evento processado: {event.event_type} - {event.id}")
         except Exception as e:
             logger.error(f"Erro ao publicar evento {event.id}: {e}")
-            raise
+            # Não propaga o erro para não quebrar o fluxo principal
     
     async def start(self):
-        """Inicia o processamento de eventos via RabbitMQ"""
+        """Inicia o processamento de eventos"""
         if self._running:
             return
         
-        if not self._rabbitmq_client:
-            await self.initialize()
-        
+        await self.initialize()
         self._running = True
-        logger.info("EventBus iniciado com RabbitMQ")
-        
-        # Inicia consumidores RabbitMQ
-        try:
-            await self._rabbitmq_client.start_consumers()
-        except Exception as e:
-            logger.error(f"Erro ao iniciar consumidores RabbitMQ: {e}")
-            self._running = False
-            raise
+        logger.info("EventBus iniciado")
     
     async def stop(self):
         """Para o processamento de eventos"""
         self._running = False
         logger.info("EventBus parado")
-    
-    async def _process_event_from_rabbitmq(self, event_data: Dict[str, Any]):
-        """Processa evento recebido do RabbitMQ"""
-        try:
-            # Reconstrói o objeto Event
-            event = Event(
-                id=event_data["id"],
-                empresa_id=event_data["empresa_id"],
-                event_type=EventType(event_data["event_type"]),
-                event_id=event_data.get("event_id"),
-                data=event_data["data"],
-                event_metadata=event_data.get("event_metadata", {}),
-                created_at=datetime.fromisoformat(event_data["created_at"]),
-                processed=event_data.get("processed", False)
-            )
-            
-            await self._process_event(event)
-            
-        except Exception as e:
-            logger.error(f"Erro ao processar evento do RabbitMQ: {e}")
     
     async def _process_event(self, event: Event):
         """Processa um evento individual"""
