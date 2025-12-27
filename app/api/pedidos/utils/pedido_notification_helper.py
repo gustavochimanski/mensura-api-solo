@@ -78,7 +78,7 @@ async def notificar_novo_pedido(pedido: PedidoUnificadoModel) -> None:
         
         # Chama o serviço de notificação
         notification_service = PedidoNotificationService()
-        await notification_service.notify_novo_pedido(
+        event_id = await notification_service.notify_novo_pedido(
             empresa_id=empresa_id,
             pedido_id=pedido_id,
             cliente_data=cliente_data,
@@ -87,7 +87,8 @@ async def notificar_novo_pedido(pedido: PedidoUnificadoModel) -> None:
             channel_metadata=channel_metadata
         )
         
-        logger.info(f"Notificação de novo pedido enviada: pedido_id={pedido_id}, empresa_id={empresa_id}")
+        # O log de sucesso/aviso já é feito dentro do notify_novo_pedido
+        logger.debug(f"Processo de notificação concluído: pedido_id={pedido_id}, empresa_id={empresa_id}, event_id={event_id}")
         
     except Exception as e:
         # Loga o erro mas não propaga para não quebrar o fluxo de criação do pedido
