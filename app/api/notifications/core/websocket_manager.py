@@ -163,12 +163,21 @@ class ConnectionManager:
         total_empresas = len(self.empresa_connections)
         total_connections = sum(len(connections) for connections in self.active_connections.values())
         
+        # Detalhes das empresas conectadas
+        empresas_details = {}
+        for emp_id, connections in self.empresa_connections.items():
+            empresas_details[emp_id] = {
+                "connection_count": len(connections),
+                "routes": [self.websocket_to_route.get(ws, "") for ws in connections]
+            }
+        
         return {
             "total_users_connected": total_users,
             "total_empresas_connected": total_empresas,
             "total_connections": total_connections,
             "users_with_connections": list(self.active_connections.keys()),
-            "empresas_with_connections": list(self.empresa_connections.keys())
+            "empresas_with_connections": list(self.empresa_connections.keys()),
+            "empresas_details": empresas_details
         }
     
     def is_user_connected(self, user_id: str) -> bool:
@@ -181,12 +190,50 @@ class ConnectionManager:
     
     def is_empresa_connected(self, empresa_id: str) -> bool:
         """Verifica se uma empresa tem conexões ativas"""
+        # Normaliza empresa_id para string
         empresa_id = str(empresa_id)
-        return empresa_id in self.empresa_connections and len(self.empresa_connections[empresa_id]) > 0
+        
+        # Verifica se a empresa tem conexões (tenta também como int caso esteja armazenado assim)
+        if empresa_id not in self.empresa_connections:
+            # Tenta também verificar se há conexões com empresa_id como int
+            empresa_id_int = None
+            try:
+                empresa_id_int = str(int(empresa_id))
+            except (ValueError, TypeError):
+                pass
+            
+            if empresa_id_int and empresa_id_int in self.empresa_connections:
+                # Se encontrou com int, usa esse
+                empresa_id = empresa_id_int
+            else:
+                logger.debug(
+                    f"Empresa {empresa_id} não tem conexões ativas. "
+                    f"Empresas conectadas: {list(self.empresa_connections.keys())}"
+                )
+                return False
+        
+        # Verifica se há conexões válidas
+        connections = self.empresa_connections.get(empresa_id, set())
+        return len(connections) > 0
     
     def get_empresa_connections(self, empresa_id: str) -> int:
         """Retorna número de conexões de uma empresa"""
+        # Normaliza empresa_id para string
         empresa_id = str(empresa_id)
+        
+        # Verifica se a empresa tem conexões (tenta também como int caso esteja armazenado assim)
+        if empresa_id not in self.empresa_connections:
+            # Tenta também verificar se há conexões com empresa_id como int
+            empresa_id_int = None
+            try:
+                empresa_id_int = str(int(empresa_id))
+            except (ValueError, TypeError):
+                pass
+            
+            if empresa_id_int and empresa_id_int in self.empresa_connections:
+                # Se encontrou com int, usa esse
+                empresa_id = empresa_id_int
+        
         return len(self.empresa_connections.get(empresa_id, set()))
     
     def set_route(self, websocket: WebSocket, route: str):
