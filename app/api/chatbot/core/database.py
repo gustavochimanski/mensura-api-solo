@@ -547,7 +547,15 @@ def get_bot_status(db: Session, phone_number: str) -> Optional[Dict]:
 
 
 def is_bot_active_for_phone(db: Session, phone_number: str) -> bool:
-    """Retorna True se o bot está ativo para o número, False se pausado"""
+    """Retorna True se o bot está ativo para o número, False se pausado.
+    Também verifica o status global - se o bot global estiver pausado, retorna False.
+    """
+    # Primeiro verifica o status global
+    global_status = get_global_bot_status(db)
+    if not global_status.get("is_active", True):
+        return False  # Bot global pausado, nenhum número responde
+
+    # Depois verifica o status individual
     status = get_bot_status(db, phone_number)
     return status.get("is_active", True)
 
@@ -641,3 +649,95 @@ def get_all_bot_statuses(db: Session, empresa_id: int = None) -> List[Dict]:
     except Exception as e:
         print(f"Erro ao listar status do bot: {e}")
         return []
+
+
+# ==================== BOT STATUS GLOBAL ====================
+
+GLOBAL_BOT_PHONE = "_GLOBAL_BOT_"
+
+def get_global_bot_status(db: Session, empresa_id: int = None) -> Dict:
+    """Verifica se o bot global está ativo (afeta todos os números)"""
+    try:
+        query = text(f"""
+            SELECT id, phone_number, is_active, paused_at, paused_by, empresa_id
+            FROM {CHATBOT_SCHEMA}.bot_status
+            WHERE phone_number = :phone
+        """)
+        result = db.execute(query, {"phone": GLOBAL_BOT_PHONE}).fetchone()
+
+        if result:
+            return {
+                "id": result[0],
+                "phone_number": result[1],
+                "is_active": result[2],
+                "paused_at": result[3].isoformat() if result[3] else None,
+                "paused_by": result[4],
+                "empresa_id": result[5]
+            }
+        # Se não existe registro, o bot global está ativo por padrão
+        return {"phone_number": GLOBAL_BOT_PHONE, "is_active": True}
+    except Exception as e:
+        print(f"Erro ao verificar status global do bot: {e}")
+        return {"phone_number": GLOBAL_BOT_PHONE, "is_active": True}
+
+
+def set_global_bot_status(db: Session, is_active: bool, paused_by: str = None, empresa_id: int = None) -> Dict:
+    """Define o status global do bot (afeta todos os números)"""
+    try:
+        # Verifica se já existe
+        existing = db.execute(
+            text(f"SELECT id FROM {CHATBOT_SCHEMA}.bot_status WHERE phone_number = :phone"),
+            {"phone": GLOBAL_BOT_PHONE}
+        ).fetchone()
+
+        if existing:
+            # Atualiza
+            query = text(f"""
+                UPDATE {CHATBOT_SCHEMA}.bot_status
+                SET is_active = :is_active,
+                    paused_at = CASE WHEN :is_active = false THEN CURRENT_TIMESTAMP ELSE NULL END,
+                    paused_by = CASE WHEN :is_active = false THEN :paused_by ELSE NULL END,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE phone_number = :phone
+                RETURNING id, phone_number, is_active, paused_at, paused_by
+            """)
+        else:
+            # Insere novo
+            query = text(f"""
+                INSERT INTO {CHATBOT_SCHEMA}.bot_status (phone_number, is_active, paused_at, paused_by, empresa_id)
+                VALUES (
+                    :phone,
+                    :is_active,
+                    CASE WHEN :is_active = false THEN CURRENT_TIMESTAMP ELSE NULL END,
+                    CASE WHEN :is_active = false THEN :paused_by ELSE NULL END,
+                    :empresa_id
+                )
+                RETURNING id, phone_number, is_active, paused_at, paused_by
+            """)
+
+        result = db.execute(query, {
+            "phone": GLOBAL_BOT_PHONE,
+            "is_active": is_active,
+            "paused_by": paused_by,
+            "empresa_id": empresa_id
+        }).fetchone()
+        db.commit()
+
+        return {
+            "success": True,
+            "id": result[0],
+            "phone_number": result[1],
+            "is_active": result[2],
+            "paused_at": result[3].isoformat() if result[3] else None,
+            "paused_by": result[4]
+        }
+    except Exception as e:
+        db.rollback()
+        print(f"Erro ao definir status global do bot: {e}")
+        return {"success": False, "error": str(e)}
+
+
+def is_bot_globally_active(db: Session) -> bool:
+    """Retorna True se o bot global está ativo, False se pausado"""
+    status = get_global_bot_status(db)
+    return status.get("is_active", True)
