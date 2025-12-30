@@ -6,6 +6,10 @@ from datetime import datetime
 
 from ..core.websocket_manager import websocket_manager
 from ....core.admin_dependencies import get_current_user
+from ....database.db_connection import get_db
+from sqlalchemy.orm import Session
+from app.api.empresas.repositories.empresa_repo import EmpresaRepository
+from app.config.settings import BASE_URL, CORS_ORIGINS
 
 logger = logging.getLogger(__name__)
 
@@ -23,16 +27,26 @@ async def websocket_notifications(
     Args:
         user_id: ID do usuário
         empresa_id: ID da empresa
+    
+    Nota: O frontend precisa se conectar a este endpoint. Funciona tanto localmente quanto na nuvem.
+    - Local: ws://localhost:8000/api/notifications/ws/notifications/{user_id}?empresa_id={empresa_id}
+    - Nuvem: wss://api.seudominio.com/api/notifications/ws/notifications/{user_id}?empresa_id={empresa_id}
     """
     try:
         # Normaliza IDs para garantir consistência
         user_id = str(user_id)
         empresa_id = str(empresa_id)
         
+        # Obtém informações do cliente (IP, host, etc)
+        client_host = websocket.client.host if websocket.client else "unknown"
+        client_port = websocket.client.port if websocket.client else "unknown"
+        headers = dict(websocket.headers) if hasattr(websocket, 'headers') else {}
+        origin = headers.get('origin', 'unknown')
+        
         logger.info(
             f"[WS_ROUTER] Tentando conectar WebSocket - user_id={user_id}, empresa_id={empresa_id}, "
             f"tipo_user_id={type(user_id)}, tipo_empresa_id={type(empresa_id)}, "
-            f"websocket_id={id(websocket)}, client={websocket.client if hasattr(websocket, 'client') else 'N/A'}"
+            f"websocket_id={id(websocket)}, client={client_host}:{client_port}, origin={origin}"
         )
         
         # Conecta o WebSocket
@@ -178,9 +192,25 @@ async def get_connection_stats(current_user = Depends(get_current_user)):
     """Retorna estatísticas das conexões WebSocket"""
     try:
         stats = websocket_manager.get_connection_stats()
+        
+        # Log detalhado do estado atual
+        logger.info(
+            f"[STATS] Estatísticas de conexões solicitadas. "
+            f"Total: {stats['total_connections']}, "
+            f"Empresas: {stats['total_empresas_connected']}, "
+            f"Lista: {stats['empresas_with_connections']}, "
+            f"Detalhes: {stats.get('empresas_details', {})}"
+        )
+        
         return {
             **stats,
-            "message": "Use estas informações para verificar se há conexões WebSocket ativas"
+            "message": "Use estas informações para verificar se há conexões WebSocket ativas",
+            "how_to_connect": {
+                "endpoint": "/api/notifications/ws/notifications/{user_id}?empresa_id={empresa_id}",
+                "example": f"/api/notifications/ws/notifications/1?empresa_id=1",
+                "protocol": "WebSocket (ws:// ou wss://)",
+                "note": "As conexões são criadas quando o frontend se conecta ao endpoint WebSocket acima"
+            }
         }
     except Exception as e:
         logger.error(f"Erro ao obter estatísticas de conexões: {e}")
@@ -194,19 +224,144 @@ async def check_empresa_connections(
     """Verifica se uma empresa específica tem conexões WebSocket ativas"""
     try:
         empresa_id = str(empresa_id)
+        
+        logger.info(
+            f"[CHECK_ENDPOINT] Verificando conexões para empresa_id={empresa_id} "
+            f"(tipo: {type(empresa_id)})"
+        )
+        
         is_connected = websocket_manager.is_empresa_connected(empresa_id)
         connection_count = websocket_manager.get_empresa_connections(empresa_id)
         stats = websocket_manager.get_connection_stats()
+        
+        logger.info(
+            f"[CHECK_ENDPOINT] Resultado - empresa_id={empresa_id}, "
+            f"is_connected={is_connected}, connection_count={connection_count}, "
+            f"todas_empresas={stats['empresas_with_connections']}"
+        )
         
         return {
             "empresa_id": empresa_id,
             "is_connected": is_connected,
             "connection_count": connection_count,
             "all_connected_empresas": stats["empresas_with_connections"],
-            "message": "Conecte-se ao WebSocket em /ws/notifications/{user_id}?empresa_id={empresa_id} para receber notificações"
+            "total_connections": stats["total_connections"],
+            "empresas_details": stats.get("empresas_details", {}),
+            "message": "Conecte-se ao WebSocket em /api/notifications/ws/notifications/{user_id}?empresa_id={empresa_id} para receber notificações",
+            "how_to_connect": {
+                "endpoint": f"/api/notifications/ws/notifications/{{user_id}}?empresa_id={empresa_id}",
+                "protocol": "WebSocket (ws:// ou wss://)",
+                "example_url": f"ws://localhost:8000/api/notifications/ws/notifications/1?empresa_id={empresa_id}",
+                "note": "Substitua {user_id} pelo ID real do usuário. A conexão deve ser feita pelo frontend."
+            }
         }
     except Exception as e:
         logger.error(f"Erro ao verificar conexões da empresa {empresa_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/config/{empresa_id}")
+async def get_websocket_config(
+    empresa_id: int,
+    user_id: int = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Retorna a configuração do WebSocket para uma empresa específica.
+    Usa a URL do frontend supervisor configurada em CORS_ORIGINS para construir a URL do WebSocket.
+    A URL é construída a partir da primeira origem permitida em CORS_ORIGINS.
+    
+    Args:
+        empresa_id: ID da empresa
+        user_id: ID do usuário (opcional, pode ser passado depois)
+    
+    Returns:
+        URL completa do WebSocket para a empresa (baseada na URL do frontend supervisor)
+    """
+    try:
+        # Busca a empresa para validar que existe
+        empresa_repo = EmpresaRepository(db)
+        empresa = empresa_repo.get_empresa_by_id(empresa_id)
+        
+        if not empresa:
+            raise HTTPException(status_code=404, detail=f"Empresa {empresa_id} não encontrada")
+        
+        # Obtém a URL do frontend supervisor de CORS_ORIGINS
+        # Exemplo: CORS_ORIGINS=["https://unitec-supervisor.vercel.app"]
+        frontend_supervisor_url = None
+        
+        if CORS_ORIGINS and len(CORS_ORIGINS) > 0:
+            # Pega a primeira URL do CORS_ORIGINS (URL do frontend supervisor)
+            frontend_supervisor_url = CORS_ORIGINS[0]
+            logger.debug(f"[WS_CONFIG] URL do frontend supervisor de CORS_ORIGINS: {frontend_supervisor_url}")
+        else:
+            logger.warning(f"[WS_CONFIG] CORS_ORIGINS não configurado")
+        
+        # O WebSocket sempre aponta para o BACKEND, não para o frontend
+        # Usa BASE_URL para construir a URL do WebSocket
+        backend_base = BASE_URL or "localhost:8000"
+        
+        logger.debug(f"[WS_CONFIG] BASE_URL do backend: {backend_base}")
+        
+        # Remove protocolo do backend e converte para WebSocket
+        if backend_base.startswith("https://"):
+            ws_protocol = "wss://"
+            backend_url = backend_base.replace("https://", "")
+        elif backend_base.startswith("http://"):
+            ws_protocol = "ws://"
+            backend_url = backend_base.replace("http://", "")
+        else:
+            # Se não tem protocolo, assume ws:// para desenvolvimento
+            ws_protocol = "ws://"
+            backend_url = backend_base
+        
+        # Remove porta se existir (ex: localhost:8000 -> localhost)
+        # Mas mantém para localhost em desenvolvimento
+        if ":" in backend_url:
+            host, port = backend_url.split(":", 1)
+            # Se for localhost ou IP local, mantém a porta para desenvolvimento
+            if host in ["localhost", "127.0.0.1"] or host.startswith("192.168.") or host.startswith("10."):
+                backend_url_clean = backend_url  # Mantém porta para dev
+            else:
+                backend_url_clean = host  # Remove porta para produção
+        else:
+            backend_url_clean = backend_url
+        
+        # Remove parâmetros de query se existirem (ex: ?empresa_id=1)
+        if "?" in backend_url_clean:
+            backend_url_clean = backend_url_clean.split("?")[0]
+        
+        # Remove path se existir (ex: /api/pedidos -> vazio)
+        if "/" in backend_url_clean and not backend_url_clean.startswith("/"):
+            backend_url_clean = backend_url_clean.split("/")[0]
+        
+        # Constrói a URL do WebSocket (sempre aponta para o backend)
+        if user_id:
+            ws_url = f"{ws_protocol}{backend_url_clean}/api/notifications/ws/notifications/{user_id}?empresa_id={empresa_id}"
+        else:
+            ws_url = f"{ws_protocol}{backend_url_clean}/api/notifications/ws/notifications/{{user_id}}?empresa_id={empresa_id}"
+        
+        logger.info(
+            f"[WS_CONFIG] Configuração WebSocket para empresa_id={empresa_id}, "
+            f"frontend_supervisor={frontend_supervisor_url} (de CORS_ORIGINS), "
+            f"backend_base={backend_base}, backend_clean={backend_url_clean}, "
+            f"ws_protocol={ws_protocol}, ws_url={ws_url}"
+        )
+        
+        return {
+            "empresa_id": empresa_id,
+            "empresa_nome": empresa.nome,
+            "websocket_url": ws_url,
+            "frontend_supervisor_url": frontend_supervisor_url,
+            "backend_url": f"{ws_protocol}{backend_url_clean}",
+            "protocol": ws_protocol.rstrip("://"),
+            "endpoint": f"/api/notifications/ws/notifications/{{user_id}}?empresa_id={empresa_id}",
+            "cors_origins": CORS_ORIGINS,
+            "note": "Substitua {user_id} pelo ID real do usuário ao conectar. WebSocket aponta para o backend (BASE_URL), não para o frontend."
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Erro ao obter configuração WebSocket para empresa {empresa_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/notifications/send")
