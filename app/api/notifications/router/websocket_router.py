@@ -15,6 +15,31 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/ws", tags=["websocket"])
 
+@router.get("/notifications/{user_id}")
+async def websocket_info(
+    user_id: str,
+    empresa_id: str = Query(..., description="ID da empresa")
+):
+    """
+    Endpoint de informação sobre o WebSocket.
+    Retorna instruções de como conectar corretamente via WebSocket.
+    
+    NOTA: Este endpoint é apenas informativo. Para conectar ao WebSocket,
+    use o protocolo WebSocket (ws:// ou wss://), não HTTP GET.
+    """
+    return {
+        "message": "Este endpoint requer conexão WebSocket, não HTTP GET",
+        "websocket_url": f"ws://localhost:8000/api/notifications/ws/notifications/{user_id}?empresa_id={empresa_id}",
+        "websocket_url_ssl": f"wss://api.seudominio.com/api/notifications/ws/notifications/{user_id}?empresa_id={empresa_id}",
+        "instructions": {
+            "protocol": "Use WebSocket (ws:// ou wss://), não HTTP (http:// ou https://)",
+            "example_javascript": "const ws = new WebSocket('ws://localhost:8000/api/notifications/ws/notifications/1?empresa_id=2');",
+            "note": "WebSocket não funciona via requisições HTTP GET/POST. Use uma biblioteca WebSocket no frontend."
+        },
+        "user_id": user_id,
+        "empresa_id": empresa_id
+    }
+
 @router.websocket("/notifications/{user_id}")
 async def websocket_notifications(
     websocket: WebSocket, 
