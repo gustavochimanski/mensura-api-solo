@@ -122,6 +122,28 @@ class PrinterRepository:
                 )
                 self.db.commit()
                 logger.info(f"[PrinterRepository] Pedido delivery {pedido_id} marcado como impresso")
+                
+                # Notifica kanban após marcar como impresso
+                try:
+                    import asyncio
+                    from app.api.pedidos.utils.pedido_notification_helper import notificar_pedido_impresso
+                    # Recarrega pedido com todos os relacionamentos para a notificação (incluindo mesa)
+                    pedido_completo = (
+                        self.db.query(PedidoUnificadoModel)
+                        .options(
+                            joinedload(PedidoUnificadoModel.cliente),
+                            joinedload(PedidoUnificadoModel.itens),
+                            joinedload(PedidoUnificadoModel.mesa),
+                            joinedload(PedidoUnificadoModel.empresa),
+                        )
+                        .filter(PedidoUnificadoModel.id == pedido_id)
+                        .first()
+                    )
+                    if pedido_completo:
+                        asyncio.create_task(notificar_pedido_impresso(pedido_completo))
+                except Exception as e:
+                    logger.error(f"Erro ao agendar notificação kanban para pedido impresso {pedido_id}: {e}")
+                
                 return True
 
             if tipo_pedido == TipoPedidoPrinterEnum.MESA:
@@ -147,6 +169,28 @@ class PrinterRepository:
                 pedido_repo.atualizar_status(pedido_id, StatusPedido.PREPARANDO.value)
                 self.db.commit()
                 logger.info(f"[PrinterRepository] Pedido mesa {pedido_id} marcado como impresso → PREPARANDO")
+                
+                # Notifica kanban após marcar como impresso
+                try:
+                    import asyncio
+                    from app.api.pedidos.utils.pedido_notification_helper import notificar_pedido_impresso
+                    # Recarrega pedido com todos os relacionamentos para a notificação (incluindo mesa)
+                    pedido_completo = (
+                        self.db.query(PedidoUnificadoModel)
+                        .options(
+                            joinedload(PedidoUnificadoModel.cliente),
+                            joinedload(PedidoUnificadoModel.itens),
+                            joinedload(PedidoUnificadoModel.mesa),
+                            joinedload(PedidoUnificadoModel.empresa),
+                        )
+                        .filter(PedidoUnificadoModel.id == pedido_id)
+                        .first()
+                    )
+                    if pedido_completo:
+                        asyncio.create_task(notificar_pedido_impresso(pedido_completo))
+                except Exception as e:
+                    logger.error(f"Erro ao agendar notificação kanban para pedido impresso {pedido_id}: {e}")
+                
                 return True
 
             if tipo_pedido == TipoPedidoPrinterEnum.BALCAO:
@@ -182,6 +226,28 @@ class PrinterRepository:
                 )
                 pedido_repo.commit()
                 logger.info(f"[PrinterRepository] Pedido balcão {pedido_id} marcado como impresso → PREPARANDO")
+                
+                # Notifica kanban após marcar como impresso
+                try:
+                    import asyncio
+                    from app.api.pedidos.utils.pedido_notification_helper import notificar_pedido_impresso
+                    # Recarrega pedido com todos os relacionamentos para a notificação (incluindo mesa)
+                    pedido_completo = (
+                        self.db.query(PedidoUnificadoModel)
+                        .options(
+                            joinedload(PedidoUnificadoModel.cliente),
+                            joinedload(PedidoUnificadoModel.itens),
+                            joinedload(PedidoUnificadoModel.mesa),
+                            joinedload(PedidoUnificadoModel.empresa),
+                        )
+                        .filter(PedidoUnificadoModel.id == pedido_id)
+                        .first()
+                    )
+                    if pedido_completo:
+                        asyncio.create_task(notificar_pedido_impresso(pedido_completo))
+                except Exception as e:
+                    logger.error(f"Erro ao agendar notificação kanban para pedido impresso {pedido_id}: {e}")
+                
                 return True
 
             logger.warning(f"[PrinterRepository] Tipo de pedido '{tipo_pedido}' não reconhecido para marcação de impressão")

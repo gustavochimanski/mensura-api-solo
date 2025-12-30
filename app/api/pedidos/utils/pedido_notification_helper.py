@@ -96,3 +96,87 @@ async def notificar_novo_pedido(pedido: PedidoUnificadoModel) -> None:
         logger.error(f"Erro ao notificar novo pedido {pedido_id}: {e}", exc_info=True)
 
 
+async def notificar_pedido_impresso(pedido: PedidoUnificadoModel) -> None:
+    """
+    Notifica o frontend sobre um pedido marcado como impresso (notificação kanban).
+    
+    Esta função é chamada de forma assíncrona após o pedido ser marcado como impresso,
+    sem bloquear o fluxo principal.
+    
+    Args:
+        pedido: Instância do PedidoUnificadoModel com todos os relacionamentos carregados
+    """
+    # Extrai o ID do pedido logo no início para evitar DetachedInstanceError
+    # caso o objeto seja desconectado da sessão durante operações assíncronas
+    try:
+        pedido_id = str(pedido.id)
+        empresa_id = str(pedido.empresa_id)
+    except Exception as e:
+        logger.error(f"Erro ao extrair IDs do pedido: {e}", exc_info=True)
+        return
+    
+    try:
+        from app.api.notifications.services.pedido_notification_service import PedidoNotificationService
+        
+        # Extrai dados do cliente
+        cliente_data: Dict[str, Any] = {}
+        if pedido.cliente:
+            cliente_data = {
+                "id": pedido.cliente.id,
+                "nome": getattr(pedido.cliente, "nome", None) or getattr(pedido.cliente, "nome_completo", None) or "Cliente",
+                "telefone": getattr(pedido.cliente, "telefone", None),
+                "email": getattr(pedido.cliente, "email", None),
+            }
+        else:
+            cliente_data = {
+                "nome": "Cliente não identificado",
+            }
+        
+        # Extrai itens do pedido
+        itens = []
+        if hasattr(pedido, "itens") and pedido.itens:
+            for item in pedido.itens:
+                item_data = {
+                    "id": item.id,
+                    "produto_descricao": getattr(item, "produto_descricao_snapshot", None) or "Produto",
+                    "quantidade": getattr(item, "quantidade", 1),
+                    "preco_unitario": float(getattr(item, "preco_unitario", 0) or 0),
+                    "preco_total": float(getattr(item, "preco_unitario", 0) or 0) * getattr(item, "quantidade", 1),
+                }
+                itens.append(item_data)
+        
+        # Valor total do pedido
+        valor_total = float(pedido.valor_total or 0)
+        
+        # Informações adicionais sobre o pedido
+        tipo_entrega = pedido.tipo_entrega.value if hasattr(pedido.tipo_entrega, "value") else str(pedido.tipo_entrega)
+        numero_pedido = pedido.numero_pedido or pedido_id
+        
+        # Metadados adicionais
+        channel_metadata = {
+            "tipo_entrega": tipo_entrega,
+            "numero_pedido": numero_pedido,
+            "status": pedido.status.value if hasattr(pedido.status, "value") else str(pedido.status),
+            "mesa_id": pedido.mesa_id,
+            "mesa_codigo": pedido.mesa.codigo if pedido.mesa and hasattr(pedido.mesa, "codigo") else None,
+        }
+        
+        # Chama o serviço de notificação
+        notification_service = PedidoNotificationService()
+        sent_count = await notification_service.notify_pedido_impresso(
+            empresa_id=empresa_id,
+            pedido_id=pedido_id,
+            cliente_data=cliente_data,
+            itens=itens,
+            valor_total=valor_total,
+            channel_metadata=channel_metadata
+        )
+        
+        logger.debug(f"Processo de notificação kanban concluído: pedido_id={pedido_id}, empresa_id={empresa_id}, sent_count={sent_count}")
+        
+    except Exception as e:
+        # Loga o erro mas não propaga para não quebrar o fluxo de marcação como impresso
+        # Usa pedido_id extraído no início para evitar DetachedInstanceError
+        logger.error(f"Erro ao notificar pedido impresso {pedido_id}: {e}", exc_info=True)
+
+
