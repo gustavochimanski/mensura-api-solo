@@ -46,19 +46,6 @@ REACT_APP_API_URL=https://teste2.mensuraapi.com.br
 VITE_API_URL=https://teste2.mensuraapi.com.br
 ```
 
-**Exemplo de uso no código:**
-
-```typescript
-// Next.js
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-
-// React (Create React App)
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
-
-// React (Vite)
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-```
-
 ### Endpoint de Conexão
 
 **Padrão:**
@@ -67,40 +54,18 @@ ws://{API_URL}/api/notifications/ws/notifications/{user_id}?empresa_id={empresa_
 ```
 
 **⚠️ Atenção:** A URL do WebSocket deve ser construída a partir da URL da API:
-- Se `API_URL` começa com `https://`, use `wss://` (WebSocket seguro)
-- Se `API_URL` começa com `http://`, use `ws://` (WebSocket não seguro)
+- Se `API_URL` começa com `https://`, use protocolo `wss://` (WebSocket seguro)
+- Se `API_URL` começa com `http://`, use protocolo `ws://` (WebSocket não seguro)
+- Remova o protocolo (`http://` ou `https://`) da URL da API
+- Adicione o protocolo WebSocket correspondente (`ws://` ou `wss://`)
+- Formato: `{protocolo}://{host}/api/notifications/ws/notifications/{user_id}?empresa_id={empresa_id}`
 
-**Função auxiliar para construir URL do WebSocket:**
+**Exemplos de URLs:**
 
-```typescript
-function getWebSocketUrl(apiUrl: string, userId: string, empresaId: string): string {
-  // Remove http:// ou https:// e adiciona ws:// ou wss://
-  const protocol = apiUrl.startsWith('https') ? 'wss' : 'ws';
-  const cleanUrl = apiUrl.replace(/^https?:\/\//, '');
-  return `${protocol}://${cleanUrl}/api/notifications/ws/notifications/${userId}?empresa_id=${empresaId}`;
-}
-
-// Exemplo de uso
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-const wsUrl = getWebSocketUrl(API_URL, '1', '1');
-// Resultado: wss://teste2.mensuraapi.com.br/api/notifications/ws/notifications/1?empresa_id=1
-```
-
-**Exemplos:**
-
-**Com variável de ambiente (Produção):**
-```typescript
-const API_URL = process.env.NEXT_PUBLIC_API_URL; // https://teste2.mensuraapi.com.br
-const wsUrl = getWebSocketUrl(API_URL, userId, empresaId);
-// wss://teste2.mensuraapi.com.br/api/notifications/ws/notifications/1?empresa_id=1
-```
-
-**Desenvolvimento Local (fallback):**
-```typescript
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-const wsUrl = getWebSocketUrl(API_URL, userId, empresaId);
-// ws://localhost:8000/api/notifications/ws/notifications/1?empresa_id=1
-```
+| API URL | Protocolo WebSocket | URL Final |
+|---------|---------------------|-----------|
+| `https://teste2.mensuraapi.com.br` | `wss://` | `wss://teste2.mensuraapi.com.br/api/notifications/ws/notifications/1?empresa_id=1` |
+| `http://localhost:8000` | `ws://` | `ws://localhost:8000/api/notifications/ws/notifications/1?empresa_id=1` |
 
 ### Obtendo a URL de Conexão (Alternativa)
 
@@ -291,7 +256,7 @@ Informa ao servidor a rota atual do usuário:
 }
 ```
 
-**⚠️ Importante:** Envie esta mensagem sempre que o usuário navegar para uma nova rota. Isso permite que o servidor saiba qual a rota atual do usuario e envie notificações apenas para usuários em rotas específicas (ex: notificações de kanban só para quem está em `/pedidos`).
+**⚠️ Importante:** Envie esta mensagem sempre que o usuário navegar para uma nova rota. Isso permite que o servidor saiba qual a rota atual do usuário e envie notificações apenas para usuários em rotas específicas (ex: notificações de kanban só para quem está em `/pedidos`).
 
 #### 4. Get Stats
 
