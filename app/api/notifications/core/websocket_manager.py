@@ -3,6 +3,7 @@ from typing import Dict, List, Set, Optional, Any
 import json
 import logging
 import asyncio
+import os
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -21,6 +22,45 @@ class ConnectionManager:
         self.websocket_to_empresa: Dict[WebSocket, str] = {}
         # Mapeia WebSocket para rota atual do cliente
         self.websocket_to_route: Dict[WebSocket, str] = {}
+        # Mapeia WebSocket para timestamp de conexão (usado para expulsar conexões antigas)
+        self.websocket_to_connected_at: Dict[WebSocket, datetime] = {}
+
+        # Lock para evitar race conditions em connect/disconnect concorrentes
+        self._lock = asyncio.Lock()
+
+        # Limite de conexões simultâneas por (user_id, empresa_id)
+        # Default: 1 (evita explosão de conexões quando o frontend entra em loop de reconnect)
+        self.max_connections_per_user_empresa: int = int(
+            os.getenv("WS_MAX_CONNECTIONS_PER_USER_EMPRESA", "1")
+        )
+
+    def _remove_connection_no_lock(self, websocket: WebSocket) -> None:
+        """Remove um websocket das estruturas internas (NÃO faz await e pressupõe lock)."""
+        user_id = self.websocket_to_user.get(websocket)
+        empresa_id = self.websocket_to_empresa.get(websocket)
+
+        if user_id and user_id in self.active_connections:
+            self.active_connections[user_id].discard(websocket)
+            if not self.active_connections[user_id]:
+                del self.active_connections[user_id]
+
+        if empresa_id and empresa_id in self.empresa_connections:
+            self.empresa_connections[empresa_id].discard(websocket)
+            if not self.empresa_connections[empresa_id]:
+                del self.empresa_connections[empresa_id]
+
+        self.websocket_to_user.pop(websocket, None)
+        self.websocket_to_empresa.pop(websocket, None)
+        self.websocket_to_route.pop(websocket, None)
+        self.websocket_to_connected_at.pop(websocket, None)
+
+    async def _best_effort_close(self, websocket: WebSocket, code: int, reason: str) -> None:
+        """Tenta fechar um websocket sem deixar exceção vazar."""
+        try:
+            await websocket.close(code=code, reason=reason)
+        except Exception:
+            # Pode falhar se já estiver fechado / estado inválido; é ok.
+            return
     
     async def connect(self, websocket: WebSocket, user_id: str, empresa_id: str):
         """Aceita uma nova conexão WebSocket"""
@@ -34,26 +74,63 @@ class ConnectionManager:
             f"[CONNECT] Iniciando conexão - user_id={user_id}, empresa_id={empresa_id}, "
             f"websocket={id(websocket)}, client={websocket.client if hasattr(websocket, 'client') else 'N/A'}"
         )
+
+        # Evita explosão de conexões por (user_id, empresa_id) fechando conexões antigas
+        websockets_to_evict: List[WebSocket] = []
+        async with self._lock:
+            if self.max_connections_per_user_empresa > 0:
+                existing_for_user = list(self.active_connections.get(user_id, set()))
+                existing_same_empresa = [
+                    ws for ws in existing_for_user
+                    if self.websocket_to_empresa.get(ws) == empresa_id
+                ]
+
+                if existing_same_empresa:
+                    # Ordena por tempo de conexão (mais antigas primeiro)
+                    existing_same_empresa.sort(
+                        key=lambda ws: self.websocket_to_connected_at.get(ws, datetime.min)
+                    )
+
+                    allowed_existing = max(0, self.max_connections_per_user_empresa - 1)
+                    evict_count = max(0, len(existing_same_empresa) - allowed_existing)
+                    if evict_count > 0:
+                        websockets_to_evict = existing_same_empresa[:evict_count]
+
+                        # Remove do estado imediatamente (mesmo que o close falhe)
+                        for ws in websockets_to_evict:
+                            self._remove_connection_no_lock(ws)
+
+                        logger.warning(
+                            f"[CONNECT] Limite atingido para user_id={user_id}, empresa_id={empresa_id}. "
+                            f"Fechando {len(websockets_to_evict)} conexão(ões) antiga(s) para aceitar a nova. "
+                            f"max_connections_per_user_empresa={self.max_connections_per_user_empresa}"
+                        )
+
+            # Adiciona a nova conexão ao estado
+            if user_id not in self.active_connections:
+                self.active_connections[user_id] = set()
+                logger.debug(f"[CONNECT] Criando novo conjunto de conexões para user_id={user_id}")
+            self.active_connections[user_id].add(websocket)
+            logger.debug(f"[CONNECT] Adicionado ao active_connections[{user_id}]. Total: {len(self.active_connections[user_id])}")
+
+            if empresa_id not in self.empresa_connections:
+                self.empresa_connections[empresa_id] = set()
+                logger.debug(f"[CONNECT] Criando novo conjunto de conexões para empresa_id={empresa_id}")
+            self.empresa_connections[empresa_id].add(websocket)
+            logger.debug(f"[CONNECT] Adicionado ao empresa_connections[{empresa_id}]. Total: {len(self.empresa_connections[empresa_id])}")
+
+            self.websocket_to_user[websocket] = user_id
+            self.websocket_to_empresa[websocket] = empresa_id
+            self.websocket_to_route[websocket] = ""
+            self.websocket_to_connected_at[websocket] = datetime.utcnow()
         
-        # Adiciona à lista de conexões do usuário
-        if user_id not in self.active_connections:
-            self.active_connections[user_id] = set()
-            logger.debug(f"[CONNECT] Criando novo conjunto de conexões para user_id={user_id}")
-        self.active_connections[user_id].add(websocket)
-        logger.debug(f"[CONNECT] Adicionado ao active_connections[{user_id}]. Total: {len(self.active_connections[user_id])}")
-        
-        # Adiciona à lista de conexões da empresa
-        if empresa_id not in self.empresa_connections:
-            self.empresa_connections[empresa_id] = set()
-            logger.debug(f"[CONNECT] Criando novo conjunto de conexões para empresa_id={empresa_id}")
-        self.empresa_connections[empresa_id].add(websocket)
-        logger.debug(f"[CONNECT] Adicionado ao empresa_connections[{empresa_id}]. Total: {len(self.empresa_connections[empresa_id])}")
-        
-        # Mapeia WebSocket para identificadores
-        self.websocket_to_user[websocket] = user_id
-        self.websocket_to_empresa[websocket] = empresa_id
-        # Inicializa rota como vazia (cliente precisa informar a rota)
-        self.websocket_to_route[websocket] = ""
+        # Fecha as conexões expulsas (fora do lock, best-effort)
+        for ws in websockets_to_evict:
+            await self._best_effort_close(
+                ws,
+                code=4000,
+                reason="Conexão substituída por outra mais recente para o mesmo usuário/empresa"
+            )
         
         # Log do estado completo após conexão
         stats = self.get_connection_stats()
@@ -64,45 +141,19 @@ class ConnectionManager:
             f"Empresas: {stats['empresas_with_connections']}"
         )
     
-    def disconnect(self, websocket: WebSocket):
-        """Remove uma conexão WebSocket"""
+    async def disconnect(self, websocket: WebSocket):
+        """Remove uma conexão WebSocket (async para ser consistente com o lock)."""
         user_id = self.websocket_to_user.get(websocket)
         empresa_id = self.websocket_to_empresa.get(websocket)
         route = self.websocket_to_route.get(websocket, "")
-        
+
         logger.info(
             f"[DISCONNECT] Iniciando desconexão - user_id={user_id}, empresa_id={empresa_id}, "
             f"route={route}, websocket={id(websocket)}"
         )
-        
-        if user_id and user_id in self.active_connections:
-            before_count = len(self.active_connections[user_id])
-            self.active_connections[user_id].discard(websocket)
-            after_count = len(self.active_connections[user_id])
-            logger.debug(
-                f"[DISCONNECT] Removido de active_connections[{user_id}]. "
-                f"Antes: {before_count}, Depois: {after_count}"
-            )
-            if not self.active_connections[user_id]:
-                del self.active_connections[user_id]
-                logger.debug(f"[DISCONNECT] Conjunto de conexões para user_id={user_id} foi removido (vazio)")
-        
-        if empresa_id and empresa_id in self.empresa_connections:
-            before_count = len(self.empresa_connections[empresa_id])
-            self.empresa_connections[empresa_id].discard(websocket)
-            after_count = len(self.empresa_connections[empresa_id])
-            logger.debug(
-                f"[DISCONNECT] Removido de empresa_connections[{empresa_id}]. "
-                f"Antes: {before_count}, Depois: {after_count}"
-            )
-            if not self.empresa_connections[empresa_id]:
-                del self.empresa_connections[empresa_id]
-                logger.debug(f"[DISCONNECT] Conjunto de conexões para empresa_id={empresa_id} foi removido (vazio)")
-        
-        # Remove mapeamentos
-        self.websocket_to_user.pop(websocket, None)
-        self.websocket_to_empresa.pop(websocket, None)
-        self.websocket_to_route.pop(websocket, None)
+
+        async with self._lock:
+            self._remove_connection_no_lock(websocket)
         
         # Log do estado completo após desconexão
         stats = self.get_connection_stats()
@@ -131,7 +182,7 @@ class ConnectionManager:
             except Exception as e:
                 logger.error(f"Erro ao enviar mensagem para usuário {user_id}: {e}")
                 # Remove conexão inválida
-                self.disconnect(websocket)
+                await self.disconnect(websocket)
         
         logger.info(f"Mensagem enviada para {success_count}/{len(connections)} conexões do usuário {user_id}")
         return success_count > 0
@@ -173,7 +224,7 @@ class ConnectionManager:
             except Exception as e:
                 logger.error(f"Erro ao enviar mensagem para empresa {empresa_id}: {e}")
                 # Remove conexão inválida
-                self.disconnect(websocket)
+                await self.disconnect(websocket)
         
         logger.info(f"Mensagem enviada para {success_count}/{len(connections)} conexões da empresa {empresa_id}")
         return success_count
@@ -195,7 +246,7 @@ class ConnectionManager:
             except Exception as e:
                 logger.error(f"Erro no broadcast: {e}")
                 # Remove conexão inválida
-                self.disconnect(websocket)
+                await self.disconnect(websocket)
         
         logger.info(f"Broadcast enviado para {success_count}/{len(all_connections)} conexões")
         return success_count
@@ -373,7 +424,7 @@ class ConnectionManager:
             except Exception as e:
                 logger.error(f"Erro ao enviar mensagem para empresa {empresa_id} na rota {required_route}: {e}")
                 # Remove conexão inválida
-                self.disconnect(websocket)
+                await self.disconnect(websocket)
         
         logger.info(
             f"Mensagem enviada para {success_count}/{len(filtered_connections)} conexões "

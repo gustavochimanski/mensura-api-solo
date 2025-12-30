@@ -112,7 +112,7 @@ async def websocket_notifications(
             f"[WS_ROUTER] Executando cleanup - user_id={user_id}, empresa_id={empresa_id}, "
             f"websocket_id={id(websocket)}"
         )
-        websocket_manager.disconnect(websocket)
+        await websocket_manager.disconnect(websocket)
         stats_after = websocket_manager.get_connection_stats()
         logger.info(
             f"[WS_ROUTER] WebSocket desconectado e removido - user_id={user_id}, empresa_id={empresa_id}. "
