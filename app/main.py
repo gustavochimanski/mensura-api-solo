@@ -221,10 +221,12 @@ def custom_openapi():
     public_paths = {"/", "/health", "/api/auth/token"}
     paths = openapi_schema.get("paths", {})
     for path, methods in paths.items():
-        if path in public_paths:
+        # Remove segurança de rotas públicas ou de autenticação
+        if path in public_paths or path.startswith("/api/auth"):
             for method_obj in methods.values():
-                # Overwrite para remover security no nível da operação
-                method_obj["security"] = []
+                if isinstance(method_obj, dict):
+                    # Overwrite para remover security no nível da operação
+                    method_obj["security"] = []
 
     app.openapi_schema = openapi_schema
     return app.openapi_schema
@@ -325,10 +327,11 @@ def get_filtered_openapi(tag_filter: str, path_prefix: str, title: str):
     # Define segurança global
     full_openapi["security"] = [{"bearerAuth": []}]
     
-    # Remove security de endpoints públicos
+    # Remove security de endpoints públicos e rotas de autenticação
     public_paths = {"/", "/health", "/api/auth/token"}
-    for path in public_paths:
-        if path in filtered_paths:
+    for path in filtered_paths:
+        # Remove segurança de rotas públicas ou de autenticação
+        if path in public_paths or path.startswith("/api/auth"):
             for method_obj in filtered_paths[path].values():
                 if isinstance(method_obj, dict):
                     method_obj["security"] = []
