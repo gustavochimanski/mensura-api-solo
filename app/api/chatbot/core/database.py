@@ -43,6 +43,7 @@ def init_database(db: Session):
                 id SERIAL PRIMARY KEY,
                 session_id VARCHAR(255) NOT NULL,
                 user_id VARCHAR(255) NOT NULL,
+                contact_name VARCHAR(255),
                 prompt_key VARCHAR(100),
                 model VARCHAR(100) NOT NULL,
                 empresa_id INTEGER,
@@ -50,6 +51,21 @@ def init_database(db: Session):
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (prompt_key) REFERENCES {CHATBOT_SCHEMA}.prompts(key)
             )
+        """))
+
+        # Adiciona coluna contact_name se não existir (para bancos já existentes)
+        db.execute(text(f"""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_schema = '{CHATBOT_SCHEMA}'
+                    AND table_name = 'conversations'
+                    AND column_name = 'contact_name'
+                ) THEN
+                    ALTER TABLE {CHATBOT_SCHEMA}.conversations ADD COLUMN contact_name VARCHAR(255);
+                END IF;
+            END $$;
         """))
 
         # Tabela de mensagens
@@ -221,11 +237,11 @@ def delete_prompt(db: Session, key: str, empresa_id: Optional[int] = None) -> bo
 
 # ==================== CONVERSAS ====================
 
-def create_conversation(db: Session, session_id: str, user_id: str, prompt_key: str, model: str, empresa_id: Optional[int] = None) -> Optional[int]:
+def create_conversation(db: Session, session_id: str, user_id: str, prompt_key: str, model: str, empresa_id: Optional[int] = None, contact_name: Optional[str] = None) -> Optional[int]:
     """Cria uma nova conversa"""
     query = text(f"""
-        INSERT INTO {CHATBOT_SCHEMA}.conversations (session_id, user_id, prompt_key, model, empresa_id)
-        VALUES (:session_id, :user_id, :prompt_key, :model, :empresa_id)
+        INSERT INTO {CHATBOT_SCHEMA}.conversations (session_id, user_id, prompt_key, model, empresa_id, contact_name)
+        VALUES (:session_id, :user_id, :prompt_key, :model, :empresa_id, :contact_name)
         RETURNING id
     """)
     result = db.execute(query, {
@@ -233,11 +249,29 @@ def create_conversation(db: Session, session_id: str, user_id: str, prompt_key: 
         "user_id": user_id,
         "prompt_key": prompt_key,
         "model": model,
-        "empresa_id": empresa_id
+        "empresa_id": empresa_id,
+        "contact_name": contact_name
     })
     db.commit()
     row = result.fetchone()
     return row[0] if row else None
+
+
+def update_conversation_contact_name(db: Session, conversation_id: int, contact_name: str) -> bool:
+    """Atualiza o nome do contato de uma conversa"""
+    try:
+        query = text(f"""
+            UPDATE {CHATBOT_SCHEMA}.conversations
+            SET contact_name = :contact_name, updated_at = CURRENT_TIMESTAMP
+            WHERE id = :id
+        """)
+        db.execute(query, {"id": conversation_id, "contact_name": contact_name})
+        db.commit()
+        return True
+    except Exception as e:
+        db.rollback()
+        print(f"Erro ao atualizar contact_name: {e}")
+        return False
 
 
 def get_conversation(db: Session, conversation_id: int) -> Optional[Dict]:
@@ -301,7 +335,7 @@ def get_conversations_by_user(db: Session, user_id: str, empresa_id: Optional[in
     """Retorna todas as conversas de um usuário"""
     if empresa_id:
         query = text(f"""
-            SELECT id, session_id, user_id, prompt_key, model, empresa_id, created_at, updated_at
+            SELECT id, session_id, user_id, contact_name, prompt_key, model, empresa_id, created_at, updated_at
             FROM {CHATBOT_SCHEMA}.conversations
             WHERE user_id = :user_id AND empresa_id = :empresa_id
             ORDER BY updated_at DESC
@@ -309,7 +343,7 @@ def get_conversations_by_user(db: Session, user_id: str, empresa_id: Optional[in
         result = db.execute(query, {"user_id": user_id, "empresa_id": empresa_id})
     else:
         query = text(f"""
-            SELECT id, session_id, user_id, prompt_key, model, empresa_id, created_at, updated_at
+            SELECT id, session_id, user_id, contact_name, prompt_key, model, empresa_id, created_at, updated_at
             FROM {CHATBOT_SCHEMA}.conversations
             WHERE user_id = :user_id
             ORDER BY updated_at DESC
@@ -321,11 +355,12 @@ def get_conversations_by_user(db: Session, user_id: str, empresa_id: Optional[in
             "id": row[0],
             "session_id": row[1],
             "user_id": row[2],
-            "prompt_key": row[3],
-            "model": row[4],
-            "empresa_id": row[5],
-            "created_at": row[6],
-            "updated_at": row[7]
+            "contact_name": row[3],
+            "prompt_key": row[4],
+            "model": row[5],
+            "empresa_id": row[6],
+            "created_at": row[7],
+            "updated_at": row[8]
         }
         for row in result.fetchall()
     ]

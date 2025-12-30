@@ -5,6 +5,7 @@ Todas as rotas relacionadas ao chatbot com IA (Ollama)
 from fastapi import APIRouter, HTTPException, Request, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from typing import List, Optional
 import httpx
 import json
@@ -295,6 +296,7 @@ async def list_all_conversations(db: Session = Depends(get_db)):
                 c.id,
                 c.session_id,
                 c.user_id,
+                c.contact_name,
                 c.prompt_key,
                 c.model,
                 c.empresa_id,
@@ -304,7 +306,7 @@ async def list_all_conversations(db: Session = Depends(get_db)):
                 MAX(m.created_at) as last_message_at
             FROM chatbot.conversations c
             LEFT JOIN chatbot.messages m ON c.id = m.conversation_id
-            GROUP BY c.id, c.session_id, c.user_id, c.prompt_key, c.model, c.empresa_id, c.created_at, c.updated_at
+            GROUP BY c.id, c.session_id, c.user_id, c.contact_name, c.prompt_key, c.model, c.empresa_id, c.created_at, c.updated_at
             ORDER BY c.updated_at DESC
         """)
 
@@ -314,13 +316,14 @@ async def list_all_conversations(db: Session = Depends(get_db)):
                 "id": row[0],
                 "session_id": row[1],
                 "user_id": row[2],
-                "prompt_key": row[3],
-                "model": row[4],
-                "empresa_id": row[5],
-                "created_at": row[6],
-                "updated_at": row[7],
-                "message_count": row[8],
-                "last_message_at": row[9]
+                "contact_name": row[3],
+                "prompt_key": row[4],
+                "model": row[5],
+                "empresa_id": row[6],
+                "created_at": row[7],
+                "updated_at": row[8],
+                "message_count": row[9],
+                "last_message_at": row[10]
             }
             for row in result.fetchall()
         ]
@@ -608,6 +611,13 @@ async def webhook_handler(request: Request, db: Session = Depends(get_db)):
                     # Verifica se há mensagens
                     messages = value.get("messages", [])
 
+                    # Extrai nome do contato da Meta (se disponível)
+                    contacts = value.get("contacts", [])
+                    contact_name = None
+                    if contacts and len(contacts) > 0:
+                        profile = contacts[0].get("profile", {})
+                        contact_name = profile.get("name")
+
                     for message in messages:
                         # Dados da mensagem
                         from_number = message.get("from")
@@ -622,12 +632,13 @@ async def webhook_handler(request: Request, db: Session = Depends(get_db)):
 
                         print(f"\n📨 Mensagem recebida:")
                         print(f"   De: {from_number}")
+                        print(f"   Nome: {contact_name}")
                         print(f"   Tipo: {message_type}")
                         print(f"   Texto: {message_text}")
 
                         if message_text:
-                            # Processa a mensagem com a IA
-                            await process_whatsapp_message(db, from_number, message_text)
+                            # Processa a mensagem com a IA (passa o nome do contato)
+                            await process_whatsapp_message(db, from_number, message_text, contact_name)
 
         return {"status": "ok"}
 
@@ -636,13 +647,13 @@ async def webhook_handler(request: Request, db: Session = Depends(get_db)):
         return {"status": "error", "message": str(e)}
 
 
-async def process_whatsapp_message(db: Session, phone_number: str, message_text: str):
+async def process_whatsapp_message(db: Session, phone_number: str, message_text: str, contact_name: str = None):
     """
     Processa mensagem recebida via WhatsApp e responde com IA
     VERSÃO 2.0: Usa SalesHandler para fluxo completo de vendas
     """
     try:
-        print(f"\n🤖 Processando mensagem de {phone_number}: {message_text}")
+        print(f"\n🤖 Processando mensagem de {phone_number} ({contact_name or 'sem nome'}): {message_text}")
 
         # VERIFICA SE O BOT ESTÁ ATIVO PARA ESTE NÚMERO
         if not chatbot_db.is_bot_active_for_phone(db, phone_number):
@@ -657,6 +668,9 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                     role="user",
                     content=message_text
                 )
+                # Atualiza o nome do contato se disponível
+                if contact_name and not conversations[0].get('contact_name'):
+                    chatbot_db.update_conversation_contact_name(db, conversations[0]['id'], contact_name)
             return  # Não responde, apenas registra
 
         # OPÇÃO: Usar SalesHandler para conversas de vendas
@@ -669,15 +683,21 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
             conversations = chatbot_db.get_conversations_by_user(db, user_id)
 
             if not conversations:
-                # Cria nova conversa
+                # Cria nova conversa com nome do contato
                 conversation_id = chatbot_db.create_conversation(
                     db=db,
                     session_id=f"whatsapp_{phone_number}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
                     user_id=user_id,
                     prompt_key="default",
-                    model="llm-sales"
+                    model="llm-sales",
+                    contact_name=contact_name
                 )
-                print(f"   ✅ Nova conversa criada: {conversation_id}")
+                print(f"   ✅ Nova conversa criada: {conversation_id} (contato: {contact_name})")
+            else:
+                # Atualiza o nome do contato se disponível e ainda não tiver
+                if contact_name and not conversations[0].get('contact_name'):
+                    chatbot_db.update_conversation_contact_name(db, conversations[0]['id'], contact_name)
+                    print(f"   📝 Nome do contato atualizado: {contact_name}")
 
             # Importa o Groq Sales Handler (LLaMA 3.1 via API - rápido!)
             from ..core.groq_sales_handler import processar_mensagem_groq
@@ -987,6 +1007,65 @@ async def test_whatsapp_token(config: WhatsAppConfigUpdate):
         )
 
 
+# ==================== FOTO DE PERFIL DO WHATSAPP ====================
+
+@router.get("/profile-picture/{phone_number}")
+async def get_whatsapp_profile_picture(phone_number: str):
+    """
+    Busca a foto de perfil de um contato do WhatsApp.
+    Usa a API do WhatsApp Business para obter a URL da foto.
+    """
+    try:
+        from ..core.config_whatsapp import WHATSAPP_CONFIG
+
+        access_token = WHATSAPP_CONFIG.get("access_token")
+        api_version = WHATSAPP_CONFIG.get("api_version", "v22.0")
+
+        # Normaliza o número (remove caracteres especiais)
+        phone_clean = ''.join(filter(str.isdigit, phone_number))
+        if not phone_clean.startswith('55'):
+            phone_clean = '55' + phone_clean
+
+        # URL para buscar informações do contato
+        # A API do WhatsApp Cloud não fornece foto de perfil diretamente
+        # mas podemos tentar buscar via endpoint de contatos
+        url = f"https://graph.facebook.com/{api_version}/{phone_clean}/profile_picture"
+
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+        }
+
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(url, headers=headers)
+
+            if response.status_code == 200:
+                data = response.json()
+                return {
+                    "success": True,
+                    "phone_number": phone_number,
+                    "profile_picture_url": data.get("profile_picture_url") or data.get("url"),
+                    "data": data
+                }
+            else:
+                # A API pode não suportar busca direta de foto
+                # Retornamos null para usar avatar padrão
+                return {
+                    "success": False,
+                    "phone_number": phone_number,
+                    "profile_picture_url": None,
+                    "message": "Foto de perfil não disponível"
+                }
+
+    except Exception as e:
+        return {
+            "success": False,
+            "phone_number": phone_number,
+            "profile_picture_url": None,
+            "error": str(e)
+        }
+
+
 # ==================== ENDPOINT DE TESTE (SIMULAÇÃO) ====================
 
 class SimulateMessageRequest(BaseModel):
@@ -1066,4 +1145,557 @@ async def simulate_chatbot_message(
         raise HTTPException(
             status_code=500,
             detail=f"Erro ao processar mensagem: {str(e)}"
+        )
+
+
+# ==================== PEDIDOS DO CLIENTE ====================
+
+# Templates de mensagem por status do pedido
+ORDER_STATUS_TEMPLATES = {
+    "P": {
+        "name": "Pendente",
+        "emoji": "🕐",
+        "message": "Seu pedido #{numero_pedido} foi recebido e está aguardando confirmação."
+    },
+    "I": {
+        "name": "Em Impressão",
+        "emoji": "🖨️",
+        "message": "Seu pedido #{numero_pedido} está sendo processado!"
+    },
+    "R": {
+        "name": "Preparando",
+        "emoji": "👨‍🍳",
+        "message": "Boa notícia! Seu pedido #{numero_pedido} está sendo preparado com todo carinho!"
+    },
+    "S": {
+        "name": "Saiu para Entrega",
+        "emoji": "🛵",
+        "message": "Seu pedido #{numero_pedido} saiu para entrega! Em breve estará com você!"
+    },
+    "E": {
+        "name": "Entregue",
+        "emoji": "✅",
+        "message": "Seu pedido #{numero_pedido} foi entregue! Obrigado pela preferência!"
+    },
+    "C": {
+        "name": "Cancelado",
+        "emoji": "❌",
+        "message": "Seu pedido #{numero_pedido} foi cancelado."
+    },
+    "A": {
+        "name": "Aguardando Pagamento",
+        "emoji": "💳",
+        "message": "Seu pedido #{numero_pedido} está aguardando confirmação do pagamento."
+    },
+    "D": {
+        "name": "Editado",
+        "emoji": "📝",
+        "message": "Seu pedido #{numero_pedido} foi atualizado."
+    },
+    "X": {
+        "name": "Em Edição",
+        "emoji": "✏️",
+        "message": "Seu pedido #{numero_pedido} está sendo editado."
+    }
+}
+
+
+@router.get("/pedidos-debug")
+async def debug_orders(db: Session = Depends(get_db)):
+    """DEBUG: Lista todos os pedidos e clientes para verificar dados"""
+    try:
+        from sqlalchemy import text
+
+        # Busca todos os clientes
+        clientes_query = text("SELECT id, nome, telefone FROM cadastros.clientes LIMIT 10")
+        clientes_result = db.execute(clientes_query)
+        clientes = [{"id": r[0], "nome": r[1], "telefone": r[2]} for r in clientes_result.fetchall()]
+
+        # Busca todos os pedidos
+        pedidos_query = text("""
+            SELECT p.id, p.numero_pedido, p.cliente_id, p.status, p.valor_total, c.nome as cliente_nome
+            FROM pedidos.pedidos p
+            LEFT JOIN cadastros.clientes c ON p.cliente_id = c.id
+            ORDER BY p.created_at DESC
+            LIMIT 20
+        """)
+        pedidos_result = db.execute(pedidos_query)
+        pedidos = [
+            {"id": r[0], "numero_pedido": r[1], "cliente_id": r[2], "status": r[3], "valor_total": float(r[4]) if r[4] else 0, "cliente_nome": r[5]}
+            for r in pedidos_result.fetchall()
+        ]
+
+        return {
+            "clientes": clientes,
+            "pedidos": pedidos,
+            "total_clientes": len(clientes),
+            "total_pedidos": len(pedidos)
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@router.get("/pedidos/{phone_number}")
+async def get_orders_by_phone(phone_number: str, db: Session = Depends(get_db)):
+    """
+    Busca todos os pedidos de um cliente pelo número de telefone.
+    Retorna pedidos ativos (não cancelados) ordenados por data.
+    """
+    try:
+        from sqlalchemy import text
+
+        # Normaliza o número de telefone
+        phone_clean = ''.join(filter(str.isdigit, phone_number))
+
+        # Remove o código do país (55) se presente para busca
+        phone_without_country = phone_clean
+        if phone_clean.startswith('55') and len(phone_clean) > 11:
+            phone_without_country = phone_clean[2:]
+
+        # Busca o cliente pelo telefone
+        cliente_query = text("""
+            SELECT id, nome, telefone FROM cadastros.clientes
+            WHERE telefone LIKE :phone_pattern
+            LIMIT 1
+        """)
+
+        # Tenta com diferentes formatos de telefone
+        patterns = [
+            phone_clean,                         # Número completo como recebido
+            phone_without_country,               # Sem código do país
+            f"%{phone_clean[-9:]}",              # Últimos 9 dígitos
+            f"%{phone_clean[-8:]}",              # Últimos 8 dígitos
+            f"55{phone_without_country}",        # Com código do país adicionado
+            f"%{phone_without_country[-9:]}",    # Últimos 9 dígitos sem código
+        ]
+
+        cliente = None
+        for pattern in patterns:
+            result = db.execute(cliente_query, {"phone_pattern": pattern})
+            cliente = result.fetchone()
+            if cliente:
+                print(f"   ✅ Cliente encontrado com padrão: {pattern}")
+                break
+
+        if not cliente:
+            return {
+                "success": False,
+                "message": "Cliente não encontrado",
+                "pedidos": []
+            }
+
+        cliente_id = cliente[0]
+        cliente_nome = cliente[1]
+
+        # Busca os pedidos do cliente
+        pedidos_query = text("""
+            SELECT
+                p.id,
+                p.numero_pedido,
+                p.tipo_entrega,
+                p.status,
+                p.subtotal,
+                p.desconto,
+                p.taxa_entrega,
+                p.valor_total,
+                p.observacoes,
+                p.pago,
+                p.created_at,
+                p.updated_at
+            FROM pedidos.pedidos p
+            WHERE p.cliente_id = :cliente_id
+            ORDER BY p.created_at DESC
+            LIMIT 20
+        """)
+
+        result = db.execute(pedidos_query, {"cliente_id": cliente_id})
+        pedidos_rows = result.fetchall()
+
+        pedidos = []
+        for row in pedidos_rows:
+            status_code = row[3]
+            status_info = ORDER_STATUS_TEMPLATES.get(status_code, {
+                "name": "Desconhecido",
+                "emoji": "❓",
+                "message": "Status do pedido: {status}"
+            })
+
+            # Busca os itens do pedido (query simplificada)
+            itens_query = text("""
+                SELECT
+                    pi.quantidade,
+                    pi.preco_unitario,
+                    pi.preco_total,
+                    pi.observacao,
+                    COALESCE(
+                        (SELECT p.descricao FROM catalogo.produtos p WHERE p.cod_barras = pi.produto_cod_barras),
+                        (SELECT r.nome FROM catalogo.receitas r WHERE r.id = pi.receita_id),
+                        (SELECT c.descricao FROM catalogo.combos c WHERE c.id = pi.combo_id),
+                        'Item'
+                    ) as nome_item
+                FROM pedidos.pedidos_itens pi
+                WHERE pi.pedido_id = :pedido_id
+            """)
+
+            itens_result = db.execute(itens_query, {"pedido_id": row[0]})
+            itens = [
+                {
+                    "quantidade": item[0],
+                    "preco_unitario": float(item[1]) if item[1] else 0,
+                    "preco_total": float(item[2]) if item[2] else 0,
+                    "observacao": item[3],
+                    "nome": item[4]
+                }
+                for item in itens_result.fetchall()
+            ]
+
+            pedidos.append({
+                "id": row[0],
+                "numero_pedido": row[1],
+                "tipo_entrega": row[2],
+                "status": {
+                    "codigo": status_code,
+                    "nome": status_info["name"],
+                    "emoji": status_info["emoji"]
+                },
+                "subtotal": float(row[4]) if row[4] else 0,
+                "desconto": float(row[5]) if row[5] else 0,
+                "taxa_entrega": float(row[6]) if row[6] else 0,
+                "valor_total": float(row[7]) if row[7] else 0,
+                "observacoes": row[8],
+                "pago": row[9],
+                "created_at": row[10].isoformat() if row[10] else None,
+                "updated_at": row[11].isoformat() if row[11] else None,
+                "itens": itens
+            })
+
+        return {
+            "success": True,
+            "cliente": {
+                "id": cliente_id,
+                "nome": cliente_nome
+            },
+            "pedidos": pedidos
+        }
+
+    except Exception as e:
+        print(f"❌ Erro ao buscar pedidos: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao buscar pedidos: {str(e)}"
+        )
+
+
+@router.post("/pedidos/{pedido_id}/enviar-resumo")
+async def send_order_summary(
+    pedido_id: int,
+    phone_number: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Envia o resumo de um pedido específico para o cliente via WhatsApp.
+    A mensagem inclui os itens, valores e o status atual do pedido.
+    """
+    try:
+        from sqlalchemy import text
+
+        # Busca o pedido
+        pedido_query = text("""
+            SELECT
+                p.id,
+                p.numero_pedido,
+                p.tipo_entrega,
+                p.status,
+                p.subtotal,
+                p.desconto,
+                p.taxa_entrega,
+                p.valor_total,
+                p.observacoes,
+                p.pago,
+                p.created_at,
+                c.nome as cliente_nome
+            FROM pedidos.pedidos p
+            LEFT JOIN cadastros.clientes c ON p.cliente_id = c.id
+            WHERE p.id = :pedido_id
+        """)
+
+        result = db.execute(pedido_query, {"pedido_id": pedido_id})
+        pedido = result.fetchone()
+
+        if not pedido:
+            raise HTTPException(status_code=404, detail="Pedido não encontrado")
+
+        # Extrai dados do pedido
+        numero_pedido = pedido[1]
+        tipo_entrega = pedido[2]
+        status_code = pedido[3]
+        subtotal = float(pedido[4]) if pedido[4] else 0
+        desconto = float(pedido[5]) if pedido[5] else 0
+        taxa_entrega = float(pedido[6]) if pedido[6] else 0
+        valor_total = float(pedido[7]) if pedido[7] else 0
+        observacoes = pedido[8]
+        pago = pedido[9]
+        created_at = pedido[10]
+        cliente_nome = pedido[11]
+
+        # Busca os itens do pedido (query simplificada)
+        itens_query = text("""
+            SELECT
+                pi.quantidade,
+                pi.preco_unitario,
+                pi.preco_total,
+                pi.observacao,
+                COALESCE(
+                    (SELECT p.descricao FROM catalogo.produtos p WHERE p.cod_barras = pi.produto_cod_barras),
+                    (SELECT r.nome FROM catalogo.receitas r WHERE r.id = pi.receita_id),
+                    (SELECT c.descricao FROM catalogo.combos c WHERE c.id = pi.combo_id),
+                    'Item'
+                ) as nome_item
+            FROM pedidos.pedidos_itens pi
+            WHERE pi.pedido_id = :pedido_id
+        """)
+
+        itens_result = db.execute(itens_query, {"pedido_id": pedido_id})
+        itens = itens_result.fetchall()
+
+        # Monta a mensagem
+        status_info = ORDER_STATUS_TEMPLATES.get(status_code, {
+            "name": "Desconhecido",
+            "emoji": "❓",
+            "message": "Status atualizado."
+        })
+
+        # Tipo de entrega formatado
+        tipo_formatado = {
+            "DELIVERY": "🛵 Delivery",
+            "RETIRADA": "🏪 Retirada",
+            "BALCAO": "🍽️ Balcão",
+            "MESA": "🪑 Mesa"
+        }.get(tipo_entrega, tipo_entrega)
+
+        # Monta a mensagem
+        mensagem = f"""📋 *RESUMO DO PEDIDO #{numero_pedido}*
+
+{status_info['emoji']} *Status:* {status_info['name']}
+📦 *Tipo:* {tipo_formatado}
+📅 *Data:* {created_at.strftime('%d/%m/%Y %H:%M') if created_at else 'N/A'}
+
+*━━━ ITENS ━━━*
+"""
+
+        for item in itens:
+            qtd = item[0]
+            preco_total = float(item[2]) if item[2] else 0
+            nome_item = item[4]
+            obs_item = item[3]
+
+            mensagem += f"• {qtd}x {nome_item} - R$ {preco_total:.2f}\n"
+            if obs_item:
+                mensagem += f"  _Obs: {obs_item}_\n"
+
+        mensagem += f"""
+*━━━ VALORES ━━━*
+Subtotal: R$ {subtotal:.2f}
+"""
+
+        if desconto > 0:
+            mensagem += f"Desconto: -R$ {desconto:.2f}\n"
+
+        if taxa_entrega > 0:
+            mensagem += f"Taxa de entrega: R$ {taxa_entrega:.2f}\n"
+
+        mensagem += f"*Total: R$ {valor_total:.2f}*\n"
+        mensagem += f"💳 Pagamento: {'✅ Pago' if pago else '⏳ Pendente'}\n"
+
+        if observacoes:
+            mensagem += f"\n📝 _Obs: {observacoes}_\n"
+
+        # Mensagem de status personalizada
+        status_message = status_info["message"].format(numero_pedido=numero_pedido)
+        mensagem += f"\n{status_info['emoji']} *{status_message}*"
+
+        # Envia via WhatsApp
+        notifier = OrderNotification()
+        result = await notifier.send_whatsapp_message(phone_number, mensagem)
+
+        if result.get("success"):
+            return {
+                "success": True,
+                "message": "Resumo do pedido enviado com sucesso!",
+                "pedido_id": pedido_id,
+                "numero_pedido": numero_pedido,
+                "status": status_info["name"]
+            }
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Erro ao enviar mensagem: {result.get('error')}"
+            )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Erro ao enviar resumo: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao enviar resumo: {str(e)}"
+        )
+
+
+@router.post("/criar-pedidos-teste/{phone_number}")
+async def criar_pedidos_teste(phone_number: str, db: Session = Depends(get_db)):
+    """
+    Endpoint temporário para criar pedidos de teste com todos os status disponíveis.
+    """
+    import random
+
+    # Limpar telefone
+    phone_clean = ''.join(filter(str.isdigit, phone_number))
+    phone_without_country = phone_clean[2:] if phone_clean.startswith('55') and len(phone_clean) > 11 else phone_clean
+
+    # Status codes disponíveis
+    STATUS_CODES = ['P', 'I', 'R', 'S', 'E', 'C', 'A', 'D', 'X']
+    STATUS_NAMES = {
+        'P': 'Pendente',
+        'I': 'Em Impressão',
+        'R': 'Preparando',
+        'S': 'Saiu para Entrega',
+        'E': 'Entregue',
+        'C': 'Cancelado',
+        'A': 'Agendado',
+        'D': 'Disponível para Retirada',
+        'X': 'Finalizado'
+    }
+    TIPOS_ENTREGA = ['DELIVERY', 'RETIRADA', 'BALCAO', 'MESA']
+
+    try:
+        # Buscar cliente pelo telefone
+        patterns = [phone_clean, phone_without_country, f"%{phone_clean[-9:]}", f"%{phone_clean[-8:]}"]
+        cliente = None
+
+        for pattern in patterns:
+            result = db.execute(text("""
+                SELECT id, nome, telefone FROM cadastros.clientes
+                WHERE telefone LIKE :pattern
+                LIMIT 1
+            """), {"pattern": pattern})
+            cliente = result.fetchone()
+            if cliente:
+                break
+
+        if not cliente:
+            # Criar cliente se não existir
+            result = db.execute(text("""
+                INSERT INTO cadastros.clientes (nome, telefone, created_at, updated_at)
+                VALUES (:nome, :telefone, NOW(), NOW())
+                RETURNING id, nome, telefone
+            """), {"nome": f"Cliente Teste {phone_without_country[-4:]}", "telefone": phone_without_country})
+            cliente = result.fetchone()
+            db.commit()
+            print(f"✅ Cliente criado: ID={cliente[0]}, Nome={cliente[1]}")
+
+        cliente_id = cliente[0]
+        print(f"✅ Usando cliente: ID={cliente_id}, Nome={cliente[1]}, Tel={cliente[2]}")
+
+        # Pegar próximo número de pedido
+        result = db.execute(text("""
+            SELECT COALESCE(MAX(CAST(SUBSTRING(numero_pedido FROM '[0-9]+') AS INTEGER)), 0) + 1
+            FROM pedidos.pedidos
+        """))
+        next_num = result.fetchone()[0]
+
+        # Criar pedidos com cada status
+        pedidos_criados = []
+        for i, status_code in enumerate(STATUS_CODES):
+            tipo_entrega = TIPOS_ENTREGA[i % len(TIPOS_ENTREGA)]
+            prefixo = {'DELIVERY': 'DEL', 'RETIRADA': 'RET', 'BALCAO': 'BAL', 'MESA': 'MESA'}[tipo_entrega]
+            numero_pedido = f'{prefixo}-{next_num + i:06d}'
+
+            subtotal = random.randint(2000, 10000)
+            desconto = random.randint(0, 500)
+            taxa_entrega = 500 if tipo_entrega == 'DELIVERY' else 0
+            valor_total = (subtotal - desconto + taxa_entrega) / 100
+            pago = random.choice([True, False])
+
+            result = db.execute(text("""
+                INSERT INTO pedidos.pedidos
+                (empresa_id, cliente_id, numero_pedido, tipo_entrega, status, subtotal, desconto,
+                 taxa_entrega, taxa_servico, valor_total, pago, acertado_entregador, created_at, updated_at)
+                VALUES
+                (1, :cliente_id, :numero_pedido, :tipo_entrega, :status, :subtotal, :desconto,
+                 :taxa_entrega, 0, :valor_total, :pago, false, NOW(), NOW())
+                RETURNING id
+            """), {
+                'cliente_id': cliente_id,
+                'numero_pedido': numero_pedido,
+                'tipo_entrega': tipo_entrega,
+                'status': status_code,
+                'subtotal': subtotal,
+                'desconto': desconto,
+                'taxa_entrega': taxa_entrega,
+                'valor_total': valor_total,
+                'pago': pago
+            })
+            pedido_id = result.fetchone()[0]
+
+            # Adicionar itens ao pedido - buscar receitas existentes
+            receitas_result = db.execute(text("""
+                SELECT id, nome FROM catalogo.receitas LIMIT 10
+            """))
+            receitas = receitas_result.fetchall()
+
+            for j in range(random.randint(1, min(4, len(receitas) if receitas else 1))):
+                qtd = random.randint(1, 3)
+                preco_unit = random.randint(500, 3000)
+                receita_id = receitas[j % len(receitas)][0] if receitas else None
+
+                if receita_id:
+                    db.execute(text("""
+                        INSERT INTO pedidos.pedidos_itens
+                        (pedido_id, receita_id, quantidade, preco_unitario, preco_total, observacao)
+                        VALUES (:pedido_id, :receita_id, :qtd, :preco_unit, :preco_total, :obs)
+                    """), {
+                        'pedido_id': pedido_id,
+                        'receita_id': receita_id,
+                        'qtd': qtd,
+                        'preco_unit': preco_unit,
+                        'preco_total': qtd * preco_unit,
+                        'obs': f'Item de teste {j+1}'
+                    })
+
+            pedidos_criados.append({
+                'id': pedido_id,
+                'numero_pedido': numero_pedido,
+                'status_codigo': status_code,
+                'status_nome': STATUS_NAMES[status_code],
+                'tipo_entrega': tipo_entrega,
+                'valor_total': valor_total,
+                'pago': pago
+            })
+
+        db.commit()
+
+        return {
+            "success": True,
+            "message": f"Criados {len(pedidos_criados)} pedidos de teste",
+            "cliente": {
+                "id": cliente_id,
+                "nome": cliente[1],
+                "telefone": cliente[2]
+            },
+            "pedidos": pedidos_criados
+        }
+
+    except Exception as e:
+        db.rollback()
+        print(f"❌ Erro ao criar pedidos de teste: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao criar pedidos de teste: {str(e)}"
         )

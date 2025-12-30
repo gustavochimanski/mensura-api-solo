@@ -305,6 +305,120 @@ class GroqSalesHandler:
         self.empresa_id = empresa_id
         self.address_service = ChatbotAddressService(db, empresa_id)
         self.ingredientes_service = IngredientesService(db, empresa_id)
+        # Cache de meios de pagamento (carregado uma vez)
+        self._meios_pagamento_cache = None
+
+    def _buscar_meios_pagamento(self) -> List[Dict]:
+        """
+        Busca meios de pagamento ativos do banco de dados.
+        Usa cache para evitar consultas repetidas.
+        """
+        if self._meios_pagamento_cache is not None:
+            return self._meios_pagamento_cache
+
+        try:
+            result = self.db.execute(text("""
+                SELECT id, nome, tipo
+                FROM cadastros.meios_pagamento
+                WHERE ativo = true
+                ORDER BY id
+            """))
+            meios = []
+            for row in result.fetchall():
+                meios.append({
+                    'id': row[0],
+                    'nome': row[1],
+                    'tipo': row[2]
+                })
+
+            # Se não houver meios cadastrados, usar fallback
+            if not meios:
+                meios = [
+                    {'id': 1, 'nome': 'PIX', 'tipo': 'PIX_ENTREGA'},
+                    {'id': 2, 'nome': 'Dinheiro', 'tipo': 'DINHEIRO'},
+                    {'id': 3, 'nome': 'Cartão', 'tipo': 'CARTAO_ENTREGA'}
+                ]
+
+            self._meios_pagamento_cache = meios
+            print(f"💳 Meios de pagamento carregados: {[m['nome'] for m in meios]}")
+            return meios
+        except Exception as e:
+            print(f"❌ Erro ao buscar meios de pagamento: {e}")
+            # Fallback para meios padrão
+            return [
+                {'id': 1, 'nome': 'PIX', 'tipo': 'PIX_ENTREGA'},
+                {'id': 2, 'nome': 'Dinheiro', 'tipo': 'DINHEIRO'},
+                {'id': 3, 'nome': 'Cartão', 'tipo': 'CARTAO_ENTREGA'}
+            ]
+
+    def _detectar_forma_pagamento_em_mensagem(self, mensagem: str) -> Optional[Dict]:
+        """
+        Detecta se a mensagem contém uma forma de pagamento.
+        Retorna o meio de pagamento encontrado ou None.
+        Funciona em qualquer parte do fluxo!
+
+        IMPORTANTE: Ignora mensagens que são PERGUNTAS sobre pagamento
+        (ex: "aceitam pix?", "pode ser no cartão?")
+        """
+        msg = mensagem.lower().strip()
+
+        # IGNORA se for uma PERGUNTA sobre pagamento (não uma seleção)
+        palavras_pergunta = ['aceita', 'aceitam', 'pode ser', 'posso pagar', 'da pra', 'dá pra',
+                            'tem como', 'consigo', 'vocês aceitam', 'voces aceitam', 'aceito']
+        if any(p in msg for p in palavras_pergunta):
+            print(f"💳 Ignorando detecção - mensagem é uma pergunta: {msg[:50]}")
+            return None
+
+        # IGNORA se termina com ? (é uma pergunta)
+        if msg.endswith('?') or msg.endswith('/'):
+            print(f"💳 Ignorando detecção - mensagem termina com ? ou /: {msg[:50]}")
+            return None
+
+        meios = self._buscar_meios_pagamento()
+
+        # Patterns para cada tipo de pagamento - mais específicos
+        patterns_por_tipo = {
+            'PIX_ENTREGA': ['pagar pix', 'pago pix', 'no pix', 'pelo pix', 'via pix', 'por pix', 'fazer pix', 'vou pagar pix'],
+            'PIX_ONLINE': ['pix online', 'pagar pix', 'pago pix'],
+            'DINHEIRO': ['pagar dinheiro', 'pago dinheiro', 'em dinheiro', 'no dinheiro', 'especie', 'espécie',
+                        'pagar na hora', 'cash', 'em maos', 'em mãos', 'vou pagar dinheiro'],
+            'CARTAO_ENTREGA': ['pagar cartao', 'pagar cartão', 'pago cartao', 'pago cartão',
+                              'no cartao', 'no cartão', 'pelo cartao', 'pelo cartão',
+                              'no credito', 'no crédito', 'no debito', 'no débito',
+                              'maquininha', 'na maquina', 'na máquina',
+                              'passar cartao', 'passar cartão', 'vou pagar cartao', 'vou pagar cartão'],
+            'OUTROS': []
+        }
+
+        # Primeiro verifica se a mensagem é APENAS o nome/tipo de pagamento (seleção direta)
+        # Ex: "pix", "dinheiro", "cartão", "1", "2"
+        palavras_pagamento_direto = ['pix', 'dinheiro', 'cartao', 'cartão', 'credito', 'crédito', 'debito', 'débito']
+        msg_limpa = msg.replace(',', '').replace('.', '').strip()
+
+        if msg_limpa in palavras_pagamento_direto:
+            # Mensagem é APENAS a forma de pagamento
+            for meio in meios:
+                nome_lower = meio['nome'].lower()
+                tipo = meio.get('tipo', 'OUTROS')
+
+                if msg_limpa in nome_lower:
+                    return meio
+                if msg_limpa == 'pix' and 'PIX' in tipo:
+                    return meio
+                if msg_limpa in ['cartao', 'cartão', 'credito', 'crédito', 'debito', 'débito'] and tipo == 'CARTAO_ENTREGA':
+                    return meio
+                if msg_limpa == 'dinheiro' and tipo == 'DINHEIRO':
+                    return meio
+
+        # Depois verifica pelos patterns do tipo (frases mais completas)
+        for meio in meios:
+            tipo = meio.get('tipo', 'OUTROS')
+            patterns = patterns_por_tipo.get(tipo, [])
+            for pattern in patterns:
+                if pattern in msg:
+                    return meio
+
+        return None
 
     def _interpretar_intencao_regras(self, mensagem: str, produtos: List[Dict], carrinho: List[Dict]) -> Optional[Dict[str, Any]]:
         """
@@ -1263,8 +1377,7 @@ REGRA PARA COMPLEMENTOS:
                                 if item.get('removidos'):
                                     resumo += f"  _Sem: {', '.join(item['removidos'])}_\n"
                                 if item.get('adicionais'):
-                                    label_comp = "Complemento obrigatório" if item.get('complemento_obrigatorio') else "Complemento"
-                                    resumo += f"  _{label_comp}: {', '.join(item['adicionais'])}_\n"
+                                    resumo += f"  _Complemento: {', '.join(item['adicionais'])}_\n"
                             resumo += f"\n💰 *Total: R$ {total:.2f}*"
                             resposta_limpa += resumo
 
@@ -1301,11 +1414,13 @@ REGRA PARA COMPLEMENTOS:
                                                 dados['aguardando_complemento'] = True
                                                 self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
                                             else:
-                                                # Opcionais - pergunta se quer
+                                                # Opcionais - mostra direto sem pedir SIM
                                                 resposta_limpa = resposta_limpa.replace("Quer mais algo?", "").replace("Quer mais algo? 😊", "").strip()
-                                                resposta_limpa += f"\n\n🍽️ *Deseja algum complemento no {nome_produto}?*"
-                                                resposta_limpa += "\nResponda *SIM* para ver as opções ou continue seu pedido! 😊"
+                                                # Mostra os complementos opcionais disponíveis
+                                                resposta_limpa += self.ingredientes_service.formatar_complementos_para_chat(complementos, nome_produto)
+                                                resposta_limpa += "\n\n_Digite o que deseja adicionar ou continue seu pedido!_ 😊"
                                                 dados['complementos_disponiveis'] = complementos
+                                                dados['aguardando_complemento'] = True
                                                 dados['ultimo_produto_com_complementos'] = nome_produto
                                     except Exception as e:
                                         print(f"Erro ao buscar complementos: {e}")
@@ -1458,8 +1573,7 @@ REGRA PARA COMPLEMENTOS:
                     if item.get('removidos'):
                         resp += f"  _Sem: {', '.join(item['removidos'])}_\n"
                     if item.get('adicionais'):
-                        label_comp = "Complemento obrigatório" if item.get('complemento_obrigatorio') else "Complemento"
-                        resp += f"  _{label_comp}: {', '.join(item['adicionais'])}_\n"
+                        resp += f"  _Complemento: {', '.join(item['adicionais'])}_\n"
                 resp += f"\n💰 *Total: R$ {total:.2f}*"
                 resp += "\n\nQuer mais alguma coisa? 😊"
                 return resp
@@ -1535,8 +1649,7 @@ REGRA PARA COMPLEMENTOS:
                         if item.get('removidos'):
                             resp += f"  _Sem: {', '.join(item['removidos'])}_\n"
                         if item.get('adicionais'):
-                            label_comp = "Complemento obrigatório" if item.get('complemento_obrigatorio') else "Complemento"
-                            resp += f"  _{label_comp}: {', '.join(item['adicionais'])}_\n"
+                            resp += f"  _Complemento: {', '.join(item['adicionais'])}_\n"
                     resp += f"\n💰 *Total: R$ {total:.2f}*"
 
                     # Verifica se tem complementos obrigatórios
@@ -1601,8 +1714,7 @@ REGRA PARA COMPLEMENTOS:
                     if item.get('removidos'):
                         resp += f"  _Sem: {', '.join(item['removidos'])}_\n"
                     if item.get('adicionais'):
-                        label_comp = "Complemento obrigatório" if item.get('complemento_obrigatorio') else "Complemento"
-                        resp += f"  _{label_comp}: {', '.join(item['adicionais'])}_\n"
+                        resp += f"  _Complemento: {', '.join(item['adicionais'])}_\n"
                 resp += f"\n💰 *Total: R$ {total:.2f}*\n\nQuer mais alguma coisa? 😊"
 
                 self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
@@ -2701,10 +2813,11 @@ Sua única função é ajudar a ESCOLHER PRODUTOS. Nada mais!
             dados['endereco_texto'] = endereco_selecionado['endereco_completo']
             dados['endereco_id'] = endereco_selecionado['id']
 
-            # Ir para pagamento
-            self._salvar_estado_conversa(user_id, STATE_COLETANDO_PAGAMENTO, dados)
-
-            return f"✅ Endereço selecionado:\n📍 {endereco_selecionado['endereco_completo']}\n\n" + self._mensagem_formas_pagamento()
+            # Ir para pagamento (ou resumo se já foi detectado)
+            return await self._ir_para_pagamento_ou_resumo(
+                user_id, dados,
+                f"✅ Endereço selecionado:\n📍 {endereco_selecionado['endereco_completo']}\n\n"
+            )
 
         # Verifica se o usuário digitou um endereço diretamente (ao invés de número)
         if self._parece_endereco(mensagem):
@@ -2846,21 +2959,53 @@ Sua única função é ajudar a ESCOLHER PRODUTOS. Nada mais!
 
         dados['endereco_texto'] = endereco_completo
 
-        # Ir para pagamento
-        self._salvar_estado_conversa(user_id, STATE_COLETANDO_PAGAMENTO, dados)
-
-        return f"✅ Endereço salvo!\n📍 {endereco_completo}\n\n" + self._mensagem_formas_pagamento()
+        # Ir para pagamento (ou resumo se já foi detectado)
+        return await self._ir_para_pagamento_ou_resumo(
+            user_id, dados,
+            f"✅ Endereço salvo!\n📍 {endereco_completo}\n\n"
+        )
 
     def _mensagem_formas_pagamento(self) -> str:
-        """Retorna a mensagem padrão de formas de pagamento"""
-        return """Agora me fala, como vai ser o pagamento?
+        """Retorna a mensagem de formas de pagamento baseada no banco de dados"""
+        meios = self._buscar_meios_pagamento()
 
-💳 *Formas disponíveis:*
-1️⃣ PIX (paga agora)
-2️⃣ Dinheiro na entrega
-3️⃣ Cartão na entrega
+        # Emojis por tipo de pagamento
+        emoji_por_tipo = {
+            'PIX_ENTREGA': '📱',
+            'PIX_ONLINE': '📱',
+            'DINHEIRO': '💵',
+            'CARTAO_ENTREGA': '💳',
+            'OUTROS': '💰'
+        }
 
-Digite o número da opção!"""
+        # Números em emoji
+        numeros_emoji = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟']
+
+        mensagem = "Agora me fala, como vai ser o pagamento?\n\n💳 *Formas disponíveis:*\n"
+
+        for i, meio in enumerate(meios):
+            emoji_num = numeros_emoji[i] if i < len(numeros_emoji) else f"{i+1}."
+            emoji_tipo = emoji_por_tipo.get(meio.get('tipo', 'OUTROS'), '💰')
+            mensagem += f"{emoji_num} {emoji_tipo} {meio['nome']}\n"
+
+        mensagem += "\nDigite o número da opção ou a forma de pagamento!"
+        return mensagem
+
+    async def _ir_para_pagamento_ou_resumo(self, user_id: str, dados: Dict, mensagem_prefixo: str = "") -> str:
+        """
+        Verifica se o pagamento já foi detectado antecipadamente.
+        Se sim, pula direto para o resumo do pedido.
+        Se não, pergunta a forma de pagamento.
+        """
+        if dados.get('forma_pagamento') and dados.get('meio_pagamento_id'):
+            # Pagamento já foi detectado! Pular direto para resumo
+            forma = dados.get('forma_pagamento')
+            print(f"💳 Pagamento já detectado ({forma}), pulando para resumo!")
+            return await self._gerar_resumo_pedido(user_id, dados)
+        else:
+            # Perguntar forma de pagamento
+            self._salvar_estado_conversa(user_id, STATE_COLETANDO_PAGAMENTO, dados)
+            return mensagem_prefixo + self._mensagem_formas_pagamento()
 
     # ========== FLUXO ENTREGA/RETIRADA ==========
 
@@ -2891,10 +3036,12 @@ Qual vai ser?"""
             # Cliente quer RETIRADA - pular endereço, ir para pagamento
             dados['tipo_entrega'] = 'RETIRADA'
             dados['endereco_texto'] = 'Retirada na loja'
-            self._salvar_estado_conversa(user_id, STATE_COLETANDO_PAGAMENTO, dados)
 
             print("🏪 Cliente escolheu RETIRADA, indo para pagamento")
-            return "Beleza! Você vai retirar aqui na loja 🏪\n\n" + self._mensagem_formas_pagamento()
+            return await self._ir_para_pagamento_ou_resumo(
+                user_id, dados,
+                "Beleza! Você vai retirar aqui na loja 🏪\n\n"
+            )
 
         else:
             # Não entendeu
@@ -2903,32 +3050,33 @@ Qual vai ser?"""
     async def _processar_pagamento(self, user_id: str, mensagem: str, dados: Dict) -> str:
         """
         Processa a forma de pagamento escolhida
-        Aceita números (1, 2, 3) ou linguagem natural (pix, dinheiro, cartao)
+        Aceita números ou linguagem natural baseado nos meios de pagamento do banco
         """
-        # Primeiro tenta detectar por linguagem natural
-        forma_natural = self._detectar_forma_pagamento_natural(mensagem)
-        if forma_natural:
-            dados['forma_pagamento'] = forma_natural
+        meios = self._buscar_meios_pagamento()
+
+        # Primeiro tenta detectar por linguagem natural usando o método dinâmico
+        meio_detectado = self._detectar_forma_pagamento_em_mensagem(mensagem)
+        if meio_detectado:
+            dados['forma_pagamento'] = meio_detectado['nome']
+            dados['meio_pagamento_id'] = meio_detectado['id']
+            print(f"💳 Pagamento detectado (natural): {meio_detectado['nome']} (ID: {meio_detectado['id']})")
             return await self._gerar_resumo_pedido(user_id, dados)
 
         # Tenta por número (incluindo ordinais)
-        numero = self._extrair_numero_natural(mensagem, max_opcoes=3)
+        numero = self._extrair_numero_natural(mensagem, max_opcoes=len(meios))
 
-        formas = {
-            1: 'PIX',
-            2: 'DINHEIRO',
-            3: 'CARTAO'
-        }
+        if numero and 1 <= numero <= len(meios):
+            meio_selecionado = meios[numero - 1]
+            dados['forma_pagamento'] = meio_selecionado['nome']
+            dados['meio_pagamento_id'] = meio_selecionado['id']
+            print(f"💳 Pagamento selecionado (número): {meio_selecionado['nome']} (ID: {meio_selecionado['id']})")
+            return await self._gerar_resumo_pedido(user_id, dados)
 
-        forma_pagamento = formas.get(numero)
+        # Mensagem de erro com opções dinâmicas
+        opcoes_str = "\n".join([f"*{i+1}* - {meio['nome']}" for i, meio in enumerate(meios)])
+        nomes_str = ", ".join([f"*{meio['nome'].lower()}*" for meio in meios[:3]])  # Mostra até 3 exemplos
 
-        if not forma_pagamento:
-            return "Ops! Escolhe uma das opções:\n*1* - PIX\n*2* - Dinheiro\n*3* - Cartão\n\nOu digite diretamente: *pix*, *dinheiro* ou *cartão* 😊"
-
-        dados['forma_pagamento'] = forma_pagamento
-
-        # Gerar resumo do pedido
-        return await self._gerar_resumo_pedido(user_id, dados)
+        return f"Ops! Escolhe uma das opções:\n{opcoes_str}\n\nOu digite diretamente: {nomes_str} 😊"
 
     async def _gerar_resumo_pedido(self, user_id: str, dados: Dict) -> str:
         """Gera o resumo final do pedido"""
@@ -2973,9 +3121,7 @@ Qual vai ser?"""
             # Mostra adicionais se tiver
             adicionais = item.get('personalizacoes', {}).get('adicionais', [])
             if adicionais:
-                comp_obrigatorio = item.get('personalizacoes', {}).get('complemento_obrigatorio', False)
-                label_comp = "Complemento obrigatório" if comp_obrigatorio else "Complemento"
-                mensagem += f"  _{label_comp}: {', '.join(adicionais)}_\n"
+                mensagem += f"  _Complemento: {', '.join(adicionais)}_\n"
             # Mostra removidos se tiver
             removidos = item.get('personalizacoes', {}).get('removidos', [])
             if removidos:
@@ -3096,13 +3242,24 @@ Qual vai ser?"""
             if tipo_entrega == 'ENTREGA' and endereco_id:
                 payload["endereco_id"] = endereco_id
 
-            # Mapear forma de pagamento para meio_pagamento_id
-            # TODO: Buscar meio_pagamento_id do banco baseado na forma escolhida
-            # Por enquanto vamos deixar sem meio de pagamento (será selecionado depois)
-            # meios_pagamento = []
-            # if forma_pagamento:
-            #     meios_pagamento.append({"id": 1, "valor": total})
-            # payload["meios_pagamento"] = meios_pagamento
+            # Adiciona meio de pagamento se foi detectado
+            meio_pagamento_id = dados.get('meio_pagamento_id')
+            if meio_pagamento_id:
+                # Calcula o total do pedido para o valor do pagamento
+                total = sum(
+                    (item.get('preco', 0) + item.get('personalizacoes', {}).get('preco_adicionais', 0))
+                    * item.get('quantidade', 1)
+                    for item in carrinho
+                )
+                # Adiciona taxa de entrega se for delivery
+                if tipo_entrega == 'ENTREGA':
+                    total += 5.00  # TODO: calcular taxa real baseada na distância
+
+                payload["meios_pagamento"] = [{
+                    "id": meio_pagamento_id,
+                    "valor": total
+                }]
+                print(f"[Checkout] Meio de pagamento: {forma_pagamento} (ID: {meio_pagamento_id}), Valor: R$ {total:.2f}")
 
             print(f"[Checkout] Payload: {json.dumps(payload, indent=2)}")
 
@@ -3330,12 +3487,31 @@ Responda:"""
             estado, dados = self._obter_estado_conversa(user_id)
             print(f"📊 Estado atual: {estado}")
 
+            # ========== DETECÇÃO ANTECIPADA DE PAGAMENTO ==========
+            # Detecta forma de pagamento APENAS se já tiver itens no pedido
+            # Isso evita detectar quando cliente só está perguntando "aceitam pix?"
+            pedido_contexto = dados.get('pedido_contexto', [])
+            carrinho = dados.get('carrinho', [])
+            tem_itens = len(pedido_contexto) > 0 or len(carrinho) > 0
+
+            if tem_itens and not dados.get('forma_pagamento') and not dados.get('meio_pagamento_id'):
+                pagamento_detectado = self._detectar_forma_pagamento_em_mensagem(mensagem)
+                if pagamento_detectado:
+                    dados['forma_pagamento'] = pagamento_detectado['nome']
+                    dados['meio_pagamento_id'] = pagamento_detectado['id']
+                    print(f"💳 Pagamento detectado antecipadamente: {pagamento_detectado['nome']} (ID: {pagamento_detectado['id']})")
+                    # Salva o estado atualizado com a forma de pagamento
+                    self._salvar_estado_conversa(user_id, estado, dados)
+
             # Se for primeira mensagem (saudação), entra no modo conversacional
             if self._eh_primeira_mensagem(mensagem):
                 dados['historico'] = [{"role": "user", "content": mensagem}]
                 dados['carrinho'] = []
                 dados['pedido_contexto'] = []  # Lista de itens mencionados na conversa
                 dados['produtos_encontrados'] = self._buscar_promocoes()
+                # LIMPA pagamento de conversa anterior
+                dados['forma_pagamento'] = None
+                dados['meio_pagamento_id'] = None
                 self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
                 return self._gerar_mensagem_boas_vindas_conversacional()
 
@@ -3452,9 +3628,10 @@ Responda:"""
                             msg_resposta += self.ingredientes_service.formatar_complementos_para_chat(complementos, produto['nome'])
                             msg_resposta += "\n\n_Escolha os complementos obrigatórios para continuar!_"
                         else:
-                            # Se não for obrigatório, pergunta se quer adicionar
-                            msg_resposta += "\n\n🍽️ *Quer adicionar algum complemento?*"
-                            msg_resposta += "\nDigite *COMPLEMENTOS* para ver as opções ou continue seu pedido 😊"
+                            # Se não for obrigatório, mostra os complementos direto
+                            msg_resposta += self.ingredientes_service.formatar_complementos_para_chat(complementos, produto['nome'])
+                            msg_resposta += "\n\n_Digite o que deseja adicionar ou continue seu pedido!_ 😊"
+                            dados['aguardando_complemento'] = True
 
                         # Salva produto atual para referência dos complementos
                         dados['ultimo_produto_adicionado'] = produto['nome']
