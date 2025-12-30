@@ -509,6 +509,198 @@ class IngredientesService:
         return mensagem
 
 
+    # ========== MÉTODOS PARA COMPLEMENTOS ==========
+
+    def buscar_complementos_receita(self, receita_id: int) -> List[Dict[str, Any]]:
+        """
+        Busca complementos disponíveis para uma receita direto do banco (mais rápido)
+
+        Returns:
+            Lista de complementos com seus adicionais, min/max, obrigatório
+        """
+        try:
+            # Busca direto do banco para evitar timeout de HTTP
+            query = text("""
+                SELECT
+                    c.id, c.nome, c.descricao, c.obrigatorio, c.quantitativo,
+                    c.minimo_itens, c.maximo_itens, c.ordem, c.ativo
+                FROM catalogo.complemento_produto c
+                JOIN catalogo.receita_complemento_link rcl ON rcl.complemento_id = c.id
+                WHERE rcl.receita_id = :receita_id AND c.ativo = true
+                ORDER BY c.ordem
+            """)
+            result = self.db.execute(query, {"receita_id": receita_id})
+
+            complementos = []
+            for row in result.fetchall():
+                comp_id = row[0]
+                # Busca adicionais do complemento
+                query_add = text("""
+                    SELECT a.id, a.nome, a.descricao, a.preco, a.ativo, cil.ordem
+                    FROM catalogo.adicionais a
+                    JOIN catalogo.complemento_item_link cil ON cil.item_id = a.id
+                    WHERE cil.complemento_id = :comp_id AND a.ativo = true
+                    ORDER BY cil.ordem
+                """)
+                result_add = self.db.execute(query_add, {"comp_id": comp_id})
+
+                adicionais = []
+                for add_row in result_add.fetchall():
+                    adicionais.append({
+                        "id": add_row[0],
+                        "nome": add_row[1],
+                        "descricao": add_row[2],
+                        "preco": float(add_row[3]) if add_row[3] else 0.0,
+                        "ativo": add_row[4],
+                        "ordem": add_row[5] or 0
+                    })
+
+                complementos.append({
+                    "id": row[0],
+                    "nome": row[1],
+                    "descricao": row[2],
+                    "obrigatorio": row[3],
+                    "quantitativo": row[4],
+                    "minimo_itens": row[5] or 0,
+                    "maximo_itens": row[6] or 0,
+                    "ordem": row[7],
+                    "ativo": row[8],
+                    "adicionais": adicionais
+                })
+
+            return complementos
+        except Exception as e:
+            print(f"Erro ao buscar complementos da receita: {e}")
+            return []
+
+    def buscar_complementos_produto(self, cod_barras: str) -> List[Dict[str, Any]]:
+        """
+        Busca complementos disponíveis para um produto via API interna
+        """
+        import httpx
+        try:
+            url = f"http://localhost:8000/api/catalogo/public/complementos/produto/{cod_barras}?apenas_ativos=true"
+            response = httpx.get(url, timeout=10.0)
+
+            if response.status_code == 200:
+                return response.json()
+            return []
+        except Exception as e:
+            print(f"Erro ao buscar complementos do produto: {e}")
+            return []
+
+    def buscar_complementos_combo(self, combo_id: int) -> List[Dict[str, Any]]:
+        """
+        Busca complementos disponíveis para um combo via API interna
+        """
+        import httpx
+        try:
+            url = f"http://localhost:8000/api/catalogo/public/complementos/combo/{combo_id}?apenas_ativos=true"
+            response = httpx.get(url, timeout=10.0)
+
+            if response.status_code == 200:
+                return response.json()
+            return []
+        except Exception as e:
+            print(f"Erro ao buscar complementos do combo: {e}")
+            return []
+
+    def buscar_complementos_por_nome_receita(self, nome_receita: str) -> List[Dict[str, Any]]:
+        """
+        Busca complementos pelo nome da receita
+        """
+        try:
+            query = text("""
+                SELECT id FROM catalogo.receitas
+                WHERE nome ILIKE :nome AND empresa_id = :empresa_id
+                LIMIT 1
+            """)
+
+            result = self.db.execute(query, {
+                "nome": f"%{nome_receita}%",
+                "empresa_id": self.empresa_id
+            }).fetchone()
+
+            if result:
+                return self.buscar_complementos_receita(result[0])
+
+            return []
+        except Exception as e:
+            print(f"Erro ao buscar complementos por nome: {e}")
+            return []
+
+    def formatar_complementos_para_chat(self, complementos: List[Dict[str, Any]], nome_produto: str) -> str:
+        """
+        Formata complementos disponíveis para exibir no WhatsApp
+
+        Returns:
+            Mensagem formatada com grupos de complementos e itens
+        """
+        if not complementos:
+            return ""
+
+        mensagem = f"\n\n🍽️ *Escolha os adicionais:*\n"
+
+        for comp in complementos:
+            nome = comp.get('nome', 'Complemento')
+            obrigatorio = comp.get('obrigatorio', False)
+            minimo = comp.get('minimo_itens', 0)
+            maximo = comp.get('maximo_itens', 0)
+            adicionais = comp.get('adicionais', [])
+
+            # Limite de seleção - formato mais limpo
+            if obrigatorio:
+                if minimo == maximo:
+                    limite_txt = f"escolha {minimo}"
+                else:
+                    limite_txt = f"escolha de {minimo} a {maximo}"
+                mensagem += f"\n*{nome}* ⚠️ *OBRIGATÓRIO* _{limite_txt}_\n"
+            else:
+                if maximo > 0:
+                    mensagem += f"\n*{nome}* _(opcional, máx {maximo})_\n"
+                else:
+                    mensagem += f"\n*{nome}* _(opcional)_\n"
+
+            for add in adicionais[:8]:  # Limita a 8 itens
+                preco = add.get('preco', 0)
+                add_nome = add.get('nome', '')
+                if preco > 0:
+                    mensagem += f"  ▸ {add_nome} *+R$ {preco:.2f}*\n"
+                else:
+                    mensagem += f"  ▸ {add_nome} _grátis_\n"
+
+            if len(adicionais) > 8:
+                mensagem += f"  _...e mais {len(adicionais) - 8} opções_\n"
+
+        return mensagem
+
+    def tem_complementos_obrigatorios(self, complementos: List[Dict[str, Any]]) -> bool:
+        """
+        Verifica se há complementos obrigatórios na lista
+        """
+        return any(comp.get('obrigatorio', False) for comp in complementos)
+
+    def buscar_receita_id_por_nome(self, nome_receita: str) -> Optional[int]:
+        """
+        Busca o ID da receita pelo nome
+        """
+        try:
+            query = text("""
+                SELECT id FROM catalogo.receitas
+                WHERE nome ILIKE :nome AND empresa_id = :empresa_id
+                LIMIT 1
+            """)
+
+            result = self.db.execute(query, {
+                "nome": f"%{nome_receita}%",
+                "empresa_id": self.empresa_id
+            }).fetchone()
+
+            return result[0] if result else None
+        except:
+            return None
+
+
 def detectar_remocao_ingrediente(mensagem: str) -> Tuple[bool, Optional[str]]:
     """
     Detecta se o cliente quer remover um ingrediente

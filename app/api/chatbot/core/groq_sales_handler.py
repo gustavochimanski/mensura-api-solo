@@ -23,7 +23,7 @@ from .ingredientes_service import (
 # Configuração do Groq - API Key deve ser configurada via variável de ambiente
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
-MODEL_NAME = "llama-3.1-8b-instant"  # Modelo rápido do Groq
+MODEL_NAME = "llama-3.1-8b-instant"  # Modelo menor = mais limite no free tier
 
 # Link do cardápio (configurável)
 LINK_CARDAPIO = "https://chatbot.mensuraapi.com.br"
@@ -34,7 +34,7 @@ AI_FUNCTIONS = [
         "type": "function",
         "function": {
             "name": "adicionar_produto",
-            "description": "Adiciona um produto ao carrinho. Use APENAS quando o cliente CLARAMENTE quer pedir algo específico. Exemplos: 'me ve uma coca', 'quero 2 pizzas', 'manda um x-bacon', 'uma coca cola'",
+            "description": "Adiciona um produto ao carrinho. Use APENAS quando o cliente especifica um PRODUTO do cardápio. Exemplos: 'me ve uma coca', 'quero 2 pizzas', 'manda um x-bacon'. NÃO use para frases genéricas como 'quero fazer pedido', 'quero pedir' - nesses casos use 'conversar' para perguntar o que ele quer.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -526,7 +526,13 @@ class GroqSalesHandler:
                 texto = texto.replace(acentuado, sem_acento)
             return texto
 
+        # Normaliza removendo hífens, espaços e caracteres especiais
+        def normalizar(texto):
+            texto = remover_acentos(texto.lower())
+            return re.sub(r'[-\s_.]', '', texto)
+
         termo_sem_acento = remover_acentos(termo_lower)
+        termo_normalizado = normalizar(termo_lower)
 
         # 1. Match exato no nome
         for produto in produtos:
@@ -536,11 +542,19 @@ class GroqSalesHandler:
                 print(f"✅ Match exato: {produto['nome']}")
                 return produto
 
-        # 2. Nome contém o termo
+        # 1.5 Match normalizado (xbacon = x-bacon, coca cola = cocacola)
+        for produto in produtos:
+            nome_normalizado = normalizar(produto['nome'])
+            if termo_normalizado == nome_normalizado:
+                print(f"✅ Match normalizado: {produto['nome']}")
+                return produto
+
+        # 2. Nome contém o termo (também normalizado)
         for produto in produtos:
             nome_lower = produto['nome'].lower()
             nome_sem_acento = remover_acentos(nome_lower)
-            if termo_sem_acento in nome_sem_acento or termo_lower in nome_lower:
+            nome_normalizado = normalizar(produto['nome'])
+            if termo_sem_acento in nome_sem_acento or termo_lower in nome_lower or termo_normalizado in nome_normalizado:
                 print(f"✅ Match parcial (termo no nome): {produto['nome']}")
                 return produto
 
@@ -661,6 +675,10 @@ class GroqSalesHandler:
             self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
             return self._gerar_lista_produtos(todos_produtos, pedido_contexto)
 
+        # VERIFICA SE ESTÁ AGUARDANDO SELEÇÃO DE COMPLEMENTOS
+        aguardando_complemento = dados.get('aguardando_complemento', False)
+        complementos_disponiveis = dados.get('complementos_disponiveis', [])
+
         # Monta cardápio formatado
         cardapio_texto = self._formatar_cardapio_para_ia(todos_produtos)
 
@@ -682,6 +700,24 @@ class GroqSalesHandler:
         else:
             pedido_atual = "\n📝 PEDIDO: Nenhum item anotado ainda.\n"
 
+        # Monta seção de complementos se estiver aguardando seleção
+        complementos_texto = ""
+        if aguardando_complemento and complementos_disponiveis and pedido_contexto:
+            ultimo_item = pedido_contexto[-1]
+            complementos_texto = f"\n\n🔔 ATENÇÃO: O cliente acabou de pedir '{ultimo_item['nome']}' e você ofereceu os complementos abaixo. Agora analise a resposta do cliente:\n"
+            complementos_texto += "COMPLEMENTOS DISPONÍVEIS:\n"
+            for comp in complementos_disponiveis:
+                obrig = "OBRIGATÓRIO" if comp.get('obrigatorio') else "opcional"
+                minimo = comp.get('minimo_itens', 0)
+                maximo = comp.get('maximo_itens', 0)
+                complementos_texto += f"\n• {comp.get('nome', '')} ({obrig}, min: {minimo}, max: {maximo}):\n"
+                for adicional in comp.get('adicionais', []):
+                    preco = adicional.get('preco', 0)
+                    preco_str = f" - R$ {preco:.2f}" if preco > 0 else " - grátis"
+                    complementos_texto += f"  - {adicional.get('nome', '')}{preco_str}\n"
+            complementos_texto += "\nSe o cliente escolher complementos, use acao 'selecionar_complementos' com os nomes EXATOS dos itens escolhidos."
+            complementos_texto += "\nSe o cliente não quiser nenhum, use acao 'pular_complementos'."
+
         # Prompt do sistema para IA conversacional
         system_prompt = f"""Você é um atendente de delivery simpático e prestativo. Seu nome é Assistente Virtual.
 
@@ -695,6 +731,7 @@ CARDÁPIO COMPLETO:
 {cardapio_texto}
 
 {pedido_atual}
+{complementos_texto}
 
 REGRAS IMPORTANTES:
 - Seja DIRETO e objetivo. NÃO peça confirmação do pedido, apenas anote e pergunte se quer mais algo
@@ -705,6 +742,7 @@ REGRAS IMPORTANTES:
 - Quando o cliente disser "só isso", "não quero mais nada", "pode fechar", use acao "prosseguir_entrega"
 - NÃO invente produtos ou preços, use apenas o que está no cardápio
 - Respostas CURTAS (máximo 2-3 linhas)
+- IMPORTANTE: Use SEMPRE o nome EXATO do produto como está no cardápio (ex: "xbacon" = "X-Bacon", "cocacola" = "Coca-Cola")
 
 EXEMPLOS DE COMPORTAMENTO CORRETO:
 - Cliente: "quero 1 pizza calabresa e 1 coca" → "Anotado! 1 Pizza Calabresa e 1 Coca-Cola. Quer mais algo? 😊" (acao: adicionar)
@@ -715,7 +753,7 @@ EXEMPLOS DE COMPORTAMENTO CORRETO:
 FORMATO DE RESPOSTA - SEMPRE RETORNE JSON VÁLIDO, SEM EXCEÇÃO:
 {{
     "resposta": "sua mensagem curta para o cliente",
-    "acao": "nenhuma" | "adicionar" | "remover" | "prosseguir_entrega",
+    "acao": "nenhuma" | "adicionar" | "remover" | "prosseguir_entrega" | "selecionar_complementos" | "pular_complementos",
     "itens": [
         {{
             "nome": "nome exato do produto do cardápio",
@@ -723,7 +761,8 @@ FORMATO DE RESPOSTA - SEMPRE RETORNE JSON VÁLIDO, SEM EXCEÇÃO:
             "removidos": [],
             "adicionais": []
         }}
-    ]
+    ],
+    "complementos_selecionados": ["nome exato do complemento escolhido"]
 }}
 
 REGRAS CRÍTICAS:
@@ -731,10 +770,30 @@ REGRAS CRÍTICAS:
 2. Se cliente pedir MÚLTIPLOS produtos: coloque TODOS no array "itens"
 3. Se cliente PERSONALIZAR (tirar/adicionar ingrediente): use "acao": "adicionar" com o item e removidos/adicionais preenchidos
 4. Se não houver ação: use "acao": "nenhuma" e "itens": []
+5. OBRIGATÓRIO: Quando acao for "adicionar", o array "itens" NUNCA pode estar vazio! Sempre inclua os produtos!
+6. Reconheça pedidos mesmo sem "quero" - ex: "1 pizza", "2 x-bacon", "uma coca" são pedidos válidos
+
+EXEMPLOS DE PEDIDOS (todos são acao: adicionar com itens preenchidos):
+- "1 pizza pepperoni" → {{"resposta": "Anotado! 1 Pizza Pepperoni. Quer mais algo?", "acao": "adicionar", "itens": [{{"nome": "Pizza Pepperoni", "quantidade": 1, "removidos": [], "adicionais": []}}]}}
+- "2 xbacon" → {{"resposta": "Anotado! 2 X-Bacon. Quer mais algo?", "acao": "adicionar", "itens": [{{"nome": "X-Bacon", "quantidade": 2, "removidos": [], "adicionais": []}}]}}
+- "uma coca" → {{"resposta": "Anotado! 1 Coca-Cola. Quer mais algo?", "acao": "adicionar", "itens": [{{"nome": "Coca-Cola", "quantidade": 1, "removidos": [], "adicionais": []}}]}}
 
 EXEMPLOS DE PERSONALIZAÇÃO:
 - Cliente: "tira o molho da pizza" → {{"resposta": "Anotado! Pizza sem molho.", "acao": "adicionar", "itens": [{{"nome": "Pizza Calabresa", "quantidade": 1, "removidos": ["Molho de Tomate"], "adicionais": []}}]}}
-- Cliente: "quero pizza sem cebola" → {{"resposta": "Pizza sem cebola, anotado!", "acao": "adicionar", "itens": [{{"nome": "Pizza Calabresa", "quantidade": 1, "removidos": ["Cebola"], "adicionais": []}}]}}"""
+- Cliente: "quero pizza sem cebola" → {{"resposta": "Pizza sem cebola, anotado!", "acao": "adicionar", "itens": [{{"nome": "Pizza Calabresa", "quantidade": 1, "removidos": ["Cebola"], "adicionais": []}}]}}
+
+EXEMPLOS DE COMPLEMENTOS (quando tiver complementos disponíveis):
+- Cliente: "maionese e queijo extra" → {{"resposta": "Adicionei maionese e queijo extra! Quer mais algo?", "acao": "selecionar_complementos", "itens": [], "complementos_selecionados": ["Maionese 30 ml", "Queijo Extra"]}}
+- Cliente: "não quero nada" → {{"resposta": "Ok, sem adicionais! Quer mais algo?", "acao": "pular_complementos", "itens": [], "complementos_selecionados": []}}
+- Cliente: "bacon" → {{"resposta": "Bacon adicionado! Mais alguma coisa?", "acao": "selecionar_complementos", "itens": [], "complementos_selecionados": ["Bacon Extra"]}}
+- Cliente: "2 maionese" → {{"resposta": "Anotado! 2x Maionese. Quer mais algo?", "acao": "selecionar_complementos", "itens": [], "complementos_selecionados": ["2x Maionese 30 ml"]}}
+- Cliente: "quero 3 queijo extra" → {{"resposta": "3x Queijo Extra adicionado!", "acao": "selecionar_complementos", "itens": [], "complementos_selecionados": ["3x Queijo Extra"]}}
+
+REGRA PARA COMPLEMENTOS:
+- Quando tiver COMPLEMENTOS DISPONÍVEIS listados acima e o cliente mencionar algum deles, use acao "selecionar_complementos" com os nomes EXATOS da lista
+- Se o cliente disser "não", "nenhum", "só isso" para os complementos, use acao "pular_complementos"
+- complementos_selecionados deve SEMPRE ter os nomes EXATOS como aparecem na lista de COMPLEMENTOS DISPONÍVEIS
+- IMPORTANTE: Se o cliente especificar QUANTIDADE (ex: "2 maionese", "3 queijo extra"), inclua a quantidade no formato "Nx Nome" (ex: "2x Maionese 30 ml")"""
 
         # Monta mensagens para a API
         messages = [{"role": "system", "content": system_prompt}]
@@ -750,6 +809,7 @@ EXEMPLOS DE PERSONALIZAÇÃO:
                     "messages": messages,
                     "temperature": 0.7,
                     "max_tokens": 500,
+                    "response_format": {"type": "json_object"},  # Força resposta JSON
                 }
 
                 headers = {
@@ -768,7 +828,20 @@ EXEMPLOS DE PERSONALIZAÇÃO:
                         # Remove possíveis marcadores de código
                         resposta_limpa = resposta_ia.replace("```json", "").replace("```", "").strip()
                         print(f"📨 Resposta IA (primeiros 200 chars): {resposta_limpa[:200]}")
-                        resposta_json = json.loads(resposta_limpa)
+
+                        # Tenta extrair JSON da resposta (pode ter texto antes/depois)
+                        json_str = resposta_limpa
+                        if not resposta_limpa.startswith('{'):
+                            # Procura o início do JSON
+                            json_start = resposta_limpa.find('{')
+                            if json_start != -1:
+                                # Encontra o final do JSON (último })
+                                json_end = resposta_limpa.rfind('}')
+                                if json_end != -1 and json_end > json_start:
+                                    json_str = resposta_limpa[json_start:json_end + 1]
+                                    print(f"🔍 JSON extraído do meio do texto")
+
+                        resposta_json = json.loads(json_str)
 
                         resposta_texto = resposta_json.get("resposta", resposta_ia)
                         acao = resposta_json.get("acao", "nenhuma")
@@ -790,8 +863,25 @@ EXEMPLOS DE PERSONALIZAÇÃO:
                                 produto_encontrado = self._buscar_produto_por_termo(item.get("nome", ""), todos_produtos)
                                 if produto_encontrado:
                                     nome_produto = produto_encontrado["nome"]
-                                    removidos = item.get("removidos", [])
-                                    adicionais = item.get("adicionais", [])
+                                    removidos_raw = item.get("removidos", [])
+                                    adicionais_raw = item.get("adicionais", [])
+
+                                    # Normaliza removidos - LLM pode retornar listas aninhadas
+                                    removidos = []
+                                    for r in removidos_raw:
+                                        if isinstance(r, list):
+                                            removidos.extend([str(x) for x in r])
+                                        else:
+                                            removidos.append(str(r))
+
+                                    # Normaliza adicionais - LLM pode retornar listas aninhadas
+                                    adicionais = []
+                                    for a in adicionais_raw:
+                                        if isinstance(a, list):
+                                            # Flatten lista aninhada
+                                            adicionais.extend([str(x) for x in a])
+                                        else:
+                                            adicionais.append(str(a))
 
                                     # Verifica se o item já existe no contexto
                                     item_existente = None
@@ -802,28 +892,122 @@ EXEMPLOS DE PERSONALIZAÇÃO:
 
                                     if item_existente:
                                         # Atualiza item existente (personalização ou quantidade)
+                                        # IMPORTANTE: Manter adicionais, preco_adicionais e complementos_checkout existentes!
                                         if removidos:
-                                            item_existente["removidos"] = removidos
+                                            # Adiciona aos removidos existentes (não substitui)
+                                            removidos_existentes = item_existente.get("removidos", [])
+                                            for r in removidos:
+                                                if r not in removidos_existentes:
+                                                    removidos_existentes.append(r)
+                                            item_existente["removidos"] = removidos_existentes
+
+                                        # PRESERVA adicionais, preco_adicionais e complementos_checkout existentes
+                                        adicionais_existentes = item_existente.get("adicionais", [])
+                                        preco_existente = item_existente.get("preco_adicionais", 0.0)
+                                        checkout_existente = item_existente.get("complementos_checkout", [])
+
+                                        # Verifica se há novos adicionais a adicionar
                                         if adicionais:
-                                            item_existente["adicionais"] = adicionais
+                                            nomes_existentes = set(a.lower() for a in adicionais_existentes)
+                                            nomes_llm = set(a.lower() for a in adicionais)
+
+                                            # Encontra apenas os NOVOS (que não existem ainda)
+                                            novos = [a for a in adicionais if a.lower() not in nomes_existentes]
+
+                                            if novos:
+                                                print(f"🆕 Novos adicionais detectados: {novos}")
+                                                # Busca preços dos NOVOS adicionais do produto
+                                                preco_novos = 0.0
+                                                checkout_novos = []
+                                                try:
+                                                    complementos_prod = self.ingredientes_service.buscar_complementos_por_nome_receita(nome_produto)
+                                                    if complementos_prod:
+                                                        for comp in complementos_prod:
+                                                            comp_id = comp.get('id')
+                                                            adds_do_comp = []
+                                                            for add in comp.get('adicionais', []):
+                                                                add_nome = add.get('nome', '')
+                                                                add_id = add.get('id')
+                                                                for novo in novos:
+                                                                    if add_nome.lower() == novo.lower() or novo.lower() in add_nome.lower() or add_nome.lower() in novo.lower():
+                                                                        preco_novos += add.get('preco', 0)
+                                                                        adds_do_comp.append({'adicional_id': add_id, 'quantidade': 1})
+                                                                        break
+                                                            if adds_do_comp:
+                                                                checkout_novos.append({'complemento_id': comp_id, 'adicionais': adds_do_comp})
+                                                except Exception as e:
+                                                    print(f"Erro ao buscar complementos: {e}")
+
+                                                # Mescla novos com existentes
+                                                item_existente["adicionais"] = adicionais_existentes + novos
+                                                item_existente["preco_adicionais"] = preco_existente + preco_novos
+                                                item_existente["complementos_checkout"] = checkout_existente + checkout_novos
+                                                print(f"💰 Preço adicionais: R$ {item_existente['preco_adicionais']:.2f} (existente: {preco_existente}, novos: {preco_novos})")
+                                            else:
+                                                # LLM apenas ecoou os mesmos - mantém existentes
+                                                print(f"💰 Mantendo preco_adicionais existente: R$ {preco_existente:.2f}")
+                                        else:
+                                            # Sem adicionais novos - mantém existentes
+                                            if adicionais_existentes:
+                                                print(f"💰 Preservando adicionais existentes: {adicionais_existentes}, R$ {preco_existente:.2f}")
+                                        # NÃO atualiza ultimo_produto_adicionado para item existente
                                         # Atualiza quantidade se for diferente
                                         nova_qtd = item.get("quantidade", 1)
                                         if nova_qtd != item_existente.get("quantidade", 1):
                                             item_existente["quantidade"] = nova_qtd
                                         print(f"✏️ Item atualizado no contexto: {item_existente}")
+                                        mostrar_resumo = True
                                     else:
                                         # Adiciona novo item
                                         novo_item = {
                                             "id": produto_encontrado.get("id", ""),
                                             "nome": nome_produto,
+                                            "descricao": produto_encontrado.get("descricao", ""),
                                             "quantidade": item.get("quantidade", 1),
                                             "preco": produto_encontrado["preco"],
                                             "removidos": removidos,
                                             "adicionais": adicionais
                                         }
+
+                                        # Se tem adicionais, calcula preço e busca IDs
+                                        if adicionais:
+                                            preco_adicionais = 0.0
+                                            complementos_checkout = []
+                                            # Busca complementos do produto
+                                            try:
+                                                complementos_prod = self.ingredientes_service.buscar_complementos_por_nome_receita(nome_produto)
+                                                if complementos_prod:
+                                                    for comp in complementos_prod:
+                                                        comp_id = comp.get('id')
+                                                        adicionais_do_comp = []
+                                                        for add in comp.get('adicionais', []):
+                                                            add_nome = add.get('nome', '')
+                                                            add_id = add.get('id')
+                                                            for sel in adicionais:
+                                                                if add_nome.lower() == sel.lower() or sel.lower() in add_nome.lower() or add_nome.lower() in sel.lower():
+                                                                    preco_adicionais += add.get('preco', 0)
+                                                                    adicionais_do_comp.append({
+                                                                        'adicional_id': add_id,
+                                                                        'quantidade': 1
+                                                                    })
+                                                                    break
+                                                        if adicionais_do_comp:
+                                                            complementos_checkout.append({
+                                                                'complemento_id': comp_id,
+                                                                'adicionais': adicionais_do_comp
+                                                            })
+                                            except Exception as e:
+                                                print(f"Erro ao buscar complementos: {e}")
+
+                                            novo_item['preco_adicionais'] = preco_adicionais
+                                            novo_item['complementos_checkout'] = complementos_checkout
+                                            print(f"💰 Preço adicionais calculado: R$ {preco_adicionais:.2f}")
+
                                         pedido_contexto.append(novo_item)
                                         print(f"🛒 Item adicionado ao contexto: {novo_item}")
-                                    mostrar_resumo = True
+                                        # Salva o último produto adicionado APENAS para novos itens
+                                        dados['ultimo_produto_adicionado'] = produto_encontrado
+                                        mostrar_resumo = True
 
                         elif acao == "remover" and itens:
                             # Remove itens do contexto
@@ -851,6 +1035,179 @@ EXEMPLOS DE PERSONALIZAÇÃO:
                                     if item.get("adicionais"):
                                         item_para_personalizar["adicionais"] = item["adicionais"]
                                     print(f"✏️ Item personalizado: {item_para_personalizar}")
+
+                        elif acao == "selecionar_complementos":
+                            # Cliente selecionou complementos - ADICIONA aos existentes do último item
+                            complementos_selecionados = resposta_json.get("complementos_selecionados", [])
+                            if complementos_selecionados and pedido_contexto:
+                                ultimo_item = pedido_contexto[-1]
+
+                                # PRESERVA adicionais existentes e seus preços
+                                adicionais_existentes = ultimo_item.get('adicionais', [])
+                                preco_existente = ultimo_item.get('preco_adicionais', 0.0)
+                                checkout_existente = ultimo_item.get('complementos_checkout', [])
+
+                                # Novos adicionais a serem adicionados
+                                novos_nomes = []
+                                novo_preco = 0.0
+                                novos_checkout = []
+                                tinha_obrigatorio = ultimo_item.get('complemento_obrigatorio', False)
+                                tem_obrigatorio = tinha_obrigatorio  # Preserva se já tinha
+
+                                # Função auxiliar para extrair quantidade do formato "Nx Nome"
+                                def extrair_quantidade_nome(sel: str) -> tuple:
+                                    """Extrai quantidade e nome de strings como '2x Maionese' ou 'Maionese'"""
+                                    import re
+                                    # Padrão: "2x Nome" ou "2 x Nome"
+                                    match = re.match(r'^(\d+)\s*x\s*(.+)$', sel.strip(), re.IGNORECASE)
+                                    if match:
+                                        return int(match.group(1)), match.group(2).strip()
+                                    return 1, sel.strip()
+
+                                # Busca IDs e preços dos complementos selecionados
+                                for comp in complementos_disponiveis:
+                                    comp_id = comp.get('id')
+                                    comp_obrigatorio = comp.get('obrigatorio', False)
+                                    adicionais_do_comp = []
+
+                                    for add in comp.get('adicionais', []):
+                                        add_nome = add.get('nome', '')
+                                        add_id = add.get('id')
+                                        add_preco = add.get('preco', 0)
+
+                                        for sel in complementos_selecionados:
+                                            # Extrai quantidade do formato "Nx Nome"
+                                            qtd_sel, nome_sel = extrair_quantidade_nome(sel)
+
+                                            # Match por nome exato ou parcial
+                                            if add_nome.lower() == nome_sel.lower() or nome_sel.lower() in add_nome.lower():
+                                                # Verifica se já existe este adicional
+                                                nome_base = add_nome  # Nome sem quantidade para checagem
+                                                ja_existe = any(nome_base in existing for existing in adicionais_existentes)
+                                                ja_novo = any(nome_base in novo for novo in novos_nomes)
+
+                                                if not ja_existe and not ja_novo:
+                                                    # Adiciona com quantidade no nome para exibição
+                                                    nome_exibicao = f"{qtd_sel}x {add_nome}" if qtd_sel > 1 else add_nome
+                                                    novos_nomes.append(nome_exibicao)
+                                                    novo_preco += add_preco * qtd_sel  # Multiplica pelo quantidade
+                                                    adicionais_do_comp.append({
+                                                        'adicional_id': add_id,
+                                                        'quantidade': qtd_sel  # Usa a quantidade extraída
+                                                    })
+                                                    # Marca se veio de complemento obrigatório
+                                                    if comp_obrigatorio:
+                                                        tem_obrigatorio = True
+                                                    print(f"📦 Adicional: {nome_exibicao} (qtd: {qtd_sel}, preço unitário: R$ {add_preco:.2f})")
+                                                break
+
+                                    if adicionais_do_comp:
+                                        # Verifica se já existe checkout para este complemento
+                                        checkout_comp_existente = None
+                                        for c in checkout_existente:
+                                            if c.get('complemento_id') == comp_id:
+                                                checkout_comp_existente = c
+                                                break
+
+                                        if checkout_comp_existente:
+                                            # Adiciona aos adicionais existentes deste complemento
+                                            for add in adicionais_do_comp:
+                                                if add not in checkout_comp_existente['adicionais']:
+                                                    checkout_comp_existente['adicionais'].append(add)
+                                        else:
+                                            novos_checkout.append({
+                                                'complemento_id': comp_id,
+                                                'adicionais': adicionais_do_comp
+                                            })
+
+                                # Mescla com existentes
+                                todos_adicionais = adicionais_existentes + novos_nomes
+                                total_preco = preco_existente + novo_preco
+                                todos_checkout = checkout_existente + novos_checkout
+
+                                ultimo_item['adicionais'] = todos_adicionais
+                                ultimo_item['complementos_checkout'] = todos_checkout
+                                ultimo_item['preco_adicionais'] = total_preco
+                                ultimo_item['complemento_obrigatorio'] = tem_obrigatorio
+                                dados['aguardando_complemento'] = False
+                                dados['complementos_disponiveis'] = []
+                                # IMPORTANTE: Limpa ultimo_produto_adicionado para não mostrar complementos novamente
+                                dados['ultimo_produto_adicionado'] = None
+                                print(f"✅ Complementos adicionados: {novos_nomes}, total agora: {todos_adicionais}")
+                                print(f"💰 Preço adicionais: R$ {total_preco:.2f} (novo: R$ {novo_preco:.2f})")
+                                print(f"📦 Estrutura para checkout: {todos_checkout}")
+                                mostrar_resumo = True
+
+                        elif acao == "pular_complementos":
+                            # Cliente não quer complementos
+                            if pedido_contexto:
+                                dados['aguardando_complemento'] = False
+                                dados['complementos_disponiveis'] = []
+                                # IMPORTANTE: Limpa ultimo_produto_adicionado para não mostrar complementos novamente
+                                dados['ultimo_produto_adicionado'] = None
+                                print(f"⏭️ Cliente pulou complementos")
+                                mostrar_resumo = True
+
+                        elif acao == "nenhuma" and itens and pedido_contexto:
+                            # LLM retornou "nenhuma" mas pode ter adicionais mencionados
+                            # Isso acontece quando o usuário adiciona mais complementos depois
+                            for item in itens:
+                                nome_item = item.get("nome", "").lower()
+                                adicionais_llm = item.get("adicionais", [])
+
+                                if adicionais_llm:
+                                    # Encontra o item correspondente no contexto
+                                    item_contexto = None
+                                    for p in pedido_contexto:
+                                        if p["nome"].lower() == nome_item:
+                                            item_contexto = p
+                                            break
+
+                                    if item_contexto:
+                                        adicionais_existentes = item_contexto.get('adicionais', [])
+                                        # Verifica se há novos adicionais
+                                        novos = [a for a in adicionais_llm if a not in adicionais_existentes]
+
+                                        if novos:
+                                            print(f"🔍 [Ação nenhuma] Detectados novos adicionais: {novos}")
+                                            # Busca preços e IDs dos novos adicionais
+                                            try:
+                                                complementos_prod = self.ingredientes_service.buscar_complementos_por_nome_receita(item_contexto['nome'])
+                                                if complementos_prod:
+                                                    preco_novo = 0.0
+                                                    checkout_novo = []
+
+                                                    for comp in complementos_prod:
+                                                        comp_id = comp.get('id')
+                                                        adds_do_comp = []
+
+                                                        for add in comp.get('adicionais', []):
+                                                            add_nome = add.get('nome', '')
+                                                            add_id = add.get('id')
+
+                                                            for novo_add in novos:
+                                                                if add_nome.lower() == novo_add.lower() or novo_add.lower() in add_nome.lower() or add_nome.lower() in novo_add.lower():
+                                                                    preco_novo += add.get('preco', 0)
+                                                                    adds_do_comp.append({
+                                                                        'adicional_id': add_id,
+                                                                        'quantidade': 1
+                                                                    })
+                                                                    break
+
+                                                        if adds_do_comp:
+                                                            checkout_novo.append({
+                                                                'complemento_id': comp_id,
+                                                                'adicionais': adds_do_comp
+                                                            })
+
+                                                    # Mescla com existentes
+                                                    item_contexto['adicionais'] = adicionais_existentes + novos
+                                                    item_contexto['preco_adicionais'] = item_contexto.get('preco_adicionais', 0) + preco_novo
+                                                    item_contexto['complementos_checkout'] = item_contexto.get('complementos_checkout', []) + checkout_novo
+                                                    print(f"✅ [Ação nenhuma] Adicionais atualizados: {item_contexto['adicionais']}, preco: R$ {item_contexto['preco_adicionais']:.2f}")
+                                                    mostrar_resumo = True
+                                            except Exception as e:
+                                                print(f"Erro ao processar adicionais em ação nenhuma: {e}")
 
                         elif acao == "prosseguir_entrega":
                             # Cliente quer finalizar - converter contexto em carrinho
@@ -884,20 +1241,74 @@ EXEMPLOS DE PERSONALIZAÇÃO:
 
                         # Se adicionou item, mostra resumo do pedido
                         if mostrar_resumo and pedido_contexto:
-                            total = sum(item.get('preco', 0) * item.get('quantidade', 1) for item in pedido_contexto)
+                            # Calcula total incluindo preço dos adicionais
+                            total = 0
+                            for item in pedido_contexto:
+                                preco_base = item.get('preco', 0)
+                                preco_adicionais = item.get('preco_adicionais', 0)
+                                qtd = item.get('quantidade', 1)
+                                total += (preco_base + preco_adicionais) * qtd
+
                             resumo = f"\n\n📋 *Seu pedido até agora:*\n"
                             for item in pedido_contexto:
                                 qtd = item.get('quantidade', 1)
                                 nome = item.get('nome', '')
                                 preco_unit = item.get('preco', 0)
-                                preco_total = preco_unit * qtd
+                                preco_adicionais = item.get('preco_adicionais', 0)
+                                preco_total = (preco_unit + preco_adicionais) * qtd
+                                descricao = item.get('descricao', '')
                                 resumo += f"• {qtd}x {nome} - R$ {preco_total:.2f}\n"
+                                if descricao:
+                                    resumo += f"  _{descricao}_\n"
                                 if item.get('removidos'):
                                     resumo += f"  _Sem: {', '.join(item['removidos'])}_\n"
                                 if item.get('adicionais'):
-                                    resumo += f"  _Com: {', '.join(item['adicionais'])}_\n"
+                                    label_comp = "Complemento obrigatório" if item.get('complemento_obrigatorio') else "Complemento"
+                                    resumo += f"  _{label_comp}: {', '.join(item['adicionais'])}_\n"
                             resumo += f"\n💰 *Total: R$ {total:.2f}*"
                             resposta_limpa += resumo
+
+                            # Verifica se acabou de adicionar complementos (não mostrar de novo)
+                            aguardando = dados.get('aguardando_complemento', False)
+                            ultimo_item = pedido_contexto[-1] if pedido_contexto else None
+                            adicionais_selecionados = ultimo_item.get('adicionais', []) if ultimo_item else []
+
+                            # Se estava aguardando e já tem adicionais, limpa o estado
+                            if aguardando and adicionais_selecionados:
+                                dados['aguardando_complemento'] = False
+                                resposta_limpa += "\n\nQuer mais alguma coisa? 😊"
+                            else:
+                                # Verifica se o último produto adicionado tem complementos
+                                ultimo_produto = dados.get('ultimo_produto_adicionado')
+                                if ultimo_produto and not adicionais_selecionados:
+                                    nome_produto = ultimo_produto.get('nome', '')
+                                    try:
+                                        complementos = self.ingredientes_service.buscar_complementos_por_nome_receita(nome_produto)
+                                        if complementos:
+                                            tem_obrigatorio = self.ingredientes_service.tem_complementos_obrigatorios(complementos)
+                                            if tem_obrigatorio:
+                                                # Remove "Quer mais algo?" pois vamos perguntar sobre complementos
+                                                resposta_limpa = resposta_limpa.replace("Quer mais algo?", "").replace("Quer mais algo? 😊", "").strip()
+                                                # Mostra complementos obrigatórios com mensagem amigável
+                                                resposta_limpa += self.ingredientes_service.formatar_complementos_para_chat(complementos, nome_produto)
+                                                # Mensagem mais amigável baseada no min/max
+                                                for comp in complementos:
+                                                    if comp.get('obrigatorio'):
+                                                        minimo = comp.get('minimo_itens', 1)
+                                                        resposta_limpa += f"\n\n👆 Escolha pelo menos {minimo} opção(ões) de *{comp.get('nome', 'complemento').upper()}* para o seu {nome_produto}!"
+                                                        break
+                                                dados['complementos_disponiveis'] = complementos
+                                                dados['aguardando_complemento'] = True
+                                                self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
+                                            else:
+                                                # Opcionais - pergunta se quer
+                                                resposta_limpa = resposta_limpa.replace("Quer mais algo?", "").replace("Quer mais algo? 😊", "").strip()
+                                                resposta_limpa += f"\n\n🍽️ *Deseja algum complemento no {nome_produto}?*"
+                                                resposta_limpa += "\nResponda *SIM* para ver as opções ou continue seu pedido! 😊"
+                                                dados['complementos_disponiveis'] = complementos
+                                                dados['ultimo_produto_com_complementos'] = nome_produto
+                                    except Exception as e:
+                                        print(f"Erro ao buscar complementos: {e}")
 
                         return resposta_limpa
 
@@ -915,11 +1326,317 @@ EXEMPLOS DE PERSONALIZAÇÃO:
 
                 else:
                     print(f"❌ Erro Groq: {response.status_code}")
-                    return "Desculpe, tive um problema. Pode repetir?"
+                    # Fallback inteligente em vez de erro
+                    return self._fallback_resposta_inteligente(mensagem, dados)
 
         except Exception as e:
             print(f"❌ Erro na conversa IA: {e}")
-            return "Ops, algo deu errado. Tenta de novo? 😅"
+            # Fallback inteligente - analisa a mensagem e responde de forma natural
+            return self._fallback_resposta_inteligente(mensagem, dados)
+
+    def _fallback_resposta_inteligente(self, mensagem: str, dados: dict) -> str:
+        """
+        Fallback quando a IA falha - analisa a mensagem e toma uma decisão inteligente.
+        Nunca retorna erro genérico.
+        """
+        msg_lower = mensagem.lower().strip()
+        pedido_contexto = dados.get('pedido_contexto', [])
+        todos_produtos = self._buscar_todos_produtos()
+        user_id = dados.get('user_id', '')
+
+        # 0. PRIMEIRO: Verifica se está aguardando seleção de complementos
+        aguardando_complemento = dados.get('aguardando_complemento', False)
+        complementos_disponiveis = dados.get('complementos_disponiveis', [])
+
+        if aguardando_complemento and complementos_disponiveis and pedido_contexto:
+            # Tenta encontrar complementos mencionados na mensagem
+            nomes_adicionais = []
+            preco_total_complementos = 0.0
+            complementos_checkout = []  # Para enviar ao endpoint
+
+            def normalizar(texto):
+                acentos = {'á': 'a', 'à': 'a', 'ã': 'a', 'â': 'a', 'é': 'e', 'ê': 'e',
+                           'í': 'i', 'ó': 'o', 'ô': 'o', 'õ': 'o', 'ú': 'u', 'ç': 'c'}
+                texto = texto.lower()
+                for ac, sem in acentos.items():
+                    texto = texto.replace(ac, sem)
+                return texto
+
+            def extrair_quantidade_mensagem(msg: str, nome_adicional: str) -> int:
+                """Extrai quantidade da mensagem para um adicional específico"""
+                import re
+                msg_norm = normalizar(msg)
+                nome_norm = normalizar(nome_adicional)
+                primeira_palavra = nome_norm.split()[0] if nome_norm else ''
+
+                # Padrões: "2 maionese", "2x maionese", "quero 2 maionese"
+                padroes = [
+                    rf'(\d+)\s*x?\s*{re.escape(primeira_palavra)}',  # "2 maionese" ou "2x maionese"
+                    rf'quero\s+(\d+)\s+{re.escape(primeira_palavra)}',  # "quero 2 maionese"
+                ]
+                for padrao in padroes:
+                    match = re.search(padrao, msg_norm)
+                    if match:
+                        return int(match.group(1))
+                return 1  # Default: 1 unidade
+
+            msg_norm = normalizar(msg_lower)
+
+            for comp in complementos_disponiveis:
+                comp_id = comp.get('id')
+                adicionais_do_comp = []
+
+                for adicional in comp.get('adicionais', []):
+                    add_nome = adicional.get('nome', '')
+                    add_id = adicional.get('id')
+                    add_preco = adicional.get('preco', 0)
+                    add_nome_norm = normalizar(add_nome)
+                    primeira_palavra = add_nome_norm.split()[0] if add_nome_norm else ''
+
+                    encontrado = False
+                    if add_nome_norm in msg_norm:
+                        encontrado = True
+                    elif len(primeira_palavra) > 3:
+                        palavras_genericas = ['extra', 'ml', 'com', 'sem', 'gratis']
+                        if primeira_palavra not in palavras_genericas and primeira_palavra in msg_norm:
+                            encontrado = True
+
+                    if encontrado and add_nome not in [n.split('x ')[-1] if 'x ' in n else n for n in nomes_adicionais]:
+                        # Extrai quantidade da mensagem
+                        qtd = extrair_quantidade_mensagem(msg_lower, add_nome)
+                        nome_exibicao = f"{qtd}x {add_nome}" if qtd > 1 else add_nome
+                        nomes_adicionais.append(nome_exibicao)
+                        preco_total_complementos += add_preco * qtd  # Multiplica pela quantidade
+                        adicionais_do_comp.append({
+                            'adicional_id': add_id,
+                            'quantidade': qtd  # Usa quantidade extraída
+                        })
+                        print(f"📦 [Fallback] Adicional: {nome_exibicao} (qtd: {qtd}, preço unitário: R$ {add_preco:.2f})")
+
+                if adicionais_do_comp:
+                    complementos_checkout.append({
+                        'complemento_id': comp_id,
+                        'adicionais': adicionais_do_comp
+                    })
+
+            if nomes_adicionais:
+                ultimo_item = pedido_contexto[-1]
+
+                # PRESERVA adicionais existentes e mescla com novos
+                adicionais_existentes = ultimo_item.get('adicionais', [])
+                preco_existente = ultimo_item.get('preco_adicionais', 0.0)
+                checkout_existente = ultimo_item.get('complementos_checkout', [])
+
+                # Filtra apenas novos (que não existem ainda)
+                novos_nomes = [n for n in nomes_adicionais if n not in adicionais_existentes]
+
+                # Mescla com existentes
+                todos_adicionais = adicionais_existentes + novos_nomes
+                total_preco = preco_existente + preco_total_complementos
+                todos_checkout = checkout_existente + complementos_checkout
+
+                ultimo_item['adicionais'] = todos_adicionais
+                ultimo_item['complementos_checkout'] = todos_checkout
+                ultimo_item['preco_adicionais'] = total_preco
+                dados['pedido_contexto'] = pedido_contexto
+                dados['aguardando_complemento'] = False
+                dados['complementos_disponiveis'] = []
+                # IMPORTANTE: Limpa ultimo_produto_adicionado para não mostrar complementos novamente
+                dados['ultimo_produto_adicionado'] = None
+                self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
+                print(f"✅ [Fallback] Novos complementos: {novos_nomes}, total agora: {todos_adicionais}")
+
+                total = sum((item.get('preco', 0) + item.get('preco_adicionais', 0)) * item.get('quantidade', 1) for item in pedido_contexto)
+                resp = f"✅ Adicionei *{', '.join(nomes_adicionais)}*!\n\n"
+                resp += "📋 *Seu pedido até agora:*\n"
+                for item in pedido_contexto:
+                    qtd = item.get('quantidade', 1)
+                    preco = (item.get('preco', 0) + item.get('preco_adicionais', 0)) * qtd
+                    resp += f"• {qtd}x {item['nome']} - R$ {preco:.2f}\n"
+                    if item.get('descricao'):
+                        resp += f"  _{item['descricao']}_\n"
+                    if item.get('removidos'):
+                        resp += f"  _Sem: {', '.join(item['removidos'])}_\n"
+                    if item.get('adicionais'):
+                        label_comp = "Complemento obrigatório" if item.get('complemento_obrigatorio') else "Complemento"
+                        resp += f"  _{label_comp}: {', '.join(item['adicionais'])}_\n"
+                resp += f"\n💰 *Total: R$ {total:.2f}*"
+                resp += "\n\nQuer mais alguma coisa? 😊"
+                return resp
+
+        # 1. Saudações - responde de forma amigável
+        saudacoes = ['oi', 'olá', 'ola', 'hey', 'eae', 'e ai', 'opa', 'bom dia', 'boa tarde', 'boa noite', 'tudo bem', 'tudo bom']
+        if any(s in msg_lower for s in saudacoes):
+            return self._gerar_mensagem_boas_vindas_conversacional()
+
+        # 2. Pedido de cardápio
+        if any(p in msg_lower for p in ['cardapio', 'cardápio', 'menu', 'o que tem', 'que tem', 'produtos']):
+            return self._gerar_lista_produtos(todos_produtos, pedido_contexto)
+
+        # 3. Quer fazer pedido / pedir algo
+        # Também aceita pedidos diretos como "1 x-egg", "2 pizzas" (começa com número)
+        tem_quantidade = bool(re.match(r'^\d+\s*', msg_lower))
+        quer_pedir = any(p in msg_lower for p in ['quero', 'me ve', 'me vê', 'me da', 'me dá', 'fazer pedido', 'pedir', 'um ', 'uma ', 'uns ', 'umas '])
+
+        if tem_quantidade or quer_pedir:
+            # Tenta encontrar um produto na mensagem
+            for produto in todos_produtos:
+                nome_normalizado = re.sub(r'[-\s_.]', '', produto['nome'].lower())
+                msg_normalizado = re.sub(r'[-\s_.]', '', msg_lower)
+                if nome_normalizado in msg_normalizado or any(p in msg_lower for p in produto['nome'].lower().split()):
+                    # Encontrou produto - adiciona ao pedido
+                    quantidade = 1
+                    nums = re.findall(r'\d+', mensagem)
+                    if nums:
+                        quantidade = int(nums[0])
+
+                    # Verifica se quer tirar algo (sem cebola, tira o molho, etc)
+                    removidos = []
+                    padroes_remover = [
+                        r'sem\s+(\w+)',
+                        r'tira[r]?\s+(?:o\s+|a\s+)?(\w+)',
+                        r'retira[r]?\s+(?:o\s+|a\s+)?(\w+)',
+                        r'nao\s+quero\s+(\w+)',
+                        r'não\s+quero\s+(\w+)'
+                    ]
+                    for padrao in padroes_remover:
+                        matches = re.findall(padrao, msg_lower)
+                        for m in matches:
+                            if m not in ['nada', 'mais', 'isso']:
+                                removidos.append(m.capitalize())
+
+                    novo_item = {
+                        "id": produto.get('id', ''),
+                        "nome": produto['nome'],
+                        "descricao": produto.get('descricao', ''),
+                        "preco": produto['preco'],
+                        "quantidade": quantidade,
+                        "removidos": removidos,
+                        "adicionais": []
+                    }
+                    pedido_contexto.append(novo_item)
+                    dados['pedido_contexto'] = pedido_contexto
+                    dados['ultimo_produto_adicionado'] = produto
+                    user_id = dados.get('user_id', '')
+
+                    # Monta resumo com detalhes
+                    total = sum((i.get('preco', 0) + i.get('preco_adicionais', 0)) * i.get('quantidade', 1) for i in pedido_contexto)
+                    resp = f"Anotado! {quantidade}x {produto['nome']}."
+                    if removidos:
+                        resp += f" (sem {', '.join(removidos)})"
+
+                    resp += f"\n\n📋 *Seu pedido até agora:*\n"
+                    for item in pedido_contexto:
+                        qtd = item.get('quantidade', 1)
+                        preco_total = (item.get('preco', 0) + item.get('preco_adicionais', 0)) * qtd
+                        resp += f"• {qtd}x {item['nome']} - R$ {preco_total:.2f}\n"
+                        if item.get('descricao'):
+                            resp += f"  _{item['descricao']}_\n"
+                        if item.get('removidos'):
+                            resp += f"  _Sem: {', '.join(item['removidos'])}_\n"
+                        if item.get('adicionais'):
+                            label_comp = "Complemento obrigatório" if item.get('complemento_obrigatorio') else "Complemento"
+                            resp += f"  _{label_comp}: {', '.join(item['adicionais'])}_\n"
+                    resp += f"\n💰 *Total: R$ {total:.2f}*"
+
+                    # Verifica se tem complementos obrigatórios
+                    try:
+                        complementos = self.ingredientes_service.buscar_complementos_por_nome_receita(produto['nome'])
+                        if complementos:
+                            tem_obrigatorio = self.ingredientes_service.tem_complementos_obrigatorios(complementos)
+                            if tem_obrigatorio:
+                                resp += self.ingredientes_service.formatar_complementos_para_chat(complementos, produto['nome'])
+                                for comp in complementos:
+                                    if comp.get('obrigatorio'):
+                                        minimo = comp.get('minimo_itens', 1)
+                                        resp += f"\n\n👆 Escolha pelo menos {minimo} opção(ões) de *{comp.get('nome', 'complemento').upper()}* para o seu {produto['nome']}!"
+                                        break
+                                dados['complementos_disponiveis'] = complementos
+                                dados['aguardando_complemento'] = True
+                            else:
+                                resp += "\n\nQuer mais alguma coisa? 😊"
+                        else:
+                            resp += "\n\nQuer mais alguma coisa? 😊"
+                    except Exception as e:
+                        print(f"Erro ao buscar complementos no fallback: {e}")
+                        resp += "\n\nQuer mais alguma coisa? 😊"
+
+                    self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
+                    return resp
+
+            # Não encontrou produto específico - pergunta o que quer
+            return "Claro! O que você gostaria de pedir? 😊"
+
+        # 4. Remover ingredientes (sem, tira, etc)
+        padroes_remover = [
+            r'sem\s+(\w+)',
+            r'tira[r]?\s+(?:o\s+|a\s+)?(\w+)',
+            r'retira[r]?\s+(?:o\s+|a\s+)?(\w+)'
+        ]
+        for padrao in padroes_remover:
+            matches = re.findall(padrao, msg_lower)
+            if matches and pedido_contexto:
+                # Encontra qual item modificar (último ou especificado)
+                item_alvo = pedido_contexto[-1]  # Default: último item
+                for item in pedido_contexto:
+                    if item['nome'].lower() in msg_lower:
+                        item_alvo = item
+                        break
+
+                removidos = item_alvo.get('removidos', [])
+                for match in matches:
+                    ingrediente = match.capitalize()
+                    if ingrediente not in removidos and ingrediente not in ['Nada', 'Mais', 'Isso']:
+                        removidos.append(ingrediente)
+                item_alvo['removidos'] = removidos
+
+                # Calcula total com preco_adicionais
+                total = sum((i['preco'] + i.get('preco_adicionais', 0)) * i.get('quantidade', 1) for i in pedido_contexto)
+
+                resp = f"✅ Anotado! {item_alvo['nome']} agora vai *sem {', '.join(removidos)}*.\n\n"
+                resp += "📋 *Seu pedido:*\n"
+                for item in pedido_contexto:
+                    preco_item = (item['preco'] + item.get('preco_adicionais', 0)) * item.get('quantidade', 1)
+                    resp += f"• {item.get('quantidade', 1)}x {item['nome']} - R$ {preco_item:.2f}\n"
+                    if item.get('removidos'):
+                        resp += f"  _Sem: {', '.join(item['removidos'])}_\n"
+                    if item.get('adicionais'):
+                        label_comp = "Complemento obrigatório" if item.get('complemento_obrigatorio') else "Complemento"
+                        resp += f"  _{label_comp}: {', '.join(item['adicionais'])}_\n"
+                resp += f"\n💰 *Total: R$ {total:.2f}*\n\nQuer mais alguma coisa? 😊"
+
+                self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
+                return resp
+
+        # 5. Finalizar pedido
+        if any(p in msg_lower for p in ['so isso', 'só isso', 'fechar', 'finalizar', 'nao quero mais', 'não quero mais', 'pronto', 'acabou']):
+            if pedido_contexto:
+                total = sum((i['preco'] + i.get('preco_adicionais', 0)) * i.get('quantidade', 1) for i in pedido_contexto)
+                return f"Perfeito! Seu pedido ficou em R$ {total:.2f}. Vou precisar do seu endereço para entrega. Pode me passar? 📍"
+            return "Você ainda não pediu nada! O que vai querer? 😊"
+
+        # 5. Ver pedido atual
+        if any(p in msg_lower for p in ['meu pedido', 'o que pedi', 'quanto ta', 'quanto tá', 'quanto deu', 'carrinho']):
+            if pedido_contexto:
+                total = sum((i['preco'] + i.get('preco_adicionais', 0)) * i.get('quantidade', 1) for i in pedido_contexto)
+                resumo = "📋 *Seu pedido:*\n"
+                for item in pedido_contexto:
+                    preco_item = (item['preco'] + item.get('preco_adicionais', 0)) * item.get('quantidade', 1)
+                    resumo += f"• {item.get('quantidade', 1)}x {item['nome']} - R$ {preco_item:.2f}\n"
+                resumo += f"\n💰 *Total: R$ {total:.2f}*\n\nQuer mais alguma coisa?"
+                return resumo
+            return "Seu carrinho está vazio! O que vai querer? 😊"
+
+        # 6. Perguntas genéricas - responde de forma útil
+        if '?' in mensagem:
+            return "Hmm, deixa eu te ajudar! Posso te mostrar nosso cardápio ou tirar dúvidas sobre algum produto específico. O que prefere? 😊"
+
+        # 7. Fallback final - sempre útil, nunca erro
+        if pedido_contexto:
+            total = sum((i['preco'] + i.get('preco_adicionais', 0)) * i.get('quantidade', 1) for i in pedido_contexto)
+            return f"Entendi! Você já tem R$ {total:.2f} no pedido. Quer adicionar mais alguma coisa ou posso fechar? 😊"
+
+        return "Opa! Como posso te ajudar? Posso mostrar o cardápio, tirar dúvidas ou anotar seu pedido! 😊"
 
     def _formatar_cardapio_para_ia(self, produtos: List[Dict]) -> str:
         """Formata cardápio completo para o prompt da IA"""
@@ -957,15 +1674,27 @@ EXEMPLOS DE PERSONALIZAÇÃO:
         """Converte o contexto da conversa para formato de carrinho"""
         carrinho = []
         for item in pedido_contexto:
+            removidos = item.get("removidos", [])
+            adicionais = item.get("adicionais", [])  # Nomes para exibição
+            complementos_checkout = item.get("complementos_checkout", [])  # IDs para o endpoint
+
+            # Observação = APENAS os removidos (SEM: cebola, SEM: tomate)
+            observacao = None
+            if removidos:
+                observacao = f"SEM: {', '.join(removidos)}"
+
             carrinho_item = {
                 "id": item.get("id", ""),
                 "nome": item["nome"],
                 "preco": item["preco"],
                 "quantidade": item.get("quantidade", 1),
+                "observacoes": observacao,  # Só os removidos vão aqui
+                "complementos": complementos_checkout,  # Estrutura com IDs para o endpoint
                 "personalizacoes": {
-                    "removidos": item.get("removidos", []),
-                    "adicionais": item.get("adicionais", []),
-                    "preco_adicionais": 0.0
+                    "removidos": removidos,
+                    "adicionais": adicionais,  # Nomes para exibição
+                    "preco_adicionais": item.get("preco_adicionais", 0.0),
+                    "complemento_obrigatorio": item.get("complemento_obrigatorio", False)
                 }
             }
             carrinho.append(carrinho_item)
@@ -1354,6 +2083,7 @@ EXEMPLOS DE PERSONALIZAÇÃO:
         novo_item = {
             'id': produto['id'],
             'nome': produto['nome'],
+            'descricao': produto.get('descricao', ''),
             'preco': produto['preco'],
             'quantidade': quantidade,
             'personalizacoes': {
@@ -1800,6 +2530,7 @@ EXEMPLOS DE PERSONALIZAÇÃO:
                 produtos.append({
                     "id": row[0],
                     "nome": row[1],
+                    "descricao": "",  # Produtos simples não têm descrição detalhada
                     "preco": float(row[2]),
                     "tipo": "produto"
                 })
@@ -1861,7 +2592,8 @@ CARRINHO ATUAL DO CLIENTE:
         if carrinho:
             total = 0
             for item in carrinho:
-                subtotal = item['preco'] * item.get('quantidade', 1)
+                preco_adicionais = item.get('personalizacoes', {}).get('preco_adicionais', 0.0)
+                subtotal = (item['preco'] + preco_adicionais) * item.get('quantidade', 1)
                 total += subtotal
                 contexto_sistema += f"- {item.get('quantidade', 1)}x {item['nome']} = R$ {subtotal:.2f}\n"
             contexto_sistema += f"TOTAL: R$ {total:.2f}\n"
@@ -2208,8 +2940,11 @@ Qual vai ser?"""
         if not carrinho:
             return "Ops, seu carrinho está vazio! Me diz o que você quer pedir 😊"
 
-        # Calcular totais
-        subtotal = sum(item['preco'] * item.get('quantidade', 1) for item in carrinho)
+        # Calcular totais (incluindo preco_adicionais)
+        subtotal = 0
+        for item in carrinho:
+            preco_adicionais = item.get('personalizacoes', {}).get('preco_adicionais', 0.0)
+            subtotal += (item['preco'] + preco_adicionais) * item.get('quantidade', 1)
 
         # Taxa de entrega só para delivery
         if tipo_entrega == 'RETIRADA':
@@ -2232,8 +2967,19 @@ Qual vai ser?"""
         mensagem += "*Itens:*\n"
         for item in carrinho:
             qtd = item.get('quantidade', 1)
-            subtotal_item = item['preco'] * qtd
+            preco_adicionais = item.get('personalizacoes', {}).get('preco_adicionais', 0.0)
+            subtotal_item = (item['preco'] + preco_adicionais) * qtd
             mensagem += f"• {qtd}x {item['nome']} - R$ {subtotal_item:.2f}\n"
+            # Mostra adicionais se tiver
+            adicionais = item.get('personalizacoes', {}).get('adicionais', [])
+            if adicionais:
+                comp_obrigatorio = item.get('personalizacoes', {}).get('complemento_obrigatorio', False)
+                label_comp = "Complemento obrigatório" if comp_obrigatorio else "Complemento"
+                mensagem += f"  _{label_comp}: {', '.join(adicionais)}_\n"
+            # Mostra removidos se tiver
+            removidos = item.get('personalizacoes', {}).get('removidos', [])
+            if removidos:
+                mensagem += f"  _Sem: {', '.join(removidos)}_\n"
 
         # Mostrar tipo de entrega
         if tipo_entrega == 'RETIRADA':
@@ -2304,23 +3050,32 @@ Qual vai ser?"""
             for item in carrinho:
                 item_id = item.get('id', '')
                 quantidade = item.get('quantidade', 1)
-                observacao = item.get('observacoes')
+                observacao = item.get('observacoes')  # Só os "SEM:" vão aqui
+                complementos = item.get('complementos', [])  # Estrutura com IDs
 
                 # Se o ID começa com "receita_", é uma receita
                 if isinstance(item_id, str) and item_id.startswith('receita_'):
                     receita_id = int(item_id.replace('receita_', ''))
-                    receitas_checkout.append({
+                    receita_item = {
                         "receita_id": receita_id,
                         "quantidade": quantidade,
                         "observacao": observacao
-                    })
+                    }
+                    # Adiciona complementos se tiver
+                    if complementos:
+                        receita_item["complementos"] = complementos
+                    receitas_checkout.append(receita_item)
                 else:
                     # É um produto com código de barras
-                    itens_checkout.append({
+                    produto_item = {
                         "produto_cod_barras": item_id,
                         "quantidade": quantidade,
                         "observacao": observacao
-                    })
+                    }
+                    # Adiciona complementos se tiver
+                    if complementos:
+                        produto_item["complementos"] = complementos
+                    itens_checkout.append(produto_item)
 
             # Monta o payload com itens e/ou receitas
             produtos_payload = {}
@@ -2359,7 +3114,7 @@ Qual vai ser?"""
                 }
 
                 # URL do checkout (localhost pois estamos no mesmo servidor)
-                checkout_url = "http://localhost:8002/api/pedidos/client/checkout"
+                checkout_url = "http://localhost:8000/api/pedidos/client/checkout"
 
                 print(f"[Checkout] Chamando {checkout_url}")
                 response = await client.post(checkout_url, json=payload, headers=headers)
@@ -2674,18 +3429,46 @@ Responda:"""
                     carrinho = dados.get('carrinho', [])
                     total = sum(item['preco'] * item.get('quantidade', 1) for item in carrinho)
 
-                    # Respostas variadas e naturais
-                    respostas_confirmacao = [
-                        f"Anotado! {quantidade}x {produto['nome']} 👍\nMais alguma coisa?",
-                        f"Beleza! {produto['nome']} no carrinho! Quer mais algo?",
-                        f"Show! Adicionei {produto['nome']}. E aí, vai querer mais?",
-                        f"Pronto! {produto['nome']} anotado. Mais algum pedido?",
-                    ]
+                    # Monta mensagem de confirmação
                     import random
-                    msg_resposta = random.choice(respostas_confirmacao)
-                    msg_resposta += f"\n\n💰 Total até agora: R$ {total:.2f}"
+                    msg_resposta = f"✅ *{quantidade}x {produto['nome']}* adicionado!\n"
+
+                    # Busca ingredientes para mostrar descrição do produto
+                    ingredientes = self.ingredientes_service.buscar_ingredientes_por_nome_receita(produto['nome'])
+                    if ingredientes:
+                        ing_lista = [i['nome'] for i in ingredientes[:5]]  # Máximo 5 ingredientes
+                        msg_resposta += f"📋 _{', '.join(ing_lista)}_\n"
+
+                    msg_resposta += f"\n💰 Total: R$ {total:.2f}"
+
+                    # Busca complementos disponíveis para o produto
+                    complementos = self.ingredientes_service.buscar_complementos_por_nome_receita(produto['nome'])
+
+                    if complementos:
+                        tem_obrigatorio = self.ingredientes_service.tem_complementos_obrigatorios(complementos)
+
+                        if tem_obrigatorio:
+                            # Se tem complemento obrigatório, mostra e pede para escolher
+                            msg_resposta += self.ingredientes_service.formatar_complementos_para_chat(complementos, produto['nome'])
+                            msg_resposta += "\n\n_Escolha os complementos obrigatórios para continuar!_"
+                        else:
+                            # Se não for obrigatório, pergunta se quer adicionar
+                            msg_resposta += "\n\n🍽️ *Quer adicionar algum complemento?*"
+                            msg_resposta += "\nDigite *COMPLEMENTOS* para ver as opções ou continue seu pedido 😊"
+
+                        # Salva produto atual para referência dos complementos
+                        dados['ultimo_produto_adicionado'] = produto['nome']
+                        dados['complementos_disponiveis'] = complementos
+                        self._salvar_estado_conversa(user_id, STATE_AGUARDANDO_PEDIDO, dados)
+                    else:
+                        msg_resposta += "\n\nMais alguma coisa? 😊"
+
                     return msg_resposta
                 else:
+                    # Verifica se parece ser uma intenção genérica de pedir (não um produto específico)
+                    termos_genericos = ['fazer', 'pedido', 'pedir', 'quero um', 'quero uma', 'algo', 'alguma coisa']
+                    if any(t in produto_busca.lower() for t in termos_genericos):
+                        return "Claro! O que você gostaria de pedir? Posso te mostrar o cardápio se quiser! 😊"
                     return f"Hmm, não achei '{produto_busca}' aqui 🤔\n\nQuer que eu te mostre o que temos?"
 
             # REMOVER PRODUTO
@@ -2761,23 +3544,32 @@ Responda:"""
                     mensagem_resposta += "\n\nMais alguma coisa? 😊"
                 return mensagem_resposta
 
-            # VER ADICIONAIS DISPONÍVEIS
+            # VER ADICIONAIS/COMPLEMENTOS DISPONÍVEIS
             elif funcao == "ver_adicionais":
                 produto_busca = params.get("produto_busca", "")
 
-                # Se não especificou produto, usa o último do carrinho
+                # Se não especificou produto, usa o último adicionado ou último do carrinho
+                if not produto_busca:
+                    produto_busca = dados.get('ultimo_produto_adicionado', '')
                 if not produto_busca and carrinho:
                     produto_busca = carrinho[-1]['nome']
 
                 if produto_busca:
-                    # Busca adicionais específicos para este produto
-                    adicionais = self.ingredientes_service.buscar_adicionais_por_nome_receita(produto_busca)
+                    # Primeiro tenta buscar complementos (estrutura correta)
+                    complementos = self.ingredientes_service.buscar_complementos_por_nome_receita(produto_busca)
 
+                    if complementos:
+                        msg = self.ingredientes_service.formatar_complementos_para_chat(complementos, produto_busca)
+                        msg += "\n\nPara adicionar, diga o nome do item (ex: *Bacon Extra*) 😊"
+                        return msg
+
+                    # Se não tem complementos, busca adicionais diretos
+                    adicionais = self.ingredientes_service.buscar_adicionais_por_nome_receita(produto_busca)
                     if adicionais:
                         msg = f"➕ *Adicionais para {produto_busca}:*\n\n"
                         for add in adicionais:
                             msg += f"• {add['nome']} - +R$ {add['preco']:.2f}\n"
-                        msg += "\nQuer adicionar algum? 😊"
+                        msg += "\nPara adicionar, diga o nome do item 😊"
                         return msg
 
                 # Se não encontrou específicos, mostra todos
@@ -2786,7 +3578,7 @@ Responda:"""
                     msg = "➕ *Adicionais disponíveis:*\n\n"
                     for add in todos_adicionais:
                         msg += f"• {add['nome']} - +R$ {add['preco']:.2f}\n"
-                    msg += "\nQuer adicionar algum? 😊"
+                    msg += "\nPara adicionar, diga o nome do item 😊"
                     return msg
                 else:
                     return "No momento não temos adicionais extras disponíveis 😅"
@@ -2815,14 +3607,15 @@ Responda:"""
                 )
 
         except httpx.TimeoutException:
-            print("⏰ Timeout no Groq")
-            return "Xiii, demorou demais... Pode mandar de novo?"
+            print("⏰ Timeout no Groq - usando fallback")
+            return self._fallback_resposta_inteligente(mensagem, dados)
 
         except Exception as e:
             print(f"❌ Erro ao processar: {e}")
             import traceback
             traceback.print_exc()
-            return "Ops, tive um probleminha técnico. Tenta de novo!"
+            # Fallback inteligente - nunca retorna erro
+            return self._fallback_resposta_inteligente(mensagem, dados)
 
 
 # Função principal para usar no webhook

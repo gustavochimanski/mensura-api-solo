@@ -457,6 +457,27 @@ async def list_all_bot_statuses(db: Session = Depends(get_db), empresa_id: Optio
     return {"statuses": statuses}
 
 
+@router.put("/bot-status-global")
+async def toggle_all_bots(
+    is_active: bool,
+    paused_by: Optional[str] = None,
+    empresa_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """Ativa ou desativa o bot para TODOS os números de uma vez"""
+    result = chatbot_db.set_global_bot_status(db, is_active, paused_by, empresa_id)
+    if not result.get("success"):
+        raise HTTPException(status_code=500, detail=result.get("error", "Erro ao atualizar status global"))
+    return result
+
+
+@router.get("/bot-status-global")
+async def get_global_bot_status(db: Session = Depends(get_db), empresa_id: Optional[int] = None):
+    """Verifica se o bot global está ativo"""
+    status = chatbot_db.get_global_bot_status(db, empresa_id)
+    return status
+
+
 # ==================== NOTIFICAÇÕES ====================
 
 @router.post("/notifications/order-confirmed")
