@@ -8,6 +8,9 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 import httpx
 import asyncio
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class OrderNotification:
@@ -150,9 +153,9 @@ _Obrigado pela preferência!_"""
         return message
 
     @staticmethod
-    def send_notification(db: Session, phone: str, message: str, order_type: str) -> Dict:
+    async def send_notification_async(db: Session, phone: str, message: str, order_type: str) -> Dict:
         """
-        Envia notificação como mensagem no chat
+        Envia notificação como mensagem no chat (versão async)
 
         O número de telefone do cliente vira o user_id no chat
         A IA envia automaticamente a mensagem de confirmação
@@ -170,6 +173,9 @@ _Obrigado pela preferência!_"""
             if conversations:
                 # Usa a conversa mais recente
                 conversation_id = conversations[0]['id']
+                # Busca empresa_id da conversa
+                conversation = chatbot_db.get_conversation(db, conversation_id)
+                empresa_id = conversation.get('empresa_id') if conversation else None
             else:
                 # Cria nova conversa
                 conversation_id = chatbot_db.create_conversation(
@@ -179,14 +185,35 @@ _Obrigado pela preferência!_"""
                     prompt_key="default",
                     model="notification-system"
                 )
+                empresa_id = None
 
             # Adiciona a mensagem de notificação como resposta da IA
-            chatbot_db.create_message(
+            message_id = chatbot_db.create_message(
                 db=db,
                 conversation_id=conversation_id,
                 role="assistant",
                 content=message
             )
+
+            # Envia notificação WebSocket para atualizar o frontend
+            try:
+                await send_chatbot_websocket_notification(
+                    empresa_id=empresa_id,
+                    notification_type="chatbot_message",
+                    title="Nova Notificação",
+                    message=f"Notificação de {order_type} enviada",
+                    data={
+                        "conversation_id": conversation_id,
+                        "message_id": message_id,
+                        "user_id": user_id,
+                        "phone": phone,
+                        "order_type": order_type,
+                        "role": "assistant"
+                    }
+                )
+            except Exception as e:
+                # Não falha a operação se WebSocket falhar
+                logger.warning(f"Erro ao enviar notificação WebSocket: {e}")
 
             notification_log = {
                 "success": True,
@@ -208,6 +235,21 @@ _Obrigado pela preferência!_"""
                 "error": str(e),
                 "phone": phone
             }
+
+    @staticmethod
+    def send_notification(db: Session, phone: str, message: str, order_type: str) -> Dict:
+        """
+        Envia notificação como mensagem no chat (versão síncrona - mantida para compatibilidade)
+        """
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+        return loop.run_until_complete(
+            OrderNotification.send_notification_async(db, phone, message, order_type)
+        )
 
     @classmethod
     async def notify_order_confirmed_async(cls, db: Session, order_data: Dict, order_type: str) -> Dict:
@@ -251,8 +293,8 @@ _Obrigado pela preferência!_"""
             "success": False
         }
 
-        # Sempre salva no chat interno (para histórico)
-        chat_result = cls.send_notification(db, phone, message, order_type)
+        # Sempre salva no chat interno (para histórico) - usa versão async
+        chat_result = await cls.send_notification_async(db, phone, message, order_type)
         results["chat_interno"] = chat_result
 
         # Se modo API estiver ativado, envia via WhatsApp também
@@ -298,3 +340,73 @@ _Obrigado pela preferência!_"""
             asyncio.set_event_loop(loop)
 
         return loop.run_until_complete(cls.notify_order_confirmed_async(db, order_data, order_type))
+
+
+# ==================== NOTIFICAÇÕES WEBSOCKET PARA CHATBOT ====================
+
+async def send_chatbot_websocket_notification(
+    empresa_id: Optional[int],
+    notification_type: str,
+    title: str,
+    message: str,
+    data: Optional[Dict] = None
+) -> int:
+    """
+    Envia notificação WebSocket para atualizar o frontend quando há mudanças no chatbot
+    
+    Args:
+        empresa_id: ID da empresa (None = envia para todas)
+        notification_type: Tipo da notificação (chatbot_message, nova_mensagem, conversation_updated, etc)
+        title: Título da notificação
+        message: Mensagem da notificação
+        data: Dados adicionais (conversation_id, message_id, etc)
+    
+    Returns:
+        Número de conexões que receberam a notificação (0 se nenhuma)
+    """
+    try:
+        from app.api.notifications.core.websocket_manager import websocket_manager
+        
+        # Normaliza empresa_id para string
+        empresa_id_str = str(empresa_id) if empresa_id else None
+        
+        notification_data = {
+            "type": "notification",
+            "notification_type": notification_type,
+            "title": title,
+            "message": message,
+            "data": data or {},
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+        # Se empresa_id foi fornecido, adiciona ao payload
+        if empresa_id_str:
+            notification_data["empresa_id"] = empresa_id_str
+        
+        # Envia notificação via WebSocket
+        if empresa_id_str:
+            sent_count = await websocket_manager.send_to_empresa(empresa_id_str, notification_data)
+        else:
+            # Se não tem empresa_id, faz broadcast para todos
+            sent_count = await websocket_manager.broadcast(notification_data)
+        
+        logger.info(
+            f"[CHATBOT_WS] Notificação enviada - tipo={notification_type}, "
+            f"empresa_id={empresa_id_str}, conexões={sent_count}"
+        )
+        
+        return sent_count
+        
+    except ImportError:
+        # Se o websocket_manager não estiver disponível, apenas loga e continua
+        logger.warning(
+            "[CHATBOT_WS] websocket_manager não disponível. "
+            "Notificações WebSocket não serão enviadas."
+        )
+        return 0
+    except Exception as e:
+        logger.error(
+            f"[CHATBOT_WS] Erro ao enviar notificação WebSocket: {e}",
+            exc_info=True
+        )
+        return 0

@@ -235,6 +235,21 @@ async def create_new_conversation(conv: ConversationCreate, db: Session = Depend
         empresa_id=conv.empresa_id
     )
 
+    # Envia notificação WebSocket de nova conversa
+    from ..core.notifications import send_chatbot_websocket_notification
+    await send_chatbot_websocket_notification(
+        empresa_id=conv.empresa_id,
+        notification_type="chatbot_conversation",
+        title="Nova Conversa",
+        message=f"Nova conversa criada para {conv.user_id}",
+        data={
+            "conversation_id": conversation_id,
+            "session_id": session_id,
+            "user_id": conv.user_id,
+            "model": conv.model
+        }
+    )
+
     return {
         "id": conversation_id,
         "session_id": session_id,
@@ -406,6 +421,22 @@ async def add_message_to_conversation(conversation_id: int, message: MessageCrea
         conversation_id=conversation_id,
         role=message.role,
         content=message.content
+    )
+
+    # Envia notificação WebSocket para atualizar o frontend
+    from ..core.notifications import send_chatbot_websocket_notification
+    await send_chatbot_websocket_notification(
+        empresa_id=conversation.get('empresa_id'),
+        notification_type="chatbot_message",
+        title="Nova Mensagem",
+        message=f"Nova mensagem na conversa {conversation_id}",
+        data={
+            "conversation_id": conversation_id,
+            "message_id": message_id,
+            "role": message.role,
+            "user_id": conversation.get('user_id'),
+            "content_preview": message.content[:100] if len(message.content) > 100 else message.content
+        }
     )
 
     return {"id": message_id}
@@ -690,14 +721,56 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                     user_id=user_id,
                     prompt_key="default",
                     model="llm-sales",
-                    contact_name=contact_name
+                    contact_name=contact_name,
+                    empresa_id=1  # TODO: Pegar empresa_id correto
                 )
                 print(f"   ✅ Nova conversa criada: {conversation_id} (contato: {contact_name})")
+                
+                # Envia notificação WebSocket de nova conversa
+                from ..core.notifications import send_chatbot_websocket_notification
+                await send_chatbot_websocket_notification(
+                    empresa_id=1,  # TODO: Pegar empresa_id correto
+                    notification_type="chatbot_conversation",
+                    title="Nova Conversa",
+                    message=f"Nova conversa iniciada com {contact_name or phone_number}",
+                    data={
+                        "conversation_id": conversation_id,
+                        "user_id": user_id,
+                        "phone_number": phone_number,
+                        "contact_name": contact_name
+                    }
+                )
             else:
+                conversation_id = conversations[0]['id']
                 # Atualiza o nome do contato se disponível e ainda não tiver
                 if contact_name and not conversations[0].get('contact_name'):
                     chatbot_db.update_conversation_contact_name(db, conversations[0]['id'], contact_name)
                     print(f"   📝 Nome do contato atualizado: {contact_name}")
+
+            # Salva mensagem do usuário
+            user_message_id = chatbot_db.create_message(
+                db=db,
+                conversation_id=conversation_id,
+                role="user",
+                content=message_text
+            )
+            
+            # Envia notificação WebSocket de nova mensagem do usuário
+            from ..core.notifications import send_chatbot_websocket_notification
+            await send_chatbot_websocket_notification(
+                empresa_id=1,  # TODO: Pegar empresa_id correto
+                notification_type="nova_mensagem",
+                title="Nova Mensagem Recebida",
+                message=f"Nova mensagem de {contact_name or phone_number}",
+                data={
+                    "conversation_id": conversation_id,
+                    "message_id": user_message_id,
+                    "phone_number": phone_number,
+                    "contact_name": contact_name,
+                    "role": "user",
+                    "content_preview": message_text[:100] if len(message_text) > 100 else message_text
+                }
+            )
 
             # Importa o Groq Sales Handler (LLaMA 3.1 via API - rápido!)
             from ..core.groq_sales_handler import processar_mensagem_groq
@@ -809,11 +882,28 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 print(f"   💬 Resposta da IA: {ai_response[:100]}...")
 
                 # 7. Salva resposta da IA no banco
-                chatbot_db.create_message(
+                message_id = chatbot_db.create_message(
                     db=db,
                     conversation_id=conversation_id,
                     role="assistant",
                     content=ai_response
+                )
+
+                # 7.1. Envia notificação WebSocket para atualizar o frontend
+                from ..core.notifications import send_chatbot_websocket_notification
+                await send_chatbot_websocket_notification(
+                    empresa_id=1,  # TODO: Pegar empresa_id correto
+                    notification_type="whatsapp_message",
+                    title="Nova Mensagem WhatsApp",
+                    message=f"Nova mensagem recebida de {contact_name or phone_number}",
+                    data={
+                        "conversation_id": conversation_id,
+                        "message_id": message_id,
+                        "phone_number": phone_number,
+                        "contact_name": contact_name,
+                        "role": "assistant",
+                        "content_preview": ai_response[:100] if len(ai_response) > 100 else ai_response
+                    }
                 )
 
                 # 8. Envia resposta via WhatsApp
