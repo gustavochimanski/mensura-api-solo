@@ -3827,13 +3827,53 @@ async def processar_mensagem_groq(
         print(f"   ✅ Nova conversa criada no banco: {conversation_id}")
 
     # 2. Salva mensagem do usuário no banco
-    chatbot_db.create_message(db, conversation_id, "user", mensagem)
+    user_message_id = chatbot_db.create_message(db, conversation_id, "user", mensagem)
+    
+    # 2.1. Envia notificação WebSocket de nova mensagem do usuário
+    try:
+        from .notifications import send_chatbot_websocket_notification
+        await send_chatbot_websocket_notification(
+            empresa_id=empresa_id,
+            notification_type="nova_mensagem",
+            title="Nova Mensagem Recebida",
+            message=f"Nova mensagem de {user_id}",
+            data={
+                "conversation_id": conversation_id,
+                "message_id": user_message_id,
+                "user_id": user_id,
+                "role": "user",
+                "content_preview": mensagem[:100] if len(mensagem) > 100 else mensagem
+            }
+        )
+    except Exception as e:
+        # Não falha se WebSocket falhar
+        print(f"   ⚠️ Erro ao enviar notificação WebSocket (user): {e}")
 
     # 3. Processa mensagem com o handler
     handler = GroqSalesHandler(db, empresa_id)
     resposta = await handler.processar_mensagem(user_id, mensagem)
 
     # 4. Salva resposta do bot no banco
-    chatbot_db.create_message(db, conversation_id, "assistant", resposta)
+    assistant_message_id = chatbot_db.create_message(db, conversation_id, "assistant", resposta)
+    
+    # 4.1. Envia notificação WebSocket de resposta do bot
+    try:
+        from .notifications import send_chatbot_websocket_notification
+        await send_chatbot_websocket_notification(
+            empresa_id=empresa_id,
+            notification_type="chatbot_message",
+            title="Nova Resposta do Bot",
+            message=f"Bot respondeu na conversa {conversation_id}",
+            data={
+                "conversation_id": conversation_id,
+                "message_id": assistant_message_id,
+                "user_id": user_id,
+                "role": "assistant",
+                "content_preview": resposta[:100] if len(resposta) > 100 else resposta
+            }
+        )
+    except Exception as e:
+        # Não falha se WebSocket falhar
+        print(f"   ⚠️ Erro ao enviar notificação WebSocket (assistant): {e}")
 
     return resposta
