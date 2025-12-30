@@ -471,27 +471,97 @@ O sistema permite enviar notificações apenas para usuários em rotas específi
 
 **⚠️ Se você ver um 404 ao tentar conectar:**
 
-Isso geralmente indica que o front-end está tentando fazer uma **requisição HTTP GET** ao invés de estabelecer uma **conexão WebSocket**.
+Este erro indica que o servidor não encontrou a rota. Isso pode acontecer por várias razões:
 
-**Causas comuns:**
-- Está usando `fetch()` ou `axios.get()` ao invés de `new WebSocket()`
-- Está usando `http://` ou `https://` ao invés de `ws://` ou `wss://`
-- O navegador não está fazendo o upgrade HTTP para WebSocket corretamente
+**1. Está usando requisição HTTP ao invés de WebSocket:**
+- **Problema:** Está usando `fetch()`, `axios.get()`, ou qualquer método HTTP ao invés de `new WebSocket()`
+- **Solução:** WebSocket requer uma conexão especial, não uma requisição HTTP. Use `new WebSocket(url)`
 
-**Solução:**
+**2. Protocolo incorreto na URL:**
+- **Problema:** Está usando `http://` ou `https://` ao invés de `ws://` ou `wss://`
+- **Solução:** WebSocket usa protocolos diferentes:
+  - `http://` → use `ws://`
+  - `https://` → use `wss://`
+
+**3. URL mal formada:**
+- **Problema:** A URL não está no formato correto
+- **Solução:** Verifique se a URL está assim: `{protocolo}://{host}/api/notifications/ws/notifications/{user_id}?empresa_id={empresa_id}`
+
+**4. Problema com o servidor/proxy:**
+- **Problema:** Um proxy ou load balancer pode estar bloqueando conexões WebSocket
+- **Solução:** Verifique se o servidor/proxy está configurado para permitir upgrades WebSocket
+
+**Como verificar qual é o problema:**
+
+**Teste 1 - Verificar se está usando WebSocket corretamente:**
+
+Exemplo usando a URL real: `wss://teste2.mensuraapi.com.br/api/notifications/ws/notifications/1?empresa_id=2`
+
+```javascript
+// ✅ CORRETO - Conecta via WebSocket
+// URL: wss://teste2.mensuraapi.com.br/api/notifications/ws/notifications/1?empresa_id=2
+const ws = new WebSocket('wss://teste2.mensuraapi.com.br/api/notifications/ws/notifications/1?empresa_id=2');
+
+ws.onopen = () => {
+    console.log('✅ Conexão WebSocket estabelecida!');
+    console.log('Esperando mensagem de conexão do servidor...');
+};
+
+ws.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    console.log('Mensagem recebida:', data);
+    
+    // Primeira mensagem deve ser do tipo "connection"
+    if (data.type === 'connection') {
+        console.log('✅ Confirmado: Conectado com sucesso!');
+        console.log('User ID:', data.user_id);
+        console.log('Empresa ID:', data.empresa_id);
+    }
+};
+
+ws.onerror = (error) => {
+    console.error('❌ Erro na conexão WebSocket:', error);
+    console.error('Verifique se a URL está correta e se o servidor está acessível');
+};
+
+ws.onclose = (event) => {
+    console.log('Conexão fechada:', event.code, event.reason);
+    if (event.code !== 1000) {
+        console.warn('⚠️ Conexão fechada inesperadamente. Código:', event.code);
+    }
+};
+
+// ❌ ERRADO - Isso vai dar 404
+// fetch() é para requisições HTTP, não WebSocket
+fetch('https://teste2.mensuraapi.com.br/api/notifications/ws/notifications/1?empresa_id=2');
+```
+
+**Teste 2 - Verificar a URL no DevTools:**
+1. Abra DevTools → Network
+2. Filtre por "WS" (WebSocket)
+3. Tente conectar
+4. Se aparecer como requisição HTTP (não WebSocket) no Network, você está usando o método errado
+
+**Teste 3 - Verificar a URL completa:**
+- URL correta: `wss://teste2.mensuraapi.com.br/api/notifications/ws/notifications/1?empresa_id=2`
+- Verifique se:
+  - Usa `ws://` ou `wss://` (não `http://` ou `https://`)
+  - Tem `/api/notifications/ws/notifications/` no path
+  - Tem `{user_id}` substituído por um número (ex: `1`)
+  - Tem `?empresa_id={empresa_id}` no final (ex: `?empresa_id=2`)
+
+**Teste 4 - Verificar se o endpoint existe:**
+- Use o endpoint de configuração para obter a URL correta:
+  ```
+  GET /api/notifications/ws/config/{empresa_id}?user_id={user_id}
+  ```
+- Isso retorna a URL exata que deve ser usada
+
+**Solução resumida:**
 - **SEMPRE use `new WebSocket(url)`** para estabelecer a conexão
 - Certifique-se de usar o protocolo correto: `ws://` ou `wss://`
 - Não use `fetch()`, `axios()`, ou qualquer biblioteca HTTP para conectar ao WebSocket
 - A URL deve ser construída corretamente com `user_id` no path e `empresa_id` como query parameter
-
-**Exemplo correto:**
-```javascript
-// ✅ CORRETO - Usa WebSocket
-const ws = new WebSocket('wss://teste2.mensuraapi.com.br/api/notifications/ws/notifications/1?empresa_id=2');
-
-// ❌ ERRADO - Usa HTTP (vai dar 404)
-fetch('https://teste2.mensuraapi.com.br/api/notifications/ws/notifications/1?empresa_id=2');
-```
 
 **Se você ver logs indicando que não há conexões:**
 - O front-end não está conectado ao WebSocket
