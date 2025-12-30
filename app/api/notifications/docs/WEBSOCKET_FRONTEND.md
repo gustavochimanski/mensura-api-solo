@@ -28,6 +28,38 @@ O sistema de notificações em tempo real utiliza WebSocket para enviar atualiza
 
 ## 🔌 Conexão WebSocket
 
+### Quando Enviar user_id e empresa_id
+
+**⚠️ IMPORTANTE:** O `user_id` e `empresa_id` são enviados **no momento da conexão**, diretamente na URL do WebSocket. Eles não são enviados como mensagens depois da conexão.
+
+**Formato da URL de Conexão:**
+```
+{protocolo}://{host}/api/notifications/ws/notifications/{user_id}?empresa_id={empresa_id}
+```
+
+**Onde:**
+- `{user_id}` - ID do usuário logado (deve estar no path da URL)
+- `{empresa_id}` - ID da empresa (deve estar como query parameter)
+
+**Exemplo:**
+```
+wss://teste2.mensuraapi.com.br/api/notifications/ws/notifications/1?empresa_id=1
+                                           ↑                              ↑
+                                    user_id=1                    empresa_id=1
+```
+
+**Quando conectar:**
+- O front-end deve ter o `user_id` do usuário autenticado
+- O front-end deve ter o `empresa_id` da empresa selecionada/ativa
+- Construa a URL com esses valores antes de criar a conexão WebSocket
+- Ao fazer `new WebSocket(url)`, os parâmetros já são enviados automaticamente
+
+**⚠️ Observação sobre tipos:**
+- Os valores podem ser números ou strings no código do front-end
+- Na URL, serão convertidos para string automaticamente
+- O backend recebe e normaliza ambos como string internamente
+- Certifique-se de que os IDs estão corretos na URL, pois são usados para identificar a conexão
+
 ### Configuração via Variáveis de Ambiente
 
 **⚠️ IMPORTANTE:** A URL da API muda de cliente para cliente. Sempre use variáveis de ambiente para configurar a URL do backend.
@@ -58,14 +90,16 @@ ws://{API_URL}/api/notifications/ws/notifications/{user_id}?empresa_id={empresa_
 - Se `API_URL` começa com `http://`, use protocolo `ws://` (WebSocket não seguro)
 - Remova o protocolo (`http://` ou `https://`) da URL da API
 - Adicione o protocolo WebSocket correspondente (`ws://` ou `wss://`)
+- Substitua `{user_id}` pelo ID do usuário logado
+- Substitua `{empresa_id}` pelo ID da empresa
 - Formato: `{protocolo}://{host}/api/notifications/ws/notifications/{user_id}?empresa_id={empresa_id}`
 
 **Exemplos de URLs:**
 
-| API URL | Protocolo WebSocket | URL Final |
-|---------|---------------------|-----------|
-| `https://teste2.mensuraapi.com.br` | `wss://` | `wss://teste2.mensuraapi.com.br/api/notifications/ws/notifications/1?empresa_id=1` |
-| `http://localhost:8000` | `ws://` | `ws://localhost:8000/api/notifications/ws/notifications/1?empresa_id=1` |
+| API URL | user_id | empresa_id | URL Final |
+|---------|---------|------------|-----------|
+| `https://teste2.mensuraapi.com.br` | 1 | 1 | `wss://teste2.mensuraapi.com.br/api/notifications/ws/notifications/1?empresa_id=1` |
+| `http://localhost:8000` | 5 | 2 | `ws://localhost:8000/api/notifications/ws/notifications/5?empresa_id=2` |
 
 ### Obtendo a URL de Conexão (Alternativa)
 
@@ -87,10 +121,68 @@ Você também pode obter a URL correta do WebSocket através do endpoint de conf
 
 **⚠️ Importante:**
 - **SEMPRE use variáveis de ambiente** para a URL da API (muda de cliente para cliente)
+- **O `user_id` e `empresa_id` são enviados na URL de conexão**, não como mensagens depois
 - Use `ws://` para desenvolvimento (HTTP) e `wss://` para produção (HTTPS)
 - O protocolo do WebSocket deve corresponder ao protocolo da API (http → ws, https → wss)
 - O WebSocket sempre aponta para o **BACKEND**, não para o front-end
-- Substitua `{user_id}` pelo ID real do usuário logado
+- Substitua `{user_id}` pelo ID real do usuário logado e `{empresa_id}` pelo ID da empresa na URL
+- A conexão só pode ser estabelecida se você tiver ambos os valores (user_id e empresa_id)
+
+### ⏰ Quando Manter a Conexão Ativa
+
+**⚠️ CRÍTICO:** A conexão WebSocket deve estar **ativa e mantida continuamente** enquanto o usuário estiver logado e precisar receber notificações.
+
+**Quando estabelecer a conexão:**
+- Logo após o login bem-sucedido do usuário
+- Quando o usuário seleciona/troca de empresa
+- Após uma desconexão (implementar reconexão automática)
+- Quando o usuário volta a focar na aba/janela (se a conexão foi perdida)
+
+**Quando manter a conexão:**
+- Durante toda a sessão do usuário
+- Mesmo quando o usuário navega entre diferentes páginas/rotas
+- Quando o usuário está em background (aba não focada) mas ainda logado
+
+**O que acontece se a conexão não estiver ativa:**
+
+Se o front-end não estiver conectado ao WebSocket quando um evento ocorre no backend (ex: criação de pedido, aprovação, etc.), a notificação **não será entregue**.
+
+**Logs do backend quando não há conexão:**
+```
+WARNING:app.api.notifications.core.websocket_manager:[CHECK] Empresa 1 não tem conexões ativas. Empresas conectadas: []
+WARNING:app.api.notifications.services.pedido_notification_service:[NOTIFY] Notificação kanban não enviada: empresa 1 não tem conexões ativas. Pedido 64 criado mas nenhum cliente conectado.
+```
+
+**Isso significa:**
+- O backend tentou enviar uma notificação
+- Não encontrou nenhuma conexão WebSocket ativa para a empresa
+- A notificação foi perdida
+- O front-end não receberá essa atualização em tempo real
+
+**Verificando se a conexão está ativa:**
+
+1. **No front-end (DevTools):**
+   - Abra DevTools → Network → Filtre por "WS" (WebSocket)
+   - Verifique se há uma conexão WebSocket listada
+   - O status deve estar "101 Switching Protocols" ou similar
+   - Verifique se há mensagens sendo trocadas
+
+2. **Via endpoint da API:**
+   ```
+   GET /api/notifications/ws/connections/check/{empresa_id}
+   ```
+   - Se `is_connected: true`, há conexões ativas
+   - Se `is_connected: false`, não há conexões para essa empresa
+
+3. **Via WebSocket:**
+   - Envie um `ping` e espere um `pong` como resposta
+   - Use `get_stats` para verificar estatísticas da conexão
+
+**Recomendações:**
+- Implemente reconexão automática quando a conexão cair
+- Envie `ping` periodicamente (ex: a cada 30 segundos) para manter a conexão viva
+- Verifique o status da conexão ao mudar de empresa
+- Monitore eventos de `close` e `error` para detectar desconexões
 
 ---
 
@@ -316,18 +408,102 @@ O sistema permite enviar notificações apenas para usuários em rotas específi
 
 ### Por que não recebo notificações de kanban?
 
-Verifique:
-1. Se você está conectado ao WebSocket
-2. Se você está na rota `/pedidos` (use `set_route`)
-3. Se a empresa_id está correta
-4. Se há conexões ativas (use endpoint `/connections/check/{empresa_id}`)
+**Possíveis causas:**
+
+1. **Não há conexões WebSocket ativas:**
+   - O front-end não está conectado ao WebSocket
+   - A conexão foi fechada/desconectada
+   - Verifique usando o endpoint `/connections/check/{empresa_id}`
+
+2. **Você não está na rota `/pedidos`:**
+   - Notificações kanban só são enviadas para usuários na rota `/pedidos`
+   - Envie mensagem `set_route` informando a rota atual
+
+3. **A empresa_id está incorreta:**
+   - Verifique se o `empresa_id` usado na conexão WebSocket corresponde ao da empresa do pedido
+
+4. **Problema na URL do WebSocket:**
+   - URL pode estar incorreta
+   - Protocolo pode estar errado (ws vs wss)
+   - Verifique usando o endpoint `/config/{empresa_id}`
+
+**Como diagnosticar:**
+
+1. Verifique conexões ativas: `GET /api/notifications/ws/connections/check/{empresa_id}`
+   - Se retornar `is_connected: false` ou `connection_count: 0`, não há conexões ativas
+   
+2. Verifique logs do backend procurando por:
+   - `[CHECK] Empresa X não tem conexões ativas`
+   - `[NOTIFY] Notificação kanban não enviada: empresa X não tem conexões ativas`
+   - `Empresas conectadas: []` indica que não há nenhuma conexão
+
+3. No front-end, verifique:
+   - Se a conexão WebSocket foi estabelecida (evento `onopen`)
+   - Se está recebendo mensagem de conexão do tipo `connection`
+   - Se há erros no console do navegador
 
 ### Como testar a conexão?
 
-1. Conecte ao WebSocket
-2. Envie um `ping` e espere um `pong`
-3. Use `get_stats` para ver estatísticas
-4. Verifique logs do backend
+1. Conecte ao WebSocket e verifique se recebe mensagem do tipo `connection`
+2. Envie um `ping` e espere um `pong` como resposta
+3. Use `get_stats` via WebSocket para ver estatísticas
+4. Use o endpoint `GET /api/notifications/ws/connections/check/{empresa_id}` para verificar se o servidor detecta sua conexão
+5. Verifique logs do backend para mensagens de conexão/desconexão
+
+### Interpretando Logs do Backend
+
+**Logs de Conexão Bem-sucedida:**
+```
+[CONNECT] WebSocket conectado com sucesso - user_id=1, empresa_id=1
+[WS_ROUTER] WebSocket conectado e registrado - user_id=1, empresa_id=1. Total de conexões: 1
+```
+
+**Logs de Problema (Nenhuma Conexão):**
+```
+[CHECK] Empresa 1 não tem conexões ativas. Empresas conectadas: []
+[NOTIFY] Notificação kanban não enviada: empresa 1 não tem conexões ativas
+```
+
+**Erro 404 - Rota não encontrada:**
+```
+"GET /api/notifications/ws/notifications/1?empresa_id=2 HTTP/1.1" 404
+```
+
+**⚠️ Se você ver um 404 ao tentar conectar:**
+
+Isso geralmente indica que o front-end está tentando fazer uma **requisição HTTP GET** ao invés de estabelecer uma **conexão WebSocket**.
+
+**Causas comuns:**
+- Está usando `fetch()` ou `axios.get()` ao invés de `new WebSocket()`
+- Está usando `http://` ou `https://` ao invés de `ws://` ou `wss://`
+- O navegador não está fazendo o upgrade HTTP para WebSocket corretamente
+
+**Solução:**
+- **SEMPRE use `new WebSocket(url)`** para estabelecer a conexão
+- Certifique-se de usar o protocolo correto: `ws://` ou `wss://`
+- Não use `fetch()`, `axios()`, ou qualquer biblioteca HTTP para conectar ao WebSocket
+- A URL deve ser construída corretamente com `user_id` no path e `empresa_id` como query parameter
+
+**Exemplo correto:**
+```javascript
+// ✅ CORRETO - Usa WebSocket
+const ws = new WebSocket('wss://teste2.mensuraapi.com.br/api/notifications/ws/notifications/1?empresa_id=2');
+
+// ❌ ERRADO - Usa HTTP (vai dar 404)
+fetch('https://teste2.mensuraapi.com.br/api/notifications/ws/notifications/1?empresa_id=2');
+```
+
+**Se você ver logs indicando que não há conexões:**
+- O front-end não está conectado ao WebSocket
+- A conexão foi estabelecida mas depois foi fechada
+- O `empresa_id` usado na conexão não corresponde ao esperado
+
+**Verificações no Front-end:**
+- Abra DevTools → Network → Filtre por WS (WebSocket)
+- Verifique se há uma conexão WebSocket ativa
+- Verifique o status da conexão (deve estar "Open" ou 1)
+- Verifique se há mensagens sendo trocadas
+- Certifique-se de que está usando `new WebSocket()` e não métodos HTTP
 
 ### Posso ter múltiplas conexões do mesmo usuário?
 
