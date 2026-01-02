@@ -7,9 +7,7 @@ from fastapi import APIRouter
 from app.api.pedidos.router.admin.router_pedidos_admin import router as router_pedidos_admin
 from app.api.pedidos.router.client.router_pedidos_client import router as router_pedidos_client
 
-api_pedidos = APIRouter(
-    tags=["API - Pedidos Unificados"]
-)
+api_pedidos = APIRouter()
 
 # Router admin unificado
 api_pedidos.include_router(router_pedidos_admin)
