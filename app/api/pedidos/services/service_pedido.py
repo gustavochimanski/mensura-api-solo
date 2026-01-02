@@ -1091,9 +1091,20 @@ class PedidoService:
         return self.response_builder.pedido_to_response_completo_total(pedido)
 
     # ---------------- Admin / Kanban ----------------
-    def list_all_kanban(self, date_filter: date, empresa_id: int = 1, limit: int = 500) -> KanbanAgrupadoResponse:
+    def list_all_kanban(
+        self, 
+        date_filter: date, 
+        empresa_id: int = 1, 
+        limit: int = 500,
+        tipo: Optional[TipoEntregaEnum] = None,
+    ) -> KanbanAgrupadoResponse:
         """Lista todos os pedidos para visualização no Kanban, agrupados por categoria."""
-        return self.kanban_service.list_all_kanban(date_filter=date_filter, empresa_id=empresa_id, limit=limit)
+        return self.kanban_service.list_all_kanban(
+            date_filter=date_filter, 
+            empresa_id=empresa_id, 
+            limit=limit,
+            tipo=tipo,
+        )
 
     # ---------------- Atualizações ----------------
     def atualizar_status(self, pedido_id: int, novo_status: PedidoStatusEnum, user_id: int | None = None) -> PedidoResponse:
