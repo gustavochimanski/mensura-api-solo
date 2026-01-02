@@ -5,6 +5,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.caixas.repositories.repo_caixa import CaixaRepository
+from app.api.caixas.repositories.repo_retirada import RetiradaRepository
 from app.api.empresas.repositories.empresa_repo import EmpresaRepository
 from app.api.cadastros.repositories.usuarios_repo import UsuarioRepository
 from app.api.caixas.schemas.schema_caixa import (
@@ -16,7 +17,9 @@ from app.api.caixas.schemas.schema_caixa import (
     CaixaValoresEsperadosResponse,
     CaixaConferenciaEsperadoResponse,
     CaixaConferenciaResumoResponse,
-    ConferenciaMeioPagamentoResponse
+    ConferenciaMeioPagamentoResponse,
+    RetiradaCreate,
+    RetiradaResponse
 )
 from app.api.caixas.models.model_caixa import CaixaModel
 from app.utils.logger import logger
@@ -26,6 +29,7 @@ class CaixaService:
     def __init__(self, db: Session):
         self.db = db
         self.repo = CaixaRepository(db)
+        self.repo_retirada = RetiradaRepository(db)
         self.repo_empresa = EmpresaRepository(db)
         self.repo_usuario = UsuarioRepository(db)
 
@@ -340,5 +344,125 @@ class CaixaService:
             status=caixa.status,
             data_abertura=caixa.data_abertura,
             data_fechamento=caixa.data_fechamento,
+        )
+
+    # ==================== MÉTODOS DE RETIRADA ====================
+
+    def criar_retirada(
+        self,
+        caixa_id: int,
+        data: RetiradaCreate,
+        usuario_id: int
+    ) -> RetiradaResponse:
+        """Cria uma nova retirada do caixa"""
+        # Valida caixa
+        caixa = self.repo.get_by_id(caixa_id)
+        if not caixa:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Caixa não encontrado"
+            )
+        
+        # Valida se está aberto
+        if caixa.status != "ABERTO":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Apenas caixas abertos podem receber retiradas"
+            )
+        
+        # Valida observação para DESPESA
+        if data.tipo == "DESPESA" and not data.observacoes:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Observação é obrigatória para despesas"
+            )
+        
+        # Valida usuário
+        self._usuario_or_404(usuario_id)
+        
+        # Cria a retirada
+        retirada = self.repo_retirada.create(
+            caixa_id=caixa_id,
+            usuario_id=usuario_id,
+            tipo=data.tipo.value,
+            valor=float(data.valor),
+            observacoes=data.observacoes
+        )
+        
+        self.db.commit()
+        
+        # Recalcula saldo esperado
+        try:
+            self.repo.calcular_saldo_esperado(caixa_id, caixa.empresa_id)
+        except Exception as e:
+            logger.warning(f"[Caixa] Erro ao recalcular saldo após retirada: {e}")
+        
+        logger.info(f"[Caixa] Retirada criada retirada_id={retirada.id} caixa_id={caixa_id} tipo={data.tipo} valor={data.valor}")
+        
+        return self._retirada_to_response(retirada)
+
+    def listar_retiradas(
+        self,
+        caixa_id: int,
+        tipo: Optional[str] = None
+    ) -> List[RetiradaResponse]:
+        """Lista retiradas de um caixa"""
+        # Valida caixa
+        caixa = self.repo.get_by_id(caixa_id)
+        if not caixa:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Caixa não encontrado"
+            )
+        
+        retiradas = self.repo_retirada.list_by_caixa(caixa_id, tipo)
+        return [self._retirada_to_response(r) for r in retiradas]
+
+    def excluir_retirada(self, retirada_id: int) -> None:
+        """Exclui uma retirada (apenas de caixas abertos)"""
+        retirada = self.repo_retirada.get_by_id(retirada_id)
+        if not retirada:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Retirada não encontrada"
+            )
+        
+        # Valida se o caixa está aberto
+        caixa = self.repo.get_by_id(retirada.caixa_id)
+        if not caixa:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Caixa não encontrado"
+            )
+        
+        if caixa.status != "ABERTO":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Apenas retiradas de caixas abertos podem ser excluídas"
+            )
+        
+        caixa_id = retirada.caixa_id
+        self.repo_retirada.delete(retirada)
+        self.db.commit()
+        
+        # Recalcula saldo esperado
+        try:
+            self.repo.calcular_saldo_esperado(caixa_id, caixa.empresa_id)
+        except Exception as e:
+            logger.warning(f"[Caixa] Erro ao recalcular saldo após exclusão de retirada: {e}")
+        
+        logger.info(f"[Caixa] Retirada excluída retirada_id={retirada_id} caixa_id={caixa_id}")
+
+    def _retirada_to_response(self, retirada) -> RetiradaResponse:
+        """Converte model de retirada para response"""
+        return RetiradaResponse(
+            id=retirada.id,
+            caixa_id=retirada.caixa_id,
+            tipo=retirada.tipo,
+            valor=float(retirada.valor),
+            observacoes=retirada.observacoes,
+            usuario_id=retirada.usuario_id,
+            usuario_nome=retirada.usuario.username if retirada.usuario else None,
+            created_at=retirada.created_at
         )
 

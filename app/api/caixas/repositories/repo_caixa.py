@@ -183,7 +183,19 @@ class CaixaRepository:
         )
         total_saidas = query_saidas.scalar() or Decimal("0")
         
-        saldo_esperado = saldo + total_entradas - total_saidas
+        # Retiradas: sangrias e despesas
+        from app.api.caixas.models.model_retirada import RetiradaModel
+        query_retiradas = (
+            self.db.query(func.sum(RetiradaModel.valor))
+            .filter(
+                and_(
+                    RetiradaModel.caixa_id == caixa_id
+                )
+            )
+        )
+        total_retiradas = query_retiradas.scalar() or Decimal("0")
+        
+        saldo_esperado = saldo + total_entradas - total_saidas - total_retiradas
         
         # Atualiza o saldo esperado no caixa
         caixa.saldo_esperado = saldo_esperado

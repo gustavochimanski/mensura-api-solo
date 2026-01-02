@@ -53,6 +53,13 @@ class CaixaModel(Base):
         back_populates="caixa",
         cascade="all, delete-orphan"
     )
+    
+    # Relacionamento com retiradas
+    retiradas = relationship(
+        "RetiradaModel",
+        back_populates="caixa",
+        cascade="all, delete-orphan"
+    )
 
     model_config = ConfigDict(from_attributes=True)
 
