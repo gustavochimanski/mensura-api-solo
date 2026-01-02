@@ -41,7 +41,7 @@ class CaixaModel(Base):
     data_hora_abertura = Column(DateTime, nullable=True)  # Data/hora informada pelo usuário na abertura
     data_hora_fechamento = Column(DateTime, nullable=True)  # Data/hora informada pelo usuário no fechamento
     
-    # Observações
+    # Observaçõe
     observacoes_abertura = Column(String(500), nullable=True)
     observacoes_fechamento = Column(String(500), nullable=True)
     
@@ -49,7 +49,7 @@ class CaixaModel(Base):
     created_at = Column(DateTime, default=now_trimmed, nullable=False)
     updated_at = Column(DateTime, default=now_trimmed, onupdate=now_trimmed, nullable=False)
     
-    # Relacionamento com conferências
+    # Relacionamento com conferência
     conferencias = relationship(
         "CaixaConferenciaModel",
         back_populates="caixa",
