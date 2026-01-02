@@ -490,7 +490,6 @@ class PedidoResponseCompletoTotal(BaseModel):
     meio_pagamento: Optional[MeioPagamentoResponse] = None
     cupom: Optional["CupomOutComProdutos"] = None
     transacao: Optional[TransacaoResponse] = None
-    historicos: List[PedidoStatusHistoricoOut] = Field(default_factory=list)
     tipo_entrega: TipoEntregaEnum
     origem: OrigemPedidoEnum
     subtotal: float
