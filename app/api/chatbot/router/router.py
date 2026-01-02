@@ -2,7 +2,7 @@
 Router do módulo de Chatbot
 Todas as rotas relacionadas ao chatbot com IA (Ollama)
 """
-from fastapi import APIRouter, HTTPException, Request, Depends
+from fastapi import APIRouter, HTTPException, Request, Depends, UploadFile, File
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -559,10 +559,11 @@ async def send_order_notification(notification: OrderNotificationRequest, db: Se
 
 
 @router.post("/send-notification")
-async def send_notification(request: dict):
+async def send_notification(request: dict, db: Session = Depends(get_db)):
     """
     Endpoint simples para enviar notificações WhatsApp
     Aceita telefone e mensagem formatada
+    Salva a mensagem no histórico da conversa
     """
     phone = request.get("phone")
     message = request.get("message")
@@ -578,6 +579,20 @@ async def send_notification(request: dict):
     result = await notifier.send_whatsapp_message(phone, message)
 
     if result.get("success"):
+        # Salva a mensagem enviada no histórico da conversa
+        try:
+            conversations = chatbot_db.get_conversations_by_user(db, phone)
+            if conversations:
+                chatbot_db.create_message(
+                    db=db,
+                    conversation_id=conversations[0]['id'],
+                    role="assistant",
+                    content=message
+                )
+                print(f"   💾 Mensagem salva no histórico (conversa {conversations[0]['id']})")
+        except Exception as e:
+            print(f"   ⚠️ Erro ao salvar mensagem no histórico: {e}")
+
         return {
             "success": True,
             "message": "Notificação enviada com sucesso",
@@ -588,6 +603,207 @@ async def send_notification(request: dict):
             status_code=400,
             detail=result.get("error", "Erro ao enviar notificação")
         )
+
+
+@router.post("/send-media")
+async def send_media(request: dict, db: Session = Depends(get_db)):
+    """
+    Endpoint para enviar arquivos (imagem, documento, audio, video) via WhatsApp
+    Salva a mensagem no histórico da conversa
+    """
+    phone = request.get("phone")
+    media_url = request.get("media_url")
+    media_type = request.get("media_type", "image")  # image, document, audio, video
+    caption = request.get("caption", "")
+
+    if not phone or not media_url:
+        raise HTTPException(
+            status_code=400,
+            detail="Telefone e media_url sao obrigatorios"
+        )
+
+    # Busca config do WhatsApp
+    config = await get_whatsapp_config()
+    access_token = config.access_token
+    phone_number_id = config.phone_number_id
+
+    if not access_token or not phone_number_id:
+        raise HTTPException(
+            status_code=500,
+            detail="Configuracao do WhatsApp incompleta"
+        )
+
+    # Formata o numero (remove caracteres especiais)
+    phone_clean = ''.join(filter(str.isdigit, phone))
+
+    # Monta o payload para enviar media
+    url = f"https://graph.facebook.com/v22.0/{phone_number_id}/messages"
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json"
+    }
+
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": phone_clean,
+        "type": media_type
+    }
+
+    # Adiciona o objeto de media baseado no tipo
+    if media_type == "image":
+        payload["image"] = {"link": media_url}
+        if caption:
+            payload["image"]["caption"] = caption
+    elif media_type == "document":
+        payload["document"] = {"link": media_url}
+        if caption:
+            payload["document"]["caption"] = caption
+            payload["document"]["filename"] = caption
+    elif media_type == "audio":
+        payload["audio"] = {"link": media_url}
+    elif media_type == "video":
+        payload["video"] = {"link": media_url}
+        if caption:
+            payload["video"]["caption"] = caption
+
+    try:
+        import httpx
+        async with httpx.AsyncClient() as client:
+            response = await client.post(url, headers=headers, json=payload)
+            result = response.json()
+
+            if response.status_code == 200:
+                # Salva a mensagem enviada no histórico da conversa
+                try:
+                    conversations = chatbot_db.get_conversations_by_user(db, phone)
+                    if conversations:
+                        # Salva como JSON para o frontend poder renderizar a mídia
+                        media_content = json.dumps({
+                            "type": "media",
+                            "media_type": media_type,
+                            "media_url": media_url,
+                            "caption": caption or ""
+                        })
+                        chatbot_db.create_message(
+                            db=db,
+                            conversation_id=conversations[0]['id'],
+                            role="assistant",
+                            content=media_content
+                        )
+                        print(f"   💾 Mídia salva no histórico (conversa {conversations[0]['id']})")
+                except Exception as save_error:
+                    print(f"   ⚠️ Erro ao salvar mídia no histórico: {save_error}")
+
+                return {
+                    "success": True,
+                    "message": "Arquivo enviado com sucesso",
+                    "message_id": result.get("messages", [{}])[0].get("id")
+                }
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail=result.get("error", {}).get("message", "Erro ao enviar arquivo")
+                )
+    except Exception as e:
+        print(f"Erro ao enviar media: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao enviar arquivo: {str(e)}"
+        )
+
+
+@router.post("/upload-file")
+async def upload_file(request: Request, file: UploadFile = File(...)):
+    """
+    Faz upload de arquivo e retorna URL publica para envio via WhatsApp
+    """
+    import os
+    import uuid as uuid_module
+    from pathlib import Path
+
+    # Diretório para arquivos temporários
+    upload_dir = Path("./uploads")
+    upload_dir.mkdir(exist_ok=True)
+
+    # Gera nome único para o arquivo
+    file_ext = Path(file.filename).suffix if file.filename else ""
+    unique_filename = f"{uuid_module.uuid4()}{file_ext}"
+    file_path = upload_dir / unique_filename
+
+    try:
+        # Salva o arquivo
+        content = await file.read()
+        with open(file_path, "wb") as f:
+            f.write(content)
+
+        # Retorna URL pública
+        # Prioridade: variável de ambiente > header X-Forwarded-Host > tunnel ativo
+        base_url = os.getenv("CHATBOT_PUBLIC_URL")
+        if not base_url:
+            # Tenta pegar do header (quando via tunnel/proxy)
+            forwarded_host = request.headers.get("x-forwarded-host")
+            forwarded_proto = request.headers.get("x-forwarded-proto", "https")
+            if forwarded_host:
+                base_url = f"{forwarded_proto}://{forwarded_host}"
+            else:
+                # Tenta detectar tunnel ativo verificando se há conexão
+                import subprocess
+                try:
+                    result = subprocess.run(
+                        ["pgrep", "-f", "cloudflared"],
+                        capture_output=True,
+                        text=True,
+                        timeout=1
+                    )
+                    if result.returncode == 0:
+                        # Tunnel está ativo, usa URL padrão do tunnel
+                        # Em produção, isso deve ser configurado via env var
+                        base_url = "https://requirements-travel-heavy-inter.trycloudflare.com"
+                    else:
+                        base_url = "http://localhost:8000"
+                except:
+                    base_url = "http://localhost:8000"
+
+        file_url = f"{base_url}/api/chatbot/files/{unique_filename}"
+
+        print(f"📁 Arquivo salvo: {file_path}")
+        print(f"🔗 URL pública: {file_url}")
+
+        return {
+            "success": True,
+            "url": file_url,
+            "filename": unique_filename
+        }
+    except Exception as e:
+        print(f"Erro ao fazer upload: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao fazer upload: {str(e)}"
+        )
+
+
+@router.get("/files/{filename}")
+async def serve_file(filename: str):
+    """
+    Serve arquivos uploadados para que o WhatsApp possa baixá-los
+    """
+    from fastapi.responses import FileResponse
+    from pathlib import Path
+
+    file_path = Path("./uploads") / filename
+
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Arquivo não encontrado")
+
+    # Detecta o tipo MIME
+    import mimetypes
+    content_type, _ = mimetypes.guess_type(str(file_path))
+
+    return FileResponse(
+        path=str(file_path),
+        media_type=content_type or "application/octet-stream",
+        filename=filename
+    )
 
 
 # ==================== WEBHOOKS DO WHATSAPP ====================
