@@ -11,8 +11,9 @@ from app.api.pedidos.schemas.schema_pedido import (
     KanbanAgrupadoResponse,
     MeioPagamentoKanbanResponse,
     PedidoKanbanResponse,
+    ClienteKanbanSimplificado,
+    PedidoPagamentoResumoKanban,
 )
-from app.api.cadastros.schemas.schema_cliente import ClienteOut
 from app.api.shared.schemas.schema_shared_enums import PedidoStatusEnum
 from app.api.pedidos.services.service_pedido_helpers import build_pagamento_resumo
 from app.utils.logger import logger
@@ -27,14 +28,18 @@ class KanbanService:
         self.repo = repo
         self.repo_cliente = ClienteRepository(db)
     
-    def _buscar_cliente_completo(self, cliente_id: int | None) -> ClienteOut | None:
-        """Busca cliente completo do banco quando temos apenas o ID"""
+    def _buscar_cliente_simplificado(self, cliente_id: int | None) -> ClienteKanbanSimplificado | None:
+        """Busca apenas campos do cliente necessários para o kanban"""
         if not cliente_id:
             return None
         try:
             cliente = self.repo_cliente.get_by_id(cliente_id)
             if cliente:
-                return ClienteOut.model_validate(cliente, from_attributes=True)
+                return ClienteKanbanSimplificado(
+                    id=cliente.id,
+                    nome=cliente.nome,
+                    telefone=cliente.telefone
+                )
         except Exception:
             pass
         return None
@@ -180,24 +185,46 @@ class KanbanService:
         # Campos alternativos para cliente
         nome_cliente = None
         telefone_cliente = None
+        cliente_simplificado = None
         if cliente:
             nome_cliente = cliente.nome
             telefone_cliente = cliente.telefone
+            cliente_simplificado = ClienteKanbanSimplificado(
+                id=cliente.id,
+                nome=cliente.nome,
+                telefone=cliente.telefone
+            )
         
         # Recalcula valor total incluindo receitas, combos e adicionais
         valor_total_calculado = self._calcular_valor_total_com_receitas_combos(p)
         
+        # Meio de pagamento simplificado (apenas nome)
+        meio_pagamento_simplificado = None
+        if p.meio_pagamento:
+            meio_pagamento_simplificado = MeioPagamentoKanbanResponse(
+                nome=p.meio_pagamento.nome
+            )
+        
+        # Pagamento simplificado (apenas campos usados pelo front)
+        pagamento_simplificado = None
+        pagamento_resumo = build_pagamento_resumo(p)
+        if pagamento_resumo:
+            pagamento_simplificado = PedidoPagamentoResumoKanban(
+                meio_pagamento_nome=pagamento_resumo.meio_pagamento_nome,
+                esta_pago=pagamento_resumo.esta_pago
+            )
+        
         return PedidoKanbanResponse(
             id=p.id,
             status=p.status,
-            cliente=ClienteOut.model_validate(cliente) if cliente else None,
+            cliente=cliente_simplificado,
             valor_total=valor_total_calculado,
             data_criacao=p.created_at,
             endereco=endereco_str,
             observacao_geral=p.observacao_geral,
-            meio_pagamento=MeioPagamentoKanbanResponse.model_validate(p.meio_pagamento) if p.meio_pagamento else None,
+            meio_pagamento=meio_pagamento_simplificado,
             entregador={"id": p.entregador.id, "nome": p.entregador.nome} if getattr(p, "entregador", None) else None,
-            pagamento=build_pagamento_resumo(p),
+            pagamento=pagamento_simplificado,
             acertado_entregador=getattr(p, "acertado_entregador", None),
             tempo_entrega_minutos=tempo_entrega_minutos,
             troco_para=float(p.troco_para) if getattr(p, "troco_para", None) is not None else None,
@@ -234,16 +261,16 @@ class KanbanService:
         except Exception:
             tempo_entrega_minutos = None
         
-        # Busca cliente completo se tivermos ID
-        cliente_out = None
+        # Busca cliente simplificado se tivermos ID
+        cliente_simplificado = None
         nome_cliente = None
         telefone_cliente = None
         if p.cliente_id:
-            cliente_out = self._buscar_cliente_completo(p.cliente_id)
+            cliente_simplificado = self._buscar_cliente_simplificado(p.cliente_id)
             if p.cliente:
                 nome_cliente = p.cliente.nome
-            if cliente_out:
-                telefone_cliente = cliente_out.telefone
+            if cliente_simplificado:
+                telefone_cliente = cliente_simplificado.telefone
         
         # Objeto mesa
         mesa_obj = None
@@ -253,15 +280,22 @@ class KanbanService:
         # Recalcula valor total incluindo receitas, combos e adicionais
         valor_total_mesa = self._calcular_valor_total_com_receitas_combos(p)
         
+        # Meio de pagamento simplificado (apenas nome)
+        meio_pagamento_simplificado = None
+        if p.meio_pagamento:
+            meio_pagamento_simplificado = MeioPagamentoKanbanResponse(
+                nome=p.meio_pagamento.nome
+            )
+        
         return PedidoKanbanResponse(
             id=p.id,
             status=p.status,
-            cliente=cliente_out,
+            cliente=cliente_simplificado,
             valor_total=valor_total_mesa,
             data_criacao=p.created_at,
             endereco=endereco_str,
             observacao_geral=p.observacoes or p.observacao_geral or "Pedido de mesa",
-            meio_pagamento=MeioPagamentoKanbanResponse.model_validate(p.meio_pagamento) if p.meio_pagamento else None,
+            meio_pagamento=meio_pagamento_simplificado,
             entregador=None,  # Mesa não tem entregador
             pagamento=None,  # Mesa não tem pagamento separado
             acertado_entregador=None,
@@ -304,16 +338,16 @@ class KanbanService:
         except Exception:
             tempo_entrega_minutos = None
         
-        # Busca cliente completo se tivermos ID
-        cliente_out = None
+        # Busca cliente simplificado se tivermos ID
+        cliente_simplificado = None
         nome_cliente = None
         telefone_cliente = None
         if p.cliente_id:
-            cliente_out = self._buscar_cliente_completo(p.cliente_id)
+            cliente_simplificado = self._buscar_cliente_simplificado(p.cliente_id)
             if p.cliente:
                 nome_cliente = p.cliente.nome
-            if cliente_out:
-                telefone_cliente = cliente_out.telefone
+            if cliente_simplificado:
+                telefone_cliente = cliente_simplificado.telefone
         
         # Objeto mesa
         mesa_obj = None
@@ -323,15 +357,22 @@ class KanbanService:
         # Recalcula valor total incluindo receitas, combos e adicionais
         valor_total_balcao = self._calcular_valor_total_com_receitas_combos(p)
         
+        # Meio de pagamento simplificado (apenas nome)
+        meio_pagamento_simplificado = None
+        if p.meio_pagamento:
+            meio_pagamento_simplificado = MeioPagamentoKanbanResponse(
+                nome=p.meio_pagamento.nome
+            )
+        
         return PedidoKanbanResponse(
             id=p.id,
             status=p.status,
-            cliente=cliente_out,
+            cliente=cliente_simplificado,
             valor_total=valor_total_balcao,
             data_criacao=p.created_at,
             endereco=endereco_str,
             observacao_geral=p.observacoes or p.observacao_geral or "Pedido de balcão",
-            meio_pagamento=MeioPagamentoKanbanResponse.model_validate(p.meio_pagamento) if p.meio_pagamento else None,
+            meio_pagamento=meio_pagamento_simplificado,
             entregador=None,  # Balcão não tem entregador
             pagamento=None,  # Balcão não tem pagamento separado
             acertado_entregador=None,
