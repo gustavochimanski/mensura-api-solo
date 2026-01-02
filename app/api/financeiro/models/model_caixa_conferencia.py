@@ -8,7 +8,7 @@ class CaixaConferenciaModel(Base):
     """Armazena a conferência por tipo de meio de pagamento no fechamento do caixa"""
     __tablename__ = "caixa_conferencias"
     __table_args__ = (
-        Index("idx_caixa_conferencia_caixa", "caixa_id"),
+        Index("idx_caixa_conferencia_caixa_abertura", "caixa_abertura_id"),
         Index("idx_caixa_conferencia_meio", "meio_pagamento_id"),
         {"schema": "financeiro"},
     )
@@ -16,8 +16,8 @@ class CaixaConferenciaModel(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     
     # Relacionamentos
-    caixa_id = Column(Integer, ForeignKey("cadastros.caixas.id", ondelete="CASCADE"), nullable=False)
-    caixa = relationship("CaixaModel", back_populates="conferencias")
+    caixa_abertura_id = Column(Integer, ForeignKey("cadastros.caixa_aberturas.id", ondelete="CASCADE"), nullable=False)
+    caixa_abertura = relationship("CaixaAberturaModel", back_populates="conferencias")
     
     meio_pagamento_id = Column(Integer, ForeignKey("cadastros.meios_pagamento.id", ondelete="RESTRICT"), nullable=False)
     meio_pagamento = relationship("MeioPagamentoModel")

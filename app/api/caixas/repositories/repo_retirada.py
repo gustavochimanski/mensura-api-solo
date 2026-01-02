@@ -11,7 +11,8 @@ class RetiradaRepository:
 
     def create(
         self,
-        caixa_id: int,
+        empresa_id: int,
+        caixa_abertura_id: int,
         usuario_id: int,
         tipo: str,
         valor: float,
@@ -19,7 +20,8 @@ class RetiradaRepository:
     ) -> RetiradaModel:
         """Cria uma nova retirada"""
         retirada = RetiradaModel(
-            caixa_id=caixa_id,
+            empresa_id=empresa_id,
+            caixa_abertura_id=caixa_abertura_id,
             usuario_id=usuario_id,
             tipo=tipo,
             valor=valor,
@@ -29,25 +31,35 @@ class RetiradaRepository:
         self.db.flush()
         return retirada
 
-    def get_by_id(self, retirada_id: int) -> Optional[RetiradaModel]:
-        """Busca uma retirada por ID"""
-        return (
-            self.db.query(RetiradaModel)
-            .options(joinedload(RetiradaModel.usuario))
-            .filter(RetiradaModel.id == retirada_id)
-            .first()
-        )
-
-    def list_by_caixa(
-        self,
-        caixa_id: int,
-        tipo: Optional[str] = None
-    ) -> List[RetiradaModel]:
-        """Lista retiradas de um caixa, opcionalmente filtradas por tipo"""
+    def get_by_id(self, retirada_id: int, empresa_id: Optional[int] = None) -> Optional[RetiradaModel]:
+        """Busca uma retirada por ID, opcionalmente filtrada por empresa"""
         query = (
             self.db.query(RetiradaModel)
             .options(joinedload(RetiradaModel.usuario))
-            .filter(RetiradaModel.caixa_id == caixa_id)
+            .filter(RetiradaModel.id == retirada_id)
+        )
+        
+        if empresa_id:
+            query = query.filter(RetiradaModel.empresa_id == empresa_id)
+        
+        return query.first()
+
+    def list_by_caixa_abertura(
+        self,
+        empresa_id: int,
+        caixa_abertura_id: int,
+        tipo: Optional[str] = None
+    ) -> List[RetiradaModel]:
+        """Lista retiradas de uma abertura de caixa, opcionalmente filtradas por tipo"""
+        query = (
+            self.db.query(RetiradaModel)
+            .options(joinedload(RetiradaModel.usuario))
+            .filter(
+                and_(
+                    RetiradaModel.empresa_id == empresa_id,
+                    RetiradaModel.caixa_abertura_id == caixa_abertura_id
+                )
+            )
         )
         
         if tipo:
@@ -60,12 +72,17 @@ class RetiradaRepository:
         self.db.delete(retirada)
         self.db.flush()
 
-    def get_total_retiradas(self, caixa_id: int) -> float:
-        """Retorna o total de retiradas de um caixa"""
+    def get_total_retiradas(self, empresa_id: int, caixa_abertura_id: int) -> float:
+        """Retorna o total de retiradas de uma abertura de caixa"""
         from sqlalchemy import func
         result = (
             self.db.query(func.sum(RetiradaModel.valor))
-            .filter(RetiradaModel.caixa_id == caixa_id)
+            .filter(
+                and_(
+                    RetiradaModel.empresa_id == empresa_id,
+                    RetiradaModel.caixa_abertura_id == caixa_abertura_id
+                )
+            )
             .scalar()
         )
         return float(result or 0)
