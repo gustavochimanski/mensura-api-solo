@@ -38,6 +38,7 @@ def abrir_caixa(
     
     - **empresa_id**: ID da empresa (obrigatório)
     - **valor_inicial**: Valor em dinheiro no caixa (obrigatório, >= 0)
+    - **data_hora_abertura**: Data e hora da abertura (opcional, usa timestamp atual se não informado)
     - **observacoes_abertura**: Observações opcionais
     
     Não permite abrir um novo caixa se já existir um caixa aberto para a empresa.
@@ -60,6 +61,7 @@ def fechar_caixa(
     
     - **caixa_id**: ID do caixa (obrigatório)
     - **saldo_real**: Valor real contado no fechamento para dinheiro físico (obrigatório, >= 0)
+    - **data_hora_fechamento**: Data e hora do fechamento (opcional, usa timestamp atual se não informado)
     - **observacoes_fechamento**: Observações opcionais
     - **conferencias**: Lista de conferências por tipo de meio de pagamento (opcional)
         - Cada conferência deve ter: meio_pagamento_id, valor_conferido, observacoes (opcional)

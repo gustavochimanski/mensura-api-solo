@@ -83,11 +83,17 @@ class CaixaRepository:
 
     def create(self, **data) -> CaixaModel:
         """Cria um novo caixa"""
+        from app.utils.database_utils import now_trimmed
+        
+        # Se data_hora_abertura não foi fornecida, usa timestamp atual
+        if 'data_hora_abertura' not in data or data['data_hora_abertura'] is None:
+            data['data_hora_abertura'] = now_trimmed()
+        
         caixa = CaixaModel(**data)
         self.db.add(caixa)
         self.db.commit()
         self.db.refresh(caixa)
-        logger.info(f"[Caixa] Criado caixa_id={caixa.id} empresa_id={caixa.empresa_id}")
+        logger.info(f"[Caixa] Criado caixa_id={caixa.id} empresa_id={caixa.empresa_id} data_hora_abertura={caixa.data_hora_abertura}")
         return caixa
 
     def update(self, caixa: CaixaModel, **data) -> CaixaModel:
@@ -103,6 +109,7 @@ class CaixaRepository:
         self,
         caixa: CaixaModel,
         saldo_real: Decimal,
+        data_hora_fechamento: Optional[datetime],
         observacoes_fechamento: Optional[str],
         usuario_id_fechamento: int
     ) -> CaixaModel:
@@ -112,9 +119,10 @@ class CaixaRepository:
         caixa.status = "FECHADO"
         caixa.saldo_real = saldo_real
         caixa.valor_final = saldo_real
+        caixa.data_hora_fechamento = data_hora_fechamento if data_hora_fechamento else now_trimmed()
         caixa.observacoes_fechamento = observacoes_fechamento
         caixa.usuario_id_fechamento = usuario_id_fechamento
-        caixa.data_fechamento = now_trimmed()
+        caixa.data_fechamento = now_trimmed()  # Timestamp automático
         
         # Calcula diferença
         if caixa.saldo_esperado is not None:
@@ -122,7 +130,7 @@ class CaixaRepository:
         
         self.db.commit()
         self.db.refresh(caixa)
-        logger.info(f"[Caixa] Fechado caixa_id={caixa.id} saldo_real={saldo_real} diferenca={caixa.diferenca}")
+        logger.info(f"[Caixa] Fechado caixa_id={caixa.id} saldo_real={saldo_real} data_hora_fechamento={caixa.data_hora_fechamento} diferenca={caixa.diferenca}")
         return caixa
 
     def calcular_saldo_esperado(
