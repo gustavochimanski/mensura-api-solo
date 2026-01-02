@@ -6,18 +6,22 @@ from app.utils.database_utils import now_trimmed
 RetiradaTipo = SAEnum("SANGRIA", "DESPESA", name="retirada_tipo_enum", create_type=False, schema="cadastros")
 
 class RetiradaModel(Base):
-    __tablename__ = "retiradas_caixa"
+    __tablename__ = "caixas_retiradas"
     __table_args__ = (
-        Index("idx_retirada_caixa", "caixa_id"),
-        Index("idx_retirada_tipo", "tipo"),
+        Index("idx_caixa_retirada_caixa_abertura", "caixa_abertura_id"),
+        Index("idx_caixa_retirada_tipo", "tipo"),
+        Index("idx_caixa_retirada_empresa", "empresa_id"),
         {"schema": "cadastros"},
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     
     # Relacionamentos
-    caixa_id = Column(Integer, ForeignKey("cadastros.caixas.id", ondelete="CASCADE"), nullable=False)
-    caixa = relationship("CaixaModel", back_populates="retiradas")
+    empresa_id = Column(Integer, ForeignKey("cadastros.empresas.id", ondelete="RESTRICT"), nullable=False)
+    empresa = relationship("EmpresaModel")
+    
+    caixa_abertura_id = Column(Integer, ForeignKey("cadastros.caixa_aberturas.id", ondelete="CASCADE"), nullable=False)
+    caixa_abertura = relationship("CaixaAberturaModel", back_populates="retiradas")
     
     usuario_id = Column(Integer, ForeignKey("cadastros.usuarios.id", ondelete="RESTRICT"), nullable=False)
     usuario = relationship("UserModel", foreign_keys=[usuario_id])

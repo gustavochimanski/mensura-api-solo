@@ -4,19 +4,23 @@ from datetime import datetime
 from decimal import Decimal
 from enum import Enum
 
-class CaixaStatusEnum(str, Enum):
+class CaixaAberturaStatusEnum(str, Enum):
     ABERTO = "ABERTO"
     FECHADO = "FECHADO"
 
-class CaixaBase(BaseModel):
+class CaixaAberturaBase(BaseModel):
+    """Schema base para abertura de caixa"""
     valor_inicial: Decimal = Field(..., ge=0, description="Valor inicial em dinheiro no caixa")
     data_hora_abertura: Optional[datetime] = Field(None, description="Data e hora da abertura (opcional, usa timestamp atual se não informado)")
     observacoes_abertura: Optional[str] = Field(None, max_length=500)
 
-class CaixaCreate(CaixaBase):
+class CaixaAberturaCreate(CaixaAberturaBase):
+    """Schema para criar uma nova abertura de caixa"""
+    caixa_id: int = Field(..., gt=0, description="ID do caixa cadastrado")
     empresa_id: int = Field(..., gt=0, description="ID da empresa")
 
-class CaixaUpdate(BaseModel):
+class CaixaAberturaUpdate(BaseModel):
+    """Schema para atualizar uma abertura de caixa (apenas observações)"""
     observacoes_abertura: Optional[str] = Field(None, max_length=500)
 
 class ConferenciaMeioPagamento(BaseModel):
@@ -25,14 +29,17 @@ class ConferenciaMeioPagamento(BaseModel):
     valor_conferido: Decimal = Field(..., ge=0, description="Valor conferido para este meio de pagamento")
     observacoes: Optional[str] = Field(None, max_length=500)
 
-class CaixaFechamentoRequest(BaseModel):
+class CaixaAberturaFechamentoRequest(BaseModel):
+    """Schema para fechar uma abertura de caixa"""
     saldo_real: Decimal = Field(..., ge=0, description="Valor real contado no fechamento (dinheiro físico)")
     data_hora_fechamento: Optional[datetime] = Field(None, description="Data e hora do fechamento (opcional, usa timestamp atual se não informado)")
     observacoes_fechamento: Optional[str] = Field(None, max_length=500)
     conferencias: List[ConferenciaMeioPagamento] = Field(default_factory=list, description="Conferências por tipo de meio de pagamento")
 
-class CaixaResponse(BaseModel):
+class CaixaAberturaResponse(BaseModel):
+    """Schema de resposta para abertura de caixa"""
     id: int
+    caixa_id: int
     empresa_id: int
     usuario_id_abertura: int
     usuario_id_fechamento: Optional[int] = None
@@ -52,15 +59,18 @@ class CaixaResponse(BaseModel):
     updated_at: datetime
     
     # Informações adicionais
+    caixa_nome: Optional[str] = None
     empresa_nome: Optional[str] = None
     usuario_abertura_nome: Optional[str] = None
     usuario_fechamento_nome: Optional[str] = None
     
     model_config = ConfigDict(from_attributes=True)
 
-class CaixaResumoResponse(BaseModel):
-    """Resumo do caixa para listagem"""
+class CaixaAberturaResumoResponse(BaseModel):
+    """Resumo da abertura de caixa para listagem"""
     id: int
+    caixa_id: int
+    caixa_nome: Optional[str] = None
     empresa_id: int
     empresa_nome: Optional[str] = None
     usuario_abertura_nome: Optional[str] = None
@@ -90,9 +100,9 @@ class ConferenciaMeioPagamentoResponse(BaseModel):
     
     model_config = ConfigDict(from_attributes=True)
 
-class CaixaConferenciaResumoResponse(BaseModel):
-    """Resumo das conferências do caixa por tipo de pagamento"""
-    caixa_id: int
+class CaixaAberturaConferenciaResumoResponse(BaseModel):
+    """Resumo das conferências da abertura de caixa por tipo de pagamento"""
+    caixa_abertura_id: int
     conferencias: List[ConferenciaMeioPagamentoResponse]
     
     model_config = ConfigDict(from_attributes=True)
@@ -107,8 +117,9 @@ class CaixaConferenciaEsperadoResponse(BaseModel):
     
     model_config = ConfigDict(from_attributes=True)
 
-class CaixaValoresEsperadosResponse(BaseModel):
-    """Resposta com valores esperados por tipo de pagamento para um caixa aberto"""
+class CaixaAberturaValoresEsperadosResponse(BaseModel):
+    """Resposta com valores esperados por tipo de pagamento para uma abertura de caixa aberta"""
+    caixa_abertura_id: int
     caixa_id: int
     empresa_id: int
     data_abertura: datetime
@@ -131,7 +142,8 @@ class RetiradaCreate(BaseModel):
 
 class RetiradaResponse(BaseModel):
     id: int
-    caixa_id: int
+    empresa_id: int
+    caixa_abertura_id: int
     tipo: str
     valor: float
     observacoes: Optional[str] = None

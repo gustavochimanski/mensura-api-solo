@@ -241,6 +241,7 @@ def importar_models():
     from app.api.catalogo.models.model_receita import ReceitaModel, ReceitaIngredienteModel, ReceitaAdicionalModel
     from app.api.financeiro.models.model_caixa_conferencia import CaixaConferenciaModel
     from app.api.caixas.models.model_caixa import CaixaModel
+    from app.api.caixas.models.model_caixa_abertura import CaixaAberturaModel
     from app.api.caixas.models.model_retirada import RetiradaModel
     # ─── Models Cardápio ───────────────────────────────────────────
     from app.api.cardapio.models.model_transacao_pagamento_dv import TransacaoPagamentoModel
