@@ -79,12 +79,17 @@ def listar_kanban(
     date_filter: date = Query(..., description="Data alvo no formato YYYY-MM-DD"),
     empresa_id: int = Query(..., gt=0, description="Empresa para filtragem"),
     limit: int = Query(500, ge=1, le=1000, description="Limite de pedidos por agrupamento"),
+    tipo: Optional[TipoEntregaEnum] = Query(
+        None,
+        description="Filtra por tipo de pedido (DELIVERY, BALCAO, MESA). Se informado, retorna apenas pedidos deste tipo.",
+    ),
     svc: PedidoAdminService = Depends(get_pedido_admin_service),
 ):
     return svc.listar_kanban(
         date_filter=date_filter,
         empresa_id=empresa_id,
         limit=limit,
+        tipo=tipo,
     )
 
 

@@ -147,11 +147,13 @@ class PedidoAdminService:
         empresa_id: int,
         date_filter: date,
         limit: int = 500,
+        tipo: Optional[TipoEntregaEnum] = None,
     ) -> KanbanAgrupadoResponse:
         return self.pedido_service.list_all_kanban(
             date_filter=date_filter,
             empresa_id=empresa_id,
             limit=limit,
+            tipo=tipo,
         )
 
     def obter_pedido(self, pedido_id: int, empresa_id: Optional[int] = None) -> PedidoResponseCompletoTotal:

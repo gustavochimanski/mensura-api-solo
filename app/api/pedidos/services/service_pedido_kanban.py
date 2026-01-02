@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime as dt, timedelta
 from decimal import Decimal
+from typing import Optional
 from sqlalchemy import and_, func
 from sqlalchemy.orm import Session, joinedload
 
@@ -14,7 +15,7 @@ from app.api.pedidos.schemas.schema_pedido import (
     ClienteKanbanSimplificado,
     PedidoPagamentoResumoKanban,
 )
-from app.api.shared.schemas.schema_shared_enums import PedidoStatusEnum
+from app.api.shared.schemas.schema_shared_enums import PedidoStatusEnum, TipoEntregaEnum
 from app.api.pedidos.services.service_pedido_helpers import build_pagamento_resumo
 from app.utils.logger import logger
 from app.api.cadastros.repositories.repo_cliente import ClienteRepository
@@ -389,13 +390,85 @@ class KanbanService:
         )
 
     def list_all_kanban(
-        self, date_filter: date, empresa_id: int = 1, limit: int = 500
+        self, 
+        date_filter: date, 
+        empresa_id: int = 1, 
+        limit: int = 500,
+        tipo: Optional[TipoEntregaEnum] = None,
     ) -> KanbanAgrupadoResponse:
         """
         Lista todos os pedidos para visualização no Kanban, agrupados por categoria.
         
         Usa o modelo unificado PedidoUnificadoModel para buscar todos os tipos de pedidos.
+        
+        Args:
+            date_filter: Data para filtrar os pedidos
+            empresa_id: ID da empresa
+            limit: Limite de pedidos por categoria
+            tipo: Tipo de pedido para filtrar (DELIVERY, BALCAO, MESA). Se informado, retorna apenas este tipo.
         """
+        # Se um tipo específico foi informado, retorna apenas esse tipo
+        if tipo:
+            if tipo == TipoEntregaEnum.DELIVERY:
+                pedidos_delivery = self.repo.list_all_kanban(
+                    date_filter=date_filter, empresa_id=empresa_id, limit=limit * 2
+                )
+                pedidos_delivery_list = [self._processar_pedido_delivery(p) for p in pedidos_delivery]
+                pedidos_delivery_list.sort(key=lambda p: p.data_criacao, reverse=True)
+                pedidos_delivery_list = pedidos_delivery_list[:limit]
+                return KanbanAgrupadoResponse(
+                    delivery=pedidos_delivery_list,
+                    balcao=[],
+                    mesas=[],
+                )
+            elif tipo == TipoEntregaEnum.MESA:
+                try:
+                    pedidos_mesa = self._buscar_pedidos_por_tipo(
+                        tipo_pedido=TipoEntrega.MESA.value,
+                        date_filter=date_filter,
+                        empresa_id=empresa_id,
+                        limit=limit
+                    )
+                    pedidos_mesas_list = [self._processar_pedido_mesa(p) for p in pedidos_mesa]
+                    pedidos_mesas_list.sort(key=lambda p: p.data_criacao, reverse=True)
+                    pedidos_mesas_list = pedidos_mesas_list[:limit]
+                    return KanbanAgrupadoResponse(
+                        delivery=[],
+                        balcao=[],
+                        mesas=pedidos_mesas_list,
+                    )
+                except Exception as e:
+                    logger.warning(f"[Kanban] Erro ao buscar pedidos de mesa: {e}.")
+                    return KanbanAgrupadoResponse(
+                        delivery=[],
+                        balcao=[],
+                        mesas=[],
+                    )
+            elif tipo == TipoEntregaEnum.BALCAO:
+                try:
+                    pedidos_balcao = self._buscar_pedidos_por_tipo(
+                        tipo_pedido=TipoEntrega.BALCAO.value,
+                        date_filter=date_filter,
+                        empresa_id=empresa_id,
+                        limit=limit
+                    )
+                    pedidos_balcao_list = [self._processar_pedido_balcao(p) for p in pedidos_balcao]
+                    pedidos_balcao_list.sort(key=lambda p: p.data_criacao, reverse=True)
+                    pedidos_balcao_list = pedidos_balcao_list[:limit]
+                    return KanbanAgrupadoResponse(
+                        delivery=[],
+                        balcao=pedidos_balcao_list,
+                        mesas=[],
+                    )
+                except Exception as e:
+                    logger.warning(f"[Kanban] Erro ao buscar pedidos de balcão: {e}.")
+                    return KanbanAgrupadoResponse(
+                        delivery=[],
+                        balcao=[],
+                        mesas=[],
+                    )
+        
+        # Se nenhum tipo foi informado, retorna todos os tipos (comportamento original)
         # Busca pedidos de DELIVERY
         pedidos_delivery = self.repo.list_all_kanban(
             date_filter=date_filter, empresa_id=empresa_id, limit=limit * 2
