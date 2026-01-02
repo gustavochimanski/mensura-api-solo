@@ -407,8 +407,8 @@ class PedidoAdminService:
         if not pedido:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
         
-        # Valida meio de pagamento se fornecido
-        if payload and payload.meio_pagamento_id:
+        # Valida e atualiza meio de pagamento se fornecido
+        if payload and payload.meio_pagamento_id is not None:
             from app.api.cadastros.services.service_meio_pagamento import MeioPagamentoService
             meio_pagamento = MeioPagamentoService(self.db).get(payload.meio_pagamento_id)
             if not meio_pagamento or not meio_pagamento.ativo:
@@ -421,6 +421,12 @@ class PedidoAdminService:
         
         # Marca como pago
         pedido.pago = True
+        
+        # IMPORTANTE: Faz commit e refresh ANTES de acessar o relacionamento meio_pagamento
+        # Isso garante que o meio_pagamento_id seja persistido e o relacionamento seja atualizado
+        if payload and (payload.meio_pagamento_id is not None or payload.troco_para is not None):
+            self.db.commit()
+            self.db.refresh(pedido)
         
         # Prepara observações para o histórico
         meio_pagamento_nome = pedido.meio_pagamento.nome if pedido.meio_pagamento else "N/A"
@@ -455,11 +461,53 @@ class PedidoAdminService:
             return self.mesa_service.reabrir(pedido_id)
         if tipo == TipoEntregaEnum.BALCAO:
             return self.balcao_service.reabrir(pedido_id)
-        return self.pedido_service.atualizar_status(
-            pedido_id=pedido_id,
-            novo_status=PedidoStatusEnum.P,
-            user_id=0,
+        # Delivery e Retirada: reabre com método específico
+        if tipo in {TipoEntregaEnum.DELIVERY, TipoEntregaEnum.RETIRADA}:
+            return self._reabrir_delivery(pedido_id)
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Reabertura de pedido não suportada para este tipo de pedido.",
         )
+    
+    def _reabrir_delivery(self, pedido_id: int) -> PedidoResponseCompleto:
+        """Reabre um pedido delivery/retirada que foi entregue ou cancelado."""
+        pedido = self.repo.get_pedido(pedido_id)
+        if not pedido:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
+        
+        # Valida que o pedido pode ser reaberto (deve estar ENTREGUE ou CANCELADO)
+        status_atual = pedido.status
+        if status_atual not in {PedidoStatusEnum.E.value, PedidoStatusEnum.C.value}:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                f"Não é possível reabrir um pedido com status '{status_atual}'. Apenas pedidos ENTREGUE ou CANCELADO podem ser reabertos."
+            )
+        
+        # Reseta o campo pago para False ao reabrir
+        pedido.pago = False
+        
+        # Atualiza status para PENDENTE
+        status_anterior = pedido.status
+        pedido.status = PedidoStatusEnum.P.value
+        
+        # Prepara observações para o histórico
+        observacoes = f"Pedido reaberto. Status anterior: {status_anterior}"
+        
+        # Registra no histórico
+        self.repo.add_status_historico(
+            pedido.id,
+            PedidoStatusEnum.P.value,
+            motivo="Pedido reaberto",
+            observacoes=observacoes,
+            criado_por_id=None,
+        )
+        
+        # Força flush para garantir que as alterações sejam enviadas ao banco
+        self.db.flush()
+        self.db.commit()
+        self.db.refresh(pedido)
+        
+        return self.pedido_service.response_builder.pedido_to_response_completo(pedido)
 
     # ------------------------------------------------------------------ #
     # Itens
