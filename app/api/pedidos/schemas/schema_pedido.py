@@ -1,7 +1,10 @@
 from enum import Enum
-from typing import List, Optional, Union
+from typing import List, Optional, Union, TYPE_CHECKING
 from datetime import datetime
 from pydantic import BaseModel, ConfigDict, condecimal, Field, field_validator, model_validator
+
+if TYPE_CHECKING:
+    from app.api.pedidos.schemas.schema_pedido import ProdutosPedidoOut
 
 from app.api.cadastros.schemas.schema_meio_pagamento import MeioPagamentoResponse, MeioPagamentoTipoEnum
 from app.api.shared.schemas.schema_shared_enums import (
@@ -26,6 +29,13 @@ from app.api.cadastros.schemas.schema_cupom import CupomOut
 from app.api.cardapio.schemas.schema_transacao_pagamento import TransacaoResponse
 from app.api.pedidos.schemas.schema_pedido_status_historico import PedidoStatusHistoricoOut
 from app.api.empresas.schemas.schema_empresa import EmpresaResponse
+
+
+class CupomOutComProdutos(CupomOut):
+    """Cupom estendido com produtos do pedido"""
+    produtos: Optional["ProdutosPedidoOut"] = Field(default=None)
+    
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ClienteKanbanSimplificado(BaseModel):
@@ -469,7 +479,7 @@ class PedidoResponseCompletoTotal(BaseModel):
     empresa: Optional[EmpresaResponse] = None
     entregador: Optional[EntregadorOut] = None
     meio_pagamento: Optional[MeioPagamentoResponse] = None
-    cupom: Optional[CupomOut] = None
+    cupom: Optional["CupomOutComProdutos"] = None
     transacao: Optional[TransacaoResponse] = None
     historicos: List[PedidoStatusHistoricoOut] = Field(default_factory=list)
     tipo_entrega: TipoEntregaEnum
@@ -487,10 +497,8 @@ class PedidoResponseCompletoTotal(BaseModel):
     endereco_geography: Optional[str] = None  # Ponto geográfico para consultas avançadas
     data_criacao: datetime
     data_atualizacao: datetime
-    itens: List[ItemPedidoResponse]
     pagamento: PedidoPagamentoResumo | None = None
     pago: bool = False
-    produtos: ProdutosPedidoOut = Field(default_factory=ProdutosPedidoOut)
     model_config = ConfigDict(from_attributes=True)
 
 

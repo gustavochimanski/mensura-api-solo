@@ -3,6 +3,7 @@ from __future__ import annotations
 from app.api.pedidos.models.model_pedido_unificado import PedidoUnificadoModel
 from app.api.cadastros.schemas.schema_cliente import ClienteOut
 from app.api.cadastros.schemas.schema_cupom import CupomOut
+from app.api.pedidos.schemas.schema_pedido import CupomOutComProdutos
 from app.api.cadastros.schemas.schema_endereco import EnderecoOut
 from app.api.cadastros.schemas.schema_entregador import EntregadorOut
 from app.api.cadastros.schemas.schema_meio_pagamento import MeioPagamentoResponse
@@ -283,7 +284,26 @@ class PedidoResponseBuilder:
             empresa=EmpresaResponse.model_validate(pedido.empresa) if pedido.empresa else None,
             entregador=EntregadorOut.model_validate(pedido.entregador) if pedido.entregador else None,
             meio_pagamento=MeioPagamentoResponse.model_validate(pedido.meio_pagamento) if pedido.meio_pagamento else None,
-            cupom=CupomOut.model_validate(pedido.cupom) if pedido.cupom else None,
+            cupom=CupomOutComProdutos(
+                **CupomOut.model_validate(pedido.cupom).model_dump(),
+                produtos=PedidoResponseBuilder._build_produtos(pedido)
+            ) if pedido.cupom else CupomOutComProdutos(
+                id=0,
+                codigo="",
+                descricao=None,
+                desconto_valor=None,
+                desconto_percentual=None,
+                ativo=False,
+                validade_inicio=None,
+                validade_fim=None,
+                created_at=pedido.data_criacao if hasattr(pedido, "data_criacao") else getattr(pedido, "created_at", None),
+                updated_at=pedido.data_atualizacao if hasattr(pedido, "data_atualizacao") else getattr(pedido, "updated_at", None),
+                monetizado=False,
+                valor_por_lead=None,
+                link_redirecionamento=None,
+                empresas=[],
+                produtos=PedidoResponseBuilder._build_produtos(pedido)
+            ),
             transacao=TransacaoResponse.model_validate(pedido.transacao) if pedido.transacao else None,
             historicos=[PedidoResponseBuilder.build_historico_response(h) for h in pedido.historico] if pedido.historico else [],
             tipo_entrega=pedido.tipo_entrega if isinstance(pedido.tipo_entrega, TipoEntregaEnum)
@@ -302,23 +322,8 @@ class PedidoResponseBuilder:
             endereco_geography=str(getattr(pedido, "endereco_geo", None)) if getattr(pedido, "endereco_geo", None) is not None else None,
             data_criacao=getattr(pedido, "data_criacao", getattr(pedido, "created_at", None)),
             data_atualizacao=getattr(pedido, "data_atualizacao", getattr(pedido, "updated_at", None)),
-            itens=[
-                ItemPedidoResponse(
-                    id=it.id,
-                    produto_cod_barras=getattr(it, "produto_cod_barras", None),
-                    combo_id=getattr(it, "combo_id", None),
-                    receita_id=getattr(it, "receita_id", None),
-                    quantidade=it.quantidade,
-                    preco_unitario=float(it.preco_unitario or 0),
-                    observacao=it.observacao,
-                    produto_descricao_snapshot=getattr(it, "produto_descricao_snapshot", None),
-                    produto_imagem_snapshot=getattr(it, "produto_imagem_snapshot", None),
-                )
-                for it in pedido.itens
-            ],
             pagamento=pagamento,
             pago=getattr(pedido, "pago", False),
-            produtos=PedidoResponseBuilder._build_produtos(pedido),
         )
 
     @staticmethod
