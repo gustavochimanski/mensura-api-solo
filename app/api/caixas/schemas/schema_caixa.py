@@ -153,3 +153,86 @@ class RetiradaResponse(BaseModel):
     
     model_config = ConfigDict(from_attributes=True)
 
+# ==================== SCHEMAS PARA SISTEMA ANTIGO (router_caixa_admin) ====================
+
+class CaixaCreate(BaseModel):
+    """Schema para criar/abrir um caixa (sistema antigo)"""
+    empresa_id: int = Field(..., gt=0, description="ID da empresa")
+    valor_inicial: Decimal = Field(..., ge=0, description="Valor inicial em dinheiro no caixa")
+    data_hora_abertura: Optional[datetime] = Field(None, description="Data e hora da abertura (opcional, usa timestamp atual se não informado)")
+    observacoes_abertura: Optional[str] = Field(None, max_length=500)
+
+class CaixaUpdate(BaseModel):
+    """Schema para atualizar um caixa (sistema antigo - não usado frequentemente)"""
+    pass  # Placeholder caso seja necessário no futuro
+
+class CaixaFechamentoRequest(BaseModel):
+    """Schema para fechar um caixa (sistema antigo)"""
+    saldo_real: Decimal = Field(..., ge=0, description="Valor real contado no fechamento (dinheiro físico)")
+    data_hora_fechamento: Optional[datetime] = Field(None, description="Data e hora do fechamento (opcional, usa timestamp atual se não informado)")
+    observacoes_fechamento: Optional[str] = Field(None, max_length=500)
+    conferencias: List[ConferenciaMeioPagamento] = Field(default_factory=list, description="Conferências por tipo de meio de pagamento")
+
+class CaixaResponse(BaseModel):
+    """Schema de resposta para caixa (sistema antigo)"""
+    id: int
+    empresa_id: int
+    usuario_id_abertura: int
+    usuario_id_fechamento: Optional[int] = None
+    valor_inicial: float
+    valor_final: Optional[float] = None
+    saldo_esperado: Optional[float] = None
+    saldo_real: Optional[float] = None
+    diferenca: Optional[float] = None
+    status: str
+    data_abertura: datetime
+    data_fechamento: Optional[datetime] = None
+    data_hora_abertura: Optional[datetime] = None
+    data_hora_fechamento: Optional[datetime] = None
+    observacoes_abertura: Optional[str] = None
+    observacoes_fechamento: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    empresa_nome: Optional[str] = None
+    usuario_abertura_nome: Optional[str] = None
+    usuario_fechamento_nome: Optional[str] = None
+    
+    model_config = ConfigDict(from_attributes=True)
+
+class CaixaResumoResponse(BaseModel):
+    """Resumo do caixa para listagem (sistema antigo)"""
+    id: int
+    empresa_id: int
+    empresa_nome: Optional[str] = None
+    usuario_abertura_nome: Optional[str] = None
+    valor_inicial: float
+    valor_final: Optional[float] = None
+    saldo_esperado: Optional[float] = None
+    saldo_real: Optional[float] = None
+    diferenca: Optional[float] = None
+    status: str
+    data_abertura: datetime
+    data_fechamento: Optional[datetime] = None
+    data_hora_abertura: Optional[datetime] = None
+    data_hora_fechamento: Optional[datetime] = None
+    
+    model_config = ConfigDict(from_attributes=True)
+
+class CaixaValoresEsperadosResponse(BaseModel):
+    """Valores esperados por tipo de pagamento para um caixa aberto (sistema antigo)"""
+    caixa_id: int
+    empresa_id: int
+    data_abertura: datetime
+    valor_inicial_dinheiro: float
+    valores_por_meio: List[CaixaConferenciaEsperadoResponse]
+    total_esperado_dinheiro: float  # Valor inicial + entradas - saídas
+    
+    model_config = ConfigDict(from_attributes=True)
+
+class CaixaConferenciaResumoResponse(BaseModel):
+    """Resumo das conferências do caixa fechado (sistema antigo)"""
+    caixa_id: int
+    conferencias: List[ConferenciaMeioPagamentoResponse]
+    
+    model_config = ConfigDict(from_attributes=True)
+
