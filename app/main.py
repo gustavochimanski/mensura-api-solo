@@ -31,7 +31,8 @@ from app.api.empresas.router.router import api_empresas
 from app.api.pedidos.router.router import api_pedidos
 from app.api.relatorios.router.router import router as relatorios_router
 from app.api.notifications.router.router import router as notifications_router
-from app.api.caixas.router.router import router as caixa_router
+# Sistema de Caixa removido - não usado pelo frontend
+# from app.api.caixas.router.router import router as caixa_router
 from app.api.localizacao.router.router_localizacao import router as localizacao_router
 from app.api.catalogo.router.router import router as catalogo_router
 from app.api.chatbot.router.router import router as chatbot_router
@@ -168,9 +169,10 @@ async def health():
 # ───────────────────────────
 # Monitoring - Monitoramento e Métricas
 # ───────────────────────────
+# Mantido apenas para Prometheus - não usado pelo frontend
 from app.api.monitoring.router import router as monitoring_router, router_public as monitoring_router_public
-app.include_router(monitoring_router_public)  # Métricas públicas (sem auth)
-app.include_router(monitoring_router)  # Logs com autenticação
+app.include_router(monitoring_router_public)  # Métricas públicas (sem auth) - usado por Prometheus
+# app.include_router(monitoring_router)  # Logs com autenticação - não usado pelo frontend
 #
 # ───────────────────────────
 # Routers
@@ -183,7 +185,8 @@ app.include_router(api_empresas)
 app.include_router(api_pedidos)
 app.include_router(relatorios_router)
 app.include_router(notifications_router)
-app.include_router(caixa_router)
+# Sistema de Caixa removido - não usado pelo frontend
+# app.include_router(caixa_router)
 app.include_router(localizacao_router)
 app.include_router(catalogo_router)
 app.include_router(chatbot_router)
