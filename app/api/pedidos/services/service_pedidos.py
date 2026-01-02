@@ -24,7 +24,7 @@ from app.api.pedidos.utils.helpers import enum_value
 
 
 class PedidoService:
-    """Service unificado para todos os tipos de pedidos."""
+    """Service unificado para todos os tipos de pedids."""
     
     def __init__(self, db: Session, produto_contract: IProdutoContract | None = None):
         self.db = db
