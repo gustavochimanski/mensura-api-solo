@@ -28,16 +28,20 @@ from app.api.pedidos.schemas.schema_pedido_status_historico import PedidoStatusH
 from app.api.empresas.schemas.schema_empresa import EmpresaResponse
 
 
+class ClienteKanbanSimplificado(BaseModel):
+    """Schema simplificado de cliente para kanban - apenas campos usados pelo front"""
+    id: Optional[int] = None
+    nome: Optional[str] = None
+    telefone: Optional[str] = None
+
+
 class MeioPagamentoKanbanResponse(BaseModel):
-    """Schema simplificado para meio de pagamento no kanban (sem timestamps)"""
-    id: int
-    nome: str
-    tipo: MeioPagamentoTipoEnum
-    ativo: bool
-    model_config = ConfigDict(from_attributes=True)
+    """Schema simplificado para meio de pagamento no kanban - apenas nome usado pelo front"""
+    nome: Optional[str] = None
 
 
 class PedidoPagamentoResumo(BaseModel):
+    """Schema completo de resumo de pagamento"""
     status: PagamentoStatusEnum | None = None
     esta_pago: bool = False
     valor: float | None = None
@@ -51,33 +55,38 @@ class PedidoPagamentoResumo(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class PedidoPagamentoResumoKanban(BaseModel):
+    """Schema simplificado de pagamento para kanban - apenas campos usados pelo front"""
+    meio_pagamento_nome: Optional[str] = None
+    esta_pago: Optional[bool] = None
+
+
 # ======================================================================
 # ============================ ADMIN ===================================
 # ======================================================================
 class PedidoKanbanResponse(BaseModel):
+    """Schema simplificado para kanban - apenas campos usados pelo front"""
     id: int
     status: PedidoStatusEnum
-    cliente: ClienteOut | None = None
+    cliente: Optional[ClienteKanbanSimplificado] = None
     valor_total: float
     data_criacao: datetime
     observacao_geral: Optional[str] = None
-    endereco: str | None = None
-    meio_pagamento: Optional[MeioPagamentoKanbanResponse] = None  # Objeto simplificado do meio de pagamento
-    entregador: dict | None = None  # {"id": int, "nome": str}
-    pagamento: PedidoPagamentoResumo | None = None
-    acertado_entregador: bool | None = None
-    tempo_entrega_minutos: float | None = None
-    troco_para: Optional[float] = None  # Valor do troco (para pagamento em dinheiro)
-    tipo_pedido: Optional[str] = None  # "DELIVERY", "MESA", "BALCAO" - para identificar origem
-    numero_pedido: Optional[str] = None  # Número do pedido (ex: "PED-001", "M123")
-    # Campos para mesa/balcão
-    mesa_id: Optional[int] = None  # ID da mesa
-    mesa: Optional[dict] = None  # Objeto mesa {"id": int}
-    mesa_numero: Optional[str] = None  # Número da mesa (ex: "M12", "12")
-    referencia_mesa: Optional[str] = None  # Referência da mesa (ex: "Mesa 12", "M12")
-    # Campos alternativos para cliente
-    nome_cliente: Optional[str] = None  # Nome do cliente (alternativa ao objeto cliente)
-    telefone_cliente: Optional[str] = None  # Telefone do cliente (alternativa ao objeto cliente)
+    endereco: Optional[str] = None
+    meio_pagamento: Optional[MeioPagamentoKanbanResponse] = None
+    entregador: Optional[dict] = None  # Record<string, unknown> conforme front
+    pagamento: Optional[PedidoPagamentoResumoKanban] = None
+    acertado_entregador: Optional[bool] = None
+    tempo_entrega_minutos: Optional[float] = None
+    troco_para: Optional[float] = None
+    tipo_pedido: Optional[str] = None
+    telefone_cliente: Optional[str] = None
+    nome_cliente: Optional[str] = None
+    mesa_id: Optional[int] = None
+    mesa: Optional[dict] = None  # {"id": int}
+    numero_pedido: Optional[str] = None
+    mesa_numero: Optional[str] = None
+    referencia_mesa: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
 
 

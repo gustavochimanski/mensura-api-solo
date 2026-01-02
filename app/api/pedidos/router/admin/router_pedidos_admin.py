@@ -98,6 +98,26 @@ def obter_pedido(
     empresa_id: Optional[int] = Query(None, description="ID da empresa para validação (opcional)"),
     svc: PedidoAdminService = Depends(get_pedido_admin_service),
 ):
+    """
+    Obtém os detalhes completos de um pedido específico.
+
+    Esta rota retorna todas as informações de um pedido, incluindo itens,
+    histórico, status e demais dados relacionados. O parâmetro empresa_id
+    é opcional e pode ser usado para validação adicional de permissões.
+
+    Args:
+        pedido_id: Identificador único do pedido (deve ser maior que 0).
+        empresa_id: ID da empresa para validação de acesso (opcional).
+        svc: Serviço de administração de pedidos (injetado via dependência).
+
+    Returns:
+        PedidoResponseCompletoTotal: Objeto contendo todos os dados do pedido,
+            incluindo informações completas e totais.
+
+    Raises:
+        HTTPException: 404 se o pedido não for encontrado.
+        HTTPException: 403 se o usuário não tiver permissão para acessar o pedido.
+    """
     return svc.obter_pedido(pedido_id, empresa_id=empresa_id)
 
 
