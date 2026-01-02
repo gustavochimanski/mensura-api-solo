@@ -2,8 +2,9 @@ from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional, List
 from datetime import datetime
 from decimal import Decimal
+from enum import Enum
 
-class CaixaStatusEnum(str):
+class CaixaStatusEnum(str, Enum):
     ABERTO = "ABERTO"
     FECHADO = "FECHADO"
 
@@ -113,7 +114,7 @@ class CaixaValoresEsperadosResponse(BaseModel):
 
 # ==================== SCHEMAS DE RETIRADA ====================
 
-class RetiradaTipoEnum(str):
+class RetiradaTipoEnum(str, Enum):
     SANGRIA = "SANGRIA"
     DESPESA = "DESPESA"
 
