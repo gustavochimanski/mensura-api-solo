@@ -486,9 +486,9 @@ class PedidoAdminService:
         # Reseta o campo pago para False ao reabrir
         pedido.pago = False
         
-        # Atualiza status para IMPRESSÃO (I)
+        # Atualiza status para PENDENTE (P)
         status_anterior = pedido.status
-        pedido.status = PedidoStatusEnum.I.value
+        pedido.status = PedidoStatusEnum.P.value
         
         # Prepara observações para o histórico
         observacoes = f"Pedido reaberto. Status anterior: {status_anterior}"
@@ -496,7 +496,7 @@ class PedidoAdminService:
         # Registra no histórico
         self.repo.add_status_historico(
             pedido.id,
-            PedidoStatusEnum.I.value,
+            PedidoStatusEnum.P.value,
             motivo="Pedido reaberto",
             observacoes=observacoes,
             criado_por_id=None,
