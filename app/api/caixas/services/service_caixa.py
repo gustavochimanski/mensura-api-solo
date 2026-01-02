@@ -74,6 +74,7 @@ class CaixaService:
             empresa_id=data.empresa_id,
             usuario_id_abertura=usuario_id,
             valor_inicial=data.valor_inicial,
+            data_hora_abertura=data.data_hora_abertura,
             observacoes_abertura=data.observacoes_abertura,
             status="ABERTO"
         )
@@ -146,6 +147,7 @@ class CaixaService:
         caixa = self.repo.fechar_caixa(
             caixa=caixa,
             saldo_real=data.saldo_real,
+            data_hora_fechamento=data.data_hora_fechamento,
             observacoes_fechamento=data.observacoes_fechamento,
             usuario_id_fechamento=usuario_id
         )
@@ -320,6 +322,8 @@ class CaixaService:
             status=caixa.status,
             data_abertura=caixa.data_abertura,
             data_fechamento=caixa.data_fechamento,
+            data_hora_abertura=caixa.data_hora_abertura,
+            data_hora_fechamento=caixa.data_hora_fechamento,
             observacoes_abertura=caixa.observacoes_abertura,
             observacoes_fechamento=caixa.observacoes_fechamento,
             created_at=caixa.created_at,
@@ -344,6 +348,8 @@ class CaixaService:
             status=caixa.status,
             data_abertura=caixa.data_abertura,
             data_fechamento=caixa.data_fechamento,
+            data_hora_abertura=caixa.data_hora_abertura,
+            data_hora_fechamento=caixa.data_hora_fechamento,
         )
 
     # ==================== MÉTODOS DE RETIRADA ====================

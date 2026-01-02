@@ -342,6 +342,15 @@ class ProdutoPedidoAdicionalOut(BaseModel):
     total: float = 0.0
 
 
+class ComplementoPedidoOut(BaseModel):
+    complemento_id: int
+    complemento_nome: str
+    obrigatorio: bool
+    quantitativo: bool
+    total: float
+    adicionais: List[ProdutoPedidoAdicionalOut] = Field(default_factory=list)
+
+
 class ProdutoPedidoItemOut(BaseModel):
     item_id: Optional[int] = None
     produto_cod_barras: Optional[str] = None
@@ -350,7 +359,7 @@ class ProdutoPedidoItemOut(BaseModel):
     quantidade: int
     preco_unitario: float
     observacao: Optional[str] = None
-    adicionais: List[ProdutoPedidoAdicionalOut] = Field(default_factory=list)
+    complementos: List["ComplementoPedidoOut"] = Field(default_factory=list)
 
 
 class ReceitaPedidoOut(BaseModel):
@@ -360,7 +369,7 @@ class ReceitaPedidoOut(BaseModel):
     quantidade: int
     preco_unitario: float
     observacao: Optional[str] = None
-    adicionais: List[ProdutoPedidoAdicionalOut] = Field(default_factory=list)
+    complementos: List["ComplementoPedidoOut"] = Field(default_factory=list)
 
 
 class ComboPedidoOut(BaseModel):
@@ -369,7 +378,7 @@ class ComboPedidoOut(BaseModel):
     quantidade: int
     preco_unitario: float
     observacao: Optional[str] = None
-    adicionais: List[ProdutoPedidoAdicionalOut] = Field(default_factory=list)
+    complementos: List["ComplementoPedidoOut"] = Field(default_factory=list)
 
 
 class ProdutosPedidoOut(BaseModel):

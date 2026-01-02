@@ -36,8 +36,10 @@ class CaixaModel(Base):
     
     # Status e datas
     status = Column(CaixaStatus, nullable=False, default="ABERTO")
-    data_abertura = Column(DateTime, default=now_trimmed, nullable=False)
-    data_fechamento = Column(DateTime, nullable=True)
+    data_abertura = Column(DateTime, default=now_trimmed, nullable=False)  # Data/hora automática (timestamp)
+    data_fechamento = Column(DateTime, nullable=True)  # Data/hora automática (timestamp)
+    data_hora_abertura = Column(DateTime, nullable=True)  # Data/hora informada pelo usuário na abertura
+    data_hora_fechamento = Column(DateTime, nullable=True)  # Data/hora informada pelo usuário no fechamento
     
     # Observações
     observacoes_abertura = Column(String(500), nullable=True)

@@ -10,6 +10,7 @@ class CaixaStatusEnum(str, Enum):
 
 class CaixaBase(BaseModel):
     valor_inicial: Decimal = Field(..., ge=0, description="Valor inicial em dinheiro no caixa")
+    data_hora_abertura: Optional[datetime] = Field(None, description="Data e hora da abertura (opcional, usa timestamp atual se não informado)")
     observacoes_abertura: Optional[str] = Field(None, max_length=500)
 
 class CaixaCreate(CaixaBase):
@@ -26,6 +27,7 @@ class ConferenciaMeioPagamento(BaseModel):
 
 class CaixaFechamentoRequest(BaseModel):
     saldo_real: Decimal = Field(..., ge=0, description="Valor real contado no fechamento (dinheiro físico)")
+    data_hora_fechamento: Optional[datetime] = Field(None, description="Data e hora do fechamento (opcional, usa timestamp atual se não informado)")
     observacoes_fechamento: Optional[str] = Field(None, max_length=500)
     conferencias: List[ConferenciaMeioPagamento] = Field(default_factory=list, description="Conferências por tipo de meio de pagamento")
 
@@ -42,6 +44,8 @@ class CaixaResponse(BaseModel):
     status: str
     data_abertura: datetime
     data_fechamento: Optional[datetime] = None
+    data_hora_abertura: Optional[datetime] = None
+    data_hora_fechamento: Optional[datetime] = None
     observacoes_abertura: Optional[str] = None
     observacoes_fechamento: Optional[str] = None
     created_at: datetime
@@ -68,6 +72,8 @@ class CaixaResumoResponse(BaseModel):
     status: str
     data_abertura: datetime
     data_fechamento: Optional[datetime] = None
+    data_hora_abertura: Optional[datetime] = None
+    data_hora_fechamento: Optional[datetime] = None
     
     model_config = ConfigDict(from_attributes=True)
 
