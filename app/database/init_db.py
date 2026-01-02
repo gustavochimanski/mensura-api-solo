@@ -186,6 +186,7 @@ def criar_enums():
             # ENUMs do schema cadastros (caixa_status está em cadastros pois CaixaModel está em cadastros)
             enums_cadastros_caixas = [
                 ("cadastros", "caixa_status_enum", ["ABERTO", "FECHADO"]),
+                ("cadastros", "retirada_tipo_enum", ["SANGRIA", "DESPESA"]),
             ]
             
             # ENUMs do schema notifications
@@ -240,6 +241,7 @@ def importar_models():
     from app.api.catalogo.models.model_receita import ReceitaModel, ReceitaIngredienteModel, ReceitaAdicionalModel
     from app.api.financeiro.models.model_caixa_conferencia import CaixaConferenciaModel
     from app.api.caixas.models.model_caixa import CaixaModel
+    from app.api.caixas.models.model_retirada import RetiradaModel
     # ─── Models Cardápio ───────────────────────────────────────────
     from app.api.cardapio.models.model_transacao_pagamento_dv import TransacaoPagamentoModel
     # Modelos unificados (modelos antigos foram removidos)
