@@ -1,5 +1,5 @@
 """
-Service unificado para pedidos.
+Service unificado para pedids.
 """
 from __future__ import annotations
 
