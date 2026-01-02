@@ -111,3 +111,26 @@ class CaixaValoresEsperadosResponse(BaseModel):
     
     model_config = ConfigDict(from_attributes=True)
 
+# ==================== SCHEMAS DE RETIRADA ====================
+
+class RetiradaTipoEnum(str):
+    SANGRIA = "SANGRIA"
+    DESPESA = "DESPESA"
+
+class RetiradaCreate(BaseModel):
+    tipo: RetiradaTipoEnum = Field(..., description="Tipo de retirada: SANGRIA ou DESPESA")
+    valor: Decimal = Field(..., gt=0, description="Valor da retirada")
+    observacoes: Optional[str] = Field(None, max_length=500, description="Observações (obrigatório para DESPESA)")
+
+class RetiradaResponse(BaseModel):
+    id: int
+    caixa_id: int
+    tipo: str
+    valor: float
+    observacoes: Optional[str] = None
+    usuario_id: int
+    usuario_nome: Optional[str] = None
+    created_at: datetime
+    
+    model_config = ConfigDict(from_attributes=True)
+

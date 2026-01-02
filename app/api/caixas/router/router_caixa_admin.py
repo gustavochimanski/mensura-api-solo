@@ -10,7 +10,9 @@ from app.api.caixas.schemas.schema_caixa import (
     CaixaResponse,
     CaixaResumoResponse,
     CaixaValoresEsperadosResponse,
-    CaixaConferenciaResumoResponse
+    CaixaConferenciaResumoResponse,
+    RetiradaCreate,
+    RetiradaResponse
 )
 from app.api.cadastros.models.user_model import UserModel
 from app.core.admin_dependencies import get_current_user
@@ -195,4 +197,59 @@ def get_conferencias(
     logger.info(f"[Caixa] Conferências - caixa_id={caixa_id}")
     svc = CaixaService(db)
     return svc.get_conferencias(caixa_id)
+
+# ======================================================================
+# ======================= RETIRADAS DO CAIXA ============================
+@router.post("/{caixa_id}/retiradas", response_model=RetiradaResponse, status_code=status.HTTP_201_CREATED)
+def criar_retirada(
+    caixa_id: int = Path(..., description="ID do caixa", gt=0),
+    data: RetiradaCreate = Body(...),
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user),
+):
+    """
+    Registra uma retirada do caixa (sangria ou despesa).
+    
+    - **tipo**: Tipo de retirada (SANGRIA ou DESPESA)
+    - **valor**: Valor da retirada (obrigatório, > 0)
+    - **observacoes**: Observações (obrigatório para DESPESA, opcional para SANGRIA)
+    
+    Apenas caixas abertos podem receber retiradas.
+    """
+    logger.info(f"[Caixa] Criar retirada - caixa_id={caixa_id} tipo={data.tipo} valor={data.valor} usuario_id={current_user.id}")
+    svc = CaixaService(db)
+    return svc.criar_retirada(caixa_id, data, current_user.id)
+
+@router.get("/{caixa_id}/retiradas", response_model=List[RetiradaResponse], status_code=status.HTTP_200_OK)
+def listar_retiradas(
+    caixa_id: int = Path(..., description="ID do caixa", gt=0),
+    tipo: Optional[str] = Query(None, description="Filtrar por tipo (SANGRIA ou DESPESA)"),
+    db: Session = Depends(get_db),
+):
+    """
+    Lista todas as retiradas de um caixa.
+    
+    Query Parameters:
+    - **tipo** (opcional): Filtrar por tipo (SANGRIA ou DESPESA)
+    """
+    logger.info(f"[Caixa] Listar retiradas - caixa_id={caixa_id} tipo={tipo}")
+    svc = CaixaService(db)
+    return svc.listar_retiradas(caixa_id, tipo)
+
+@router.delete("/retiradas/{retirada_id}", status_code=status.HTTP_204_NO_CONTENT)
+def excluir_retirada(
+    retirada_id: int = Path(..., description="ID da retirada", gt=0),
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user),
+):
+    """
+    Exclui uma retirada do caixa.
+    
+    Apenas retiradas de caixas abertos podem ser excluídas.
+    Após a exclusão, o saldo esperado do caixa é recalculado automaticamente.
+    """
+    logger.info(f"[Caixa] Excluir retirada - retirada_id={retirada_id} usuario_id={current_user.id}")
+    svc = CaixaService(db)
+    svc.excluir_retirada(retirada_id)
+    return None
 
