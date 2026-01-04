@@ -143,21 +143,31 @@ async def websocket_notifications(
         resolved_empresa_id: str | None = None
         if empresa_id is not None:
             empresa_id = str(empresa_id)
+            logger.info(f"[WS_ROUTER] Validando empresa_id={empresa_id} contra empresas do usuário")
+            empresa_ids_usuario = [str(emp.id) for emp in user_empresas]
+            logger.info(f"[WS_ROUTER] Empresas do usuário: {empresa_ids_usuario}")
             if any(str(emp.id) == empresa_id for emp in user_empresas):
                 resolved_empresa_id = empresa_id
+                logger.info(f"[WS_ROUTER] Empresa {empresa_id} validada com sucesso")
             else:
+                logger.warning(f"[WS_ROUTER] Empresa {empresa_id} não pertence ao usuário. Empresas válidas: {empresa_ids_usuario}")
                 await _close_ws_policy(websocket, "empresa_id não pertence ao usuário")
                 return
         else:
             # Se não vier empresa_id e o usuário só tem 1, assume automaticamente.
+            logger.info(f"[WS_ROUTER] empresa_id não fornecido, verificando se usuário tem apenas 1 empresa")
             if len(user_empresas) == 1:
                 resolved_empresa_id = str(user_empresas[0].id)
+                logger.info(f"[WS_ROUTER] Usuário tem apenas 1 empresa, usando: {resolved_empresa_id}")
             else:
+                logger.warning(f"[WS_ROUTER] Usuário tem {len(user_empresas)} empresas, empresa_id é obrigatório")
                 await _close_ws_policy(websocket, "empresa_id é obrigatório para usuários multi-empresa")
                 return
 
         # 3) Agora sim aceita a conexão
+        logger.info(f"[WS_ROUTER] Todas as validações passaram, aceitando conexão WebSocket...")
         await websocket.accept()
+        logger.info(f"[WS_ROUTER] Conexão WebSocket aceita com sucesso!")
 
         # Normaliza IDs para garantir consistência
         user_id = str(user_id_int)
