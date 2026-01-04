@@ -1,5 +1,5 @@
 # app/api/mensura/repositories/auth_repo.py
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.api.cadastros.models.user_model import UserModel
 
@@ -18,6 +18,7 @@ class AuthRepository:
     def get_user_by_id(self, user_id: int) -> UserModel | None:
         return (
             self.db.query(UserModel)
+            .options(joinedload(UserModel.empresas))
             .filter(UserModel.id == user_id)
             .first()
         )
