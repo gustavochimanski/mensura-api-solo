@@ -214,13 +214,6 @@ async def websocket_notifications_legacy(
     NÃO confia no user_id do path; identidade vem do JWT (Authorization: Bearer <token>).
     """
     await websocket_notifications(websocket=websocket, empresa_id=empresa_id, db=db)
-        stats_after = websocket_manager.get_connection_stats()
-        logger.info(
-            f"[WS_ROUTER] WebSocket desconectado e removido - user_id={user_id}, empresa_id={empresa_id}. "
-            f"Conexões restantes: {stats_after['total_connections']}, "
-            f"Empresas conectadas: {stats_after['total_empresas_connected']}, "
-            f"Empresas: {stats_after['empresas_with_connections']}"
-        )
 
 async def _handle_client_message(websocket: WebSocket, user_id: str, empresa_id: str, message: Dict[str, Any]):
     """Processa mensagens recebidas do cliente"""
