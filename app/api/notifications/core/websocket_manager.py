@@ -1,5 +1,5 @@
 from fastapi import WebSocket, WebSocketDisconnect
-from typing import Dict, List, Set, Optional, Any
+from typing import Dict, List, Set, Optional, Any, Literal
 import json
 import logging
 import asyncio
@@ -63,8 +63,11 @@ class ConnectionManager:
             return
     
     async def connect(self, websocket: WebSocket, user_id: str, empresa_id: str):
-        """Aceita uma nova conexão WebSocket"""
-        await websocket.accept()
+        """
+        Registra uma nova conexão WebSocket.
+
+        IMPORTANTE: o `accept()` deve ser feito ANTES (após autenticação/validação) no endpoint WS.
+        """
         
         # Normaliza IDs para string para evitar inconsistências
         user_id = str(user_id)
@@ -140,6 +143,50 @@ class ConnectionManager:
             f"{stats['total_empresas_connected']} empresas conectadas, "
             f"Empresas: {stats['empresas_with_connections']}"
         )
+
+    async def emit_event(
+        self,
+        *,
+        event: str,
+        scope: Literal["empresa", "usuario"],
+        payload: Dict[str, Any],
+        empresa_id: str | None = None,
+        user_id: str | None = None,
+        required_route: str | None = None,
+    ) -> int | bool:
+        """
+        Envia um evento padronizado via WebSocket.
+
+        Envelope:
+        {
+          "type": "event",
+          "event": "<nome>",
+          "scope": "empresa" | "usuario",
+          "payload": {...},
+          "timestamp": "..."
+        }
+        """
+        message = {
+            "type": "event",
+            "event": event,
+            "scope": scope,
+            "payload": payload or {},
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+
+        if scope == "usuario":
+            if not user_id:
+                raise ValueError("user_id é obrigatório quando scope='usuario'")
+            return await self.send_to_user(str(user_id), message)
+
+        # scope == "empresa"
+        if not empresa_id:
+            raise ValueError("empresa_id é obrigatório quando scope='empresa'")
+
+        if required_route:
+            return await self.send_to_empresa_on_route(str(empresa_id), message, required_route=required_route)
+
+        return await self.send_to_empresa(str(empresa_id), message)
     
     async def disconnect(self, websocket: WebSocket):
         """Remove uma conexão WebSocket (async para ser consistente com o lock)."""

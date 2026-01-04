@@ -3,6 +3,7 @@ import logging
 from datetime import datetime
 
 from ..core.websocket_manager import websocket_manager
+from ..core.ws_events import WSEvents
 from ..core.event_publisher import EventPublisher
 from ..core.event_bus import event_bus, EventType
 
@@ -289,6 +290,16 @@ class PedidoNotificationService:
                 "empresa_id": empresa_id,
                 "timestamp": datetime.utcnow().isoformat()
             }
+
+            # Emite também o evento padronizado (compatível com o novo contrato),
+            # mantendo o formato antigo acima para não quebrar consumidores legados.
+            event_map = {
+                "kanban": WSEvents.PEDIDO_IMPRESSO,
+                "pedido_aprovado": WSEvents.PEDIDO_APROVADO,
+                "pedido_cancelado": WSEvents.PEDIDO_CANCELADO,
+                "pedido_entregue": WSEvents.PEDIDO_ENTREGUE,
+            }
+            ws_event = event_map.get(notification_type)
             
             # Se uma rota é requerida, envia apenas para clientes nessa rota
             if required_route:
@@ -297,9 +308,24 @@ class PedidoNotificationService:
                     notification_data, 
                     required_route
                 )
+                if ws_event:
+                    await websocket_manager.emit_event(
+                        event=ws_event,
+                        scope="empresa",
+                        empresa_id=empresa_id,
+                        payload={"pedido_id": data.get("pedido_id")},
+                        required_route=required_route,
+                    )
             else:
                 # Envia para todos os usuários da empresa conectados
                 sent_count = await websocket_manager.send_to_empresa(empresa_id, notification_data)
+                if ws_event:
+                    await websocket_manager.emit_event(
+                        event=ws_event,
+                        scope="empresa",
+                        empresa_id=empresa_id,
+                        payload={"pedido_id": data.get("pedido_id")},
+                    )
             
             return sent_count
                 

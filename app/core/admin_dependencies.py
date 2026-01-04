@@ -21,6 +21,22 @@ forbidden_exception = HTTPException(
     detail="Você não tem permissão para acessar este recurso",
 )
 
+def decode_access_token(access_token: str) -> dict:
+    """
+    Decodifica o JWT de access token e retorna o payload.
+    Mantém os mesmos parâmetros de validação usados pelo fluxo HTTP.
+    """
+    try:
+        return jwt.decode(
+            access_token,
+            SECRET_KEY,
+            algorithms=[ALGORITHM],
+            options={"verify_sub": False},
+        )
+    except JWTError as e:
+        logger.error(f"[AUTH] Erro ao decodificar JWT: {e}")
+        raise credentials_exception
+
 
 def get_current_user(
     request: Request,
@@ -38,19 +54,14 @@ def get_current_user(
     access_token = auth_header.replace("Bearer ", "")
 
     # 2. Decodifica o JWT
+    payload = decode_access_token(access_token)
+    raw_sub = payload.get("sub")
+    if raw_sub is None:
+        raise credentials_exception
     try:
-        payload = jwt.decode(
-            access_token,
-            SECRET_KEY,
-            algorithms=[ALGORITHM],
-            options={"verify_sub": False},
-        )
-        raw_sub = payload.get("sub")
-        if raw_sub is None:
-            raise credentials_exception
         user_id = int(raw_sub)
-    except (JWTError, ValueError) as e:
-        logger.error(f"[AUTH] Erro ao decodificar JWT: {e}")
+    except ValueError as e:
+        logger.error(f"[AUTH] 'sub' inválido no JWT: {e}")
         raise credentials_exception
 
     # 3. Busca o usuário no banco
