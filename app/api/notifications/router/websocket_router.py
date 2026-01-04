@@ -46,19 +46,26 @@ def _get_bearer_token_from_ws(websocket: WebSocket) -> str | None:
             return None
 
         parts = [p.strip() for p in proto.split(",") if p.strip()]
+        logger.info(f"[WS_AUTH] Protocol parts: {len(parts)} partes")
         if not parts:
+            logger.warning("[WS_AUTH] Protocol parts vazio após split")
             return None
 
         # Formato 1: ['mensura-bearer', '<token>'] ou ['bearer', '<token>']
         if len(parts) >= 2 and parts[0].lower() in ("mensura-bearer", "bearer"):
-            return parts[1]
+            token = parts[1]
+            logger.info(f"[WS_AUTH] Token extraído do formato 1 (primeiros 30 chars): {token[:30]}...")
+            return token
 
         # Formato 2: 'mensura-bearer.<token>' ou 'bearer.<token>'
         for p in parts:
             lower = p.lower()
             if lower.startswith("mensura-bearer.") or lower.startswith("bearer."):
-                return p.split(".", 1)[1].strip()
+                token = p.split(".", 1)[1].strip()
+                logger.info(f"[WS_AUTH] Token extraído do formato 2 (primeiros 30 chars): {token[:30]}...")
+                return token
 
+        logger.warning(f"[WS_AUTH] Nenhum formato de token reconhecido. Parts: {parts}")
         return None
     if auth_header.lower().startswith("bearer "):
         return auth_header.split(" ", 1)[1].strip()
@@ -90,16 +97,18 @@ async def websocket_notifications(
             await _close_ws_policy(websocket, "Authorization Bearer ausente ou malformado")
             return
         
-        logger.info(f"[WS_ROUTER] Token encontrado, decodificando...")
+        logger.info(f"[WS_ROUTER] Token encontrado, decodificando... (token length: {len(token)})")
 
         try:
             payload = decode_access_token(token)
+            logger.info(f"[WS_ROUTER] Token decodificado com sucesso. Payload keys: {list(payload.keys())}")
         except Exception as e:
-            logger.error(f"[WS_ROUTER] Erro ao decodificar token: {e}")
+            logger.error(f"[WS_ROUTER] Erro ao decodificar token: {e}", exc_info=True)
             await _close_ws_policy(websocket, "Token inválido ou expirado")
             return
             
         raw_sub = payload.get("sub")
+        logger.info(f"[WS_ROUTER] JWT sub extraído: {raw_sub}")
         if raw_sub is None:
             logger.warning(f"[WS_ROUTER] JWT sem sub - payload: {payload.keys()}")
             await _close_ws_policy(websocket, "JWT sem sub")
@@ -107,20 +116,27 @@ async def websocket_notifications(
 
         try:
             user_id_int = int(raw_sub)
-        except ValueError:
-            logger.error(f"[WS_ROUTER] JWT sub inválido: {raw_sub}")
+            logger.info(f"[WS_ROUTER] User ID convertido: {user_id_int}")
+        except ValueError as e:
+            logger.error(f"[WS_ROUTER] JWT sub inválido: {raw_sub} - erro: {e}")
             await _close_ws_policy(websocket, "JWT sub inválido")
             return
 
+        logger.info(f"[WS_ROUTER] Buscando usuário no banco: {user_id_int}")
         user = AuthRepository(db).get_user_by_id(user_id_int)
         if not user:
             logger.warning(f"[WS_ROUTER] Usuário não encontrado: {user_id_int}")
             await _close_ws_policy(websocket, "Usuário não encontrado")
             return
+        
+        logger.info(f"[WS_ROUTER] Usuário encontrado: {user_id_int}")
 
         # 2) Resolve/valida empresa_id (não confiamos cegamente na URL)
+        logger.info(f"[WS_ROUTER] Obtendo empresas do usuário...")
         user_empresas = list(getattr(user, "empresas", []) or [])
+        logger.info(f"[WS_ROUTER] Usuário tem {len(user_empresas)} empresa(s)")
         if not user_empresas:
+            logger.warning(f"[WS_ROUTER] Usuário sem empresas vinculadas")
             await _close_ws_policy(websocket, "Usuário sem empresas vinculadas")
             return
 
