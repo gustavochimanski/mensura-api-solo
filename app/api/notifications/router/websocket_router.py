@@ -133,10 +133,20 @@ async def websocket_notifications(
 
         # 2) Resolve/valida empresa_id (não confiamos cegamente na URL)
         logger.info(f"[WS_ROUTER] Obtendo empresas do usuário...")
-        user_empresas = list(getattr(user, "empresas", []) or [])
+        # Força o carregamento do relacionamento se ainda não foi carregado
+        try:
+            user_empresas = list(user.empresas) if hasattr(user, 'empresas') else []
+        except Exception as e:
+            logger.error(f"[WS_ROUTER] Erro ao acessar empresas do usuário: {e}")
+            user_empresas = []
+        
         logger.info(f"[WS_ROUTER] Usuário tem {len(user_empresas)} empresa(s)")
+        if user_empresas:
+            empresa_ids = [str(emp.id) for emp in user_empresas]
+            logger.info(f"[WS_ROUTER] IDs das empresas do usuário: {empresa_ids}")
+        
         if not user_empresas:
-            logger.warning(f"[WS_ROUTER] Usuário sem empresas vinculadas")
+            logger.warning(f"[WS_ROUTER] Usuário sem empresas vinculadas. Verifique a tabela cadastros.usuario_empresa")
             await _close_ws_policy(websocket, "Usuário sem empresas vinculadas")
             return
 
