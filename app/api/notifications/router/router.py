@@ -1,9 +1,5 @@
 from fastapi import APIRouter
-from .notification_router import router as notification_router
-from .subscription_router import router as subscription_router
-from .event_router import router as event_router
 from .websocket_router import router as websocket_router
-from .pedido_router import router as pedido_router
 from .historico_router import router as historico_router
 from .message_dispatch_router import router as message_dispatch_router
 
@@ -13,11 +9,10 @@ router = APIRouter(
     tags=["API - Notifications"]
 )
 
-# Inclui todos os sub-routers
-router.include_router(notification_router)
-router.include_router(subscription_router)
-router.include_router(event_router)
+# Inclui apenas os routers utilizados:
+# - websocket_router: WebSocket principal + rotas de estatísticas
+# - historico_router: Rotas de consulta/estatísticas (admin)
+# - message_dispatch_router: Disparo de mensagens (usado pelo frontend)
 router.include_router(websocket_router)
-router.include_router(pedido_router)
 router.include_router(historico_router)
 router.include_router(message_dispatch_router)
