@@ -25,10 +25,12 @@ def _get_bearer_token_from_ws(websocket: WebSocket) -> str | None:
     # Starlette normaliza headers; tentamos ambos por segurança.
     auth_header = websocket.headers.get("authorization") or websocket.headers.get("Authorization")
     
-    # Log para debug
+    # Log para debug - usando INFO para garantir que apareça
     all_headers = dict(websocket.headers) if hasattr(websocket, 'headers') else {}
-    logger.debug(f"[WS_AUTH] Headers recebidos: {list(all_headers.keys())}")
-    logger.debug(f"[WS_AUTH] Authorization header: {auth_header}")
+    logger.info(f"[WS_AUTH] Headers recebidos: {list(all_headers.keys())}")
+    logger.info(f"[WS_AUTH] Authorization header presente: {auth_header is not None}")
+    if auth_header:
+        logger.info(f"[WS_AUTH] Authorization header (primeiros 20 chars): {auth_header[:20]}...")
     
     if not auth_header:
         # Browser não permite setar Authorization no WebSocket nativo.
@@ -36,7 +38,9 @@ def _get_bearer_token_from_ws(websocket: WebSocket) -> str | None:
         #   new WebSocket(url, ['mensura-bearer', token])
         # Header chega como: "mensura-bearer, <token>"
         proto = websocket.headers.get("sec-websocket-protocol") or websocket.headers.get("Sec-WebSocket-Protocol")
-        logger.debug(f"[WS_AUTH] Sec-WebSocket-Protocol: {proto}")
+        logger.info(f"[WS_AUTH] Sec-WebSocket-Protocol presente: {proto is not None}")
+        if proto:
+            logger.info(f"[WS_AUTH] Sec-WebSocket-Protocol (primeiros 50 chars): {proto[:50]}...")
         if not proto:
             logger.warning("[WS_AUTH] Token não encontrado nem em Authorization nem em Sec-WebSocket-Protocol")
             return None
@@ -86,7 +90,7 @@ async def websocket_notifications(
             await _close_ws_policy(websocket, "Authorization Bearer ausente ou malformado")
             return
         
-        logger.debug(f"[WS_ROUTER] Token encontrado, decodificando...")
+        logger.info(f"[WS_ROUTER] Token encontrado, decodificando...")
 
         try:
             payload = decode_access_token(token)
