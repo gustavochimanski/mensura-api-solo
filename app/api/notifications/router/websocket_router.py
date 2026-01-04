@@ -5,9 +5,10 @@ import logging
 from datetime import datetime
 
 from ..core.websocket_manager import websocket_manager
-from ....core.admin_dependencies import get_current_user
+from ....core.admin_dependencies import get_current_user, decode_access_token
 from ....database.db_connection import get_db
 from sqlalchemy.orm import Session
+from app.api.auth.auth_repo import AuthRepository
 from app.api.empresas.repositories.empresa_repo import EmpresaRepository
 from app.config.settings import BASE_URL, CORS_ORIGINS
 
@@ -15,27 +16,113 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/ws", tags=["websocket"])
 
-@router.websocket("/notifications/{user_id}")
+async def _close_ws_policy(websocket: WebSocket, reason: str) -> None:
+    # 1008: Policy Violation (apropriado para auth inválida)
+    try:
+        await websocket.close(code=1008, reason=reason)
+    except Exception:
+        return
+
+def _get_bearer_token_from_ws(websocket: WebSocket) -> str | None:
+    # Starlette normaliza headers; tentamos ambos por segurança.
+    auth_header = websocket.headers.get("authorization") or websocket.headers.get("Authorization")
+    if not auth_header:
+        # Browser não permite setar Authorization no WebSocket nativo.
+        # Alternativa suportada: enviar o token via Sec-WebSocket-Protocol:
+        #   new WebSocket(url, ['mensura-bearer', token])
+        # Header chega como: "mensura-bearer, <token>"
+        proto = websocket.headers.get("sec-websocket-protocol") or websocket.headers.get("Sec-WebSocket-Protocol")
+        if not proto:
+            return None
+
+        parts = [p.strip() for p in proto.split(",") if p.strip()]
+        if not parts:
+            return None
+
+        # Formato 1: ['mensura-bearer', '<token>'] ou ['bearer', '<token>']
+        if len(parts) >= 2 and parts[0].lower() in ("mensura-bearer", "bearer"):
+            return parts[1]
+
+        # Formato 2: 'mensura-bearer.<token>' ou 'bearer.<token>'
+        for p in parts:
+            lower = p.lower()
+            if lower.startswith("mensura-bearer.") or lower.startswith("bearer."):
+                return p.split(".", 1)[1].strip()
+
+        return None
+    if auth_header.lower().startswith("bearer "):
+        return auth_header.split(" ", 1)[1].strip()
+    return None
+
+@router.websocket("/notifications")
 async def websocket_notifications(
     websocket: WebSocket, 
-    user_id: str, 
-    empresa_id: str = Query(..., description="ID da empresa")
+    empresa_id: str | None = Query(None, description="ID da empresa (será validado contra as empresas do usuário)"),
+    db: Session = Depends(get_db),
 ):
     """
     WebSocket endpoint para notificações em tempo real
     
-    Args:
-        user_id: ID do usuário
-        empresa_id: ID da empresa
+    Identidade é derivada do JWT (Authorization: Bearer <token>).
+    `empresa_id` pode ser usado para selecionar o escopo, mas é validado no banco.
     
     Nota: O frontend precisa se conectar a este endpoint. Funciona tanto localmente quanto na nuvem.
-    - Local: ws://localhost:8000/api/notifications/ws/notifications/{user_id}?empresa_id={empresa_id}
-    - Nuvem: wss://api.seudominio.com/api/notifications/ws/notifications/{user_id}?empresa_id={empresa_id}
+    - Local: ws://localhost:8000/api/notifications/ws/notifications?empresa_id={empresa_id}
+    - Nuvem: wss://api.seudominio.com/api/notifications/ws/notifications?empresa_id={empresa_id}
     """
+    user_id = "unknown"
     try:
+        # 1) Autentica via header Authorization (Bearer) ANTES do accept()
+        token = _get_bearer_token_from_ws(websocket)
+        if not token:
+            await _close_ws_policy(websocket, "Authorization Bearer ausente ou malformado")
+            return
+
+        payload = decode_access_token(token)
+        raw_sub = payload.get("sub")
+        if raw_sub is None:
+            await _close_ws_policy(websocket, "JWT sem sub")
+            return
+
+        try:
+            user_id_int = int(raw_sub)
+        except ValueError:
+            await _close_ws_policy(websocket, "JWT sub inválido")
+            return
+
+        user = AuthRepository(db).get_user_by_id(user_id_int)
+        if not user:
+            await _close_ws_policy(websocket, "Usuário não encontrado")
+            return
+
+        # 2) Resolve/valida empresa_id (não confiamos cegamente na URL)
+        user_empresas = list(getattr(user, "empresas", []) or [])
+        if not user_empresas:
+            await _close_ws_policy(websocket, "Usuário sem empresas vinculadas")
+            return
+
+        resolved_empresa_id: str | None = None
+        if empresa_id is not None:
+            empresa_id = str(empresa_id)
+            if any(str(emp.id) == empresa_id for emp in user_empresas):
+                resolved_empresa_id = empresa_id
+            else:
+                await _close_ws_policy(websocket, "empresa_id não pertence ao usuário")
+                return
+        else:
+            # Se não vier empresa_id e o usuário só tem 1, assume automaticamente.
+            if len(user_empresas) == 1:
+                resolved_empresa_id = str(user_empresas[0].id)
+            else:
+                await _close_ws_policy(websocket, "empresa_id é obrigatório para usuários multi-empresa")
+                return
+
+        # 3) Agora sim aceita a conexão
+        await websocket.accept()
+
         # Normaliza IDs para garantir consistência
-        user_id = str(user_id)
-        empresa_id = str(empresa_id)
+        user_id = str(user_id_int)
+        empresa_id = str(resolved_empresa_id)
         
         # Obtém informações do cliente (IP, host, etc)
         client_host = websocket.client.host if websocket.client else "unknown"
@@ -113,6 +200,20 @@ async def websocket_notifications(
             f"websocket_id={id(websocket)}"
         )
         await websocket_manager.disconnect(websocket)
+
+
+@router.websocket("/notifications/{_user_id}")
+async def websocket_notifications_legacy(
+    websocket: WebSocket,
+    _user_id: str,
+    empresa_id: str | None = Query(None, description="(LEGADO) ID da empresa; será validado"),
+    db: Session = Depends(get_db),
+):
+    """
+    Endpoint LEGADO para compatibilidade.
+    NÃO confia no user_id do path; identidade vem do JWT (Authorization: Bearer <token>).
+    """
+    await websocket_notifications(websocket=websocket, empresa_id=empresa_id, db=db)
         stats_after = websocket_manager.get_connection_stats()
         logger.info(
             f"[WS_ROUTER] WebSocket desconectado e removido - user_id={user_id}, empresa_id={empresa_id}. "
@@ -206,10 +307,10 @@ async def get_connection_stats(current_user = Depends(get_current_user)):
             **stats,
             "message": "Use estas informações para verificar se há conexões WebSocket ativas",
             "how_to_connect": {
-                "endpoint": "/api/notifications/ws/notifications/{user_id}?empresa_id={empresa_id}",
-                "example": f"/api/notifications/ws/notifications/1?empresa_id=1",
+                "endpoint": "/api/notifications/ws/notifications?empresa_id={empresa_id}",
+                "example": f"/api/notifications/ws/notifications?empresa_id=1",
                 "protocol": "WebSocket (ws:// ou wss://)",
-                "note": "As conexões são criadas quando o frontend se conecta ao endpoint WebSocket acima"
+                "note": "A conexão exige Authorization: Bearer <token>. user_id é derivado do JWT."
             }
         }
     except Exception as e:
@@ -247,12 +348,12 @@ async def check_empresa_connections(
             "all_connected_empresas": stats["empresas_with_connections"],
             "total_connections": stats["total_connections"],
             "empresas_details": stats.get("empresas_details", {}),
-            "message": "Conecte-se ao WebSocket em /api/notifications/ws/notifications/{user_id}?empresa_id={empresa_id} para receber notificações",
+            "message": "Conecte-se ao WebSocket em /api/notifications/ws/notifications?empresa_id={empresa_id} para receber notificações (Authorization Bearer obrigatório)",
             "how_to_connect": {
-                "endpoint": f"/api/notifications/ws/notifications/{{user_id}}?empresa_id={empresa_id}",
+                "endpoint": f"/api/notifications/ws/notifications?empresa_id={empresa_id}",
                 "protocol": "WebSocket (ws:// ou wss://)",
-                "example_url": f"ws://localhost:8000/api/notifications/ws/notifications/1?empresa_id={empresa_id}",
-                "note": "Substitua {user_id} pelo ID real do usuário. A conexão deve ser feita pelo frontend."
+                "example_url": f"ws://localhost:8000/api/notifications/ws/notifications?empresa_id={empresa_id}",
+                "note": "Envie Authorization: Bearer <token>. user_id é derivado do JWT."
             }
         }
     except Exception as e:
@@ -335,10 +436,8 @@ async def get_websocket_config(
             backend_url_clean = backend_url_clean.split("/")[0]
         
         # Constrói a URL do WebSocket (sempre aponta para o backend)
-        if user_id:
-            ws_url = f"{ws_protocol}{backend_url_clean}/api/notifications/ws/notifications/{user_id}?empresa_id={empresa_id}"
-        else:
-            ws_url = f"{ws_protocol}{backend_url_clean}/api/notifications/ws/notifications/{{user_id}}?empresa_id={empresa_id}"
+        # Identidade vem do JWT (Authorization: Bearer). Não usamos mais user_id no path.
+        ws_url = f"{ws_protocol}{backend_url_clean}/api/notifications/ws/notifications?empresa_id={empresa_id}"
         
         logger.info(
             f"[WS_CONFIG] Configuração WebSocket para empresa_id={empresa_id}, "
@@ -354,9 +453,9 @@ async def get_websocket_config(
             "frontend_supervisor_url": frontend_supervisor_url,
             "backend_url": f"{ws_protocol}{backend_url_clean}",
             "protocol": ws_protocol.rstrip("://"),
-            "endpoint": f"/api/notifications/ws/notifications/{{user_id}}?empresa_id={empresa_id}",
+            "endpoint": f"/api/notifications/ws/notifications?empresa_id={empresa_id}",
             "cors_origins": CORS_ORIGINS,
-            "note": "Substitua {user_id} pelo ID real do usuário ao conectar. WebSocket aponta para o backend (BASE_URL), não para o frontend."
+            "note": "Envie Authorization: Bearer <token> ao conectar. user_id é derivado do JWT; empresa_id é validado."
         }
     except HTTPException:
         raise
