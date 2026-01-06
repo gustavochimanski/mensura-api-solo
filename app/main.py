@@ -74,6 +74,29 @@ app.add_exception_handler(Exception, general_exception_handler)
 # Middlewares são executados na ORDEM REVERSA da adição (último adicionado = primeiro executado)
 # ───────────────────────────
 
+# Middleware de Logging para Webhook (adicionado antes de outros middlewares)
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+
+class WebhookLoggingMiddleware(BaseHTTPMiddleware):
+    """Middleware para logar todas as requisições, especialmente webhooks"""
+    async def dispatch(self, request: Request, call_next):
+        # Log especial para webhooks
+        if "/webhook" in request.url.path:
+            logger.info(f"🔔 WEBHOOK REQUEST: {request.method} {request.url.path}")
+            logger.info(f"   Query params: {dict(request.query_params)}")
+            logger.info(f"   Headers: {dict(request.headers)}")
+            logger.info(f"   Client: {request.client.host if request.client else 'unknown'}")
+        
+        response = await call_next(request)
+        
+        if "/webhook" in request.url.path:
+            logger.info(f"🔔 WEBHOOK RESPONSE: {response.status_code}")
+        
+        return response
+
+app.add_middleware(WebhookLoggingMiddleware)
+
 # Prometheus Middleware (para coletar métricas)
 from app.utils.prometheus_metrics import PrometheusMiddleware
 app.add_middleware(PrometheusMiddleware)
