@@ -825,6 +825,8 @@ async def webhook_verification(request: Request):
     Verificação do webhook do WhatsApp (Meta)
     A Meta envia um GET request para verificar o webhook
     """
+    from fastapi.responses import PlainTextResponse
+    
     mode = request.query_params.get("hub.mode")
     token = request.query_params.get("hub.verify_token")
     challenge = request.query_params.get("hub.challenge")
@@ -832,15 +834,23 @@ async def webhook_verification(request: Request):
     # Token de verificação - você pode mudar isso
     VERIFY_TOKEN = "meu_token_secreto_123"
 
+    # Log para debug
+    print(f"\n🔍 Verificação do webhook recebida:")
+    print(f"   Mode: {mode}")
+    print(f"   Token recebido: {token}")
+    print(f"   Token esperado: {VERIFY_TOKEN}")
+    print(f"   Challenge: {challenge}")
+
     if mode == "subscribe" and token == VERIFY_TOKEN:
         print("✅ Webhook verificado com sucesso!")
-        # Retornar o challenge exatamente como recebido (Facebook espera int ou string)
-        try:
-            return int(challenge)
-        except (ValueError, TypeError):
-            return challenge
+        # Retornar o challenge como texto puro (WhatsApp espera text/plain)
+        if challenge:
+            return PlainTextResponse(content=str(challenge))
+        else:
+            raise HTTPException(status_code=400, detail="Challenge não fornecido")
     else:
         print("❌ Falha na verificação do webhook")
+        print(f"   Motivo: mode={mode}, token_match={token == VERIFY_TOKEN}")
         raise HTTPException(status_code=403, detail="Falha na verificação")
 
 
