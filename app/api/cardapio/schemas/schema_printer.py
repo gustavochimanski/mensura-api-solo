@@ -47,6 +47,8 @@ from pydantic import BaseModel, Field, validator
 from typing import List, Optional
 from datetime import datetime
 
+from app.api.pedidos.schemas.schema_pedido import ProdutosPedidoOut
+
 
 class ItemPedidoPrinter(BaseModel):
     """Item de pedido formatado para impressão"""
@@ -122,6 +124,10 @@ class PedidoPendenteImpressaoResponse(BaseModel):
     cliente: str = Field(..., description="Nome do cliente")
     telefone_cliente: Optional[str] = Field(None, description="Telefone do cliente")
     itens: List[ItemPedidoPrinter] = Field(..., description="Lista de itens do pedido")
+    produtos: ProdutosPedidoOut = Field(
+        default_factory=ProdutosPedidoOut,
+        description="Produtos do pedido no padrão (itens/receitas/combos) com complementos/adicionais",
+    )
     subtotal: float = Field(..., description="Subtotal do pedido")
     desconto: float = Field(0, description="Valor do desconto")
     taxa_entrega: float = Field(0, description="Taxa de entrega")
