@@ -16,9 +16,30 @@ router = APIRouter(prefix="/ws", tags=["websocket"])
 
 async def _close_ws_policy(websocket: WebSocket, reason: str) -> None:
     # 1008: Policy Violation (apropriado para auth inválida)
+    # IMPORTANTE: Precisamos aceitar o WebSocket antes de fechar para responder ao Sec-WebSocket-Protocol
     try:
-        await websocket.close(code=1008, reason=reason)
-    except Exception:
+        # Verifica se já foi aceito
+        client_state = getattr(websocket, 'client_state', None)
+        is_connected = client_state and hasattr(client_state, 'name') and client_state.name == "CONNECTED"
+        
+        if not is_connected:
+            # Aceita primeiro para responder ao Sec-WebSocket-Protocol
+            await websocket.accept()
+            # Envia mensagem de erro antes de fechar
+            error_msg = {
+                "type": "error",
+                "message": reason,
+                "timestamp": datetime.utcnow().isoformat()
+            }
+            try:
+                await websocket.send_text(json.dumps(error_msg))
+            except:
+                pass  # Ignora se não conseguir enviar
+        
+        # Fecha a conexão
+        await websocket.close(code=1008, reason=reason.encode('utf-8')[:123])  # Limite de 123 bytes
+    except Exception as e:
+        logger.error(f"[WS_ROUTER] Erro ao fechar WebSocket: {e}")
         return
 
 def _get_bearer_token_from_ws(websocket: WebSocket) -> str | None:
