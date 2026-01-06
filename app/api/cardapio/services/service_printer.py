@@ -13,6 +13,7 @@ from app.api.cardapio.schemas.schema_printer import (
     TipoPedidoPrinterEnum,
 )
 from app.api.pedidos.models.model_pedido_unificado import PedidoUnificadoModel, TipoEntrega, StatusPedido
+from app.api.pedidos.utils.produtos_builder import build_produtos_out_from_items
 from sqlalchemy import and_
 from datetime import datetime, timedelta
 from app.utils.logger import logger
@@ -52,6 +53,7 @@ class PrinterService:
     # ------------------------------------------------------------------
     def _converter_pedido_delivery(self, pedido) -> PedidoPendenteImpressaoResponse:
         itens = self._converter_itens(pedido.itens)
+        produtos = build_produtos_out_from_items(pedido.itens)
         endereco = self._montar_endereco_delivery(pedido)
 
         troco = None
@@ -70,6 +72,7 @@ class PrinterService:
             cliente=pedido.cliente.nome if pedido.cliente else "Cliente não informado",
             telefone_cliente=pedido.cliente.telefone if pedido.cliente else None,
             itens=itens,
+            produtos=produtos,
             subtotal=float(pedido.subtotal or 0),
             desconto=float(pedido.desconto or 0),
             taxa_entrega=float(pedido.taxa_entrega or 0),
@@ -154,6 +157,7 @@ class PrinterService:
 
     def _converter_pedido_mesa_unificado(self, pedido: PedidoUnificadoModel) -> PedidoPendenteImpressaoResponse:
         itens = self._converter_itens(pedido.itens)
+        produtos = build_produtos_out_from_items(pedido.itens)
         subtotal = self._calcular_subtotal(itens, pedido.valor_total)
 
         observacao = pedido.observacoes or pedido.observacao_geral or ""
@@ -172,6 +176,7 @@ class PrinterService:
             cliente=pedido.cliente.nome if pedido.cliente else "Cliente",
             telefone_cliente=pedido.cliente.telefone if pedido.cliente else None,
             itens=itens,
+            produtos=produtos,
             subtotal=subtotal,
             desconto=0.0,
             taxa_entrega=0.0,
@@ -188,6 +193,7 @@ class PrinterService:
 
     def _converter_pedido_balcao_unificado(self, pedido: PedidoUnificadoModel) -> PedidoPendenteImpressaoResponse:
         itens = self._converter_itens(pedido.itens)
+        produtos = build_produtos_out_from_items(pedido.itens)
         subtotal = self._calcular_subtotal(itens, pedido.valor_total)
 
         observacao = pedido.observacoes or pedido.observacao_geral or ""
@@ -217,6 +223,7 @@ class PrinterService:
             cliente=pedido.cliente.nome if pedido.cliente else "Cliente",
             telefone_cliente=pedido.cliente.telefone if pedido.cliente else None,
             itens=itens,
+            produtos=produtos,
             subtotal=subtotal,
             desconto=0.0,
             taxa_entrega=0.0,
