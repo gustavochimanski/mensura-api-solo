@@ -842,31 +842,41 @@ async def webhook_verification(request: Request):
     """
     from fastapi.responses import PlainTextResponse
     
-    mode = request.query_params.get("hub.mode")
-    token = request.query_params.get("hub.verify_token")
-    challenge = request.query_params.get("hub.challenge")
+    try:
+        mode = request.query_params.get("hub.mode")
+        token = request.query_params.get("hub.verify_token")
+        challenge = request.query_params.get("hub.challenge")
 
-    # Token de verificação - você pode mudar isso
-    VERIFY_TOKEN = "meu_token_secreto_123"
+        # Token de verificação - você pode mudar isso
+        VERIFY_TOKEN = "meu_token_secreto_123"
 
-    # Log para debug
-    print(f"\n🔍 Verificação do webhook recebida:")
-    print(f"   Mode: {mode}")
-    print(f"   Token recebido: {token}")
-    print(f"   Token esperado: {VERIFY_TOKEN}")
-    print(f"   Challenge: {challenge}")
+        # Log para debug
+        print(f"\n🔍 Verificação do webhook recebida:")
+        print(f"   Mode: {mode}")
+        print(f"   Token recebido: {token}")
+        print(f"   Token esperado: {VERIFY_TOKEN}")
+        print(f"   Challenge: {challenge}")
 
-    if mode == "subscribe" and token == VERIFY_TOKEN:
-        print("✅ Webhook verificado com sucesso!")
-        # Retornar o challenge como texto puro (WhatsApp espera text/plain)
-        if challenge:
-            return PlainTextResponse(content=str(challenge))
+        if mode == "subscribe" and token == VERIFY_TOKEN:
+            print("✅ Webhook verificado com sucesso!")
+            # Retornar o challenge como texto puro (WhatsApp espera text/plain)
+            if challenge:
+                return PlainTextResponse(content=str(challenge))
+            else:
+                print("⚠️ Challenge não fornecido")
+                raise HTTPException(status_code=400, detail="Challenge não fornecido")
         else:
-            raise HTTPException(status_code=400, detail="Challenge não fornecido")
-    else:
-        print("❌ Falha na verificação do webhook")
-        print(f"   Motivo: mode={mode}, token_match={token == VERIFY_TOKEN}")
-        raise HTTPException(status_code=403, detail="Falha na verificação")
+            print("❌ Falha na verificação do webhook")
+            print(f"   Motivo: mode={mode}, token_match={token == VERIFY_TOKEN}")
+            raise HTTPException(status_code=403, detail="Falha na verificação")
+    except HTTPException:
+        # Re-raise HTTPException para manter o comportamento correto
+        raise
+    except Exception as e:
+        print(f"❌ Erro inesperado na verificação do webhook: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Erro interno: {str(e)}")
 
 
 @router.post("/webhook")
@@ -875,11 +885,32 @@ async def webhook_handler(request: Request, db: Session = Depends(get_db)):
     Recebe mensagens do WhatsApp via webhook
     Processa e responde automaticamente com a IA
     """
+    # Verifica se é realmente uma requisição POST
+    if request.method != "POST":
+        print(f"⚠️ Requisição {request.method} chegou no endpoint POST - redirecionando para GET")
+        # Se for GET, deixa o FastAPI rotear para o endpoint GET
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url=str(request.url).replace("/webhook", "/webhook"), status_code=307)
+    
     try:
-        body = await request.json()
+        # Verifica se há body na requisição
+        body_bytes = await request.body()
+        
+        if not body_bytes or len(body_bytes) == 0:
+            print("⚠️ Webhook POST recebido sem body - retornando OK")
+            return {"status": "ok", "message": "Webhook recebido sem body"}
+        
+        # Tenta parsear JSON
+        try:
+            body = json.loads(body_bytes.decode('utf-8'))
+        except json.JSONDecodeError as e:
+            print(f"❌ Erro ao parsear JSON do webhook: {e}")
+            print(f"   Body recebido (primeiros 200 chars): {body_bytes[:200] if len(body_bytes) > 0 else 'VAZIO'}")
+            # Retorna 200 OK mesmo com erro de JSON para não quebrar o webhook
+            return {"status": "ok", "message": "Webhook recebido (JSON inválido, mas processado)"}
 
         # Log do webhook recebido
-        print(f"\n📥 Webhook recebido: {json.dumps(body, indent=2)}")
+        print(f"\n📥 Webhook POST recebido: {json.dumps(body, indent=2)}")
 
         # Verifica se é uma mensagem
         if body.get("object") == "whatsapp_business_account":

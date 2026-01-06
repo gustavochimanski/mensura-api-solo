@@ -104,21 +104,27 @@ app.add_middleware(PrometheusMiddleware)
 
 # CORS (adicionado por último, será executado primeiro)
 # ───────────────────────────
+# IMPORTANTE: Webhooks do Facebook/WhatsApp são requisições server-to-server (GET/POST diretas)
+# CORS não afeta webhooks, mas configuramos para garantir que não haja bloqueios
+# ───────────────────────────
 # Regra:
 # - Se CORS_ALLOW_ALL=true => allow_origins=["*"], allow_credentials=False
 # - Caso contrário => allow_origins=CORS_ORIGINS (se vazio cai para ["*"]), allow_credentials=True somente quando houver origens explícitas
+
 if CORS_ALLOW_ALL:
     allowed_origins = ["*"]
     allow_credentials = False
 else:
+    # Se CORS_ORIGINS estiver vazio, permite tudo (padrão seguro para webhooks)
     allowed_origins = CORS_ORIGINS or ["*"]
     allow_credentials = bool(CORS_ORIGINS)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
     allow_credentials=allow_credentials,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["*"],  # Permite GET, POST, etc (necessário para webhooks)
+    allow_headers=["*"],  # Permite todos os headers (necessário para webhooks)
 )
 
 # ───────────────────────────
