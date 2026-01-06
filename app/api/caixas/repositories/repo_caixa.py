@@ -141,10 +141,14 @@ class CaixaRepository:
         """
         Calcula o saldo esperado do caixa baseado em:
         - Valor inicial
-        + Entradas (pedidos pagos em dinheiro)
+        + Entradas (pedidos pagos em dinheiro e entregues no período)
         - Saídas (trocos dados, etc.)
+        
+        IMPORTANTE: Considera a data de ENTREGA do pedido, não a data de criação.
+        Apenas pedidos entregues durante o período do caixa são contabilizados.
         """
         from app.api.pedidos.models.model_pedido_unificado import PedidoUnificadoModel, TipoEntrega
+        from app.api.pedidos.models.model_pedido_historico_unificado import PedidoHistoricoUnificadoModel
         from app.api.cardapio.models.model_transacao_pagamento_dv import TransacaoPagamentoModel
         from app.api.cadastros.models.model_meio_pagamento import MeioPagamentoModel
         from app.api.shared.schemas.schema_shared_enums import PagamentoStatusEnum
@@ -155,20 +159,46 @@ class CaixaRepository:
         
         saldo = Decimal(str(caixa.valor_inicial))
         
-        # Busca pedidos pagos em dinheiro entre a abertura e agora (ou fechamento)
+        # Busca pedidos entregues no período do caixa
         data_fim = caixa.data_fechamento if caixa.data_fechamento else datetime.utcnow()
         
-        # Entradas: pedidos pagos em dinheiro através de transações
+        # Subquery para obter a data de entrega de cada pedido (quando status mudou para "E")
+        subquery_data_entrega = (
+            self.db.query(
+                PedidoHistoricoUnificadoModel.pedido_id,
+                func.min(PedidoHistoricoUnificadoModel.created_at).label('data_entrega')
+            )
+            .filter(
+                PedidoHistoricoUnificadoModel.status_novo == "E"
+            )
+            .group_by(PedidoHistoricoUnificadoModel.pedido_id)
+            .subquery()
+        )
+        
+        # Entradas: pedidos pagos em dinheiro e entregues durante o período do caixa
         # Busca transações com status PAGO e meio de pagamento tipo DINHEIRO
+        # Filtra por data de ENTREGA (não data de criação)
         query_entradas = (
             self.db.query(func.sum(TransacaoPagamentoModel.valor))
             .join(PedidoUnificadoModel, TransacaoPagamentoModel.pedido_id == PedidoUnificadoModel.id)
             .join(MeioPagamentoModel, TransacaoPagamentoModel.meio_pagamento_id == MeioPagamentoModel.id)
+            .outerjoin(
+                subquery_data_entrega,
+                PedidoUnificadoModel.id == subquery_data_entrega.c.pedido_id
+            )
             .filter(
                 and_(
                     PedidoUnificadoModel.empresa_id == empresa_id,
-                    PedidoUnificadoModel.created_at >= caixa.data_abertura,
-                    PedidoUnificadoModel.created_at <= data_fim,
+                    PedidoUnificadoModel.status == "E",  # Apenas pedidos entregues
+                    # Usa data de entrega se existir, senão usa created_at como fallback
+                    func.coalesce(
+                        subquery_data_entrega.c.data_entrega,
+                        PedidoUnificadoModel.created_at
+                    ) >= caixa.data_abertura,
+                    func.coalesce(
+                        subquery_data_entrega.c.data_entrega,
+                        PedidoUnificadoModel.created_at
+                    ) <= data_fim,
                     TransacaoPagamentoModel.status == PagamentoStatusEnum.PAGO.value,
                     MeioPagamentoModel.tipo == "DINHEIRO"
                 )
@@ -176,14 +206,26 @@ class CaixaRepository:
         )
         total_entradas = query_entradas.scalar() or Decimal("0")
         
-        # Saídas: trocos dados
+        # Saídas: trocos dados (considera data de entrega também)
         query_saidas = (
             self.db.query(func.sum(PedidoUnificadoModel.troco_para))
+            .outerjoin(
+                subquery_data_entrega,
+                PedidoUnificadoModel.id == subquery_data_entrega.c.pedido_id
+            )
             .filter(
                 and_(
                     PedidoUnificadoModel.empresa_id == empresa_id,
-                    PedidoUnificadoModel.created_at >= caixa.data_abertura,
-                    PedidoUnificadoModel.created_at <= data_fim,
+                    PedidoUnificadoModel.status == "E",  # Apenas pedidos entregues
+                    # Usa data de entrega se existir, senão usa created_at como fallback
+                    func.coalesce(
+                        subquery_data_entrega.c.data_entrega,
+                        PedidoUnificadoModel.created_at
+                    ) >= caixa.data_abertura,
+                    func.coalesce(
+                        subquery_data_entrega.c.data_entrega,
+                        PedidoUnificadoModel.created_at
+                    ) <= data_fim,
                     PedidoUnificadoModel.troco_para.isnot(None),
                     PedidoUnificadoModel.troco_para > 0
                 )
@@ -219,8 +261,12 @@ class CaixaRepository:
         """
         Calcula valores esperados por tipo de meio de pagamento.
         Retorna lista com informações de cada meio de pagamento usado no período.
+        
+        IMPORTANTE: Considera a data de ENTREGA do pedido, não a data de criação.
+        Apenas pedidos entregues durante o período do caixa são contabilizados.
         """
         from app.api.pedidos.models.model_pedido_unificado import PedidoUnificadoModel, TipoEntrega
+        from app.api.pedidos.models.model_pedido_historico_unificado import PedidoHistoricoUnificadoModel
         from app.api.cardapio.models.model_transacao_pagamento_dv import TransacaoPagamentoModel
         from app.api.cadastros.models.model_meio_pagamento import MeioPagamentoModel
         from app.api.shared.schemas.schema_shared_enums import PagamentoStatusEnum
@@ -231,7 +277,21 @@ class CaixaRepository:
         
         data_fim = caixa.data_fechamento if caixa.data_fechamento else datetime.utcnow()
         
+        # Subquery para obter a data de entrega de cada pedido (quando status mudou para "E")
+        subquery_data_entrega = (
+            self.db.query(
+                PedidoHistoricoUnificadoModel.pedido_id,
+                func.min(PedidoHistoricoUnificadoModel.created_at).label('data_entrega')
+            )
+            .filter(
+                PedidoHistoricoUnificadoModel.status_novo == "E"
+            )
+            .group_by(PedidoHistoricoUnificadoModel.pedido_id)
+            .subquery()
+        )
+        
         # Busca valores agrupados por meio de pagamento
+        # Filtra por data de ENTREGA (não data de criação)
         query = (
             self.db.query(
                 MeioPagamentoModel.id,
@@ -248,11 +308,23 @@ class CaixaRepository:
                 PedidoUnificadoModel,
                 TransacaoPagamentoModel.pedido_id == PedidoUnificadoModel.id
             )
+            .outerjoin(
+                subquery_data_entrega,
+                PedidoUnificadoModel.id == subquery_data_entrega.c.pedido_id
+            )
             .filter(
                 and_(
                     PedidoUnificadoModel.empresa_id == empresa_id,
-                    PedidoUnificadoModel.created_at >= caixa.data_abertura,
-                    PedidoUnificadoModel.created_at <= data_fim,
+                    PedidoUnificadoModel.status == "E",  # Apenas pedidos entregues
+                    # Usa data de entrega se existir, senão usa created_at como fallback
+                    func.coalesce(
+                        subquery_data_entrega.c.data_entrega,
+                        PedidoUnificadoModel.created_at
+                    ) >= caixa.data_abertura,
+                    func.coalesce(
+                        subquery_data_entrega.c.data_entrega,
+                        PedidoUnificadoModel.created_at
+                    ) <= data_fim,
                     TransacaoPagamentoModel.status == PagamentoStatusEnum.PAGO.value
                 )
             )
