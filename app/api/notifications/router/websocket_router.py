@@ -24,7 +24,18 @@ async def _close_ws_policy(websocket: WebSocket, reason: str) -> None:
         
         if not is_connected:
             # Aceita primeiro para responder ao Sec-WebSocket-Protocol
-            await websocket.accept()
+            # Se o cliente enviou um subprotocolo, precisamos responder com ele
+            proto = websocket.headers.get("sec-websocket-protocol") or websocket.headers.get("Sec-WebSocket-Protocol")
+            if proto:
+                parts = [p.strip() for p in proto.split(",") if p.strip()]
+                if parts and parts[0].lower() in ("mensura-bearer", "bearer"):
+                    subprotocol = parts[0]
+                    await websocket.accept(subprotocol=subprotocol)
+                else:
+                    await websocket.accept()
+            else:
+                await websocket.accept()
+            
             # Envia mensagem de erro antes de fechar
             error_msg = {
                 "type": "error",
@@ -196,8 +207,24 @@ async def websocket_notifications(
                 return
 
         # 3) Agora sim aceita a conexão
+        # IMPORTANTE: Se o cliente enviou um subprotocolo, precisamos responder com ele
         logger.info(f"[WS_ROUTER] Todas as validações passaram, aceitando conexão WebSocket...")
-        await websocket.accept()
+        
+        # Verifica se o cliente enviou Sec-WebSocket-Protocol
+        proto = websocket.headers.get("sec-websocket-protocol") or websocket.headers.get("Sec-WebSocket-Protocol")
+        if proto:
+            # Extrai o primeiro subprotocolo (mensura-bearer ou bearer)
+            parts = [p.strip() for p in proto.split(",") if p.strip()]
+            if parts and parts[0].lower() in ("mensura-bearer", "bearer"):
+                # Responde com o subprotocolo que o cliente enviou
+                subprotocol = parts[0]
+                logger.info(f"[WS_ROUTER] Aceitando conexão com subprotocolo: {subprotocol}")
+                await websocket.accept(subprotocol=subprotocol)
+            else:
+                await websocket.accept()
+        else:
+            await websocket.accept()
+        
         logger.info(f"[WS_ROUTER] Conexão WebSocket aceita com sucesso!")
 
         # Normaliza IDs para garantir consistência
