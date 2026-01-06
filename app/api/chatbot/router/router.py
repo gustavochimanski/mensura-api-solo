@@ -15,6 +15,7 @@ from datetime import datetime
 from app.database.db_connection import get_db
 from ..core import database as chatbot_db
 from ..core.notifications import OrderNotification
+from ..core.ngrok_manager import get_public_url, get_webhook_url
 from ..schemas.schemas import (
     ChatRequest,
     ChatResponse,
@@ -1228,6 +1229,29 @@ def format_phone_number(phone: str) -> str:
         "message": "Configuração do WhatsApp atualizada com sucesso",
         "config": new_config
     }
+
+
+@router.get("/ngrok-url")
+async def get_ngrok_url():
+    """Retorna a URL pública do ngrok se estiver ativo"""
+    public_url = get_public_url()
+    webhook_url = get_webhook_url()
+    
+    if public_url:
+        return {
+            "success": True,
+            "public_url": public_url,
+            "webhook_url": webhook_url,
+            "status": "active"
+        }
+    else:
+        return {
+            "success": False,
+            "public_url": None,
+            "webhook_url": None,
+            "status": "inactive",
+            "message": "Túnel ngrok não está ativo"
+        }
 
 
 @router.get("/webhook-info")
