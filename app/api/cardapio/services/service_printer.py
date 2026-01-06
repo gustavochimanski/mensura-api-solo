@@ -52,7 +52,6 @@ class PrinterService:
     # Conversões / Helpers
     # ------------------------------------------------------------------
     def _converter_pedido_delivery(self, pedido) -> PedidoPendenteImpressaoResponse:
-        itens = self._converter_itens(pedido.itens)
         produtos = build_produtos_out_from_items(pedido.itens)
         endereco = self._montar_endereco_delivery(pedido)
 
@@ -71,7 +70,6 @@ class PrinterService:
             status=self._status_to_str(pedido.status),
             cliente=pedido.cliente.nome if pedido.cliente else "Cliente não informado",
             telefone_cliente=pedido.cliente.telefone if pedido.cliente else None,
-            itens=itens,
             produtos=produtos,
             subtotal=float(pedido.subtotal or 0),
             desconto=float(pedido.desconto or 0),
@@ -156,9 +154,8 @@ class PrinterService:
             return []
 
     def _converter_pedido_mesa_unificado(self, pedido: PedidoUnificadoModel) -> PedidoPendenteImpressaoResponse:
-        itens = self._converter_itens(pedido.itens)
         produtos = build_produtos_out_from_items(pedido.itens)
-        subtotal = self._calcular_subtotal(itens, pedido.valor_total)
+        subtotal = self._calcular_subtotal_db_items(pedido.itens, pedido.valor_total)
 
         observacao = pedido.observacoes or pedido.observacao_geral or ""
         if pedido.numero_pedido:
@@ -175,7 +172,6 @@ class PrinterService:
             status=self._status_to_str(pedido.status),
             cliente=pedido.cliente.nome if pedido.cliente else "Cliente",
             telefone_cliente=pedido.cliente.telefone if pedido.cliente else None,
-            itens=itens,
             produtos=produtos,
             subtotal=subtotal,
             desconto=0.0,
@@ -192,9 +188,8 @@ class PrinterService:
         )
 
     def _converter_pedido_balcao_unificado(self, pedido: PedidoUnificadoModel) -> PedidoPendenteImpressaoResponse:
-        itens = self._converter_itens(pedido.itens)
         produtos = build_produtos_out_from_items(pedido.itens)
-        subtotal = self._calcular_subtotal(itens, pedido.valor_total)
+        subtotal = self._calcular_subtotal_db_items(pedido.itens, pedido.valor_total)
 
         observacao = pedido.observacoes or pedido.observacao_geral or ""
         if pedido.numero_pedido:
@@ -222,7 +217,6 @@ class PrinterService:
             status=self._status_to_str(pedido.status),
             cliente=pedido.cliente.nome if pedido.cliente else "Cliente",
             telefone_cliente=pedido.cliente.telefone if pedido.cliente else None,
-            itens=itens,
             produtos=produtos,
             subtotal=subtotal,
             desconto=0.0,
@@ -271,6 +265,23 @@ class PrinterService:
     @staticmethod
     def _calcular_subtotal(itens: List[ItemPedidoPrinter], valor_total) -> float:
         subtotal = sum(item.preco * item.quantidade for item in itens)
+        if subtotal == 0 and valor_total is not None:
+            try:
+                subtotal = float(valor_total)
+            except Exception:
+                subtotal = 0.0
+        return float(subtotal)
+
+    @staticmethod
+    def _calcular_subtotal_db_items(itens_db, valor_total) -> float:
+        subtotal = 0.0
+        for item in itens_db or []:
+            try:
+                qtd = int(getattr(item, "quantidade", 0) or 0)
+                preco_unit = float(getattr(item, "preco_unitario", 0) or 0)
+                subtotal += preco_unit * qtd
+            except Exception:
+                continue
         if subtotal == 0 and valor_total is not None:
             try:
                 subtotal = float(valor_total)

@@ -123,7 +123,6 @@ class PedidoPendenteImpressaoResponse(BaseModel):
     status: str = Field(..., description="Status do pedido")
     cliente: str = Field(..., description="Nome do cliente")
     telefone_cliente: Optional[str] = Field(None, description="Telefone do cliente")
-    itens: List[ItemPedidoPrinter] = Field(..., description="Lista de itens do pedido")
     produtos: ProdutosPedidoOut = Field(
         default_factory=ProdutosPedidoOut,
         description="Produtos do pedido no padrão (itens/receitas/combos) com complementos/adicionais",
