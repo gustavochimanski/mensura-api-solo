@@ -4,12 +4,21 @@ Gerenciamento do túnel ngrok para webhooks do WhatsApp
 import os
 import logging
 from typing import Optional
-from pyngrok import ngrok, conf
 
 logger = logging.getLogger(__name__)
 
+# Import pyngrok opcionalmente
+try:
+    from pyngrok import ngrok, conf
+    PYNGROK_AVAILABLE = True
+except ImportError:
+    PYNGROK_AVAILABLE = False
+    ngrok = None
+    conf = None
+    logger.warning("pyngrok não está instalado. Funcionalidades do ngrok estarão desabilitadas.")
+
 # Variável global para armazenar o túnel ativo
-_active_tunnel: Optional[ngrok.NgrokTunnel] = None
+_active_tunnel = None
 _public_url: Optional[str] = None
 
 
@@ -32,6 +41,10 @@ def start_ngrok_tunnel(port: int = 8000) -> Optional[str]:
         URL pública do ngrok ou None se falhar
     """
     global _active_tunnel, _public_url
+
+    if not PYNGROK_AVAILABLE:
+        logger.error("pyngrok não está instalado. Instale com: pip install pyngrok")
+        return None
 
     try:
         # Verifica se já existe um túnel ativo
@@ -88,6 +101,10 @@ def stop_ngrok_tunnel():
     Para o túnel ngrok ativo.
     """
     global _active_tunnel, _public_url
+
+    if not PYNGROK_AVAILABLE:
+        logger.warning("pyngrok não está instalado. Não é possível parar o túnel.")
+        return
 
     if _active_tunnel:
         try:

@@ -15,7 +15,17 @@ from datetime import datetime
 from app.database.db_connection import get_db
 from ..core import database as chatbot_db
 from ..core.notifications import OrderNotification
-from ..core.ngrok_manager import get_public_url, get_webhook_url
+
+# Import ngrok functions optionally (pyngrok may not be installed)
+try:
+    from ..core.ngrok_manager import get_public_url, get_webhook_url
+    NGROK_AVAILABLE = True
+except ImportError:
+    NGROK_AVAILABLE = False
+    def get_public_url():
+        return None
+    def get_webhook_url():
+        return None
 from ..schemas.schemas import (
     ChatRequest,
     ChatResponse,
@@ -1234,6 +1244,15 @@ def format_phone_number(phone: str) -> str:
 @router.get("/ngrok-url")
 async def get_ngrok_url():
     """Retorna a URL pública do ngrok se estiver ativo"""
+    if not NGROK_AVAILABLE:
+        return {
+            "success": False,
+            "public_url": None,
+            "webhook_url": None,
+            "status": "unavailable",
+            "message": "pyngrok não está instalado. Instale com: pip install pyngrok"
+        }
+    
     public_url = get_public_url()
     webhook_url = get_webhook_url()
     
