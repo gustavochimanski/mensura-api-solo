@@ -885,28 +885,30 @@ async def webhook_handler(request: Request, db: Session = Depends(get_db)):
     Recebe mensagens do WhatsApp via webhook
     Processa e responde automaticamente com a IA
     """
-    # Verifica se é realmente uma requisição POST
-    if request.method != "POST":
-        print(f"⚠️ Requisição {request.method} chegou no endpoint POST - redirecionando para GET")
-        # Se for GET, deixa o FastAPI rotear para o endpoint GET
-        from fastapi.responses import RedirectResponse
-        return RedirectResponse(url=str(request.url).replace("/webhook", "/webhook"), status_code=307)
-    
     try:
-        # Verifica se há body na requisição
-        body_bytes = await request.body()
+        # Lê o body de forma segura
+        try:
+            body_bytes = await request.body()
+        except Exception as e:
+            print(f"⚠️ Erro ao ler body da requisição: {e}")
+            return {"status": "ok", "message": "Erro ao ler body, mas webhook recebido"}
         
+        # Verifica se há body
         if not body_bytes or len(body_bytes) == 0:
             print("⚠️ Webhook POST recebido sem body - retornando OK")
             return {"status": "ok", "message": "Webhook recebido sem body"}
         
         # Tenta parsear JSON
         try:
-            body = json.loads(body_bytes.decode('utf-8'))
+            body_text = body_bytes.decode('utf-8')
+            if not body_text.strip():
+                print("⚠️ Webhook POST recebido com body vazio - retornando OK")
+                return {"status": "ok", "message": "Webhook recebido com body vazio"}
+            body = json.loads(body_text)
         except json.JSONDecodeError as e:
             print(f"❌ Erro ao parsear JSON do webhook: {e}")
-            print(f"   Body recebido (primeiros 200 chars): {body_bytes[:200] if len(body_bytes) > 0 else 'VAZIO'}")
-            # Retorna 200 OK mesmo com erro de JSON para não quebrar o webhook
+            print(f"   Body recebido (primeiros 200 chars): {body_text[:200] if 'body_text' in locals() else 'N/A'}")
+            # Retorna 200 OK mesmo com erro de JSON para não quebrar o webhook do Facebook
             return {"status": "ok", "message": "Webhook recebido (JSON inválido, mas processado)"}
 
         # Log do webhook recebido
