@@ -2022,12 +2022,26 @@ Subtotal: R$ {subtotal:.2f}
         result = await notifier.send_whatsapp_message(phone_number, mensagem)
 
         if result.get("success"):
+            # Também registra no histórico do chatbot para aparecer no /messages
+            conversation_id = None
+            try:
+                chat_log = await notifier.send_notification_async(
+                    db=db,
+                    phone=phone_number,
+                    message=mensagem,
+                    order_type="pedido_resumo"
+                )
+                conversation_id = chat_log.get("conversation_id")
+            except Exception as e:
+                print(f"⚠️ Erro ao registrar mensagem no histórico do chatbot: {e}")
+
             return {
                 "success": True,
                 "message": "Resumo do pedido enviado com sucesso!",
                 "pedido_id": pedido_id,
                 "numero_pedido": numero_pedido,
-                "status": status_info["name"]
+                "status": status_info["name"],
+                "conversation_id": conversation_id
             }
         else:
             raise HTTPException(
