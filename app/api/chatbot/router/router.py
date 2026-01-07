@@ -326,13 +326,14 @@ async def list_all_conversations(db: Session = Depends(get_db)):
                 c.prompt_key,
                 c.model,
                 c.empresa_id,
+                c.profile_picture_url,
                 c.created_at,
                 c.updated_at,
                 COUNT(m.id) as message_count,
                 MAX(m.created_at) as last_message_at
             FROM chatbot.conversations c
             LEFT JOIN chatbot.messages m ON c.id = m.conversation_id
-            GROUP BY c.id, c.session_id, c.user_id, c.contact_name, c.prompt_key, c.model, c.empresa_id, c.created_at, c.updated_at
+            GROUP BY c.id, c.session_id, c.user_id, c.contact_name, c.prompt_key, c.model, c.empresa_id, c.profile_picture_url, c.created_at, c.updated_at
             ORDER BY c.updated_at DESC
         """)
 
@@ -346,10 +347,11 @@ async def list_all_conversations(db: Session = Depends(get_db)):
                 "prompt_key": row[4],
                 "model": row[5],
                 "empresa_id": row[6],
-                "created_at": row[7],
-                "updated_at": row[8],
-                "message_count": row[9],
-                "last_message_at": row[10]
+                "profile_picture_url": row[7],
+                "created_at": row[8],
+                "updated_at": row[9],
+                "message_count": row[10],
+                "last_message_at": row[11]
             }
             for row in result.fetchall()
         ]
@@ -964,12 +966,15 @@ async def webhook_handler(request: Request, db: Session = Depends(get_db)):
                     # Verifica se há mensagens
                     messages = value.get("messages", [])
 
-                    # Extrai nome do contato da Meta (se disponível)
+                    # Extrai nome e foto de perfil do contato da Meta (se disponível)
                     contacts = value.get("contacts", [])
                     contact_name = None
+                    profile_picture_url = None
                     if contacts and len(contacts) > 0:
                         profile = contacts[0].get("profile", {})
                         contact_name = profile.get("name")
+                        # Tenta obter foto de perfil (geralmente não está disponível no webhook)
+                        profile_picture_url = profile.get("profile_picture_url") or profile.get("picture_url")
 
                     for message in messages:
                         # Dados da mensagem
@@ -990,8 +995,8 @@ async def webhook_handler(request: Request, db: Session = Depends(get_db)):
                         print(f"   Texto: {message_text}")
 
                         if message_text:
-                            # Processa a mensagem com a IA (passa o nome do contato)
-                            await process_whatsapp_message(db, from_number, message_text, contact_name)
+                            # Processa a mensagem com a IA (passa o nome e foto do contato)
+                            await process_whatsapp_message(db, from_number, message_text, contact_name, profile_picture_url)
 
         return {"status": "ok"}
 
@@ -1000,13 +1005,15 @@ async def webhook_handler(request: Request, db: Session = Depends(get_db)):
         return {"status": "error", "message": str(e)}
 
 
-async def process_whatsapp_message(db: Session, phone_number: str, message_text: str, contact_name: str = None):
+async def process_whatsapp_message(db: Session, phone_number: str, message_text: str, contact_name: str = None, profile_picture_url: str = None):
     """
     Processa mensagem recebida via WhatsApp e responde com IA
     VERSÃO 2.0: Usa SalesHandler para fluxo completo de vendas
     """
     try:
         print(f"\n🤖 Processando mensagem de {phone_number} ({contact_name or 'sem nome'}): {message_text}")
+        if profile_picture_url:
+            print(f"   📷 Foto de perfil recebida: {profile_picture_url}")
 
         # VERIFICA SE O BOT ESTÁ ATIVO PARA ESTE NÚMERO
         if not chatbot_db.is_bot_active_for_phone(db, phone_number):
@@ -1024,6 +1031,9 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 # Atualiza o nome do contato se disponível
                 if contact_name and not conversations[0].get('contact_name'):
                     chatbot_db.update_conversation_contact_name(db, conversations[0]['id'], contact_name)
+                # Atualiza a foto de perfil se disponível
+                if profile_picture_url and not conversations[0].get('profile_picture_url'):
+                    chatbot_db.update_conversation_profile_picture(db, conversations[0]['id'], profile_picture_url)
             return  # Não responde, apenas registra
 
         # OPÇÃO: Usar SalesHandler para conversas de vendas
@@ -1036,7 +1046,7 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
             conversations = chatbot_db.get_conversations_by_user(db, user_id)
 
             if not conversations:
-                # Cria nova conversa com nome do contato
+                # Cria nova conversa com nome e foto do contato
                 conversation_id = chatbot_db.create_conversation(
                     db=db,
                     session_id=f"whatsapp_{phone_number}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
@@ -1044,6 +1054,7 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                     prompt_key="default",
                     model="llm-sales",
                     contact_name=contact_name,
+                    profile_picture_url=profile_picture_url,
                     empresa_id=1  # TODO: Pegar empresa_id correto
                 )
                 print(f"   ✅ Nova conversa criada: {conversation_id} (contato: {contact_name})")
@@ -1068,6 +1079,10 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 if contact_name and not conversations[0].get('contact_name'):
                     chatbot_db.update_conversation_contact_name(db, conversations[0]['id'], contact_name)
                     print(f"   📝 Nome do contato atualizado: {contact_name}")
+                # Atualiza a foto de perfil se disponível e ainda não tiver
+                if profile_picture_url and not conversations[0].get('profile_picture_url'):
+                    chatbot_db.update_conversation_profile_picture(db, conversations[0]['id'], profile_picture_url)
+                    print(f"   📷 Foto de perfil atualizada")
 
             # Salva mensagem do usuário
             user_message_id = chatbot_db.create_message(
@@ -1454,53 +1469,35 @@ async def test_whatsapp_token(config: WhatsAppConfigUpdate):
 # ==================== FOTO DE PERFIL DO WHATSAPP ====================
 
 @router.get("/profile-picture/{phone_number}")
-async def get_whatsapp_profile_picture(phone_number: str):
+async def get_whatsapp_profile_picture(phone_number: str, db: Session = Depends(get_db)):
     """
     Busca a foto de perfil de um contato do WhatsApp.
-    Usa a API do WhatsApp Business para obter a URL da foto.
+    
+    Primeiro tenta buscar a foto armazenada no banco (se foi capturada via webhook).
+    Se não encontrar, retorna null para o frontend usar avatar padrão.
+    
+    NOTA: A API do WhatsApp Cloud não fornece endpoint para buscar fotos de perfil diretamente.
+    A foto só pode ser obtida se o webhook do WhatsApp enviar essa informação.
     """
     try:
-        from ..core.config_whatsapp import WHATSAPP_CONFIG
-
-        access_token = WHATSAPP_CONFIG.get("access_token")
-        api_version = WHATSAPP_CONFIG.get("api_version", "v22.0")
-
-        # Normaliza o número (remove caracteres especiais)
-        phone_clean = ''.join(filter(str.isdigit, phone_number))
-        if not phone_clean.startswith('55'):
-            phone_clean = '55' + phone_clean
-
-        # URL para buscar informações do contato
-        # A API do WhatsApp Cloud não fornece foto de perfil diretamente
-        # mas podemos tentar buscar via endpoint de contatos
-        url = f"https://graph.facebook.com/{api_version}/{phone_clean}/profile_picture"
-
-        headers = {
-            "Authorization": f"Bearer {access_token}",
-            "Content-Type": "application/json",
+        # Busca conversas do usuário
+        conversations = chatbot_db.get_conversations_by_user(db, phone_number)
+        
+        if conversations and conversations[0].get('profile_picture_url'):
+            return {
+                "success": True,
+                "phone_number": phone_number,
+                "profile_picture_url": conversations[0]['profile_picture_url'],
+                "message": "Foto de perfil encontrada no banco de dados"
+            }
+        
+        # Se não encontrou foto armazenada, retorna null
+        return {
+            "success": False,
+            "phone_number": phone_number,
+            "profile_picture_url": None,
+            "message": "Foto de perfil não disponível. O webhook do WhatsApp geralmente não envia fotos de perfil."
         }
-
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(url, headers=headers)
-
-            if response.status_code == 200:
-                data = response.json()
-                return {
-                    "success": True,
-                    "phone_number": phone_number,
-                    "profile_picture_url": data.get("profile_picture_url") or data.get("url"),
-                    "data": data
-                }
-            else:
-                # A API pode não suportar busca direta de foto
-                # Retornamos null para usar avatar padrão
-                return {
-                    "success": False,
-                    "phone_number": phone_number,
-                    "profile_picture_url": None,
-                    "message": "Foto de perfil não disponível"
-                }
-
     except Exception as e:
         return {
             "success": False,

@@ -67,6 +67,21 @@ def init_database(db: Session):
                 END IF;
             END $$;
         """))
+        
+        # Adiciona coluna profile_picture_url se não existir
+        db.execute(text(f"""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_schema = '{CHATBOT_SCHEMA}'
+                    AND table_name = 'conversations'
+                    AND column_name = 'profile_picture_url'
+                ) THEN
+                    ALTER TABLE {CHATBOT_SCHEMA}.conversations ADD COLUMN profile_picture_url TEXT;
+                END IF;
+            END $$;
+        """))
 
         # Tabela de mensagens
         db.execute(text(f"""
@@ -237,11 +252,11 @@ def delete_prompt(db: Session, key: str, empresa_id: Optional[int] = None) -> bo
 
 # ==================== CONVERSAS ====================
 
-def create_conversation(db: Session, session_id: str, user_id: str, prompt_key: str, model: str, empresa_id: Optional[int] = None, contact_name: Optional[str] = None) -> Optional[int]:
+def create_conversation(db: Session, session_id: str, user_id: str, prompt_key: str, model: str, empresa_id: Optional[int] = None, contact_name: Optional[str] = None, profile_picture_url: Optional[str] = None) -> Optional[int]:
     """Cria uma nova conversa"""
     query = text(f"""
-        INSERT INTO {CHATBOT_SCHEMA}.conversations (session_id, user_id, prompt_key, model, empresa_id, contact_name)
-        VALUES (:session_id, :user_id, :prompt_key, :model, :empresa_id, :contact_name)
+        INSERT INTO {CHATBOT_SCHEMA}.conversations (session_id, user_id, prompt_key, model, empresa_id, contact_name, profile_picture_url)
+        VALUES (:session_id, :user_id, :prompt_key, :model, :empresa_id, :contact_name, :profile_picture_url)
         RETURNING id
     """)
     result = db.execute(query, {
@@ -250,7 +265,8 @@ def create_conversation(db: Session, session_id: str, user_id: str, prompt_key: 
         "prompt_key": prompt_key,
         "model": model,
         "empresa_id": empresa_id,
-        "contact_name": contact_name
+        "contact_name": contact_name,
+        "profile_picture_url": profile_picture_url
     })
     db.commit()
     row = result.fetchone()
@@ -274,10 +290,27 @@ def update_conversation_contact_name(db: Session, conversation_id: int, contact_
         return False
 
 
+def update_conversation_profile_picture(db: Session, conversation_id: int, profile_picture_url: str) -> bool:
+    """Atualiza a foto de perfil de uma conversa"""
+    try:
+        query = text(f"""
+            UPDATE {CHATBOT_SCHEMA}.conversations
+            SET profile_picture_url = :profile_picture_url, updated_at = CURRENT_TIMESTAMP
+            WHERE id = :id
+        """)
+        db.execute(query, {"id": conversation_id, "profile_picture_url": profile_picture_url})
+        db.commit()
+        return True
+    except Exception as e:
+        db.rollback()
+        print(f"Erro ao atualizar profile_picture_url: {e}")
+        return False
+
+
 def get_conversation(db: Session, conversation_id: int) -> Optional[Dict]:
     """Busca uma conversa pelo ID"""
     query = text(f"""
-        SELECT id, session_id, user_id, prompt_key, model, empresa_id, created_at, updated_at
+        SELECT id, session_id, user_id, contact_name, prompt_key, model, empresa_id, profile_picture_url, created_at, updated_at
         FROM {CHATBOT_SCHEMA}.conversations
         WHERE id = :id
     """)
@@ -288,11 +321,13 @@ def get_conversation(db: Session, conversation_id: int) -> Optional[Dict]:
             "id": row[0],
             "session_id": row[1],
             "user_id": row[2],
-            "prompt_key": row[3],
-            "model": row[4],
-            "empresa_id": row[5],
-            "created_at": row[6],
-            "updated_at": row[7]
+            "contact_name": row[3],
+            "prompt_key": row[4],
+            "model": row[5],
+            "empresa_id": row[6],
+            "profile_picture_url": row[7],
+            "created_at": row[8],
+            "updated_at": row[9]
         }
     return None
 
@@ -335,7 +370,7 @@ def get_conversations_by_user(db: Session, user_id: str, empresa_id: Optional[in
     """Retorna todas as conversas de um usuário"""
     if empresa_id:
         query = text(f"""
-            SELECT id, session_id, user_id, contact_name, prompt_key, model, empresa_id, created_at, updated_at
+            SELECT id, session_id, user_id, contact_name, prompt_key, model, empresa_id, profile_picture_url, created_at, updated_at
             FROM {CHATBOT_SCHEMA}.conversations
             WHERE user_id = :user_id AND empresa_id = :empresa_id
             ORDER BY updated_at DESC
@@ -343,7 +378,7 @@ def get_conversations_by_user(db: Session, user_id: str, empresa_id: Optional[in
         result = db.execute(query, {"user_id": user_id, "empresa_id": empresa_id})
     else:
         query = text(f"""
-            SELECT id, session_id, user_id, contact_name, prompt_key, model, empresa_id, created_at, updated_at
+            SELECT id, session_id, user_id, contact_name, prompt_key, model, empresa_id, profile_picture_url, created_at, updated_at
             FROM {CHATBOT_SCHEMA}.conversations
             WHERE user_id = :user_id
             ORDER BY updated_at DESC
@@ -359,8 +394,9 @@ def get_conversations_by_user(db: Session, user_id: str, empresa_id: Optional[in
             "prompt_key": row[4],
             "model": row[5],
             "empresa_id": row[6],
-            "created_at": row[7],
-            "updated_at": row[8]
+            "profile_picture_url": row[7],
+            "created_at": row[8],
+            "updated_at": row[9]
         }
         for row in result.fetchall()
     ]
