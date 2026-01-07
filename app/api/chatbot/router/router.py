@@ -1847,13 +1847,14 @@ async def send_order_summary(
         created_at = pedido[10]
         cliente_nome = pedido[11]
 
-        # Busca os itens do pedido (query simplificada)
+        # Busca os itens do pedido incluindo complementos e adicionais
         itens_query = text("""
             SELECT
                 pi.quantidade,
                 pi.preco_unitario,
                 pi.preco_total,
                 pi.observacao,
+                pi.adicionais_snapshot,
                 COALESCE(
                     (SELECT p.descricao FROM catalogo.produtos p WHERE p.cod_barras = pi.produto_cod_barras),
                     (SELECT r.nome FROM catalogo.receitas r WHERE r.id = pi.receita_id),
@@ -1862,6 +1863,7 @@ async def send_order_summary(
                 ) as nome_item
             FROM pedidos.pedidos_itens pi
             WHERE pi.pedido_id = :pedido_id
+            ORDER BY pi.id
         """)
 
         itens_result = db.execute(itens_query, {"pedido_id": pedido_id})
@@ -1895,10 +1897,68 @@ async def send_order_summary(
         for item in itens:
             qtd = item[0]
             preco_total = float(item[2]) if item[2] else 0
-            nome_item = item[4]
+            nome_item = item[5]  # Ajustado para o índice correto após adicionar adicionais_snapshot
             obs_item = item[3]
+            adicionais_snapshot = item[4]  # JSON com complementos e adicionais
 
             mensagem += f"• {qtd}x {nome_item} - R$ {preco_total:.2f}\n"
+            
+            # Processa complementos e adicionais
+            if adicionais_snapshot:
+                try:
+                    # Parse do JSON
+                    if isinstance(adicionais_snapshot, str):
+                        complementos_data = json.loads(adicionais_snapshot)
+                    else:
+                        complementos_data = adicionais_snapshot
+                    
+                    # Verifica se é array de complementos (nova estrutura) ou array direto de adicionais (estrutura antiga)
+                    if isinstance(complementos_data, list) and len(complementos_data) > 0:
+                        # Verifica se tem complemento_nome (nova estrutura com complementos)
+                        primeiro_item = complementos_data[0]
+                        if isinstance(primeiro_item, dict) and "complemento_nome" in primeiro_item:
+                            # Nova estrutura: array de complementos
+                            for complemento in complementos_data:
+                                complemento_nome = complemento.get("complemento_nome", "")
+                                adicionais = complemento.get("adicionais", [])
+                                
+                                if adicionais:
+                                    adicionais_lista = []
+                                    for adicional in adicionais:
+                                        adicional_nome = adicional.get("nome", "")
+                                        adicional_qtd = adicional.get("quantidade", 1)
+                                        
+                                        if adicional_qtd > 1:
+                                            adicionais_lista.append(f"{adicional_qtd}x {adicional_nome}")
+                                        else:
+                                            adicionais_lista.append(adicional_nome)
+                                    
+                                    if adicionais_lista:
+                                        if complemento_nome:
+                                            mensagem += f"  📌 {complemento_nome}: {', '.join(adicionais_lista)}\n"
+                                        else:
+                                            mensagem += f"  ➕ {', '.join(adicionais_lista)}\n"
+                        else:
+                            # Estrutura antiga: array direto de adicionais
+                            adicionais_lista = []
+                            for adicional in complementos_data:
+                                if isinstance(adicional, dict):
+                                    adicional_nome = adicional.get("nome", "")
+                                    adicional_qtd = adicional.get("quantidade", 1)
+                                    
+                                    if adicional_qtd > 1:
+                                        adicionais_lista.append(f"{adicional_qtd}x {adicional_nome}")
+                                    else:
+                                        adicionais_lista.append(adicional_nome)
+                            
+                            if adicionais_lista:
+                                mensagem += f"  ➕ {', '.join(adicionais_lista)}\n"
+                                
+                except (json.JSONDecodeError, AttributeError, TypeError) as e:
+                    # Se houver erro ao processar, ignora e continua
+                    print(f"⚠️ Erro ao processar adicionais_snapshot: {e}")
+                    pass
+            
             if obs_item:
                 mensagem += f"  _Obs: {obs_item}_\n"
 
