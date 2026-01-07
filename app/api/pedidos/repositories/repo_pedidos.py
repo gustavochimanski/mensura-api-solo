@@ -6,8 +6,9 @@ from typing import Optional
 
 from fastapi import HTTPException
 from starlette import status
-from sqlalchemy import func, or_, and_
+from sqlalchemy import func, or_, and_, text
 from sqlalchemy.orm import Session, joinedload, defer, selectinload
+from sqlalchemy.exc import IntegrityError
 
 from app.api.cadastros.models.model_mesa import MesaModel
 from app.api.catalogo.models.model_produto_emp import ProdutoEmpModel
@@ -43,6 +44,55 @@ class PedidoRepository:
     def __init__(self, db: Session, produto_contract: IProdutoContract | None = None):
         self.db = db
         self.produto_contract = produto_contract
+
+    # ------------- Número de pedido (concorrência segura) -------------
+    def _advisory_lock_numero_pedido(self, *, empresa_id: int, lock_code: int) -> None:
+        """
+        Serializa a geração de numero_pedido por empresa/canal usando pg_advisory_xact_lock.
+        O lock é liberado automaticamente no COMMIT/ROLLBACK.
+        """
+        self.db.execute(
+            text("SELECT pg_advisory_xact_lock(:empresa_id, :lock_code)"),
+            {"empresa_id": int(empresa_id), "lock_code": int(lock_code)},
+        )
+
+    def _next_numero_prefixado(
+        self,
+        *,
+        empresa_id: int,
+        tipo_entrega: str,
+        prefixo: str,
+        width: int,
+        lock_code: int,
+        extra_filters: list | None = None,
+    ) -> str:
+        """
+        Próximo numero_pedido no formato '{prefixo}-{seq:0{width}d}' de forma segura:
+        - pg_advisory_xact_lock
+        - MAX(numero_pedido) + 1 (funciona bem com padding fixo)
+        """
+        self._advisory_lock_numero_pedido(empresa_id=empresa_id, lock_code=lock_code)
+
+        q = (
+            self.db.query(func.max(PedidoUnificadoModel.numero_pedido))
+            .filter(
+                PedidoUnificadoModel.empresa_id == empresa_id,
+                PedidoUnificadoModel.tipo_entrega == tipo_entrega,
+                PedidoUnificadoModel.numero_pedido.like(f"{prefixo}-%"),
+            )
+        )
+        for f in extra_filters or []:
+            q = q.filter(f)
+
+        max_numero: str | None = q.scalar()
+        seq_atual = 0
+        if max_numero:
+            try:
+                seq_atual = int(max_numero.split("-", 1)[1])
+            except Exception:
+                seq_atual = 0
+
+        return f"{prefixo}-{(seq_atual + 1):0{width}d}"
 
     # ------------- Validations / Queries -------------
     def get_cliente(self, telefone: str) -> Optional[ClienteModel]:
@@ -241,17 +291,14 @@ class PedidoRepository:
         endereco_geo = None,
     ) -> PedidoUnificadoModel:
         """Cria um pedido de delivery."""
-        # Gera número único de pedido: DV-{sequencial} por empresa
-        seq = (
-            self.db.query(PedidoUnificadoModel)
-            .filter(
-                PedidoUnificadoModel.empresa_id == empresa_id,
-                PedidoUnificadoModel.tipo_entrega == TipoEntrega.DELIVERY.value
-            )
-            .count()
-            + 1
+        # Gera número único de pedido: DV-{sequencial} por empresa (concorrência segura)
+        numero = self._next_numero_prefixado(
+            empresa_id=empresa_id,
+            tipo_entrega=TipoEntrega.DELIVERY.value,
+            prefixo="DV",
+            width=6,
+            lock_code=1001,
         )
-        numero = f"DV-{seq:06d}"
         
         pedido = PedidoUnificadoModel(
             tipo_entrega=TipoEntrega.DELIVERY.value,
@@ -292,17 +339,14 @@ class PedidoRepository:
             if mesa.empresa_id != empresa_id:
                 raise HTTPException(status.HTTP_400_BAD_REQUEST, "Mesa não pertence à empresa informada")
 
-        # Gera número único de pedido: BAL-{sequencial} por empresa
-        seq = (
-            self.db.query(PedidoUnificadoModel)
-            .filter(
-                PedidoUnificadoModel.empresa_id == empresa_id,
-                PedidoUnificadoModel.tipo_entrega == TipoEntrega.BALCAO.value
-            )
-            .count()
-            + 1
+        # Gera número único de pedido: BAL-{sequencial} por empresa (concorrência segura)
+        numero = self._next_numero_prefixado(
+            empresa_id=empresa_id,
+            tipo_entrega=TipoEntrega.BALCAO.value,
+            prefixo="BAL",
+            width=6,
+            lock_code=1002,
         )
-        numero = f"BAL-{seq:06d}"
 
         pedido = PedidoUnificadoModel(
             tipo_entrega=TipoEntrega.BALCAO.value,
@@ -318,10 +362,30 @@ class PedidoRepository:
             taxa_servico=Decimal("0"),
             valor_total=Decimal("0"),
         )
-        self.db.add(pedido)
-        self.db.commit()
-        self.db.refresh(pedido)
-        return pedido
+        # Commit com retry para cobrir concorrência com processos antigos/externos
+        max_tentativas = 5
+        for _ in range(max_tentativas):
+            try:
+                self.db.add(pedido)
+                self.db.commit()
+                self.db.refresh(pedido)
+                return pedido
+            except IntegrityError as exc:
+                self.db.rollback()
+                if "uq_pedidos_empresa_numero" in str(exc.orig) or "UniqueViolation" in str(exc.orig):
+                    pedido.numero_pedido = self._next_numero_prefixado(
+                        empresa_id=empresa_id,
+                        tipo_entrega=TipoEntrega.BALCAO.value,
+                        prefixo="BAL",
+                        width=6,
+                        lock_code=1002,
+                    )
+                    continue
+                raise
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            "Não foi possível criar o pedido de balcão (colisão de numero_pedido).",
+        )
 
     def criar_pedido_mesa(
         self,
@@ -344,18 +408,17 @@ class PedidoRepository:
         if not mesa:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Mesa não encontrada")
 
-        # número simples: {mesa.numero}-{sequencial curto}
-        seq = (
-            self.db.query(PedidoUnificadoModel)
-            .filter(
-                PedidoUnificadoModel.tipo_entrega == TipoEntrega.MESA.value,
+        # número simples: {mesa.numero}-{sequencial curto} (concorrência segura por mesa)
+        numero = self._next_numero_prefixado(
+            empresa_id=empresa_id,
+            tipo_entrega=TipoEntrega.MESA.value,
+            prefixo=str(mesa.numero),
+            width=3,
+            lock_code=300000 + int(mesa_id),
+            extra_filters=[
                 PedidoUnificadoModel.mesa_id == mesa_id,
-                PedidoUnificadoModel.empresa_id == empresa_id,
-            )
-            .count()
-            or 0
-        ) + 1
-        numero = f"{mesa.numero}-{seq:03d}"
+            ],
+        )
 
         pedido = PedidoUnificadoModel(
             tipo_entrega=TipoEntrega.MESA.value,
@@ -372,10 +435,32 @@ class PedidoRepository:
             taxa_servico=Decimal("0"),
             valor_total=Decimal("0"),
         )
-        self.db.add(pedido)
-        self.db.commit()
-        self.db.refresh(pedido)
-        return pedido
+        max_tentativas = 5
+        for _ in range(max_tentativas):
+            try:
+                self.db.add(pedido)
+                self.db.commit()
+                self.db.refresh(pedido)
+                return pedido
+            except IntegrityError as exc:
+                self.db.rollback()
+                if "uq_pedidos_empresa_numero" in str(exc.orig) or "UniqueViolation" in str(exc.orig):
+                    pedido.numero_pedido = self._next_numero_prefixado(
+                        empresa_id=empresa_id,
+                        tipo_entrega=TipoEntrega.MESA.value,
+                        prefixo=str(mesa.numero),
+                        width=3,
+                        lock_code=300000 + int(mesa_id),
+                        extra_filters=[
+                            PedidoUnificadoModel.mesa_id == mesa_id,
+                        ],
+                    )
+                    continue
+                raise
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            "Não foi possível criar o pedido de mesa (colisão de numero_pedido).",
+        )
 
     def atualizar_totais(
         self,
