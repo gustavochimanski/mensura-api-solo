@@ -675,6 +675,10 @@ class PedidoBalcaoService:
     def list_pedidos_by_cliente(self, cliente_id: int, *, empresa_id: Optional[int] = None, skip: int = 0, limit: int = 50) -> list[PedidoResponseCompleto]:
         """Lista todos os pedidos de balcão de um cliente específico"""
         pedidos = self.repo.list_by_cliente_id(cliente_id, TipoEntrega.BALCAO, empresa_id=empresa_id, skip=skip, limit=limit)
+        # Filtra itens para manter apenas produtos (remove receitas e combos)
+        for pedido in pedidos:
+            if hasattr(pedido, 'itens') and pedido.itens:
+                pedido.itens = [item for item in pedido.itens if item.produto_cod_barras is not None]
         return [PedidoResponseBuilder.pedido_to_response_completo(p) for p in pedidos]
 
     # -------- Histórico --------
