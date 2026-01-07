@@ -167,6 +167,17 @@ _Obrigado pela preferência!_"""
             user_id = phone
             session_id = f"order_{order_type}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
 
+            # Garante que o prompt padrão existe para não violar a FK da tabela
+            prompt_key = "default"
+            if not chatbot_db.get_prompt(db, prompt_key):
+                chatbot_db.create_prompt(
+                    db=db,
+                    key=prompt_key,
+                    name="Padrão (Notificações)",
+                    content="Atendente virtual para notificações automáticas.",
+                    is_default=True
+                )
+
             # Cria ou busca conversa existente para esse usuário
             conversations = chatbot_db.get_conversations_by_user(db, user_id)
 
@@ -182,7 +193,7 @@ _Obrigado pela preferência!_"""
                     db=db,
                     session_id=session_id,
                     user_id=user_id,
-                    prompt_key="default",
+                    prompt_key=prompt_key,
                     model="notification-system"
                 )
                 empresa_id = None
