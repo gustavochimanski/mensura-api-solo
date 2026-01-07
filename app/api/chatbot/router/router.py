@@ -592,17 +592,36 @@ async def send_notification(request: dict, db: Session = Depends(get_db)):
     if result.get("success"):
         # Salva a mensagem enviada no histórico da conversa
         try:
+            from datetime import datetime
             conversations = chatbot_db.get_conversations_by_user(db, phone)
-            if conversations:
-                chatbot_db.create_message(
+            
+            # Se não encontrar conversa, cria uma nova
+            if not conversations:
+                conversation_id = chatbot_db.create_conversation(
                     db=db,
-                    conversation_id=conversations[0]['id'],
-                    role="assistant",
-                    content=message
+                    session_id=f"whatsapp_{phone}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                    user_id=phone,
+                    prompt_key="default",
+                    model="groq-sales",
+                    empresa_id=1  # TODO: Pegar empresa_id correto do contexto
                 )
-                print(f"   💾 Mensagem salva no histórico (conversa {conversations[0]['id']})")
+                print(f"   ✅ Nova conversa criada: {conversation_id}")
+            else:
+                # Usa a conversa mais recente (primeira da lista ordenada por updated_at DESC)
+                conversation_id = conversations[0]['id']
+            
+            # Salva a mensagem
+            message_id = chatbot_db.create_message(
+                db=db,
+                conversation_id=conversation_id,
+                role="assistant",
+                content=message
+            )
+            print(f"   💾 Mensagem salva no histórico (conversa {conversation_id}, mensagem {message_id})")
         except Exception as e:
             print(f"   ⚠️ Erro ao salvar mensagem no histórico: {e}")
+            import traceback
+            traceback.print_exc()
 
         return {
             "success": True,
@@ -686,24 +705,42 @@ async def send_media(request: dict, db: Session = Depends(get_db)):
             if response.status_code == 200:
                 # Salva a mensagem enviada no histórico da conversa
                 try:
+                    from datetime import datetime
                     conversations = chatbot_db.get_conversations_by_user(db, phone)
-                    if conversations:
-                        # Salva como JSON para o frontend poder renderizar a mídia
-                        media_content = json.dumps({
-                            "type": "media",
-                            "media_type": media_type,
-                            "media_url": media_url,
-                            "caption": caption or ""
-                        })
-                        chatbot_db.create_message(
+                    
+                    # Se não encontrar conversa, cria uma nova
+                    if not conversations:
+                        conversation_id = chatbot_db.create_conversation(
                             db=db,
-                            conversation_id=conversations[0]['id'],
-                            role="assistant",
-                            content=media_content
+                            session_id=f"whatsapp_{phone}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                            user_id=phone,
+                            prompt_key="default",
+                            model="groq-sales",
+                            empresa_id=1  # TODO: Pegar empresa_id correto do contexto
                         )
-                        print(f"   💾 Mídia salva no histórico (conversa {conversations[0]['id']})")
+                        print(f"   ✅ Nova conversa criada: {conversation_id}")
+                    else:
+                        # Usa a conversa mais recente (primeira da lista ordenada por updated_at DESC)
+                        conversation_id = conversations[0]['id']
+                    
+                    # Salva como JSON para o frontend poder renderizar a mídia
+                    media_content = json.dumps({
+                        "type": "media",
+                        "media_type": media_type,
+                        "media_url": media_url,
+                        "caption": caption or ""
+                    })
+                    message_id = chatbot_db.create_message(
+                        db=db,
+                        conversation_id=conversation_id,
+                        role="assistant",
+                        content=media_content
+                    )
+                    print(f"   💾 Mídia salva no histórico (conversa {conversation_id}, mensagem {message_id})")
                 except Exception as save_error:
                     print(f"   ⚠️ Erro ao salvar mídia no histórico: {save_error}")
+                    import traceback
+                    traceback.print_exc()
 
                 return {
                     "success": True,
