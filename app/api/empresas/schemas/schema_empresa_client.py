@@ -1,11 +1,23 @@
 # app/api/empresas/schemas/schema_empresa_client.py
 from pydantic import BaseModel, ConfigDict, Field
-from typing import Optional
+from typing import Optional, List, Any
+
+
+class HorarioIntervaloOut(BaseModel):
+    inicio: str
+    fim: str
+
+
+class HorarioDiaOut(BaseModel):
+    dia_semana: int
+    intervalos: List[HorarioIntervaloOut] = Field(default_factory=list)
 
 
 class EmpresaClientOut(BaseModel):
     nome: str
     logo: Optional[str] = None
+    timezone: Optional[str] = None
+    horarios_funcionamento: Optional[List[HorarioDiaOut]] = None
     cardapio_tema: Optional[str] = "padrao"
     aceita_pedido_automatico: bool = False
     tempo_entrega_maximo: int = Field(..., gt=0)

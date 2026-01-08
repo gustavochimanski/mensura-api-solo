@@ -18,7 +18,11 @@ from ..schemas.message_dispatch_schemas import (
 )
 from ..models.notification import MessageType
 from ..adapters.recipient_adapters import ClienteRecipientAdapter, CompositeRecipientAdapter
-from ..adapters.channel_config_adapters import DefaultChannelConfigAdapter
+from ..adapters.channel_config_adapters import (
+    DefaultChannelConfigAdapter,
+    DatabaseChannelConfigAdapter,
+    CompositeChannelConfigAdapter,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +35,10 @@ def get_message_dispatch_service(db: Session = Depends(get_db)) -> MessageDispat
     event_repo = EventRepository(db)
     
     # Configura provedor de configuração de canais
-    channel_config_provider = DefaultChannelConfigAdapter()
+    channel_config_provider = CompositeChannelConfigAdapter([
+        DatabaseChannelConfigAdapter(db),
+        DefaultChannelConfigAdapter()
+    ])
     
     # Cria serviço de notificações com provedor de configuração
     notification_service = NotificationService(

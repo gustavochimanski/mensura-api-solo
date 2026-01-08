@@ -2,7 +2,7 @@
 Router do módulo de Chatbot
 Todas as rotas relacionadas ao chatbot com IA (Ollama)
 """
-from fastapi import APIRouter, HTTPException, Request, Depends, UploadFile, File
+from fastapi import APIRouter, HTTPException, Request, Depends, UploadFile, File, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -15,6 +15,8 @@ from datetime import datetime
 from app.database.db_connection import get_db
 from ..core import database as chatbot_db
 from ..core.notifications import OrderNotification
+from app.api.notifications.repositories.whatsapp_config_repository import WhatsAppConfigRepository
+from app.api.notifications.services.whatsapp_config_service import WhatsAppConfigService
 
 # Import ngrok functions optionally (pyngrok may not be installed)
 try:
@@ -539,6 +541,7 @@ async def send_order_notification(notification: OrderNotificationRequest, db: Se
         "order_id": notification.order_id,
         "items": notification.items,
         "total": notification.total,
+        "empresa_id": notification.empresa_id,
     }
 
     # Adiciona campos específicos por tipo
@@ -580,6 +583,7 @@ async def send_notification(request: dict, db: Session = Depends(get_db)):
     """
     phone = request.get("phone")
     message = request.get("message")
+    empresa_id = request.get("empresa_id")
 
     if not phone or not message:
         raise HTTPException(
@@ -589,7 +593,7 @@ async def send_notification(request: dict, db: Session = Depends(get_db)):
 
     # Envia via WhatsApp
     notifier = OrderNotification()
-    result = await notifier.send_whatsapp_message(phone, message)
+    result = await notifier.send_whatsapp_message(phone, message, empresa_id=empresa_id)
 
     if result.get("success"):
         # Salva a mensagem enviada no histórico da conversa
@@ -1109,6 +1113,51 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 }
             )
 
+            # Se existir horário cadastrado e estiver fora do horário, responde "fechado" e não roda o SalesHandler
+            try:
+                from app.api.empresas.services.empresa_service import EmpresaService
+                from app.utils.horarios_funcionamento import empresa_esta_aberta_agora
+
+                empresa_id = 1  # TODO: Pegar empresa_id correto do contexto
+                empresa = EmpresaService(db).get_empresa(empresa_id)
+                aberto = empresa_esta_aberta_agora(
+                    horarios_funcionamento=getattr(empresa, "horarios_funcionamento", None),
+                    timezone=getattr(empresa, "timezone", None) or "America/Sao_Paulo",
+                    now=datetime.now(),
+                )
+
+                if aberto is False:
+                    resposta_fechado = "Olá! No momento estamos fechados. Por favor, envie mensagem dentro do nosso horário de funcionamento."
+
+                    notifier = OrderNotification()
+                    await notifier.send_whatsapp_message(phone_number, resposta_fechado, empresa_id=str(empresa_id))
+
+                    assistant_message_id = chatbot_db.create_message(
+                        db=db,
+                        conversation_id=conversation_id,
+                        role="assistant",
+                        content=resposta_fechado
+                    )
+
+                    await send_chatbot_websocket_notification(
+                        empresa_id=empresa_id,
+                        notification_type="whatsapp_message",
+                        title="Resposta Automática (Fechado)",
+                        message=f"Mensagem enviada para {contact_name or phone_number}",
+                        data={
+                            "conversation_id": conversation_id,
+                            "message_id": assistant_message_id,
+                            "phone_number": phone_number,
+                            "contact_name": contact_name,
+                            "role": "assistant",
+                            "content_preview": resposta_fechado
+                        }
+                    )
+                    return
+            except Exception as e:
+                # Falha aberta: se der erro ao avaliar horário, não bloqueia o atendimento
+                print(f"⚠️ Erro ao verificar horário de funcionamento: {e}")
+
             # Importa o Groq Sales Handler (LLaMA 3.1 via API - rápido!)
             from ..core.groq_sales_handler import processar_mensagem_groq
 
@@ -1125,7 +1174,7 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
 
             # Envia resposta via WhatsApp
             notifier = OrderNotification()
-            result = await notifier.send_whatsapp_message(phone_number, resposta)
+            result = await notifier.send_whatsapp_message(phone_number, resposta, empresa_id="1")
 
             if result.get("success"):
                 print(f"   ✅ Resposta enviada via WhatsApp!")
@@ -1245,7 +1294,7 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
 
                 # 8. Envia resposta via WhatsApp
                 notifier = OrderNotification()
-                result = await notifier.send_whatsapp_message(phone_number, ai_response)
+                result = await notifier.send_whatsapp_message(phone_number, ai_response, empresa_id="1")
 
                 if result.get("success"):
                     print(f"   ✅ Resposta enviada via WhatsApp!")
@@ -1263,94 +1312,49 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
 # ==================== CONFIGURAÇÕES WHATSAPP ====================
 
 @router.get("/whatsapp-config", response_model=WhatsAppConfigResponse)
-async def get_whatsapp_config():
-    """Busca a configuração atual do WhatsApp"""
-    from ..core.config_whatsapp import WHATSAPP_CONFIG
-    return WhatsAppConfigResponse(
-        access_token=WHATSAPP_CONFIG.get("access_token", ""),
-        phone_number_id=WHATSAPP_CONFIG.get("phone_number_id", ""),
-        business_account_id=WHATSAPP_CONFIG.get("business_account_id", ""),
-        api_version=WHATSAPP_CONFIG.get("api_version", "v22.0"),
-        send_mode=WHATSAPP_CONFIG.get("send_mode", "api"),
-        coexistence_enabled=WHATSAPP_CONFIG.get("coexistence_enabled", False),
-    )
+async def get_whatsapp_config(
+    empresa_id: str = Query(..., description="ID da empresa"),
+    db: Session = Depends(get_db),
+):
+    """Busca a configuração ativa do WhatsApp no banco."""
+    service = WhatsAppConfigService(WhatsAppConfigRepository(db))
+    config = service.get_active_config(empresa_id)
+
+    if not config:
+        raise HTTPException(
+            status_code=404,
+            detail="Nenhuma configuração ativa encontrada para a empresa informada",
+        )
+
+    return WhatsAppConfigService.to_response_dict(config)
 
 
 @router.put("/whatsapp-config")
-async def update_whatsapp_config(config: WhatsAppConfigUpdate):
-    """Atualiza a configuração do WhatsApp"""
-    import os
-    import json
+async def update_whatsapp_config(
+    config: WhatsAppConfigUpdate,
+    db: Session = Depends(get_db),
+):
+    """Cria/atualiza e ativa a configuração do WhatsApp no banco."""
+    if not config.empresa_id:
+        raise HTTPException(status_code=400, detail="empresa_id é obrigatório")
 
-    # Caminho do arquivo de configuração
-    config_file = os.path.join(
-        os.path.dirname(__file__),
-        "..",
-        "core",
-        "config_whatsapp.py"
-    )
+    payload = config.dict(exclude_none=True)
+    payload["empresa_id"] = str(config.empresa_id)
+    payload.setdefault("is_active", True)
 
-    # Atualiza o dicionário WHATSAPP_CONFIG
-    new_config = {
-        "access_token": config.access_token,
-        "phone_number_id": config.phone_number_id,
-        "business_account_id": config.business_account_id,
-        "api_version": config.api_version or "v22.0",
-        "send_mode": (config.send_mode or "api"),
-        "coexistence_enabled": bool(config.coexistence_enabled),
-    }
+    service = WhatsAppConfigService(WhatsAppConfigRepository(db))
+    current = service.get_active_config(config.empresa_id)
 
-    # Substitui o conteúdo do arquivo (mantém as funções auxiliares)
-    new_content = f'''# app/api/chatbot/core/config_whatsapp.py
-"""
-Configuração da API do WhatsApp Business
-"""
-
-WHATSAPP_CONFIG = {json.dumps(new_config, indent=4)}
-
-
-def get_whatsapp_url():
-    """Retorna a URL base da API do WhatsApp"""
-    api_version = WHATSAPP_CONFIG.get("api_version", "v22.0")
-    phone_number_id = WHATSAPP_CONFIG.get("phone_number_id")
-    return f"https://graph.facebook.com/{{api_version}}/{{phone_number_id}}/messages"
-
-
-def get_headers():
-    """Retorna os headers para requisições à API do WhatsApp"""
-    access_token = WHATSAPP_CONFIG.get("access_token")
-    return {{
-        "Authorization": f"Bearer {{access_token}}",
-        "Content-Type": "application/json",
-    }}
-
-
-def format_phone_number(phone: str) -> str:
-    """
-    Formata número de telefone para o formato do WhatsApp
-    Remove caracteres especiais e garante que tenha o código do país
-    """
-    # Remove todos os caracteres não numéricos
-    phone = ''.join(filter(str.isdigit, phone))
-
-    # Se não começa com código do país, assume Brasil (55)
-    if not phone.startswith('55'):
-        phone = '55' + phone
-
-    return phone
-'''
-
-    with open(config_file, 'w', encoding='utf-8') as f:
-        f.write(new_content)
-
-    # Recarrega o módulo para aplicar as mudanças
-    import importlib
-    from ..core import config_whatsapp
-    importlib.reload(config_whatsapp)
+    if current:
+        saved = service.update_config(current.id, payload)
+        action = "atualizada"
+    else:
+        saved = service.create_config(payload)
+        action = "criada"
 
     return {
-        "message": "Configuração do WhatsApp atualizada com sucesso",
-        "config": new_config
+        "message": f"Configuração do WhatsApp {action} e ativada com sucesso",
+        "config": WhatsAppConfigService.to_response_dict(saved),
     }
 
 
@@ -1548,6 +1552,29 @@ async def simulate_chatbot_message(
                 phone_number=phone_number,
                 message_sent=message_text
             )
+
+        # Se existir horário cadastrado e estiver fora do horário, retorna "fechado"
+        try:
+            from app.api.empresas.services.empresa_service import EmpresaService
+            from app.utils.horarios_funcionamento import empresa_esta_aberta_agora
+
+            empresa_id = 1  # TODO: Pegar empresa_id correto
+            empresa = EmpresaService(db).get_empresa(empresa_id)
+            aberto = empresa_esta_aberta_agora(
+                horarios_funcionamento=getattr(empresa, "horarios_funcionamento", None),
+                timezone=getattr(empresa, "timezone", None) or "America/Sao_Paulo",
+                now=datetime.now(),
+            )
+            if aberto is False:
+                resposta_fechado = "Olá! No momento estamos fechados. Por favor, envie mensagem dentro do nosso horário de funcionamento."
+                return SimulateMessageResponse(
+                    success=True,
+                    response=resposta_fechado,
+                    phone_number=phone_number,
+                    message_sent=message_text
+                )
+        except Exception as e:
+            print(f"⚠️ Erro ao verificar horário de funcionamento (simulação): {e}")
 
         # Cria conversa se não existir
         user_id = phone_number
@@ -2022,7 +2049,7 @@ Subtotal: R$ {subtotal:.2f}
 
         # Envia via WhatsApp
         notifier = OrderNotification()
-        result = await notifier.send_whatsapp_message(phone_number, mensagem)
+        result = await notifier.send_whatsapp_message(phone_number, mensagem, empresa_id=None)
 
         if result.get("success"):
             # Também registra no histórico do chatbot para aparecer no /messages
