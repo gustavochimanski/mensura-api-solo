@@ -21,10 +21,10 @@ class WhatsAppConfigService:
 
     def get_active_config(self, empresa_id: Optional[str]) -> Optional[WhatsAppConfigModel]:
         if empresa_id:
-            config = self.repo.get_active_by_empresa(empresa_id)
-            if config:
-                return config
+            # Retorna apenas a configuração da empresa informada
+            return self.repo.get_active_by_empresa(empresa_id)
         # Fallback: última configuração ativa independente da empresa (mantém compatibilidade)
+        # Só usado quando empresa_id é None
         return self.repo.get_last_active()
 
     def create_config(self, data: Dict[str, Any]) -> WhatsAppConfigModel:
