@@ -1271,6 +1271,8 @@ async def get_whatsapp_config():
         phone_number_id=WHATSAPP_CONFIG.get("phone_number_id", ""),
         business_account_id=WHATSAPP_CONFIG.get("business_account_id", ""),
         api_version=WHATSAPP_CONFIG.get("api_version", "v22.0"),
+        send_mode=WHATSAPP_CONFIG.get("send_mode", "api"),
+        coexistence_enabled=WHATSAPP_CONFIG.get("coexistence_enabled", False),
     )
 
 
@@ -1294,7 +1296,8 @@ async def update_whatsapp_config(config: WhatsAppConfigUpdate):
         "phone_number_id": config.phone_number_id,
         "business_account_id": config.business_account_id,
         "api_version": config.api_version or "v22.0",
-        "send_mode": "api",
+        "send_mode": (config.send_mode or "api"),
+        "coexistence_enabled": bool(config.coexistence_enabled),
     }
 
     # Substitui o conteúdo do arquivo (mantém as funções auxiliares)

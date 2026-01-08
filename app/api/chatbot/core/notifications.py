@@ -51,7 +51,7 @@ class OrderNotification:
                 }
             }
 
-            # Envia a mensagem
+            # Envia a mensagem (Cloud API) - compatível com modo de coexistência
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(url, json=payload, headers=headers)
 
@@ -65,15 +65,26 @@ class OrderNotification:
                         "status": "sent",
                         "response": result
                     }
-                else:
-                    error_data = response.json() if response.text else {}
-                    return {
-                        "success": False,
-                        "provider": "WhatsApp Business API (Meta)",
-                        "error": error_data.get("error", {}).get("message", response.text),
-                        "status_code": response.status_code,
-                        "phone": phone_formatted
-                    }
+
+                error_data = response.json() if response.text else {}
+                error_detail = error_data.get("error", {}) if isinstance(error_data, dict) else {}
+
+                coexistence_hint = None
+                # Dica adicional quando houver conflito de registro do número
+                if response.status_code in (400, 403, 409):
+                    coexistence_hint = (
+                        "Verifique se o número foi conectado no modo 'App e API' na Meta "
+                        "(coexistência) e se o app WhatsApp Business está atualizado."
+                    )
+
+                return {
+                    "success": False,
+                    "provider": "WhatsApp Business API (Meta)",
+                    "error": error_detail.get("message", response.text),
+                    "status_code": response.status_code,
+                    "phone": phone_formatted,
+                    "coexistence_hint": coexistence_hint
+                }
 
         except Exception as e:
             return {
@@ -308,20 +319,29 @@ _Obrigado pela preferência!_"""
         chat_result = await cls.send_notification_async(db, phone, message, order_type)
         results["chat_interno"] = chat_result
 
-        # Se modo API estiver ativado, envia via WhatsApp também
-        if WHATSAPP_CONFIG.get("send_mode") == "api":
+        # Se modo API/coexistência estiver ativado, envia via WhatsApp também
+        send_mode = WHATSAPP_CONFIG.get("send_mode")
+        if send_mode in {"api", "coexistence"}:
             whatsapp_result = await cls.send_whatsapp_message(phone, message)
             results["whatsapp_api"] = whatsapp_result
 
             # Considera sucesso se WhatsApp API funcionou
             if whatsapp_result.get("success"):
                 results["success"] = True
-                results["provider"] = "WhatsApp API + Chat Interno"
+                provider_label = (
+                    "WhatsApp API (Coexistência) + Chat Interno"
+                    if send_mode == "coexistence"
+                    else "WhatsApp API + Chat Interno"
+                )
+                results["provider"] = provider_label
                 results["message"] = "Notificação enviada via WhatsApp e salva no chat"
             else:
                 results["success"] = False
                 results["error"] = whatsapp_result.get("error")
-                results["message"] = "Erro ao enviar via WhatsApp, mas salvo no chat"
+                results["message"] = (
+                    whatsapp_result.get("coexistence_hint")
+                    or "Erro ao enviar via WhatsApp, mas salvo no chat"
+                )
         else:
             # Modo chat interno apenas
             results["success"] = chat_result.get("success", False)
