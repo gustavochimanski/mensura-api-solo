@@ -17,7 +17,7 @@ class OrderNotification:
     """Gerenciador de notificações de pedidos"""
 
     @staticmethod
-    async def send_whatsapp_message(phone: str, message: str) -> Dict:
+    async def send_whatsapp_message(phone: str, message: str, empresa_id: Optional[str] = None) -> Dict:
         """
         Envia mensagem via WhatsApp Business API (Meta)
 
@@ -29,16 +29,30 @@ class OrderNotification:
             Dict com resultado do envio
         """
         try:
-            from .config_whatsapp import WHATSAPP_CONFIG, get_whatsapp_url, get_headers, format_phone_number
+            from .config_whatsapp import (
+                load_whatsapp_config,
+                get_whatsapp_url,
+                get_headers,
+                format_phone_number,
+            )
+
+            config = load_whatsapp_config(empresa_id)
+            if not config.get("access_token") or not config.get("phone_number_id"):
+                return {
+                    "success": False,
+                    "provider": "WhatsApp Business API (Meta)",
+                    "error": "Configuração do WhatsApp ausente ou incompleta",
+                    "phone": phone,
+                }
 
             # Formata o número para o padrão WhatsApp
             phone_formatted = format_phone_number(phone)
 
             # URL da API
-            url = get_whatsapp_url()
+            url = get_whatsapp_url(empresa_id, config)
 
             # Headers com token de autorização
-            headers = get_headers()
+            headers = get_headers(empresa_id, config)
 
             # Payload da mensagem
             payload = {
@@ -286,7 +300,7 @@ _Obrigado pela preferência!_"""
         Returns:
             Dict com resultado do envio
         """
-        from .config_whatsapp import WHATSAPP_CONFIG
+        from .config_whatsapp import load_whatsapp_config
 
         # Formata mensagem baseada no tipo de pedido
         if order_type == "cardapio":
@@ -320,9 +334,11 @@ _Obrigado pela preferência!_"""
         results["chat_interno"] = chat_result
 
         # Se modo API/coexistência estiver ativado, envia via WhatsApp também
-        send_mode = WHATSAPP_CONFIG.get("send_mode")
+        empresa_id = order_data.get("empresa_id")
+        whatsapp_config = load_whatsapp_config(empresa_id)
+        send_mode = whatsapp_config.get("send_mode")
         if send_mode in {"api", "coexistence"}:
-            whatsapp_result = await cls.send_whatsapp_message(phone, message)
+            whatsapp_result = await cls.send_whatsapp_message(phone, message, empresa_id=empresa_id)
             results["whatsapp_api"] = whatsapp_result
 
             # Considera sucesso se WhatsApp API funcionou

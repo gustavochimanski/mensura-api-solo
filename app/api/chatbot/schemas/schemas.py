@@ -107,6 +107,7 @@ class MessageResponse(BaseModel):
 class OrderNotificationRequest(BaseModel):
     """Requisição de notificação de pedido"""
     order_type: str  # cardapio, mesa, balcao
+    empresa_id: Optional[int] = None
     client_name: str
     client_phone: str
     order_id: int
@@ -129,19 +130,30 @@ class NotificationResponse(BaseModel):
 
 class WhatsAppConfigUpdate(BaseModel):
     """Atualização de configuração do WhatsApp"""
+    empresa_id: Optional[str] = None
+    name: Optional[str] = None
+    display_phone_number: Optional[str] = None
     access_token: str
     phone_number_id: str
     business_account_id: str
     api_version: Optional[str] = "v22.0"
     send_mode: Optional[str] = "api"
     coexistence_enabled: Optional[bool] = False
+    is_active: Optional[bool] = True
 
 
 class WhatsAppConfigResponse(BaseModel):
     """Resposta de configuração do WhatsApp"""
+    id: Optional[str] = None
+    empresa_id: Optional[str] = None
+    name: Optional[str] = None
+    display_phone_number: Optional[str] = None
     access_token: str
     phone_number_id: str
     business_account_id: str
     api_version: str
     send_mode: str
     coexistence_enabled: bool
+    is_active: Optional[bool] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None

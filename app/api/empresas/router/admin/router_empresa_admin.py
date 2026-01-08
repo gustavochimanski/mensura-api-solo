@@ -74,6 +74,8 @@ async def create_empresa(
     nome: str = Form(...),
     cnpj: str | None = Form(None),
     endereco: str = Form(...),  # JSON string com campos de endereço
+    horarios_funcionamento: str | None = Form(None),  # JSON string com horários
+    timezone: str | None = Form("America/Sao_Paulo"),
     logo: UploadFile | None = None,
     cardapio_link: str | None = Form(None),
     cardapio_tema: str | None = Form("padrao"),
@@ -81,12 +83,25 @@ async def create_empresa(
     tempo_entrega_maximo: int = Form(...),
     db: Session = Depends(get_db),
 ):
-    endereco_data = json.loads(endereco)
+    try:
+        endereco_data = json.loads(endereco)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Campo 'endereco' deve ser um JSON válido (string).")
+
+    if horarios_funcionamento:
+        try:
+            horarios_data = json.loads(horarios_funcionamento)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Campo 'horarios_funcionamento' deve ser um JSON válido (string).")
+    else:
+        horarios_data = None
     slug = make_slug(nome)
     empresa_data = EmpresaCreate(
         nome=nome,
         cnpj=cnpj,
         slug=slug,
+        timezone=timezone,
+        horarios_funcionamento=horarios_data,
         cardapio_link=cardapio_link,
         cardapio_tema=cardapio_tema,
         aceita_pedido_automatico = aceita_pedido_automatico.lower() == "true",
@@ -102,6 +117,8 @@ async def update_empresa(
     nome: str | None = Form(None),
     cnpj: str | None = Form(None),
     endereco: str | None = Form(None),  # JSON string com campos de endereço
+    horarios_funcionamento: str | None = Form(None),  # JSON string com horários
+    timezone: str | None = Form(None),
     logo: UploadFile | None = None,
     cardapio_link: str | None = Form(None),
     cardapio_tema: str | None = Form(None),
@@ -110,11 +127,27 @@ async def update_empresa(
     db: Session = Depends(get_db),
 ):
     slug = make_slug(nome) if nome else None
-    endereco_payload = json.loads(endereco) if endereco else {}
+    if endereco:
+        try:
+            endereco_payload = json.loads(endereco)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Campo 'endereco' deve ser um JSON válido (string).")
+    else:
+        endereco_payload = {}
+
+    if horarios_funcionamento:
+        try:
+            horarios_payload = json.loads(horarios_funcionamento)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Campo 'horarios_funcionamento' deve ser um JSON válido (string).")
+    else:
+        horarios_payload = None
     empresa_data = EmpresaUpdate(
         nome=nome,
         cnpj=cnpj,
         slug=slug,
+        timezone=timezone,
+        horarios_funcionamento=horarios_payload,
         cardapio_link=cardapio_link,
         cardapio_tema=cardapio_tema,
         aceita_pedido_automatico = aceita_pedido_automatico.lower() == "true" if aceita_pedido_automatico else None,

@@ -83,6 +83,8 @@ class EmpresaService:
             nome=data.nome,
             cnpj=data.cnpj,
             slug=slug,
+            timezone=data.timezone or "America/Sao_Paulo",
+            horarios_funcionamento=data.horarios_funcionamento,
             cardapio_tema=data.cardapio_tema,
             aceita_pedido_automatico=bool(data.aceita_pedido_automatico),
             tempo_entrega_maximo=data.tempo_entrega_maximo,
@@ -168,6 +170,8 @@ class EmpresaService:
                 empresa.aceita_pedido_automatico = bool(value)
             elif key == "estado" and value is not None:
                 empresa.estado = value.upper()
+            elif key == "timezone" and value is not None:
+                empresa.timezone = value
             else:
                 setattr(empresa, key, value)
 

@@ -60,7 +60,7 @@ from app.api.catalogo.contracts.complemento_contract import IComplementoContract
 from app.api.pedidos.services.service_pedido_kanban import KanbanService
 # Migrado para modelos unificados - contratos não são mais necessários
 from app.api.empresas.repositories.empresa_repo import EmpresaRepository
-from app.api.chatbot.core.config_whatsapp import WHATSAPP_CONFIG
+from app.api.chatbot.core.config_whatsapp import load_whatsapp_config
 from app.api.chatbot.core.notifications import OrderNotification
 from app.utils.logger import logger
 from app.utils.database_utils import now_trimmed
@@ -1457,9 +1457,10 @@ class PedidoService:
         return str(status)
 
     @staticmethod
-    def _whatsapp_config_valida() -> bool:
+    def _whatsapp_config_valida(empresa_id: Optional[str] = None) -> bool:
         required_keys = ("access_token", "phone_number_id", "api_version")
-        return all(WHATSAPP_CONFIG.get(chave) for chave in required_keys)
+        cfg = load_whatsapp_config(str(empresa_id) if empresa_id is not None else None)
+        return all(cfg.get(chave) for chave in required_keys)
 
     def _execute_async(self, coro_factory: Callable[[], object]) -> object:
         primary_coro = coro_factory()
@@ -1638,7 +1639,7 @@ class PedidoService:
                 )
                 return
 
-            if not self._whatsapp_config_valida():
+            if not self._whatsapp_config_valida(getattr(pedido, "empresa_id", None)):
                 logger.warning("[Pedidos] Configurações do WhatsApp (chatbot) ausentes; notificação não enviada")
                 return
 
@@ -1648,6 +1649,7 @@ class PedidoService:
                 lambda: OrderNotification.send_whatsapp_message(
                     telefone,
                     whatsapp_message,
+                    getattr(pedido, "empresa_id", None),
                 )
             )
 

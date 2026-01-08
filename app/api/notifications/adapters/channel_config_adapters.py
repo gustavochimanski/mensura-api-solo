@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from ..contracts.channel_config_provider_contract import IChannelConfigProvider
 from ..models.notification import NotificationChannel
+from ..repositories.whatsapp_config_repository import WhatsAppConfigRepository
 
 logger = logging.getLogger(__name__)
 
@@ -23,13 +24,13 @@ class DefaultChannelConfigAdapter(IChannelConfigProvider):
         # Para WhatsApp, tenta usar a configuração do chatbot se disponível
         if channel == NotificationChannel.WHATSAPP:
             try:
-                from app.api.chatbot.core.config_whatsapp import WHATSAPP_CONFIG
-                # Usa a configuração do chatbot se estiver disponível
-                if WHATSAPP_CONFIG.get("access_token") and WHATSAPP_CONFIG.get("phone_number_id"):
+                from app.api.chatbot.core.config_whatsapp import load_whatsapp_config
+                chatbot_config = load_whatsapp_config(empresa_id)
+                if chatbot_config.get("access_token") and chatbot_config.get("phone_number_id"):
                     config = {
-                        "access_token": WHATSAPP_CONFIG.get("access_token"),
-                        "phone_number_id": WHATSAPP_CONFIG.get("phone_number_id"),
-                        "api_version": WHATSAPP_CONFIG.get("api_version", "v22.0")
+                        "access_token": chatbot_config.get("access_token"),
+                        "phone_number_id": chatbot_config.get("phone_number_id"),
+                        "api_version": chatbot_config.get("api_version", "v22.0")
                     }
                     logger.debug("Usando configuração do WhatsApp do chatbot")
             except ImportError:
@@ -92,6 +93,7 @@ class DatabaseChannelConfigAdapter(IChannelConfigProvider):
     
     def __init__(self, db: Session):
         self.db = db
+        self.whatsapp_repo = WhatsAppConfigRepository(db)
     
     def get_channel_config(
         self,
@@ -99,9 +101,24 @@ class DatabaseChannelConfigAdapter(IChannelConfigProvider):
         channel: NotificationChannel
     ) -> Optional[Dict[str, Any]]:
         """Busca configuração do banco de dados"""
-        # TODO: Implementar busca real no banco
-        # Por enquanto, retorna None para usar configuração padrão
         logger.debug(f"Buscando configuração de canal {channel} para empresa {empresa_id}")
+
+        if channel == NotificationChannel.WHATSAPP:
+            config = self.whatsapp_repo.get_active_by_empresa(empresa_id)
+            if not config:
+                return None
+
+            return {
+                "access_token": config.access_token,
+                "phone_number_id": config.phone_number_id,
+                "business_account_id": config.business_account_id,
+                "api_version": config.api_version,
+                "send_mode": config.send_mode,
+                "coexistence_enabled": config.coexistence_enabled,
+                "display_phone_number": config.display_phone_number,
+                "name": config.name,
+            }
+
         return None
     
     def validate_channel_config(
@@ -111,7 +128,8 @@ class DatabaseChannelConfigAdapter(IChannelConfigProvider):
         config: Dict[str, Any]
     ) -> bool:
         """Valida configuração"""
-        # TODO: Implementar validação baseada em regras do banco
+        if channel == NotificationChannel.WHATSAPP:
+            return all(config.get(k) for k in ("access_token", "phone_number_id"))
         return True
     
     def get_default_channel_config(self, channel: NotificationChannel) -> Dict[str, Any]:

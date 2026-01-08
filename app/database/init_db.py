@@ -267,6 +267,7 @@ def importar_models():
     from app.api.catalogo.models.model_complemento import ComplementoModel
     # ─── Models Notifications ───────────────────────────────────────────
     from app.api.notifications.models.notification import Notification, NotificationLog
+    from app.api.notifications.models.whatsapp_config_model import WhatsAppConfigModel
     logger.info("📦 Models importados com sucesso.")
 
 
@@ -530,6 +531,26 @@ def criar_tabelas():
         except Exception as e:
             logger.error(
                 "❌ Erro ao garantir colunas minimo_itens/maximo_itens em catalogo.complemento_produto: %s",
+                e,
+                exc_info=True,
+            )
+
+        # Garante colunas de horário de funcionamento em cadastros.empresas
+        try:
+            with engine.begin() as conn:
+                conn.execute(
+                    text(
+                        """
+                        ALTER TABLE cadastros.empresas
+                        ADD COLUMN IF NOT EXISTS timezone varchar(64) DEFAULT 'America/Sao_Paulo',
+                        ADD COLUMN IF NOT EXISTS horarios_funcionamento jsonb
+                        """
+                    )
+                )
+            logger.info("✅ Colunas timezone/horarios_funcionamento em cadastros.empresas criadas/verificadas com sucesso")
+        except Exception as e:
+            logger.error(
+                "❌ Erro ao garantir colunas timezone/horarios_funcionamento em cadastros.empresas: %s",
                 e,
                 exc_info=True,
             )

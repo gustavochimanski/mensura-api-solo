@@ -1,5 +1,6 @@
 # app/api/empresas/models/empresa_model.py
 from sqlalchemy import Column, Integer, String, Boolean, Numeric
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from pydantic import ConfigDict
 
@@ -19,6 +20,15 @@ class EmpresaModel(Base):
     telefone = Column(String(255), nullable=True)
 
     aceita_pedido_automatico = Column(Boolean, nullable=False, default=False)
+
+    # Horário de funcionamento (para chatbot e disponibilidade)
+    # Estrutura esperada (JSON):
+    # [
+    #   {"dia_semana": 0..6, "intervalos": [{"inicio":"HH:MM","fim":"HH:MM"}]}
+    # ]
+    # dia_semana: 0=domingo, 1=segunda, ..., 6=sábado
+    timezone = Column(String(64), nullable=True, default="America/Sao_Paulo")
+    horarios_funcionamento = Column(JSONB, nullable=True)
 
     # Configurações de Cardápio
     cardapio_link = Column(String(255), nullable=True, unique=True)
