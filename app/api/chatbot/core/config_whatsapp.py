@@ -8,7 +8,12 @@ WHATSAPP_CONFIG = {
     "phone_number_id": "887075554489957",
     "business_account_id": "1454221955671283",
     "api_version": "v22.0",
-    "send_mode": "api"
+    # send_mode:
+    # - api: usa somente API (fluxo atual)
+    # - coexistence: número compartilhado com o app WhatsApp Business
+    "send_mode": "api",
+    "coexistence_enabled": False,
+    # Referência: https://developers.facebook.com/docs/whatsapp/cloud-api/phone-numbers#app-and-api-coexistence
 }
 
 
