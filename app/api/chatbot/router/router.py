@@ -570,14 +570,22 @@ async def send_order_notification(notification: OrderNotificationRequest, db: Se
 
 
 @router.post("/send-notification")
-async def send_notification(request: dict, db: Session = Depends(get_db)):
+async def send_notification(request: Request, db: Session = Depends(get_db)):
     """
     Endpoint simples para enviar notificações WhatsApp
     Aceita telefone e mensagem formatada
     Salva a mensagem no histórico da conversa
     """
-    phone = request.get("phone")
-    message = request.get("message")
+    try:
+        body = await request.json()
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Erro ao processar JSON: {str(e)}"
+        )
+    
+    phone = body.get("phone")
+    message = body.get("message")
 
     if not phone or not message:
         raise HTTPException(
@@ -617,15 +625,23 @@ async def send_notification(request: dict, db: Session = Depends(get_db)):
 
 
 @router.post("/send-media")
-async def send_media(request: dict, db: Session = Depends(get_db)):
+async def send_media(request: Request, db: Session = Depends(get_db)):
     """
     Endpoint para enviar arquivos (imagem, documento, audio, video) via WhatsApp
     Salva a mensagem no histórico da conversa
     """
-    phone = request.get("phone")
-    media_url = request.get("media_url")
-    media_type = request.get("media_type", "image")  # image, document, audio, video
-    caption = request.get("caption", "")
+    try:
+        body = await request.json()
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Erro ao processar JSON: {str(e)}"
+        )
+    
+    phone = body.get("phone")
+    media_url = body.get("media_url")
+    media_type = body.get("media_type", "image")  # image, document, audio, video
+    caption = body.get("caption", "")
 
     if not phone or not media_url:
         raise HTTPException(
