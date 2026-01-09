@@ -77,7 +77,7 @@ class DefaultChannelConfigAdapter(IChannelConfigProvider):
                 "headers": {"Content-Type": "application/json"}
             },
             NotificationChannel.WHATSAPP: {
-                "access_token": "LLaJ4CTFRHMtE9o8hHRp3YU4AK",  # 360dialog API key
+                # Usa 360dialog como padrão, mas depende da configuração por empresa
                 "base_url": "https://waba-v2.360dialog.io",
                 "provider": "360dialog",
                 "api_version": "v22.0",
@@ -122,8 +122,13 @@ class DatabaseChannelConfigAdapter(IChannelConfigProvider):
                 "coexistence_enabled": config.coexistence_enabled,
                 "display_phone_number": config.display_phone_number,
                 "name": config.name,
-                "base_url": "https://waba-v2.360dialog.io",
-                "provider": "360dialog",
+                    "base_url": config.base_url or "https://waba-v2.360dialog.io",
+                    "provider": config.provider or "360dialog",
+                    "webhook_url": config.webhook_url,
+                    "webhook_verify_token": config.webhook_verify_token,
+                    "webhook_is_active": config.webhook_is_active,
+                    "webhook_status": config.webhook_status,
+                    "webhook_last_sync": config.webhook_last_sync,
             }
 
         return None
