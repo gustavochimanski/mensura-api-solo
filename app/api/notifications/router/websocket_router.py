@@ -4,6 +4,24 @@ import json
 import logging
 from datetime import datetime
 
+# Tenta importar ClientDisconnected, se não estiver disponível, usa verificação dinâmica
+try:
+    from uvicorn.protocols.utils import ClientDisconnected
+except ImportError:
+    ClientDisconnected = None
+
+def _is_disconnect_exception(e: Exception) -> bool:
+    """Verifica se a exceção é relacionada a desconexão do cliente"""
+    if isinstance(e, WebSocketDisconnect):
+        return True
+    if ClientDisconnected and isinstance(e, ClientDisconnected):
+        return True
+    # Verifica pelo nome da classe (para casos onde o import falhou)
+    exception_type = type(e).__name__
+    if "Disconnect" in exception_type or "ConnectionClosed" in exception_type:
+        return True
+    return False
+
 from ..core.websocket_manager import websocket_manager
 from ....core.admin_dependencies import get_current_user, decode_access_token
 from ....database.db_connection import get_db
@@ -264,7 +282,22 @@ async def websocket_notifications(
             "empresa_id": empresa_id,
             "timestamp": datetime.utcnow().isoformat()
         }
-        await websocket.send_text(json.dumps(welcome_message))
+        try:
+            await websocket.send_text(json.dumps(welcome_message))
+        except Exception as e:
+            if _is_disconnect_exception(e):
+                logger.info(
+                    f"[WS_ROUTER] Cliente desconectou antes de receber mensagem de boas-vindas - "
+                    f"user_id={user_id}, empresa_id={empresa_id}, websocket_id={id(websocket)}"
+                )
+                # Cliente desconectou imediatamente, não há problema - apenas retorna
+                return
+            else:
+                logger.warning(
+                    f"[WS_ROUTER] Erro ao enviar mensagem de boas-vindas - "
+                    f"user_id={user_id}, empresa_id={empresa_id}, erro={e}"
+                )
+                # Se houver erro ao enviar, continua mesmo assim - o cliente pode ter desconectado
         
         # Loop para manter a conexão ativa e processar mensagens
         while True:
@@ -289,7 +322,9 @@ async def websocket_notifications(
                     "message": "Formato de mensagem inválido",
                     "timestamp": datetime.utcnow().isoformat()
                 }
-                await websocket.send_text(json.dumps(error_message))
+                # Se falhar ao enviar, o cliente provavelmente desconectou
+                if not await _safe_send_text(websocket, error_message, user_id, empresa_id):
+                    break
             except Exception as e:
                 logger.error(f"Erro no WebSocket para usuário {user_id}: {e}")
                 break
@@ -309,6 +344,24 @@ async def websocket_notifications(
         await websocket_manager.disconnect(websocket)
 
 
+async def _safe_send_text(websocket: WebSocket, message: Dict[str, Any], user_id: str = "unknown", empresa_id: str = "unknown") -> bool:
+    """Envia mensagem de forma segura, tratando desconexões"""
+    try:
+        await websocket.send_text(json.dumps(message))
+        return True
+    except Exception as e:
+        if _is_disconnect_exception(e):
+            logger.debug(
+                f"[WS_ROUTER] Cliente desconectado ao enviar mensagem - "
+                f"user_id={user_id}, empresa_id={empresa_id}, tipo={message.get('type', 'unknown')}"
+            )
+        else:
+            logger.warning(
+                f"[WS_ROUTER] Erro ao enviar mensagem - "
+                f"user_id={user_id}, empresa_id={empresa_id}, tipo={message.get('type', 'unknown')}, erro={e}"
+            )
+        return False
+
 async def _handle_client_message(websocket: WebSocket, user_id: str, empresa_id: str, message: Dict[str, Any]):
     """Processa mensagens recebidas do cliente"""
     message_type = message.get("type")
@@ -319,7 +372,7 @@ async def _handle_client_message(websocket: WebSocket, user_id: str, empresa_id:
             "type": "pong",
             "timestamp": datetime.utcnow().isoformat()
         }
-        await websocket.send_text(json.dumps(pong_message))
+        await _safe_send_text(websocket, pong_message, user_id, empresa_id)
         
     elif message_type == "subscribe":
         # Cliente quer se inscrever em tipos específicos de notificação
@@ -330,7 +383,7 @@ async def _handle_client_message(websocket: WebSocket, user_id: str, empresa_id:
             "event_types": event_types,
             "timestamp": datetime.utcnow().isoformat()
         }
-        await websocket.send_text(json.dumps(subscription_message))
+        await _safe_send_text(websocket, subscription_message, user_id, empresa_id)
     
     elif message_type == "set_route":
         # Cliente informa que mudou de rota
@@ -346,7 +399,7 @@ async def _handle_client_message(websocket: WebSocket, user_id: str, empresa_id:
             "route": route,
             "timestamp": datetime.utcnow().isoformat()
         }
-        await websocket.send_text(json.dumps(route_message))
+        await _safe_send_text(websocket, route_message, user_id, empresa_id)
         
         # Log do estado após atualizar rota
         stats = websocket_manager.get_connection_stats()
@@ -364,7 +417,7 @@ async def _handle_client_message(websocket: WebSocket, user_id: str, empresa_id:
             "data": stats,
             "timestamp": datetime.utcnow().isoformat()
         }
-        await websocket.send_text(json.dumps(stats_message))
+        await _safe_send_text(websocket, stats_message, user_id, empresa_id)
         
     else:
         # Tipo de mensagem não reconhecido
@@ -373,7 +426,7 @@ async def _handle_client_message(websocket: WebSocket, user_id: str, empresa_id:
             "message": f"Tipo de mensagem '{message_type}' não reconhecido",
             "timestamp": datetime.utcnow().isoformat()
         }
-        await websocket.send_text(json.dumps(error_message))
+        await _safe_send_text(websocket, error_message, user_id, empresa_id)
 
 @router.get("/connections/stats")
 async def get_connection_stats(current_user = Depends(get_current_user)):

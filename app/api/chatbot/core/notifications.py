@@ -229,11 +229,26 @@ class OrderNotification:
             # mas a conta inteira é bloqueada se houver pendências de pagamento, mesmo para respostas.
             # O formato abaixo é o correto para mensagens dentro da janela de conversa.
             if is_360:
+                # Para 360Dialog, tenta diferentes formatos de número se o primeiro falhar
+                # Formato 1: Com código do país (padrão)
+                phone_to_use = phone_formatted
+                
+                # Validação: remove espaços e caracteres especiais do número
+                phone_to_use = ''.join(filter(str.isdigit, phone_to_use))
+                
+                # Garante que tem código do país
+                if not phone_to_use.startswith('55'):
+                    phone_to_use = '55' + phone_to_use
+                
                 payload = {
-                    "to": phone_formatted,
+                    "to": phone_to_use,
                     "type": "text",
                     "text": {"body": message},
                 }
+                
+                # Log do número que será usado
+                print(f"   📱 Número formatado para envio: {phone_to_use} (original: {phone})")
+                
                 # Não precisamos adicionar "context" ou "message_id" - o 360dialog detecta automaticamente
                 # se é uma resposta dentro da janela de conversa baseado no número e timestamp
             else:
@@ -251,10 +266,47 @@ class OrderNotification:
             logger.debug(f"[WhatsApp] Enviando para URL: {url}")
             print(f"   🔍 URL: {url}")
             print(f"   🔍 Payload: {json.dumps(payload, indent=2, ensure_ascii=False)}")
+            
+            # Para 360Dialog, tenta diferentes formatos se o primeiro falhar
+            last_error = None
+            last_response = None
+            
             async with httpx.AsyncClient(timeout=30.0) as client:
+                # Primeira tentativa com o formato padrão
                 response = await client.post(url, json=payload, headers=headers)
                 logger.debug(f"[WhatsApp] Resposta recebida - status_code={response.status_code}")
                 print(f"   📡 Resposta HTTP: status_code={response.status_code}")
+                
+                # Se falhar com 400 e for 360Dialog, tenta formato alternativo do número
+                if response.status_code == 400 and is_360:
+                    error_text = response.text or ""
+                    last_error = error_text
+                    last_response = response
+                    
+                    # Tenta sem código do país (apenas DDD + número)
+                    if phone_to_use.startswith('55') and len(phone_to_use) > 11:
+                        phone_alt = phone_to_use[2:]  # Remove o 55
+                        print(f"   🔄 Tentando formato alternativo (sem código do país): {phone_alt}")
+                        payload_alt = payload.copy()
+                        payload_alt["to"] = phone_alt
+                        
+                        response = await client.post(url, json=payload_alt, headers=headers)
+                        print(f"   📡 Resposta HTTP (tentativa alternativa): status_code={response.status_code}")
+                        
+                        if response.status_code == 200:
+                            # Sucesso com formato alternativo
+                            result = response.json()
+                            message_id = result.get("messages", [{}])[0].get("id") if result.get("messages") else None
+                            print(f"   ✅ Mensagem enviada com sucesso (formato alternativo)! Message ID: {message_id}")
+                            return {
+                                "success": True,
+                                "provider": "360dialog",
+                                "phone": phone_alt,
+                                "message_id": message_id,
+                                "status": "sent",
+                                "response": result,
+                                "note": "Enviado com formato alternativo (sem código do país)"
+                            }
                 
                 if response.status_code != 200:
                     # Log completo do erro
@@ -269,11 +321,28 @@ class OrderNotification:
                         print(f"   🔗 URL: {url}")
                         print(f"   📦 Payload enviado: {json.dumps(payload, indent=2, ensure_ascii=False)}")
                         print(f"   🔑 Headers: {json.dumps({k: v if 'key' not in k.lower() and 'token' not in k.lower() else '***' + str(v)[-10:] for k, v in headers.items()}, indent=2)}")
-                    except:
+                        
+                        # Tenta extrair mais detalhes do erro
+                        if isinstance(error_json, dict):
+                            error_detail = error_json.get("error", {})
+                            if isinstance(error_detail, dict):
+                                error_code = error_detail.get("code")
+                                error_type = error_detail.get("type")
+                                error_subcode = error_detail.get("error_subcode")
+                                if error_code or error_type:
+                                    print(f"   🔍 Detalhes do erro:")
+                                    if error_code:
+                                        print(f"      Code: {error_code}")
+                                    if error_type:
+                                        print(f"      Type: {error_type}")
+                                    if error_subcode:
+                                        print(f"      Subcode: {error_subcode}")
+                    except Exception as parse_error:
                         error_message = error_text
                         logger.error(f"[WhatsApp] Erro ao enviar mensagem (Status {response.status_code}): {error_message}")
                         print(f"   ❌ ERRO ao enviar mensagem: {error_message}")
                         print(f"   📄 Resposta completa (texto): {error_text[:1000]}")
+                        print(f"   ⚠️ Erro ao parsear JSON: {parse_error}")
 
                 if response.status_code == 200:
                     result = response.json()
