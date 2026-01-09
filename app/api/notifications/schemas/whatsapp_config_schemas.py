@@ -1,6 +1,6 @@
 from typing import Optional
 from datetime import datetime
-from pydantic import BaseModel, root_validator
+from pydantic import BaseModel, model_validator
 
 
 class WhatsAppConfigBase(BaseModel):
@@ -13,6 +13,11 @@ class WhatsAppConfigBase(BaseModel):
     send_mode: Optional[str] = "api"
     coexistence_enabled: Optional[bool] = False
     is_active: Optional[bool] = False
+    webhook_url: Optional[str] = None
+    webhook_verify_token: Optional[str] = None
+    webhook_is_active: Optional[bool] = False
+    webhook_status: Optional[str] = "pending"
+    webhook_last_sync: Optional[datetime] = None
 
 
 class WhatsAppConfigCreate(WhatsAppConfigBase):
@@ -20,20 +25,25 @@ class WhatsAppConfigCreate(WhatsAppConfigBase):
     access_token: str
     phone_number_id: Optional[str] = None
 
-    @root_validator
-    def ensure_required_fields(cls, values):
-        provider = (values.get("provider") or "").lower()
-        base_url = (values.get("base_url") or "").lower()
-        phone_number_id = values.get("phone_number_id")
+    @model_validator(mode='after')
+    def ensure_required_fields(self):
+        provider = (self.provider or "").lower()
+        base_url = (self.base_url or "").lower()
+        phone_number_id = self.phone_number_id
+        webhook_url = self.webhook_url
+        webhook_verify_token = self.webhook_verify_token
 
         if "360dialog" not in provider and "360dialog" not in base_url:
             if not phone_number_id:
                 raise ValueError("phone_number_id é obrigatório para provedores que não sejam 360dialog")
 
-        if not values.get("access_token"):
+        if not self.access_token:
             raise ValueError("access_token é obrigatório")
 
-        return values
+        if webhook_url and not webhook_verify_token:
+            raise ValueError("webhook_verify_token é obrigatório quando webhook_url for enviado")
+
+        return self
 
 
 class WhatsAppConfigUpdate(BaseModel):
@@ -49,6 +59,11 @@ class WhatsAppConfigUpdate(BaseModel):
     send_mode: Optional[str] = None
     coexistence_enabled: Optional[bool] = None
     is_active: Optional[bool] = None
+    webhook_url: Optional[str] = None
+    webhook_verify_token: Optional[str] = None
+    webhook_is_active: Optional[bool] = None
+    webhook_status: Optional[str] = None
+    webhook_last_sync: Optional[datetime] = None
 
 
 class WhatsAppConfigResponse(BaseModel):
@@ -65,6 +80,11 @@ class WhatsAppConfigResponse(BaseModel):
     send_mode: str
     coexistence_enabled: bool
     is_active: bool
+    webhook_url: Optional[str] = None
+    webhook_verify_token: Optional[str] = None
+    webhook_is_active: bool
+    webhook_status: Optional[str] = None
+    webhook_last_sync: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
 

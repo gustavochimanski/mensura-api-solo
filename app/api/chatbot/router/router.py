@@ -1057,8 +1057,9 @@ async def webhook_verification(request: Request):
         token = request.query_params.get("hub.verify_token")
         challenge = request.query_params.get("hub.challenge")
 
-        # Token de verificação - você pode mudar isso
-        VERIFY_TOKEN = "meu_token_secreto_123"
+        # Token de verificação vem da configuração ativa (360dialog)
+        cfg = load_whatsapp_config()
+        VERIFY_TOKEN = cfg.get("webhook_verify_token") or "meu_token_secreto_123"
 
         # Log para debug
         print(f"\n🔍 Verificação do webhook recebida:")
@@ -1558,20 +1559,33 @@ async def get_ngrok_url():
 
 
 @router.get("/webhook-info")
-async def get_webhook_info():
-    """Retorna informacoes sobre o webhook do WhatsApp"""
-    # Webhook configurado no dominio proprio
-    webhook_url = "https://mensuraapi.com.br/api/chatbot/webhook"
+async def get_webhook_info(
+    empresa_id: str = Query(..., description="ID da empresa"),
+    db: Session = Depends(get_db),
+):
+    """Retorna informacoes sobre o webhook configurado para o WhatsApp"""
+    service = WhatsAppConfigService(WhatsAppConfigRepository(db))
+    config = service.get_active_config(empresa_id)
+
+    webhook_url = None
+    verify_token = None
+    status = "unconfigured"
+
+    if config:
+        webhook_url = config.webhook_url or get_webhook_url()
+        verify_token = config.webhook_verify_token
+        status = config.webhook_status or ("active" if config.webhook_is_active else "pending")
+    else:
+        webhook_url = get_webhook_url()
 
     return {
         "webhook_url": webhook_url,
-        "verify_token": "meu_token_secreto_123",
-        "status": "active",
+        "verify_token": verify_token,
+        "status": status,
         "instructions": {
-            "step_1": "Acesse https://developers.facebook.com",
-            "step_2": "Va em 'Meus Apps' > Seu App > WhatsApp > Configuration",
-            "step_3": f"Configure o webhook com URL: {webhook_url}",
-            "step_4": "Token de Verificacao: meu_token_secreto_123"
+            "step_1": "Acesse o painel do 360dialog e defina o webhook",
+            "step_2": f"Use a URL: {webhook_url}" if webhook_url else "Configure uma URL pública para receber webhooks",
+            "step_3": "Informe o verify token configurado aqui para validar o webhook",
         }
     }
 
@@ -1584,7 +1598,8 @@ async def test_whatsapp_token(config: WhatsAppConfigUpdate):
     """
     try:
         # 360dialog: consulta configuração do webhook para validar a API key
-        url = f"{D360_BASE_URL.rstrip('/')}/v1/configs/webhook"
+        base_url = config.base_url or D360_BASE_URL
+        url = f"{base_url.rstrip('/')}/v1/configs/webhook"
         headers = {
             "D360-API-KEY": config.access_token,
             "Content-Type": "application/json",

@@ -24,6 +24,12 @@ class WhatsAppConfigModel(Base):
     send_mode = Column(String, nullable=False, default="api")
     coexistence_enabled = Column(Boolean, nullable=False, default=False)
     is_active = Column(Boolean, nullable=False, default=False, index=True)
+    # Campos específicos 360dialog / Webhook
+    webhook_url = Column(String, nullable=True)
+    webhook_verify_token = Column(String, nullable=True)
+    webhook_is_active = Column(Boolean, nullable=False, default=False)
+    webhook_status = Column(String, nullable=True, default="pending")
+    webhook_last_sync = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

@@ -1,5 +1,6 @@
 """Configuração dinâmica da API do WhatsApp Business (agora vinda do banco)."""
 
+import os
 from typing import Optional, Dict
 from contextlib import contextmanager
 
@@ -7,13 +8,13 @@ from app.database.db_connection import SessionLocal
 from app.api.notifications.repositories.whatsapp_config_repository import WhatsAppConfigRepository
 from app.api.notifications.services.whatsapp_config_service import WhatsAppConfigService
 
-# Configuração padrão agora usa 360dialog (manual, sem variáveis de ambiente)
-D360_BASE_URL = "https://waba-v2.360dialog.io"
-D360_API_KEY = "LLaJ4CTFRHMtE9o8hHRp3YU4AK"
+# Configuração padrão agora usa 360dialog e evita credenciais hard-coded
+D360_BASE_URL = os.getenv("D360_BASE_URL", "https://waba-v2.360dialog.io")
+D360_API_KEY = os.getenv("D360_API_KEY", "")
 
 # Fallback manual para 360dialog
 DEFAULT_WHATSAPP_CONFIG: Dict[str, str] = {
-    "access_token": D360_API_KEY,  # chave da API 360dialog
+    "access_token": D360_API_KEY,
     "d360_api_key": D360_API_KEY,
     "base_url": D360_BASE_URL,
     "provider": "360dialog",
@@ -22,6 +23,11 @@ DEFAULT_WHATSAPP_CONFIG: Dict[str, str] = {
     "api_version": "v22.0",
     "send_mode": "api",
     "coexistence_enabled": False,
+    "webhook_url": "",
+    "webhook_verify_token": "",
+    "webhook_is_active": False,
+    "webhook_status": "pending",
+    "webhook_last_sync": None,
 }
 
 
@@ -47,6 +53,11 @@ def load_whatsapp_config(empresa_id: Optional[str] = None) -> Dict[str, str]:
             # Garante base_url/provider mesmo se não estiverem no banco
             cfg.setdefault("base_url", D360_BASE_URL)
             cfg.setdefault("provider", "360dialog")
+            cfg.setdefault("webhook_url", "")
+            cfg.setdefault("webhook_verify_token", "")
+            cfg.setdefault("webhook_is_active", False)
+            cfg.setdefault("webhook_status", "pending")
+            cfg.setdefault("webhook_last_sync", None)
             return cfg
     return DEFAULT_WHATSAPP_CONFIG.copy()
 

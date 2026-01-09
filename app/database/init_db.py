@@ -142,6 +142,27 @@ def configurar_timezone():
     except Exception as e:
         logger.warning(f"⚠️ Erro ao configurar timezone do banco: {e}")
 
+
+def garantir_colunas_whatsapp_configs():
+    """Garante colunas necessárias para configuração do WhatsApp/360dialog."""
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    """
+                    ALTER TABLE notifications.whatsapp_configs
+                    ADD COLUMN IF NOT EXISTS webhook_url varchar,
+                    ADD COLUMN IF NOT EXISTS webhook_verify_token varchar,
+                    ADD COLUMN IF NOT EXISTS webhook_is_active boolean DEFAULT false,
+                    ADD COLUMN IF NOT EXISTS webhook_status varchar DEFAULT 'pending',
+                    ADD COLUMN IF NOT EXISTS webhook_last_sync timestamp without time zone
+                    """
+                )
+            )
+        logger.info("✅ Colunas de webhook em notifications.whatsapp_configs criadas/verificadas")
+    except Exception as e:
+        logger.error("❌ Erro ao garantir colunas de webhook em notifications.whatsapp_configs: %s", e)
+
 def criar_schemas():
     try:
         with engine.begin() as conn:
@@ -433,6 +454,9 @@ def criar_tabelas():
                     logger.info(f"✅ Tabela {table.schema}.{table.name} criada/verificada (2ª tentativa)")
                 except Exception as table_error:
                     logger.error(f"❌ Erro persistente na tabela {table.schema}.{table.name}: {table_error}", exc_info=True)
+
+        # Garante colunas específicas do 360dialog (webhook) na tabela whatsapp_configs
+        garantir_colunas_whatsapp_configs()
 
         # Verifica e força criação das tabelas do cardapio
         logger.info("🔍 Verificando tabelas do schema cardapio...")

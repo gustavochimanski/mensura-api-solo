@@ -108,6 +108,11 @@ class WhatsAppConfigService:
             "send_mode": config.send_mode,
             "coexistence_enabled": config.coexistence_enabled,
             "is_active": config.is_active,
+            "webhook_url": config.webhook_url,
+            "webhook_verify_token": config.webhook_verify_token,
+            "webhook_is_active": config.webhook_is_active,
+            "webhook_status": config.webhook_status,
+            "webhook_last_sync": config.webhook_last_sync,
             "created_at": config.created_at,
             "updated_at": config.updated_at,
         }
@@ -121,6 +126,12 @@ class WhatsAppConfigService:
         data = dict(data)
         data.setdefault("base_url", existing.base_url if existing else self.DEFAULT_BASE_URL)
         data.setdefault("provider", existing.provider if existing else self.DEFAULT_PROVIDER)
+        # Webhook: mantém dados existentes se não enviados
+        data.setdefault("webhook_url", existing.webhook_url if existing else None)
+        data.setdefault("webhook_verify_token", existing.webhook_verify_token if existing else None)
+        data.setdefault("webhook_is_active", existing.webhook_is_active if existing else False)
+        data.setdefault("webhook_status", existing.webhook_status if existing else "pending")
+        data.setdefault("webhook_last_sync", existing.webhook_last_sync if existing else None)
         return data
 
     def _validate_requirements(
@@ -132,6 +143,10 @@ class WhatsAppConfigService:
         provider = (data.get("provider") or (existing.provider if existing else "") or "").lower()
         base_url = (data.get("base_url") or (existing.base_url if existing else "") or "").lower()
         phone_number_id = data.get("phone_number_id") or (existing.phone_number_id if existing else None)
+        webhook_url = data.get("webhook_url") or (existing.webhook_url if existing else None)
+        webhook_verify_token = data.get("webhook_verify_token") or (
+            existing.webhook_verify_token if existing else None
+        )
 
         if "360dialog" not in provider and "360dialog" not in base_url:
             if not phone_number_id:
@@ -139,3 +154,6 @@ class WhatsAppConfigService:
 
         if not data.get("access_token") and not (existing and existing.access_token):
             raise ValueError("access_token é obrigatório")
+
+        if webhook_url and not webhook_verify_token:
+            raise ValueError("webhook_verify_token é obrigatório quando webhook_url for enviado")
