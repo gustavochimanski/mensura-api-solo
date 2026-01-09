@@ -8,7 +8,7 @@ from app.core.security import hash_password
 from app.api.cadastros.models.user_model import UserModel
 
 logger = logging.getLogger(__name__)
-SCHEMAS = ["notifications", "cadastros", "cardapio", "catalogo", "financeiro", "pedidos"]
+SCHEMAS = ["notifications", "cadastros", "cardapio", "catalogo", "financeiro", "pedidos", "chatbot"]
 
 #
 def verificar_banco_inicializado():
@@ -18,13 +18,15 @@ def verificar_banco_inicializado():
             # Verifica se existem tabelas principais dos schemas
             result = conn.execute(text("""
                 SELECT COUNT(*) FROM information_schema.tables 
-                    WHERE table_schema IN ('cardapio', 'cadastros', 'notifications', 'catalogo', 'financeiro', 'pedidos')
+                    WHERE table_schema IN ('cardapio', 'cadastros', 'notifications', 'catalogo', 'financeiro', 'pedidos', 'chatbot')
                 AND table_name IN (
                     'usuarios', 'empresas', 'produtos', 'produtos_empresa', 'categorias',
                     'clientes', 'pedidos', 'enderecos', 'regioes_entrega',
                     'categoria_dv', 'vitrines_dv', 'entregadores_dv', 'meio_pagamento_dv',
                     'cupons_dv', 'transacoes_pagamento_dv', 'pedidos_itens',
-                    'pedidos_historico', 'parceiros_dv', 'banner_parceiros_dv'
+                    'pedidos_historico', 'parceiros_dv', 'banner_parceiros_dv',
+                    'notifications', 'notification_logs', 'events', 'notification_subscriptions', 'whatsapp_configs',
+                    'prompts', 'conversations', 'messages', 'bot_status'
                 );
             """))
             table_count = result.scalar()
@@ -288,6 +290,8 @@ def importar_models():
     from app.api.catalogo.models.model_complemento import ComplementoModel
     # ─── Models Notifications ───────────────────────────────────────────
     from app.api.notifications.models.notification import Notification, NotificationLog
+    from app.api.notifications.models.event import Event
+    from app.api.notifications.models.subscription import NotificationSubscription
     from app.api.notifications.models.whatsapp_config_model import WhatsAppConfigModel
     logger.info("📦 Models importados com sucesso.")
 
@@ -583,6 +587,23 @@ def criar_tabelas():
     except Exception as e:
         logger.error(f"❌ Erro geral ao criar tabelas: {e}", exc_info=True)
 
+def criar_tabelas_chatbot():
+    """Cria as tabelas do chatbot usando a função de inicialização do módulo chatbot"""
+    try:
+        logger.info("🤖 Inicializando tabelas do schema chatbot...")
+        from app.api.chatbot.core.database import init_database, seed_default_prompts
+        
+        with SessionLocal() as session:
+            success = init_database(session)
+            if success:
+                # Semeia prompts padrão
+                seed_default_prompts(session)
+                logger.info("✅ Tabelas do chatbot criadas/verificadas com sucesso")
+            else:
+                logger.error("❌ Erro ao criar tabelas do chatbot")
+    except Exception as e:
+        logger.error(f"❌ Erro ao criar tabelas do chatbot: {e}", exc_info=True)
+
 def criar_usuario_admin_padrao():
     """Cria o usuário 'admin' com senha padrão caso não exista."""
     try:
@@ -664,30 +685,34 @@ def inicializar_banco():
     logger.info("🚀 Iniciando processo de inicialização do banco de dados...")
     
     # Configura timezone primeiro
-    logger.info("📦 Passo 1/7: Configurando timezone do banco...")
+    logger.info("📦 Passo 1/8: Configurando timezone do banco...")
     configurar_timezone()
     
     # Habilita PostGIS primeiro (necessário para tipos geography)
-    logger.info("📦 Passo 2/7: Habilitando extensão PostGIS...")
+    logger.info("📦 Passo 2/8: Habilitando extensão PostGIS...")
     habilitar_postgis()
     
     # SEMPRE cria/verifica os schemas primeiro
-    logger.info("📦 Passo 3/7: Criando/verificando schemas...")
+    logger.info("📦 Passo 3/8: Criando/verificando schemas...")
     criar_schemas()
     
     # Cria os ENUMs antes de criar as tabelas
-    logger.info("📦 Passo 4/7: Criando/verificando ENUMs...")
+    logger.info("📦 Passo 4/8: Criando/verificando ENUMs...")
     criar_enums()
     
     # SEMPRE cria as tabelas (criar_tabelas usa checkfirst=True, então não sobrescreve)
-    logger.info("📋 Passo 5/7: Criando/verificando todas as tabelas...")
+    logger.info("📋 Passo 5/8: Criando/verificando todas as tabelas...")
     criar_tabelas()
     
-    logger.info("👤 Passo 6/7: Garantindo usuário admin padrão...")
+    # Cria tabelas do chatbot (que não usam modelos SQLAlchemy)
+    logger.info("🤖 Passo 6/8: Criando/verificando tabelas do chatbot...")
+    criar_tabelas_chatbot()
+    
+    logger.info("👤 Passo 7/8: Garantindo usuário admin padrão...")
     criar_usuario_admin_padrao()
     
     # Dados iniciais de meios de pagamento
-    logger.info("💳 Criando/verificando meios de pagamento padrão...")
+    logger.info("💳 Passo 8/8: Criando/verificando meios de pagamento padrão...")
     criar_meios_pagamento_padrao()
     
     logger.info("✅ Banco inicializado com sucesso.")
