@@ -165,14 +165,21 @@ async def chat(request: ChatRequest, db: Session = Depends(get_db)):
 # ==================== PROMPTS ====================
 
 @router.get("/prompts")
-async def list_prompts(db: Session = Depends(get_db), empresa_id: Optional[int] = None):
-    """Lista todos os prompts"""
+async def list_prompts(
+    db: Session = Depends(get_db), 
+    empresa_id: int = Query(..., description="ID da empresa")
+):
+    """Lista todos os prompts da empresa"""
     prompts = chatbot_db.get_all_prompts(db, empresa_id)
     return {"prompts": prompts}
 
 
 @router.get("/prompts/{key}")
-async def get_prompt_by_key(key: str, db: Session = Depends(get_db), empresa_id: Optional[int] = None):
+async def get_prompt_by_key(
+    key: str, 
+    db: Session = Depends(get_db), 
+    empresa_id: int = Query(..., description="ID da empresa")
+):
     """Busca um prompt específico"""
     prompt = chatbot_db.get_prompt(db, key, empresa_id)
     if not prompt:
@@ -181,7 +188,11 @@ async def get_prompt_by_key(key: str, db: Session = Depends(get_db), empresa_id:
 
 
 @router.post("/prompts")
-async def create_new_prompt(prompt: PromptCreate, db: Session = Depends(get_db), empresa_id: Optional[int] = None):
+async def create_new_prompt(
+    prompt: PromptCreate, 
+    db: Session = Depends(get_db), 
+    empresa_id: int = Query(..., description="ID da empresa")
+):
     """Cria um novo prompt customizado"""
     # Garante que não é um prompt padrão
     if prompt.key in ["default", "custom1", "custom2"]:
@@ -209,7 +220,12 @@ async def create_new_prompt(prompt: PromptCreate, db: Session = Depends(get_db),
 
 
 @router.put("/prompts/{key}")
-async def update_existing_prompt(key: str, prompt: PromptUpdate, db: Session = Depends(get_db), empresa_id: Optional[int] = None):
+async def update_existing_prompt(
+    key: str, 
+    prompt: PromptUpdate, 
+    db: Session = Depends(get_db), 
+    empresa_id: int = Query(..., description="ID da empresa")
+):
     """Atualiza um prompt customizado"""
     success = chatbot_db.update_prompt(db, key, prompt.name, prompt.content, empresa_id)
     if not success:
@@ -221,7 +237,11 @@ async def update_existing_prompt(key: str, prompt: PromptUpdate, db: Session = D
 
 
 @router.delete("/prompts/{key}")
-async def delete_existing_prompt(key: str, db: Session = Depends(get_db), empresa_id: Optional[int] = None):
+async def delete_existing_prompt(
+    key: str, 
+    db: Session = Depends(get_db), 
+    empresa_id: int = Query(..., description="ID da empresa")
+):
     """Deleta um prompt customizado"""
     success = chatbot_db.delete_prompt(db, key, empresa_id)
     if not success:
@@ -235,8 +255,18 @@ async def delete_existing_prompt(key: str, db: Session = Depends(get_db), empres
 # ==================== CONVERSAS ====================
 
 @router.post("/conversations")
-async def create_new_conversation(conv: ConversationCreate, db: Session = Depends(get_db)):
+async def create_new_conversation(
+    conv: ConversationCreate, 
+    db: Session = Depends(get_db),
+    empresa_id: int = Query(..., description="ID da empresa")
+):
     """Cria uma nova conversa"""
+    if conv.empresa_id and conv.empresa_id != empresa_id:
+        raise HTTPException(
+            status_code=400,
+            detail="empresa_id no body deve ser igual ao empresa_id do query parameter"
+        )
+    
     session_id = conv.session_id or str(uuid.uuid4())
 
     conversation_id = chatbot_db.create_conversation(
@@ -245,7 +275,7 @@ async def create_new_conversation(conv: ConversationCreate, db: Session = Depend
         user_id=conv.user_id,
         prompt_key=conv.prompt_key,
         model=conv.model,
-        empresa_id=conv.empresa_id
+        empresa_id=empresa_id
     )
 
     # Envia notificação WebSocket de nova conversa
@@ -271,32 +301,56 @@ async def create_new_conversation(conv: ConversationCreate, db: Session = Depend
 
 
 @router.get("/conversations/{conversation_id}")
-async def get_conversation_details(conversation_id: int, db: Session = Depends(get_db)):
+async def get_conversation_details(
+    conversation_id: int, 
+    db: Session = Depends(get_db),
+    empresa_id: int = Query(..., description="ID da empresa")
+):
     """Busca uma conversa com todas as mensagens"""
     conversation = chatbot_db.get_conversation_with_messages(db, conversation_id)
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversa não encontrada")
+    
+    # Valida que a conversa pertence à empresa
+    if conversation.get('empresa_id') != empresa_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Conversa não pertence à empresa informada"
+        )
+    
     return conversation
 
 
 @router.get("/conversations/session/{session_id}")
-async def get_session_conversations(session_id: str, db: Session = Depends(get_db), empresa_id: Optional[int] = None):
+async def get_session_conversations(
+    session_id: str, 
+    db: Session = Depends(get_db), 
+    empresa_id: int = Query(..., description="ID da empresa")
+):
     """Lista todas as conversas de uma sessão"""
     conversations = chatbot_db.get_conversations_by_session(db, session_id, empresa_id)
     return {"conversations": conversations}
 
 
 @router.get("/conversations/user/{user_id}")
-async def get_user_conversations(user_id: str, db: Session = Depends(get_db), empresa_id: Optional[int] = None):
+async def get_user_conversations(
+    user_id: str, 
+    db: Session = Depends(get_db), 
+    empresa_id: int = Query(..., description="ID da empresa")
+):
     """Lista todas as conversas de um usuário"""
     conversations = chatbot_db.get_conversations_by_user(db, user_id, empresa_id)
     return {"conversations": conversations}
 
 
 @router.get("/conversations/user/{user_id}/latest")
-async def get_user_latest_conversation(user_id: str, db: Session = Depends(get_db)):
+async def get_user_latest_conversation(
+    user_id: str, 
+    db: Session = Depends(get_db),
+    empresa_id: int = Query(..., description="ID da empresa")
+):
     """Busca a conversa mais recente de um usuário"""
-    conversations = chatbot_db.get_conversations_by_user(db, user_id)
+    conversations = chatbot_db.get_conversations_by_user(db, user_id, empresa_id)
 
     if not conversations:
         raise HTTPException(status_code=404, detail="Nenhuma conversa encontrada")
@@ -315,8 +369,11 @@ async def get_user_latest_conversation(user_id: str, db: Session = Depends(get_d
 
 
 @router.get("/conversations")
-async def list_all_conversations(db: Session = Depends(get_db)):
-    """Lista TODAS as conversas do sistema (para admin)"""
+async def list_all_conversations(
+    db: Session = Depends(get_db),
+    empresa_id: int = Query(..., description="ID da empresa")
+):
+    """Lista todas as conversas da empresa"""
     try:
         from sqlalchemy import text
         query = text(f"""
@@ -335,11 +392,12 @@ async def list_all_conversations(db: Session = Depends(get_db)):
                 MAX(m.created_at) as last_message_at
             FROM chatbot.conversations c
             LEFT JOIN chatbot.messages m ON c.id = m.conversation_id
+            WHERE c.empresa_id = :empresa_id
             GROUP BY c.id, c.session_id, c.user_id, c.contact_name, c.prompt_key, c.model, c.empresa_id, c.profile_picture_url, c.created_at, c.updated_at
             ORDER BY c.updated_at DESC
         """)
 
-        result = db.execute(query)
+        result = db.execute(query, {"empresa_id": empresa_id})
         conversations = [
             {
                 "id": row[0],
@@ -366,6 +424,7 @@ async def list_all_conversations(db: Session = Depends(get_db)):
 async def update_conversation_settings(
     conversation_id: int,
     db: Session = Depends(get_db),
+    empresa_id: int = Query(..., description="ID da empresa"),
     model: Optional[str] = None,
     prompt_key: Optional[str] = None
 ):
@@ -373,6 +432,13 @@ async def update_conversation_settings(
     conversation = chatbot_db.get_conversation(db, conversation_id)
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversa não encontrada")
+    
+    # Valida que a conversa pertence à empresa
+    if conversation.get('empresa_id') != empresa_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Conversa não pertence à empresa informada"
+        )
 
     try:
         from sqlalchemy import text
@@ -409,22 +475,45 @@ async def update_conversation_settings(
 
 
 @router.get("/conversations/{conversation_id}/messages")
-async def get_conversation_messages(conversation_id: int, db: Session = Depends(get_db)):
+async def get_conversation_messages(
+    conversation_id: int, 
+    db: Session = Depends(get_db),
+    empresa_id: int = Query(..., description="ID da empresa")
+):
     """Lista todas as mensagens de uma conversa"""
     conversation = chatbot_db.get_conversation(db, conversation_id)
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversa não encontrada")
+    
+    # Valida que a conversa pertence à empresa
+    if conversation.get('empresa_id') != empresa_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Conversa não pertence à empresa informada"
+        )
 
     messages = chatbot_db.get_messages(db, conversation_id)
     return {"messages": messages}
 
 
 @router.post("/conversations/{conversation_id}/messages")
-async def add_message_to_conversation(conversation_id: int, message: MessageCreate, db: Session = Depends(get_db)):
+async def add_message_to_conversation(
+    conversation_id: int, 
+    message: MessageCreate, 
+    db: Session = Depends(get_db),
+    empresa_id: int = Query(..., description="ID da empresa")
+):
     """Adiciona uma mensagem à conversa"""
     conversation = chatbot_db.get_conversation(db, conversation_id)
     if not conversation:
         raise HTTPException(status_code=404, detail="Conversa não encontrada")
+    
+    # Valida que a conversa pertence à empresa
+    if conversation.get('empresa_id') != empresa_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Conversa não pertence à empresa informada"
+        )
 
     # Se a conversa é de notificação e o usuário está enviando uma mensagem,
     # atualiza o modelo para permitir chat normal
@@ -458,19 +547,37 @@ async def add_message_to_conversation(conversation_id: int, message: MessageCrea
 
 
 @router.delete("/conversations/{conversation_id}")
-async def delete_existing_conversation(conversation_id: int, db: Session = Depends(get_db)):
+async def delete_existing_conversation(
+    conversation_id: int, 
+    db: Session = Depends(get_db),
+    empresa_id: int = Query(..., description="ID da empresa")
+):
     """Deleta uma conversa e suas mensagens"""
+    conversation = chatbot_db.get_conversation(db, conversation_id)
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversa não encontrada")
+    
+    # Valida que a conversa pertence à empresa
+    if conversation.get('empresa_id') != empresa_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Conversa não pertence à empresa informada"
+        )
+    
     success = chatbot_db.delete_conversation(db, conversation_id)
     if not success:
-        raise HTTPException(status_code=404, detail="Conversa não encontrada")
+        raise HTTPException(status_code=500, detail="Erro ao deletar conversa")
     return {"message": "Conversa deletada com sucesso"}
 
 
 # ==================== ESTATÍSTICAS ====================
 
 @router.get("/stats")
-async def get_database_stats(db: Session = Depends(get_db), empresa_id: Optional[int] = None):
-    """Retorna estatísticas do banco de dados"""
+async def get_database_stats(
+    db: Session = Depends(get_db), 
+    empresa_id: int = Query(..., description="ID da empresa")
+):
+    """Retorna estatísticas do banco de dados da empresa"""
     stats = chatbot_db.get_stats(db, empresa_id)
     return stats
 
@@ -478,9 +585,19 @@ async def get_database_stats(db: Session = Depends(get_db), empresa_id: Optional
 # ==================== BOT STATUS (PAUSAR/ATIVAR) ====================
 
 @router.get("/bot-status/{phone_number}")
-async def get_bot_status_for_phone(phone_number: str, db: Session = Depends(get_db)):
+async def get_bot_status_for_phone(
+    phone_number: str, 
+    db: Session = Depends(get_db),
+    empresa_id: int = Query(..., description="ID da empresa")
+):
     """Verifica se o bot está ativo para um número específico"""
     status = chatbot_db.get_bot_status(db, phone_number)
+    # Valida que o status pertence à empresa (se tiver empresa_id)
+    if status.get('empresa_id') and status.get('empresa_id') != empresa_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Status do bot não pertence à empresa informada"
+        )
     return status
 
 
@@ -500,8 +617,11 @@ async def toggle_bot_status(
 
 
 @router.get("/bot-status")
-async def list_all_bot_statuses(db: Session = Depends(get_db), empresa_id: Optional[int] = None):
-    """Lista todos os status de bot (útil para ver quais números estão pausados)"""
+async def list_all_bot_statuses(
+    db: Session = Depends(get_db), 
+    empresa_id: int = Query(..., description="ID da empresa")
+):
+    """Lista todos os status de bot da empresa (útil para ver quais números estão pausados)"""
     statuses = chatbot_db.get_all_bot_statuses(db, empresa_id)
     return {"statuses": statuses}
 
@@ -521,8 +641,11 @@ async def toggle_all_bots(
 
 
 @router.get("/bot-status-global")
-async def get_global_bot_status(db: Session = Depends(get_db), empresa_id: Optional[int] = None):
-    """Verifica se o bot global está ativo"""
+async def get_global_bot_status(
+    db: Session = Depends(get_db), 
+    empresa_id: int = Query(..., description="ID da empresa")
+):
+    """Verifica se o bot global está ativo para a empresa"""
     status = chatbot_db.get_global_bot_status(db, empresa_id)
     return status
 
@@ -1476,7 +1599,11 @@ async def test_whatsapp_token(config: WhatsAppConfigUpdate):
 # ==================== FOTO DE PERFIL DO WHATSAPP ====================
 
 @router.get("/profile-picture/{phone_number}")
-async def get_whatsapp_profile_picture(phone_number: str, db: Session = Depends(get_db)):
+async def get_whatsapp_profile_picture(
+    phone_number: str, 
+    db: Session = Depends(get_db),
+    empresa_id: int = Query(..., description="ID da empresa")
+):
     """
     Busca a foto de perfil de um contato do WhatsApp.
     
@@ -1487,8 +1614,8 @@ async def get_whatsapp_profile_picture(phone_number: str, db: Session = Depends(
     A foto só pode ser obtida se o webhook do WhatsApp enviar essa informação.
     """
     try:
-        # Busca conversas do usuário
-        conversations = chatbot_db.get_conversations_by_user(db, phone_number)
+        # Busca conversas do usuário filtradas por empresa
+        conversations = chatbot_db.get_conversations_by_user(db, phone_number, empresa_id)
         
         if conversations and conversations[0].get('profile_picture_url'):
             return {
