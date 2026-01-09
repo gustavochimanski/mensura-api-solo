@@ -51,3 +51,6 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30
 # Configurações do Sistema
 DEBUG = True
 ENVIRONMENT = "development"
+
+# Configurações do Chatbot (IA)
+GROQ_API_KEY = "your_groq_api_key_here"
