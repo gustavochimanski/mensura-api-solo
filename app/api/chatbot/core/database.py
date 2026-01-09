@@ -83,6 +83,21 @@ def init_database(db: Session):
             END $$;
         """))
 
+        # Adiciona coluna metadata se não existir
+        db.execute(text(f"""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_schema = '{CHATBOT_SCHEMA}'
+                    AND table_name = 'conversations'
+                    AND column_name = 'metadata'
+                ) THEN
+                    ALTER TABLE {CHATBOT_SCHEMA}.conversations ADD COLUMN metadata JSONB;
+                END IF;
+            END $$;
+        """))
+
         # Tabela de mensagens
         db.execute(text(f"""
             CREATE TABLE IF NOT EXISTS {CHATBOT_SCHEMA}.messages (
