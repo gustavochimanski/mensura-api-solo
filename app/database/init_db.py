@@ -153,6 +153,7 @@ def garantir_colunas_whatsapp_configs():
                 text(
                     """
                     ALTER TABLE notifications.whatsapp_configs
+                    ALTER COLUMN access_token DROP NOT NULL,
                     ADD COLUMN IF NOT EXISTS webhook_url varchar,
                     ADD COLUMN IF NOT EXISTS webhook_verify_token varchar,
                     ADD COLUMN IF NOT EXISTS webhook_is_active boolean DEFAULT false,

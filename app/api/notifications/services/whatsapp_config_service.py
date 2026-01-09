@@ -147,13 +147,15 @@ class WhatsAppConfigService:
         webhook_verify_token = data.get("webhook_verify_token") or (
             existing.webhook_verify_token if existing else None
         )
+        is_360 = "360dialog" in provider or "360dialog" in base_url
 
-        if "360dialog" not in provider and "360dialog" not in base_url:
+        if not is_360:
             if not phone_number_id:
                 raise ValueError("phone_number_id é obrigatório para provedores que não sejam 360dialog")
 
-        if not data.get("access_token") and not (existing and existing.access_token):
-            raise ValueError("access_token é obrigatório")
+        if not is_360:
+            if not data.get("access_token") and not (existing and existing.access_token):
+                raise ValueError("access_token é obrigatório para provedores que não sejam 360dialog")
 
         if webhook_url and not webhook_verify_token:
             raise ValueError("webhook_verify_token é obrigatório quando webhook_url for enviado")

@@ -22,7 +22,7 @@ class WhatsAppConfigBase(BaseModel):
 
 class WhatsAppConfigCreate(WhatsAppConfigBase):
     empresa_id: str
-    access_token: str
+    access_token: Optional[str] = None
     phone_number_id: Optional[str] = None
 
     @model_validator(mode='after')
@@ -33,12 +33,14 @@ class WhatsAppConfigCreate(WhatsAppConfigBase):
         webhook_url = self.webhook_url
         webhook_verify_token = self.webhook_verify_token
 
-        if "360dialog" not in provider and "360dialog" not in base_url:
+        is_360 = "360dialog" in provider or "360dialog" in base_url
+
+        if not is_360:
             if not phone_number_id:
                 raise ValueError("phone_number_id é obrigatório para provedores que não sejam 360dialog")
 
-        if not self.access_token:
-            raise ValueError("access_token é obrigatório")
+        if not is_360 and not self.access_token:
+            raise ValueError("access_token é obrigatório para provedores que não sejam 360dialog")
 
         if webhook_url and not webhook_verify_token:
             raise ValueError("webhook_verify_token é obrigatório quando webhook_url for enviado")
