@@ -238,10 +238,9 @@ class OrderNotification:
                 if not phone_to_use.startswith('55'):
                     phone_to_use = '55' + phone_to_use
 
-                # Payload conforme documentação oficial da 360Dialog
+                # Payload para 360Dialog - formato simplificado (sem messaging_product e recipient_type)
+                # Conforme documentação: https://docs.360dialog.com/docs/waba-messaging/messaging
                 payload = {
-                    "messaging_product": "whatsapp",
-                    "recipient_type": "individual",
                     "to": phone_to_use,
                     "type": "text",
                     "text": {"body": message},
@@ -304,8 +303,6 @@ class OrderNotification:
                         phone_alt = phone_to_use[2:]  # Remove o 55
                         print(f"   🔄 Tentando formato alternativo (sem código do país): {phone_alt}")
                         payload_alt = {
-                            "messaging_product": "whatsapp",
-                            "recipient_type": "individual",
                             "to": phone_alt,
                             "type": "text",
                             "text": {"body": message},
