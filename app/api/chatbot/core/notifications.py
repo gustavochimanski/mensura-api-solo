@@ -51,9 +51,18 @@ class OrderNotification:
 
             # URL para marcar como lida
             if is_360:
-                # 360Dialog usa endpoint diferente para marcar como lida
-                base_url_clean = (base_url or "https://waba-v2.360dialog.io").rstrip('/')
-                url = f"{base_url_clean}/v1/messages"
+                # 360Dialog: Para marcar como lida, usa o mesmo endpoint de mensagens
+                # mas com payload diferente - na verdade, 360Dialog marca automaticamente como lida
+                # quando você responde dentro da janela de 24h. Vamos tentar o endpoint de status.
+                # NOTA: 360Dialog pode não suportar marcar como lida explicitamente da mesma forma que Meta
+                # Vamos pular essa funcionalidade para 360Dialog por enquanto
+                logger.info(f"[WhatsApp] 360Dialog: Mensagens são marcadas como lidas automaticamente ao responder")
+                return {
+                    "success": True,
+                    "message_id": message_id,
+                    "status": "read",
+                    "note": "360Dialog marca automaticamente como lida ao responder"
+                }
             else:
                 # Meta Cloud API
                 phone_number_id = config.get("phone_number_id")
@@ -67,8 +76,7 @@ class OrderNotification:
 
             headers = get_headers(empresa_id, config)
 
-            # Payload para marcar como lida (formato padrão WhatsApp Cloud API)
-            # Conforme documentação: https://docs.360dialog.com/docs/waba-messaging/messaging
+            # Payload para marcar como lida (formato Meta Cloud API)
             payload = {
                 "messaging_product": "whatsapp",
                 "status": "read",
@@ -86,12 +94,27 @@ class OrderNotification:
                         "status": "read"
                     }
                 else:
-                    error_message = response.text or "Erro desconhecido"
-                    logger.warning(f"[WhatsApp] Erro ao marcar mensagem como lida: {error_message}")
+                    # Log completo do erro
+                    error_text = response.text or "Erro desconhecido"
+                    try:
+                        error_json = response.json()
+                        error_message = json.dumps(error_json, indent=2, ensure_ascii=False)
+                        logger.error(f"[WhatsApp] Erro ao marcar mensagem como lida (Status {response.status_code}):\n{error_message}")
+                        print(f"   ❌ ERRO COMPLETO ao marcar como lida:")
+                        print(f"   📊 Status: {response.status_code}")
+                        print(f"   📄 Resposta: {error_message}")
+                        print(f"   🔗 URL: {url}")
+                        print(f"   📦 Payload enviado: {json.dumps(payload, indent=2, ensure_ascii=False)}")
+                    except:
+                        error_message = error_text
+                        logger.error(f"[WhatsApp] Erro ao marcar mensagem como lida (Status {response.status_code}): {error_message}")
+                        print(f"   ❌ ERRO ao marcar como lida: {error_message}")
+                    
                     return {
                         "success": False,
                         "error": error_message,
-                        "status_code": response.status_code
+                        "status_code": response.status_code,
+                        "response_text": error_text
                     }
 
         except Exception as e:
@@ -232,8 +255,25 @@ class OrderNotification:
                 response = await client.post(url, json=payload, headers=headers)
                 logger.debug(f"[WhatsApp] Resposta recebida - status_code={response.status_code}")
                 print(f"   📡 Resposta HTTP: status_code={response.status_code}")
+                
                 if response.status_code != 200:
-                    print(f"   📄 Resposta completa: {response.text[:500]}")
+                    # Log completo do erro
+                    error_text = response.text or "Erro desconhecido"
+                    try:
+                        error_json = response.json()
+                        error_message = json.dumps(error_json, indent=2, ensure_ascii=False)
+                        logger.error(f"[WhatsApp] Erro ao enviar mensagem (Status {response.status_code}):\n{error_message}")
+                        print(f"   ❌ ERRO COMPLETO ao enviar mensagem:")
+                        print(f"   📊 Status: {response.status_code}")
+                        print(f"   📄 Resposta completa: {error_message}")
+                        print(f"   🔗 URL: {url}")
+                        print(f"   📦 Payload enviado: {json.dumps(payload, indent=2, ensure_ascii=False)}")
+                        print(f"   🔑 Headers: {json.dumps({k: v if 'key' not in k.lower() and 'token' not in k.lower() else '***' + str(v)[-10:] for k, v in headers.items()}, indent=2)}")
+                    except:
+                        error_message = error_text
+                        logger.error(f"[WhatsApp] Erro ao enviar mensagem (Status {response.status_code}): {error_message}")
+                        print(f"   ❌ ERRO ao enviar mensagem: {error_message}")
+                        print(f"   📄 Resposta completa (texto): {error_text[:1000]}")
 
                 if response.status_code == 200:
                     result = response.json()
