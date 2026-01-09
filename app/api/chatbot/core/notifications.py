@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 import httpx
 import asyncio
 import logging
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -43,13 +44,17 @@ class OrderNotification:
             is_360 = (provider == "360dialog") or (not provider and "360dialog" in base_url)
             access_token = config.get("access_token") or ""
 
-            # Log de debug
-            logger.debug(f"[WhatsApp] Enviando mensagem - empresa_id={empresa_id}, provider={provider}, base_url={base_url}, is_360={is_360}, token_length={len(access_token) if access_token else 0}")
+            # Log de debug (também usa print para garantir visibilidade)
+            log_msg = f"[WhatsApp] Enviando mensagem - empresa_id={empresa_id}, provider={provider}, base_url={base_url}, is_360={is_360}, token_length={len(access_token) if access_token else 0}"
+            logger.debug(log_msg)
+            print(f"   🔍 {log_msg}")
 
             # Valida se o token existe e não está vazio
             if not access_token or access_token.strip() == "":
                 error_msg = f"Configuração do WhatsApp ausente ou incompleta: access_token não configurado (empresa_id={empresa_id})"
                 logger.error(f"[WhatsApp] {error_msg}")
+                print(f"   ❌ {error_msg}")
+                print(f"   🔍 Config completa: {config}")
                 return {
                     "success": False,
                     "provider": "360dialog" if is_360 else "WhatsApp Business API (Meta)",
@@ -76,9 +81,35 @@ class OrderNotification:
             try:
                 headers = get_headers(empresa_id, config)
                 logger.debug(f"[WhatsApp] Headers preparados: {list(headers.keys())}")
+                print(f"   🔍 Headers preparados: {list(headers.keys())}")
+                # Não mostra o token completo por segurança, apenas indica se existe
+                for key in headers.keys():
+                    if "key" in key.lower() or "token" in key.lower() or "authorization" in key.lower():
+                        header_value = headers[key]
+                        if header_value:
+                            # Mostra últimos 10 caracteres para debug
+                            masked = "***" + str(header_value)[-10:] if len(str(header_value)) > 10 else "***"
+                            print(f"   🔍 Header {key}: {masked} (length: {len(str(header_value))})")
+                        else:
+                            print(f"   ⚠️ Header {key}: VAZIO!")
+                
+                # Validação extra para 360dialog
+                if is_360:
+                    api_key = headers.get("D360-API-KEY", "")
+                    if not api_key or len(api_key.strip()) == 0:
+                        error_msg = "API Key do 360dialog está vazia!"
+                        print(f"   ❌ {error_msg}")
+                        return {
+                            "success": False,
+                            "provider": "360dialog",
+                            "error": error_msg,
+                            "phone": phone,
+                        }
+                    print(f"   ✅ API Key do 360dialog presente (length: {len(api_key)})")
             except ValueError as e:
                 error_msg = f"Erro na configuração do WhatsApp: {str(e)}"
                 logger.error(f"[WhatsApp] {error_msg}")
+                print(f"   ❌ {error_msg}")
                 return {
                     "success": False,
                     "provider": "360dialog" if is_360 else "WhatsApp Business API (Meta)",
@@ -106,39 +137,72 @@ class OrderNotification:
 
             # Envia a mensagem (Cloud API) - compatível com modo de coexistência
             logger.debug(f"[WhatsApp] Enviando para URL: {url}")
+            print(f"   🔍 URL: {url}")
+            print(f"   🔍 Payload: {json.dumps(payload, indent=2, ensure_ascii=False)}")
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(url, json=payload, headers=headers)
                 logger.debug(f"[WhatsApp] Resposta recebida - status_code={response.status_code}")
+                print(f"   📡 Resposta HTTP: status_code={response.status_code}")
+                if response.status_code != 200:
+                    print(f"   📄 Resposta completa: {response.text[:500]}")
 
                 if response.status_code == 200:
                     result = response.json()
+                    message_id = result.get("messages", [{}])[0].get("id") if result.get("messages") else None
+                    print(f"   ✅ Mensagem enviada com sucesso! Message ID: {message_id}")
                     return {
                         "success": True,
                         "provider": "360dialog" if is_360 else "WhatsApp Business API (Meta)",
                         "phone": phone_formatted,
-                        "message_id": result.get("messages", [{}])[0].get("id"),
+                        "message_id": message_id,
                         "status": "sent",
                         "response": result
                     }
 
-                error_data = response.json() if response.text else {}
-                error_detail = error_data.get("error", {}) if isinstance(error_data, dict) else {}
+                # Trata erro na resposta
+                error_message = response.text or "Erro desconhecido"
+                error_detail = {}
+                
+                # Tenta parsear JSON da resposta de erro
+                try:
+                    if response.text:
+                        error_data = response.json()
+                        if isinstance(error_data, dict):
+                            error_detail = error_data.get("error", {})
+                            if isinstance(error_detail, dict):
+                                error_message = error_detail.get("message", error_data.get("message", response.text))
+                            else:
+                                error_message = str(error_detail) if error_detail else response.text
+                        else:
+                            error_message = str(error_data) if error_data else response.text
+                except (ValueError, json.JSONDecodeError):
+                    # Se não conseguir parsear, usa o texto da resposta
+                    error_message = response.text or f"Erro HTTP {response.status_code}"
+                
+                print(f"   ❌ Erro na API: status_code={response.status_code}, error={error_message}")
 
                 coexistence_hint = None
                 # Dica adicional quando houver conflito de registro do número
                 if response.status_code in (400, 403, 409):
-                    coexistence_hint = (
-                        "Verifique se o número foi conectado no modo 'App e API' na Meta "
-                        "(coexistência) e se o app WhatsApp Business está atualizado."
-                    )
+                    if is_360:
+                        coexistence_hint = (
+                            "Verifique se a API Key do 360dialog está correta e ativa. "
+                            "Status 403 geralmente indica API Key inválida ou expirada."
+                        )
+                    else:
+                        coexistence_hint = (
+                            "Verifique se o número foi conectado no modo 'App e API' na Meta "
+                            "(coexistência) e se o app WhatsApp Business está atualizado."
+                        )
 
                 return {
                     "success": False,
                     "provider": "360dialog" if is_360 else "WhatsApp Business API (Meta)",
-                    "error": error_detail.get("message", response.text),
+                    "error": error_message,
                     "status_code": response.status_code,
                     "phone": phone_formatted,
-                    "coexistence_hint": coexistence_hint
+                    "coexistence_hint": coexistence_hint,
+                    "response_text": response.text[:500] if response.text else None
                 }
 
         except Exception as e:

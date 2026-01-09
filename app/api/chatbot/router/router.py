@@ -1130,16 +1130,32 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
             )
 
             print(f"   💬 Resposta do SalesHandler: {resposta[:100]}...")
+            
+            # Verifica se a resposta não está vazia
+            if not resposta or not resposta.strip():
+                print(f"   ⚠️ Resposta vazia, não será enviada")
+                return
 
             # Envia resposta via WhatsApp
+            print(f"   📤 Tentando enviar resposta via WhatsApp...")
+            print(f"   📱 Telefone: {phone_number}, empresa_id: {empresa_id}")
+            print(f"   📝 Tamanho da resposta: {len(resposta)} caracteres")
             notifier = OrderNotification()
             result = await notifier.send_whatsapp_message(phone_number, resposta, empresa_id=empresa_id)
+            
+            print(f"   📊 Resultado do envio: {result}")
 
             if isinstance(result, dict) and result.get("success"):
-                print(f"   ✅ Resposta enviada via WhatsApp!")
+                print(f"   ✅ Resposta enviada via WhatsApp com sucesso!")
+                print(f"   📨 Message ID: {result.get('message_id', 'N/A')}")
             else:
                 error_msg = result.get("error") if isinstance(result, dict) else str(result)
+                status_code = result.get("status_code") if isinstance(result, dict) else None
                 print(f"   ❌ Erro ao enviar resposta: {error_msg}")
+                if status_code:
+                    print(f"   📊 Status Code: {status_code}")
+                if isinstance(result, dict) and result.get("coexistence_hint"):
+                    print(f"   💡 Dica: {result.get('coexistence_hint')}")
 
             return
 
@@ -1256,14 +1272,24 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 )
 
                 # 8. Envia resposta via WhatsApp
+                print(f"   📤 Tentando enviar resposta via WhatsApp...")
+                print(f"   📱 Telefone: {phone_number}, empresa_id: {empresa_id}")
                 notifier = OrderNotification()
                 result = await notifier.send_whatsapp_message(phone_number, ai_response, empresa_id=empresa_id)
+                
+                print(f"   📊 Resultado do envio: {result}")
 
                 if isinstance(result, dict) and result.get("success"):
-                    print(f"   ✅ Resposta enviada via WhatsApp!")
+                    print(f"   ✅ Resposta enviada via WhatsApp com sucesso!")
+                    print(f"   📨 Message ID: {result.get('message_id', 'N/A')}")
                 else:
                     error_msg = result.get("error") if isinstance(result, dict) else str(result)
+                    status_code = result.get("status_code") if isinstance(result, dict) else None
                     print(f"   ❌ Erro ao enviar resposta: {error_msg}")
+                    if status_code:
+                        print(f"   📊 Status Code: {status_code}")
+                    if isinstance(result, dict) and result.get("coexistence_hint"):
+                        print(f"   💡 Dica: {result.get('coexistence_hint')}")
             else:
                 print(f"   ❌ Erro na IA: {response.text}")
 
