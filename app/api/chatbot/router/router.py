@@ -827,7 +827,10 @@ async def send_media(request: dict, db: Session = Depends(get_db)):
 
     # Busca config do WhatsApp (360dialog por padrão)
     config = load_whatsapp_config()
-    is_360 = "360dialog" in str(config.get("base_url", ""))
+    provider = (config.get("provider") or "").lower()
+    base_url = str(config.get("base_url", "") or "").lower()
+    # `provider` tem precedência. Se estiver vazio, inferimos pelo base_url (compatibilidade).
+    is_360 = (provider == "360dialog") or (not provider and "360dialog" in base_url)
 
     if (is_360 and not config.get("access_token")) or (
         not is_360 and (not config.get("access_token") or not config.get("phone_number_id"))
@@ -1082,6 +1085,28 @@ async def webhook_handler(request: Request, db: Session = Depends(get_db)):
     Processa e responde automaticamente com a IA
     """
     try:
+        # Valida header customizado se configurado
+        from ..core.config_whatsapp import load_whatsapp_config
+        cfg = load_whatsapp_config()
+        webhook_header_key = (cfg.get("webhook_header_key") or "").strip()
+        webhook_header_value = (cfg.get("webhook_header_value") or "").strip()
+        
+        if webhook_header_key and webhook_header_value:
+            # Valida o header customizado (headers são case-insensitive)
+            header_received = (request.headers.get(webhook_header_key) or "").strip()
+
+            if not header_received:
+                raise HTTPException(
+                    status_code=401,
+                    detail=f"Webhook não autorizado (header {webhook_header_key} ausente)",
+                )
+
+            if header_received != webhook_header_value:
+                raise HTTPException(
+                    status_code=401,
+                    detail="Webhook não autorizado (header inválido)",
+                )
+        
         # Lê o body de forma segura
         try:
             body_bytes = await request.body()

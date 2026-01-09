@@ -25,6 +25,8 @@ DEFAULT_WHATSAPP_CONFIG: Dict[str, str] = {
     "coexistence_enabled": False,
     "webhook_url": "",
     "webhook_verify_token": "",
+    "webhook_header_key": "",
+    "webhook_header_value": "",
     "webhook_is_active": False,
     "webhook_status": "pending",
     "webhook_last_sync": None,
@@ -47,7 +49,8 @@ def load_whatsapp_config(empresa_id: Optional[str] = None) -> Dict[str, str]:
     Se não houver, retorna o fallback vazio (DEFAULT_WHATSAPP_CONFIG).
     """
     with _service_ctx() as service:
-        config = service.get_active_config(empresa_id) if empresa_id else None
+        # Busca ativo por empresa quando informado; caso contrário, usa fallback do service (último ativo)
+        config = service.get_active_config(empresa_id)
         if config:
             cfg = WhatsAppConfigService.to_response_dict(config)
             # Garante base_url/provider mesmo se não estiverem no banco
@@ -55,6 +58,8 @@ def load_whatsapp_config(empresa_id: Optional[str] = None) -> Dict[str, str]:
             cfg.setdefault("provider", "360dialog")
             cfg.setdefault("webhook_url", "")
             cfg.setdefault("webhook_verify_token", "")
+            cfg.setdefault("webhook_header_key", "")
+            cfg.setdefault("webhook_header_value", "")
             cfg.setdefault("webhook_is_active", False)
             cfg.setdefault("webhook_status", "pending")
             cfg.setdefault("webhook_last_sync", None)
@@ -70,10 +75,15 @@ def get_whatsapp_url(empresa_id: Optional[str] = None, config: Optional[Dict[str
     """Retorna a URL base da API do WhatsApp."""
     cfg = config or load_whatsapp_config(empresa_id)
     base_url = cfg.get("base_url")
+    provider = (cfg.get("provider") or "").lower()
+
+    # Provedor primário: se provider estiver definido, ele manda.
+    # Fallback: se provider vier vazio, inferimos pelo base_url (mantém compatibilidade).
+    is_360 = (provider == "360dialog") or (not provider and "360dialog" in (base_url or "").lower())
 
     # 360dialog usa base_url dedicada sem phone_number_id
-    if base_url:
-        return f"{base_url.rstrip('/')}/v1/messages"
+    if is_360:
+        return f"{(base_url or D360_BASE_URL).rstrip('/')}/v1/messages"
 
     api_version = cfg.get("api_version", "v22.0")
     phone_number_id = cfg.get("phone_number_id")
@@ -85,13 +95,15 @@ def get_headers(empresa_id: Optional[str] = None, config: Optional[Dict[str, str
     cfg = config or load_whatsapp_config(empresa_id)
     access_token = cfg.get("access_token") or ""
     base_url = cfg.get("base_url") or ""
+    provider = (cfg.get("provider") or "").lower()
 
     # Valida se o token existe e não está vazio
     if not access_token or access_token.strip() == "":
         raise ValueError("Access token do WhatsApp não configurado ou vazio")
 
     # 360dialog: usa header D360-API-KEY
-    if "360dialog" in base_url:
+    is_360 = (provider == "360dialog") or (not provider and "360dialog" in base_url.lower())
+    if is_360:
         return {
             "D360-API-KEY": access_token,
             "Content-Type": "application/json",

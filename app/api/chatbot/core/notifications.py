@@ -37,7 +37,10 @@ class OrderNotification:
             )
 
             config = load_whatsapp_config(empresa_id)
-            is_360 = "360dialog" in str(config.get("base_url", ""))
+            provider = (config.get("provider") or "").lower()
+            base_url = str(config.get("base_url", "") or "").lower()
+            # `provider` tem precedência. Se estiver vazio, inferimos pelo base_url (compatibilidade).
+            is_360 = (provider == "360dialog") or (not provider and "360dialog" in base_url)
             access_token = config.get("access_token") or ""
 
             # Valida se o token existe e não está vazio

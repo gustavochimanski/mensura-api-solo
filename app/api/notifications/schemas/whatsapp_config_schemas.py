@@ -14,7 +14,11 @@ class WhatsAppConfigBase(BaseModel):
     coexistence_enabled: Optional[bool] = False
     is_active: Optional[bool] = False
     webhook_url: Optional[str] = None
+    # Token de verificação do webhook (comparado com `hub.verify_token` no GET /webhook)
     webhook_verify_token: Optional[str] = None
+    # Validação extra via header no POST /webhook (comparação exata; NÃO é validação de assinatura/HMAC)
+    webhook_header_key: Optional[str] = None  # Ex: "X-Webhook-Token"
+    webhook_header_value: Optional[str] = None  # Ex: "meu-segredo-compartilhado"
     webhook_is_active: Optional[bool] = False
     webhook_status: Optional[str] = "pending"
     webhook_last_sync: Optional[datetime] = None
@@ -32,8 +36,11 @@ class WhatsAppConfigCreate(WhatsAppConfigBase):
         phone_number_id = self.phone_number_id
         webhook_url = self.webhook_url
         webhook_verify_token = self.webhook_verify_token
+        webhook_header_key = self.webhook_header_key
+        webhook_header_value = self.webhook_header_value
 
-        is_360 = "360dialog" in provider or "360dialog" in base_url
+        # `provider` tem precedência. Se estiver vazio, inferimos pelo base_url (compatibilidade).
+        is_360 = (provider == "360dialog") or (not provider and "360dialog" in base_url)
 
         if not is_360:
             if not phone_number_id:
@@ -44,6 +51,9 @@ class WhatsAppConfigCreate(WhatsAppConfigBase):
 
         if webhook_url and not webhook_verify_token:
             raise ValueError("webhook_verify_token é obrigatório quando webhook_url for enviado")
+
+        if (webhook_header_key and not webhook_header_value) or (webhook_header_value and not webhook_header_key):
+            raise ValueError("webhook_header_key e webhook_header_value devem ser enviados juntos")
 
         return self
 
@@ -62,7 +72,11 @@ class WhatsAppConfigUpdate(BaseModel):
     coexistence_enabled: Optional[bool] = None
     is_active: Optional[bool] = None
     webhook_url: Optional[str] = None
+    # Token de verificação do webhook (comparado com `hub.verify_token` no GET /webhook)
     webhook_verify_token: Optional[str] = None
+    # Validação extra via header no POST /webhook (comparação exata; NÃO é validação de assinatura/HMAC)
+    webhook_header_key: Optional[str] = None  # Ex: "X-Webhook-Token"
+    webhook_header_value: Optional[str] = None  # Ex: "meu-segredo-compartilhado"
     webhook_is_active: Optional[bool] = None
     webhook_status: Optional[str] = None
     webhook_last_sync: Optional[datetime] = None
@@ -73,7 +87,7 @@ class WhatsAppConfigResponse(BaseModel):
     empresa_id: str
     name: Optional[str] = None
     display_phone_number: Optional[str] = None
-    access_token: str
+    access_token: Optional[str] = None
     phone_number_id: Optional[str] = None
     business_account_id: Optional[str] = None
     base_url: Optional[str] = None
@@ -83,7 +97,11 @@ class WhatsAppConfigResponse(BaseModel):
     coexistence_enabled: bool
     is_active: bool
     webhook_url: Optional[str] = None
+    # Token de verificação do webhook (comparado com `hub.verify_token` no GET /webhook)
     webhook_verify_token: Optional[str] = None
+    # Validação extra via header no POST /webhook (comparação exata; NÃO é validação de assinatura/HMAC)
+    webhook_header_key: Optional[str] = None  # Ex: "X-Webhook-Token"
+    webhook_header_value: Optional[str] = None  # Ex: "meu-segredo-compartilhado"
     webhook_is_active: bool
     webhook_status: Optional[str] = None
     webhook_last_sync: Optional[datetime] = None
