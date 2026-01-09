@@ -231,12 +231,19 @@ class OrderNotification:
                 # Formato 1: Com código do país (padrão)
                 phone_to_use = phone_formatted
 
-                # Validação: remove espaços e caracteres especiais do número
-                phone_to_use = ''.join(filter(str.isdigit, phone_to_use))
+                # Validação rigorosa do número
+                phone_clean = ''.join(filter(str.isdigit, phone_to_use))
 
                 # Garante que tem código do país
-                if not phone_to_use.startswith('55'):
-                    phone_to_use = '55' + phone_to_use
+                if not phone_clean.startswith('55'):
+                    phone_clean = '55' + phone_clean
+
+                # Validação final: deve ter exatamente 13 dígitos para Brasil (55 + 2 DDD + 8 número)
+                if len(phone_clean) != 13:
+                    print(f"   ⚠️ AVISO: Número tem {len(phone_clean)} dígitos, esperado 13 para Brasil")
+                    print(f"   📊 Número limpo: {phone_clean}")
+
+                phone_to_use = phone_clean
 
                 # Payload conforme documentação oficial da 360Dialog
                 # https://docs.360dialog.com/docs/waba-messaging/messaging
@@ -247,9 +254,13 @@ class OrderNotification:
                     "type": "text",
                     "text": {"body": message},
                 }
-                
-                # Log do número que será usado
-                print(f"   📱 Número formatado para envio: {phone_to_use} (original: {phone})")
+
+                # Log detalhado do número
+                print(f"   📱 Número original: {phone}")
+                print(f"   🔢 Número formatado: {phone_formatted}")
+                print(f"   🧹 Número limpo: {phone_clean}")
+                print(f"   📤 Número para envio: {phone_to_use} ({len(phone_to_use)} dígitos)")
+                print(f"   🌍 País detectado: {'Brasil' if phone_to_use.startswith('55') else 'Internacional'}")
                 
                 # Não precisamos adicionar "context" ou "message_id" - o 360dialog detecta automaticamente
                 # se é uma resposta dentro da janela de conversa baseado no número e timestamp
