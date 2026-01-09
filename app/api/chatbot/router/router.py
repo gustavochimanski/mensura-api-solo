@@ -2,7 +2,7 @@
 Router do módulo de Chatbot
 Todas as rotas relacionadas ao chatbot com IA (Ollama)
 """
-from fastapi import APIRouter, HTTPException, Request, Depends, UploadFile, File
+from fastapi import APIRouter, HTTPException, Request, Depends, UploadFile, File, BackgroundTasks
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -915,10 +915,14 @@ def get_empresa_id_by_phone_number_id(db: Session, phone_number_id: str) -> Opti
 
 
 @router.post("/webhook")
-async def webhook_handler(request: Request, db: Session = Depends(get_db)):
+async def webhook_handler(request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """
-    Recebe mensagens do WhatsApp via webhook
-    Processa e responde automaticamente com a IA
+    Recebe mensagens do WhatsApp via webhook (360Dialog/Meta)
+    
+    IMPORTANTE: Segue a documentação da 360Dialog:
+    - Retorna 200 OK imediatamente após receber o webhook
+    - Processa mensagens de forma assíncrona em background
+    - Processa messages, statuses e errors conforme documentação
     """
     try:
         # Lê o body de forma segura
@@ -926,11 +930,13 @@ async def webhook_handler(request: Request, db: Session = Depends(get_db)):
             body_bytes = await request.body()
         except Exception as e:
             print(f"⚠️ Erro ao ler body da requisição: {e}")
+            # Retorna 200 OK imediatamente mesmo com erro (requisito da 360Dialog)
             return {"status": "ok", "message": "Erro ao ler body, mas webhook recebido"}
         
         # Verifica se há body
         if not body_bytes or len(body_bytes) == 0:
             print("⚠️ Webhook POST recebido sem body - retornando OK")
+            # Retorna 200 OK imediatamente (requisito da 360Dialog)
             return {"status": "ok", "message": "Webhook recebido sem body"}
         
         # Tenta parsear JSON
@@ -938,18 +944,49 @@ async def webhook_handler(request: Request, db: Session = Depends(get_db)):
             body_text = body_bytes.decode('utf-8')
             if not body_text.strip():
                 print("⚠️ Webhook POST recebido com body vazio - retornando OK")
+                # Retorna 200 OK imediatamente (requisito da 360Dialog)
                 return {"status": "ok", "message": "Webhook recebido com body vazio"}
             body = json.loads(body_text)
         except json.JSONDecodeError as e:
             print(f"❌ Erro ao parsear JSON do webhook: {e}")
             print(f"   Body recebido (primeiros 200 chars): {body_text[:200] if 'body_text' in locals() else 'N/A'}")
-            # Retorna 200 OK mesmo com erro de JSON para não quebrar o webhook do Facebook
+            # Retorna 200 OK imediatamente mesmo com erro de JSON (requisito da 360Dialog)
             return {"status": "ok", "message": "Webhook recebido (JSON inválido, mas processado)"}
 
-        # Log do webhook recebido
+        # Log do webhook recebido (apenas log, não bloqueia resposta)
         print(f"\n📥 Webhook POST recebido: {json.dumps(body, indent=2)}")
 
-        # Verifica se é uma mensagem
+        # CRÍTICO: Retorna 200 OK IMEDIATAMENTE antes de processar
+        # Conforme documentação 360Dialog: "acknowledge immediately after receiving the webhook"
+        # Processa tudo em background para não violar o limite de 5 segundos
+        
+        # Adiciona processamento em background
+        # IMPORTANTE: Não passa a sessão do banco diretamente, cria nova sessão na função
+        background_tasks.add_task(process_webhook_background, body)
+
+        # Retorna 200 OK imediatamente (requisito crítico da 360Dialog)
+        return {"status": "ok"}
+
+    except Exception as e:
+        print(f"❌ Erro no webhook: {e}")
+        # Mesmo com erro, retorna 200 OK para não quebrar o webhook
+        return {"status": "ok", "message": f"Webhook recebido (erro: {str(e)})"}
+
+
+async def process_webhook_background(body: dict):
+    """
+    Processa webhook em background (após retornar 200 OK)
+    Processa messages, statuses e errors conforme documentação 360Dialog
+    
+    IMPORTANTE: Cria nova sessão do banco aqui, pois background tasks
+    não podem usar a sessão da requisição original
+    """
+    # Cria nova sessão do banco para background task
+    from app.database.db_connection import get_db
+    db = next(get_db())
+    
+    try:
+        # Verifica se é uma mensagem do WhatsApp Business Account
         if body.get("object") == "whatsapp_business_account":
             entries = body.get("entry", [])
 
@@ -958,6 +995,7 @@ async def webhook_handler(request: Request, db: Session = Depends(get_db)):
 
                 for change in changes:
                     value = change.get("value", {})
+                    field = change.get("field", "")
 
                     # Extrai phone_number_id do metadata para identificar a empresa
                     metadata = value.get("metadata", {})
@@ -974,43 +1012,101 @@ async def webhook_handler(request: Request, db: Session = Depends(get_db)):
                         print(f"   ⚠️ Empresa não encontrada para phone_number_id {phone_number_id}, usando fallback empresa_id=1")
                         empresa_id = "1"
 
-                    # Verifica se há mensagens
+                    # Processa MESSAGES (mensagens recebidas)
                     messages = value.get("messages", [])
+                    if messages:
+                        # Extrai nome do contato da Meta (se disponível)
+                        contacts = value.get("contacts", [])
+                        contact_name = None
+                        if contacts and len(contacts) > 0:
+                            profile = contacts[0].get("profile", {})
+                            contact_name = profile.get("name")
 
-                    # Extrai nome do contato da Meta (se disponível)
-                    contacts = value.get("contacts", [])
-                    contact_name = None
-                    if contacts and len(contacts) > 0:
-                        profile = contacts[0].get("profile", {})
-                        contact_name = profile.get("name")
+                        for message in messages:
+                            # Dados da mensagem
+                            from_number = message.get("from")
+                            message_id = message.get("id")
+                            message_type = message.get("type")
+                            timestamp = message.get("timestamp")
 
-                    for message in messages:
-                        # Dados da mensagem
-                        from_number = message.get("from")
-                        message_id = message.get("id")
-                        message_type = message.get("type")
-                        timestamp = message.get("timestamp")
+                            # Extrai o texto da mensagem
+                            message_text = None
+                            if message_type == "text":
+                                message_text = message.get("text", {}).get("body")
 
-                        # Extrai o texto da mensagem
-                        message_text = None
-                        if message_type == "text":
-                            message_text = message.get("text", {}).get("body")
+                            print(f"\n📨 Mensagem recebida:")
+                            print(f"   De: {from_number}")
+                            print(f"   Nome: {contact_name}")
+                            print(f"   Tipo: {message_type}")
+                            print(f"   Texto: {message_text}")
 
-                        print(f"\n📨 Mensagem recebida:")
-                        print(f"   De: {from_number}")
-                        print(f"   Nome: {contact_name}")
-                        print(f"   Tipo: {message_type}")
-                        print(f"   Texto: {message_text}")
+                            if message_text:
+                                # Marca mensagem como lida (conforme documentação 360Dialog)
+                                # Todas as mensagens recebidas aparecem como "delivered" por padrão
+                                # Para aparecerem como "read", precisamos marcar explicitamente
+                                try:
+                                    mark_result = await OrderNotification.mark_message_as_read(message_id, empresa_id)
+                                    if mark_result.get("success"):
+                                        print(f"   ✅ Mensagem {message_id} marcada como lida")
+                                    else:
+                                        print(f"   ⚠️ Não foi possível marcar mensagem como lida: {mark_result.get('error')}")
+                                except Exception as mark_error:
+                                    print(f"   ⚠️ Erro ao marcar mensagem como lida: {mark_error}")
+                                
+                                # Processa a mensagem com a IA (passa o nome do contato e empresa_id)
+                                await process_whatsapp_message(db, from_number, message_text, contact_name, empresa_id)
 
-                        if message_text:
-                            # Processa a mensagem com a IA (passa o nome do contato e empresa_id)
-                            await process_whatsapp_message(db, from_number, message_text, contact_name, empresa_id)
+                    # Processa STATUSES (status de mensagens enviadas: sent, delivered, read)
+                    statuses = value.get("statuses", [])
+                    if statuses:
+                        for status in statuses:
+                            status_id = status.get("id")
+                            status_type = status.get("status")  # sent, delivered, read, failed
+                            recipient_id = status.get("recipient_id")
+                            timestamp = status.get("timestamp")
+                            
+                            print(f"\n📊 Status recebido:")
+                            print(f"   Message ID: {status_id}")
+                            print(f"   Status: {status_type}")
+                            print(f"   Recipient: {recipient_id}")
+                            print(f"   Timestamp: {timestamp}")
+                            
+                            # Aqui você pode salvar status no banco, atualizar conversas, etc.
+                            # Por exemplo, marcar mensagem como lida quando status_type == "read"
+                            if status_type == "read":
+                                print(f"   ✅ Mensagem {status_id} foi lida pelo usuário")
+                            elif status_type == "delivered":
+                                print(f"   📬 Mensagem {status_id} foi entregue")
+                            elif status_type == "sent":
+                                print(f"   📤 Mensagem {status_id} foi enviada")
+                            elif status_type == "failed":
+                                error_info = status.get("errors", [])
+                                print(f"   ❌ Mensagem {status_id} falhou: {error_info}")
 
-        return {"status": "ok"}
+                    # Processa ERRORS (erros do webhook)
+                    errors = value.get("errors", [])
+                    if errors:
+                        for error in errors:
+                            error_code = error.get("code")
+                            error_title = error.get("title")
+                            error_message = error.get("message")
+                            error_details = error.get("error_data", {})
+                            
+                            print(f"\n❌ Erro recebido do webhook:")
+                            print(f"   Code: {error_code}")
+                            print(f"   Title: {error_title}")
+                            print(f"   Message: {error_message}")
+                            print(f"   Details: {error_details}")
+                            
+                            # Aqui você pode logar erros, notificar administradores, etc.
 
     except Exception as e:
-        print(f"❌ Erro no webhook: {e}")
-        return {"status": "error", "message": str(e)}
+        print(f"❌ Erro ao processar webhook em background: {e}")
+        import traceback
+        traceback.print_exc()
+    finally:
+        # Fecha a sessão do banco
+        db.close()
 
 
 async def process_whatsapp_message(db: Session, phone_number: str, message_text: str, contact_name: str = None, empresa_id: str = "1"):
@@ -1155,7 +1251,12 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 if status_code:
                     print(f"   📊 Status Code: {status_code}")
                 if isinstance(result, dict) and result.get("coexistence_hint"):
-                    print(f"   💡 Dica: {result.get('coexistence_hint')}")
+                    hint = result.get('coexistence_hint')
+                    print(f"   💡 {hint}")
+                    # Se for erro de pagamento, destaca mais
+                    if "payment" in error_msg.lower() or "blocked" in error_msg.lower():
+                        print(f"   ⚠️ ATENÇÃO: A mensagem foi salva no banco, mas NÃO foi enviada ao cliente!")
+                        print(f"   💳 Ação necessária: Adicionar créditos/pagamento na conta do 360dialog")
 
             return
 

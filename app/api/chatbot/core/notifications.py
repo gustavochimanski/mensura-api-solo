@@ -18,6 +18,90 @@ class OrderNotification:
     """Gerenciador de notificações de pedidos"""
 
     @staticmethod
+    async def mark_message_as_read(message_id: str, empresa_id: Optional[str] = None) -> Dict:
+        """
+        Marca uma mensagem como lida no WhatsApp
+        Conforme documentação 360Dialog: https://docs.360dialog.com/docs/waba-messaging/messaging
+        
+        Args:
+            message_id: ID da mensagem a ser marcada como lida
+            empresa_id: ID da empresa (opcional)
+        
+        Returns:
+            Dict com resultado da operação
+        """
+        try:
+            from .config_whatsapp import (
+                load_whatsapp_config,
+                get_whatsapp_url,
+                get_headers,
+            )
+
+            config = load_whatsapp_config(empresa_id)
+            provider = (config.get("provider") or "").lower()
+            base_url = str(config.get("base_url", "") or "").lower()
+            is_360 = (provider == "360dialog") or (not provider and "360dialog" in base_url)
+            access_token = config.get("access_token") or ""
+
+            if not access_token or access_token.strip() == "":
+                return {
+                    "success": False,
+                    "error": "Configuração do WhatsApp ausente ou incompleta",
+                }
+
+            # URL para marcar como lida
+            if is_360:
+                # 360Dialog usa endpoint diferente para marcar como lida
+                base_url_clean = (base_url or "https://waba-v2.360dialog.io").rstrip('/')
+                url = f"{base_url_clean}/v1/messages"
+            else:
+                # Meta Cloud API
+                phone_number_id = config.get("phone_number_id")
+                if not phone_number_id:
+                    return {
+                        "success": False,
+                        "error": "phone_number_id não configurado",
+                    }
+                api_version = config.get("api_version", "v22.0")
+                url = f"https://graph.facebook.com/{api_version}/{phone_number_id}/messages"
+
+            headers = get_headers(empresa_id, config)
+
+            # Payload para marcar como lida (formato padrão WhatsApp Cloud API)
+            # Conforme documentação: https://docs.360dialog.com/docs/waba-messaging/messaging
+            payload = {
+                "messaging_product": "whatsapp",
+                "status": "read",
+                "message_id": message_id
+            }
+
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.post(url, json=payload, headers=headers)
+                
+                if response.status_code == 200:
+                    logger.debug(f"[WhatsApp] Mensagem {message_id} marcada como lida")
+                    return {
+                        "success": True,
+                        "message_id": message_id,
+                        "status": "read"
+                    }
+                else:
+                    error_message = response.text or "Erro desconhecido"
+                    logger.warning(f"[WhatsApp] Erro ao marcar mensagem como lida: {error_message}")
+                    return {
+                        "success": False,
+                        "error": error_message,
+                        "status_code": response.status_code
+                    }
+
+        except Exception as e:
+            logger.error(f"[WhatsApp] Exceção ao marcar mensagem como lida: {str(e)}", exc_info=True)
+            return {
+                "success": False,
+                "error": str(e)
+            }
+
+    @staticmethod
     async def send_whatsapp_message(phone: str, message: str, empresa_id: Optional[str] = None) -> Dict:
         """
         Envia mensagem via WhatsApp Business API (Meta)
@@ -118,12 +202,17 @@ class OrderNotification:
                 }
 
             # Payload da mensagem
+            # NOTA: Para 360dialog, respostas dentro da janela de conversa (24h) são gratuitas,
+            # mas a conta inteira é bloqueada se houver pendências de pagamento, mesmo para respostas.
+            # O formato abaixo é o correto para mensagens dentro da janela de conversa.
             if is_360:
                 payload = {
                     "to": phone_formatted,
                     "type": "text",
                     "text": {"body": message},
                 }
+                # Não precisamos adicionar "context" ou "message_id" - o 360dialog detecta automaticamente
+                # se é uma resposta dentro da janela de conversa baseado no número e timestamp
             else:
                 payload = {
                     "messaging_product": "whatsapp",
@@ -185,10 +274,20 @@ class OrderNotification:
                 # Dica adicional quando houver conflito de registro do número
                 if response.status_code in (400, 403, 409):
                     if is_360:
-                        coexistence_hint = (
-                            "Verifique se a API Key do 360dialog está correta e ativa. "
-                            "Status 403 geralmente indica API Key inválida ou expirada."
-                        )
+                        # Verifica se é erro de pagamento
+                        if "payment" in error_message.lower() or "blocked" in error_message.lower():
+                            coexistence_hint = (
+                                "⚠️ CONTA BLOQUEADA POR FALTA DE PAGAMENTO: "
+                                "A conta do 360dialog está bloqueada por falta de créditos/pagamento. "
+                                "IMPORTANTE: Mesmo respostas dentro da janela de conversa (24h) são bloqueadas quando há pendências. "
+                                "É necessário regularizar o pagamento na conta do 360dialog para desbloquear TODAS as mensagens, "
+                                "incluindo respostas gratuitas dentro da janela de conversa."
+                            )
+                        else:
+                            coexistence_hint = (
+                                "Verifique se a API Key do 360dialog está correta e ativa. "
+                                "Status 403 geralmente indica API Key inválida ou expirada."
+                            )
                     else:
                         coexistence_hint = (
                             "Verifique se o número foi conectado no modo 'App e API' na Meta "
