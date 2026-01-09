@@ -16,7 +16,10 @@ class WhatsAppChannel(BaseNotificationChannel):
         self.api_version = config.get("api_version", "v22.0")
         self.base_url = config.get("base_url", "https://waba-v2.360dialog.io")
         self.provider = config.get("provider", "360dialog")
-        self.is_360 = "360dialog" in (self.base_url or "")
+        provider_norm = (self.provider or "").lower()
+        base_url_norm = (self.base_url or "").lower()
+        # `provider` tem precedência. Se estiver vazio, inferimos pelo base_url (compatibilidade).
+        self.is_360 = (provider_norm == "360dialog") or (not provider_norm and "360dialog" in base_url_norm)
         
         if not self.validate_config(config):
             raise ValueError("Configuração inválida para canal de WhatsApp")
@@ -29,7 +32,10 @@ class WhatsAppChannel(BaseNotificationChannel):
     
     def validate_config(self, config: Dict[str, Any]) -> bool:
         """Valida a configuração do canal de WhatsApp"""
-        if "360dialog" in str(config.get("base_url", "")):
+        provider_norm = (config.get("provider") or "").lower()
+        base_url_norm = str(config.get("base_url", "") or "").lower()
+        is_360 = (provider_norm == "360dialog") or (not provider_norm and "360dialog" in base_url_norm)
+        if is_360:
             return bool(config.get("access_token"))
         required_fields = ["access_token", "phone_number_id"]
         return all(field in config for field in required_fields)

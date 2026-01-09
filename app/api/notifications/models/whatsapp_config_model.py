@@ -26,7 +26,11 @@ class WhatsAppConfigModel(Base):
     is_active = Column(Boolean, nullable=False, default=False, index=True)
     # Campos específicos 360dialog / Webhook
     webhook_url = Column(String, nullable=True)
+    # Token de verificação do webhook (comparado com `hub.verify_token` no GET /webhook)
     webhook_verify_token = Column(String, nullable=True)
+    # Validação extra via header no POST /webhook (comparação exata; NÃO é validação de assinatura/HMAC)
+    webhook_header_key = Column(String, nullable=True)  # Ex: "X-Webhook-Token"
+    webhook_header_value = Column(Text, nullable=True)  # Ex: "meu-segredo-compartilhado"
     webhook_is_active = Column(Boolean, nullable=False, default=False)
     webhook_status = Column(String, nullable=True, default="pending")
     webhook_last_sync = Column(DateTime, nullable=True)

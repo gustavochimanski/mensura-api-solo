@@ -110,6 +110,8 @@ class WhatsAppConfigService:
             "is_active": config.is_active,
             "webhook_url": config.webhook_url,
             "webhook_verify_token": config.webhook_verify_token,
+            "webhook_header_key": config.webhook_header_key,
+            "webhook_header_value": config.webhook_header_value,
             "webhook_is_active": config.webhook_is_active,
             "webhook_status": config.webhook_status,
             "webhook_last_sync": config.webhook_last_sync,
@@ -129,6 +131,8 @@ class WhatsAppConfigService:
         # Webhook: mantém dados existentes se não enviados
         data.setdefault("webhook_url", existing.webhook_url if existing else None)
         data.setdefault("webhook_verify_token", existing.webhook_verify_token if existing else None)
+        data.setdefault("webhook_header_key", existing.webhook_header_key if existing else None)
+        data.setdefault("webhook_header_value", existing.webhook_header_value if existing else None)
         data.setdefault("webhook_is_active", existing.webhook_is_active if existing else False)
         data.setdefault("webhook_status", existing.webhook_status if existing else "pending")
         data.setdefault("webhook_last_sync", existing.webhook_last_sync if existing else None)
@@ -147,7 +151,14 @@ class WhatsAppConfigService:
         webhook_verify_token = data.get("webhook_verify_token") or (
             existing.webhook_verify_token if existing else None
         )
-        is_360 = "360dialog" in provider or "360dialog" in base_url
+        webhook_header_key = data.get("webhook_header_key") or (
+            existing.webhook_header_key if existing else None
+        )
+        webhook_header_value = data.get("webhook_header_value") or (
+            existing.webhook_header_value if existing else None
+        )
+        # `provider` tem precedência. Se estiver vazio, inferimos pelo base_url (compatibilidade).
+        is_360 = (provider == "360dialog") or (not provider and "360dialog" in base_url)
 
         if not is_360:
             if not phone_number_id:
@@ -159,3 +170,6 @@ class WhatsAppConfigService:
 
         if webhook_url and not webhook_verify_token:
             raise ValueError("webhook_verify_token é obrigatório quando webhook_url for enviado")
+
+        if (webhook_header_key and not webhook_header_value) or (webhook_header_value and not webhook_header_key):
+            raise ValueError("webhook_header_key e webhook_header_value devem ser enviados juntos")

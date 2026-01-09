@@ -52,7 +52,10 @@ class DefaultChannelConfigAdapter(IChannelConfigProvider):
             return 'username' in config and 'password' in config
         elif channel == NotificationChannel.WHATSAPP:
             # 360dialog precisa apenas da api key; Meta Cloud requer phone_number_id
-            if "360dialog" in str(config.get("base_url", "")):
+            provider_norm = (config.get("provider") or "").lower()
+            base_url_norm = str(config.get("base_url", "") or "").lower()
+            is_360 = (provider_norm == "360dialog") or (not provider_norm and "360dialog" in base_url_norm)
+            if is_360:
                 return bool(config.get("access_token"))
             return all(k in config for k in ['access_token', 'phone_number_id'])
         elif channel == NotificationChannel.WEBHOOK:
@@ -141,7 +144,10 @@ class DatabaseChannelConfigAdapter(IChannelConfigProvider):
     ) -> bool:
         """Valida configuração"""
         if channel == NotificationChannel.WHATSAPP:
-            if "360dialog" in str(config.get("base_url", "")):
+            provider_norm = (config.get("provider") or "").lower()
+            base_url_norm = str(config.get("base_url", "") or "").lower()
+            is_360 = (provider_norm == "360dialog") or (not provider_norm and "360dialog" in base_url_norm)
+            if is_360:
                 return bool(config.get("access_token"))
             return all(config.get(k) for k in ("access_token", "phone_number_id"))
         return True

@@ -156,6 +156,8 @@ def garantir_colunas_whatsapp_configs():
                     ALTER COLUMN access_token DROP NOT NULL,
                     ADD COLUMN IF NOT EXISTS webhook_url varchar,
                     ADD COLUMN IF NOT EXISTS webhook_verify_token varchar,
+                    ADD COLUMN IF NOT EXISTS webhook_header_key varchar,
+                    ADD COLUMN IF NOT EXISTS webhook_header_value text,
                     ADD COLUMN IF NOT EXISTS webhook_is_active boolean DEFAULT false,
                     ADD COLUMN IF NOT EXISTS webhook_status varchar DEFAULT 'pending',
                     ADD COLUMN IF NOT EXISTS webhook_last_sync timestamp without time zone
