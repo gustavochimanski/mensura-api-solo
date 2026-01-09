@@ -517,118 +517,183 @@ class PedidoAdminService:
     def gerenciar_item(self, pedido_id: int, payload: PedidoItemMutationRequest):
         pedido = self._get_pedido(pedido_id)
         tipo = self._to_tipo_entrega_enum(pedido.tipo_entrega)
+        
+        # Validação: se tipo foi informado no payload, deve corresponder ao tipo do pedido
+        if payload.tipo and payload.tipo != tipo:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                f"Tipo informado no payload ({payload.tipo}) não corresponde ao tipo do pedido ({tipo})"
+            )
 
         if tipo == TipoEntregaEnum.DELIVERY:
-            # Para delivery, usa o método do pedido_service que suporta receitas e combos
-            # através do método atualizar_item_pedido que aceita ItemPedidoEditar
-            # Mas esse método só aceita produto_cod_barras, então precisamos usar uma abordagem diferente
-            # para receitas e combos em delivery
-            
             if payload.acao == PedidoItemMutationAction.ADD:
-                # Se for receita ou combo, precisa usar o repositório diretamente
-                if payload.receita_id or payload.combo_id:
-                    # Para receitas e combos em delivery, usa o repositório diretamente
-                    from app.api.catalogo.core import ProductCore
-                    from app.api.catalogo.adapters.produto_adapter import ProdutoAdapter
-                    from app.api.catalogo.adapters.combo_adapter import ComboAdapter
-                    from app.api.catalogo.adapters.complemento_adapter import ComplementoAdapter
-                    
-                    produto_adapter = ProdutoAdapter(self.db)
-                    combo_adapter = ComboAdapter(self.db)
-                    complemento_adapter = ComplementoAdapter(self.db)
-                    product_core = ProductCore(
-                        produto_contract=produto_adapter,
-                        combo_contract=combo_adapter,
-                        complemento_contract=complemento_adapter,
+                # Unificado: usa adicionar_produto_generico para todos os tipos (produto, receita, combo)
+                # Agora com suporte a complementos também para delivery
+                from app.api.pedidos.services.service_pedidos_balcao import (
+                    AdicionarProdutoGenericoRequest as ProdutoGenericoRequest,
+                )
+                
+                # Valida que pelo menos um identificador foi enviado
+                if not payload.produto_cod_barras and not payload.receita_id and not payload.combo_id:
+                    raise HTTPException(
+                        status.HTTP_400_BAD_REQUEST,
+                        "É necessário informar produto_cod_barras, receita_id ou combo_id"
                     )
-                    
-                    empresa_id = pedido.empresa_id
-                    qtd = payload.quantidade or 1
-                    
-                    # Busca receita do banco se necessário
-                    receita_model = None
-                    if payload.receita_id:
-                        from app.api.catalogo.models.model_receita import ReceitaModel
-                        receita_model = self.db.query(ReceitaModel).filter(ReceitaModel.id == payload.receita_id).first()
-                    
-                    # Busca produto usando ProductCore
-                    product = product_core.buscar_qualquer(
-                        empresa_id=empresa_id,
-                        cod_barras=payload.produto_cod_barras,
-                        combo_id=payload.combo_id,
-                        receita_id=payload.receita_id,
-                        receita_model=receita_model,
-                    )
-                    
-                    if not product:
-                        raise HTTPException(status.HTTP_404_NOT_FOUND, "Produto não encontrado")
-                    
-                    if not product_core.validar_disponivel(product, qtd):
-                        tipo_nome = product.product_type.value
-                        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"{tipo_nome.capitalize()} não disponível")
-                    
-                    if not product_core.validar_empresa(product, empresa_id):
-                        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Produto não pertence à empresa {empresa_id}")
-                    
-                    # Calcula preço (sem complementos para delivery)
-                    preco_total, _ = product_core.calcular_preco_com_complementos(
-                        product=product,
+                
+                # Cria serviço de balcão temporário para usar o método unificado
+                # (mesmo método funciona para delivery, apenas muda o tipo de entrega)
+                from app.api.catalogo.adapters.produto_adapter import ProdutoAdapter
+                from app.api.catalogo.adapters.combo_adapter import ComboAdapter
+                from app.api.catalogo.adapters.complemento_adapter import ComplementoAdapter
+                from app.api.catalogo.contracts.produto_contract import IProdutoContract
+                from app.api.catalogo.contracts.combo_contract import IComboContract
+                from app.api.catalogo.contracts.complemento_contract import IComplementoContract
+                
+                produto_adapter = ProdutoAdapter(self.db)
+                combo_adapter = ComboAdapter(self.db)
+                complemento_adapter = ComplementoAdapter(self.db)
+                
+                # Usa o serviço de balcão que já tem a lógica unificada
+                balcao_service = PedidoBalcaoService(
+                    self.db,
+                    produto_contract=produto_adapter,
+                    combo_contract=combo_adapter,
+                    complemento_contract=complemento_adapter,
+                )
+                
+                body = ProdutoGenericoRequest(
+                    produto_cod_barras=payload.produto_cod_barras,
+                    receita_id=payload.receita_id,
+                    combo_id=payload.combo_id,
+                    quantidade=payload.quantidade or 1,
+                    observacao=payload.observacao,
+                    complementos=payload.complementos,  # Agora suporta complementos em delivery
+                )
+                
+                # Usa o método unificado, mas precisa ajustar para delivery
+                # Como o método adicionar_produto_generico usa TipoEntrega.BALCAO,
+                # vamos usar uma abordagem diferente: usar ProductCore diretamente
+                from app.api.catalogo.core import ProductCore
+                from app.api.catalogo.models.model_receita import ReceitaModel
+                from app.api.pedidos.models.model_pedido_unificado import TipoEntrega
+                from app.api.pedidos.models.model_pedido_historico_unificado import TipoOperacaoPedido
+                from app.api.pedidos.services.service_pedido_responses import PedidoResponseBuilder
+                
+                product_core = ProductCore(
+                    produto_contract=produto_adapter,
+                    combo_contract=combo_adapter,
+                    complemento_contract=complemento_adapter,
+                )
+                
+                empresa_id = pedido.empresa_id
+                qtd = max(int(body.quantidade or 1), 1)
+                
+                # Busca receita do banco se necessário
+                receita_model = None
+                if body.receita_id:
+                    receita_model = self.db.query(ReceitaModel).filter(ReceitaModel.id == body.receita_id).first()
+                
+                # Busca produto usando ProductCore
+                product = product_core.buscar_qualquer(
+                    empresa_id=empresa_id,
+                    cod_barras=body.produto_cod_barras,
+                    combo_id=body.combo_id,
+                    receita_id=body.receita_id,
+                    receita_model=receita_model,
+                )
+                
+                if not product:
+                    raise HTTPException(status.HTTP_404_NOT_FOUND, "Produto não encontrado")
+                
+                if not product_core.validar_disponivel(product, qtd):
+                    tipo_nome = product.product_type.value
+                    raise HTTPException(status.HTTP_400_BAD_REQUEST, f"{tipo_nome.capitalize()} não disponível")
+                
+                if not product_core.validar_empresa(product, empresa_id):
+                    raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Produto não pertence à empresa {empresa_id}")
+                
+                # Calcula preço COM complementos (agora suportado para delivery)
+                preco_total, adicionais_snapshot = product_core.calcular_preco_com_complementos(
+                    product=product,
+                    quantidade=qtd,
+                    complementos_request=body.complementos,  # Agora suporta complementos
+                )
+                preco_unitario = preco_total / Decimal(str(qtd))
+                
+                # Adiciona item usando repositório
+                descricao_produto = product.nome or product.descricao or ""
+                
+                if product.product_type.value == "produto":
+                    self.repo.adicionar_item(
+                        pedido_id=pedido_id,
+                        cod_barras=str(product.identifier),
                         quantidade=qtd,
-                        complementos_request=None,  # Delivery não tem complementos
+                        preco_unitario=preco_unitario,
+                        observacao=body.observacao,
+                        produto_descricao_snapshot=descricao_produto,
+                        adicionais_snapshot=adicionais_snapshot if adicionais_snapshot else None,
                     )
-                    preco_unitario = preco_total / Decimal(str(qtd))
-                    
-                    # Adiciona item usando repositório
-                    if payload.receita_id:
-                        self.repo.adicionar_item(
-                            pedido_id=pedido_id,
-                            receita_id=payload.receita_id,
-                            quantidade=qtd,
-                            preco_unitario=preco_unitario,
-                            observacao=payload.observacao,
-                            produto_descricao_snapshot=product.nome or product.descricao,
-                        )
-                    elif payload.combo_id:
-                        self.repo.adicionar_item(
-                            pedido_id=pedido_id,
-                            combo_id=payload.combo_id,
-                            quantidade=qtd,
-                            preco_unitario=preco_unitario,
-                            observacao=payload.observacao,
-                            produto_descricao_snapshot=product.nome or product.descricao,
-                        )
-                    
-                    # Atualiza totais do pedido usando o método de recálculo do PedidoService
-                    pedido_atualizado = self.repo.get_pedido(pedido_id)
-                    self.pedido_service._recalcular_pedido(pedido_atualizado)
-                    pedido_atualizado = self.repo.get_pedido(pedido_id)
-                    return self._build_pedido_response(pedido_atualizado)
+                    descricao_historico = f"Produto adicionado: {product.identifier} (qtd: {qtd})"
+                elif product.product_type.value == "receita":
+                    self.repo.adicionar_item(
+                        pedido_id=pedido_id,
+                        receita_id=int(product.identifier),
+                        quantidade=qtd,
+                        preco_unitario=preco_unitario,
+                        observacao=body.observacao,
+                        produto_descricao_snapshot=descricao_produto,
+                        adicionais_snapshot=adicionais_snapshot if adicionais_snapshot else None,
+                    )
+                    descricao_historico = f"Receita adicionada: {descricao_produto} (ID: {product.identifier}, qtd: {qtd})"
+                elif product.product_type.value == "combo":
+                    self.repo.adicionar_item(
+                        pedido_id=pedido_id,
+                        combo_id=int(product.identifier),
+                        quantidade=qtd,
+                        preco_unitario=preco_unitario,
+                        observacao=body.observacao,
+                        produto_descricao_snapshot=descricao_produto,
+                        adicionais_snapshot=adicionais_snapshot if adicionais_snapshot else None,
+                    )
+                    descricao_historico = f"Combo adicionado: {descricao_produto} (ID: {product.identifier}, qtd: {qtd})"
                 else:
-                    # Para produtos simples, usa o método existente
-                    if not payload.produto_cod_barras:
-                        raise HTTPException(
-                            status.HTTP_400_BAD_REQUEST,
-                            "produto_cod_barras é obrigatório para adicionar item simples em pedidos de delivery."
-                        )
-                    
-                    acao_map = {
-                        PedidoItemMutationAction.ADD: "adicionar",
-                        PedidoItemMutationAction.UPDATE: "atualizar",
-                        PedidoItemMutationAction.REMOVE: "remover",
-                    }
-                    item = ItemPedidoEditar(
-                        id=payload.item_id,
-                        produto_cod_barras=payload.produto_cod_barras,
-                        quantidade=payload.quantidade,
-                        observacao=payload.observacao,
-                        acao=acao_map[payload.acao],
-                    )
-                    return self.pedido_service.atualizar_item_pedido(pedido_id, item)
-            else:
-                # Para UPDATE e REMOVE, usa o método existente
+                    raise HTTPException(status.HTTP_400_BAD_REQUEST, "Tipo de produto não suportado")
+                
+                # Registra histórico
+                self.repo.add_historico(
+                    pedido_id=pedido_id,
+                    tipo_operacao=TipoOperacaoPedido.ITEM_ADICIONADO,
+                    descricao=descricao_historico,
+                    usuario_id=None,
+                )
+                
+                # Atualiza totais do pedido
+                pedido_atualizado = self.repo.get_pedido(pedido_id)
+                self.pedido_service._recalcular_pedido(pedido_atualizado)
+                self.repo.commit()
+                pedido_atualizado = self.repo.get_pedido(pedido_id)
+                return self._build_pedido_response(pedido_atualizado)
+            elif payload.acao == PedidoItemMutationAction.UPDATE:
+                # Para UPDATE em delivery, usa o método existente
+                if not payload.item_id:
+                    raise HTTPException(status.HTTP_400_BAD_REQUEST, "item_id é obrigatório para atualizar item.")
+                
                 acao_map = {
-                    PedidoItemMutationAction.ADD: "adicionar",
                     PedidoItemMutationAction.UPDATE: "atualizar",
+                }
+                item = ItemPedidoEditar(
+                    id=payload.item_id,
+                    produto_cod_barras=payload.produto_cod_barras,
+                    quantidade=payload.quantidade,
+                    observacao=payload.observacao,
+                    acao=acao_map[payload.acao],
+                )
+                return self.pedido_service.atualizar_item_pedido(pedido_id, item)
+            elif payload.acao == PedidoItemMutationAction.REMOVE:
+                if not payload.item_id:
+                    raise HTTPException(status.HTTP_400_BAD_REQUEST, "item_id é obrigatório para remover item.")
+                
+                acao_map = {
                     PedidoItemMutationAction.REMOVE: "remover",
                 }
                 item = ItemPedidoEditar(
@@ -661,14 +726,16 @@ class PedidoAdminService:
                     complementos=payload.complementos,
                 )
                 self.mesa_service.adicionar_produto_generico(pedido_id, body)
+                pedido_atualizado = self.repo.get_pedido(pedido_id)
+                return self._build_pedido_response(pedido_atualizado)
             elif payload.acao == PedidoItemMutationAction.REMOVE:
                 if not payload.item_id:
                     raise HTTPException(status.HTTP_400_BAD_REQUEST, "item_id é obrigatório para remover item.")
                 self.mesa_service.remover_item(pedido_id, payload.item_id)
+                pedido_atualizado = self.repo.get_pedido(pedido_id)
+                return self._build_pedido_response(pedido_atualizado)
             else:
                 raise HTTPException(status.HTTP_400_BAD_REQUEST, "Atualização parcial de itens não suportada para mesa.")
-            pedido_atualizado = self.repo.get_pedido(pedido_id)
-            return self._build_pedido_response(pedido_atualizado)
 
         if tipo == TipoEntregaEnum.BALCAO:
             if payload.acao == PedidoItemMutationAction.ADD:
@@ -693,14 +760,16 @@ class PedidoAdminService:
                     complementos=payload.complementos,
                 )
                 self.balcao_service.adicionar_produto_generico(pedido_id, body)
+                pedido_atualizado = self.repo.get_pedido(pedido_id)
+                return self._build_pedido_response(pedido_atualizado)
             elif payload.acao == PedidoItemMutationAction.REMOVE:
                 if not payload.item_id:
                     raise HTTPException(status.HTTP_400_BAD_REQUEST, "item_id é obrigatório para remover item.")
                 self.balcao_service.remover_item(pedido_id, payload.item_id)
+                pedido_atualizado = self.repo.get_pedido(pedido_id)
+                return self._build_pedido_response(pedido_atualizado)
             else:
                 raise HTTPException(status.HTTP_400_BAD_REQUEST, "Atualização parcial de itens não suportada para balcão.")
-            pedido_atualizado = self.repo.get_pedido(pedido_id)
-            return self._build_pedido_response(pedido_atualizado)
 
         raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Tipo de pedido '{tipo}' não suportado.")
 

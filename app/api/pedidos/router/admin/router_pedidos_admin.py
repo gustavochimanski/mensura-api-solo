@@ -243,8 +243,24 @@ def reabrir_pedido(
 def gerenciar_itens(
     pedido_id: int = Path(..., gt=0),
     payload: PedidoItemMutationRequest = Body(...),
+    tipo: Optional[TipoEntregaEnum] = Query(
+        None,
+        description="Tipo de pedido (DELIVERY, BALCAO, MESA). Opcional - será detectado automaticamente pelo pedido_id se não informado.",
+    ),
     svc: PedidoAdminService = Depends(get_pedido_admin_service),
 ):
+    """
+    Endpoint unificado para gerenciar itens de pedidos (Delivery, Balcão e Mesa).
+    
+    Suporta adicionar, atualizar e remover produtos, receitas e combos.
+    Todos os tipos de pedido suportam complementos.
+    
+    O parâmetro `tipo` é opcional e serve apenas para validação.
+    O tipo real do pedido é detectado automaticamente pelo `pedido_id`.
+    """
+    # Se tipo foi informado na query, adiciona ao payload para validação
+    if tipo:
+        payload.tipo = tipo
     return svc.gerenciar_item(pedido_id, payload)
 
 
