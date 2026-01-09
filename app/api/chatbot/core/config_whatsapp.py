@@ -67,8 +67,11 @@ def load_whatsapp_config(empresa_id: Optional[str] = None) -> Dict[str, str]:
     return DEFAULT_WHATSAPP_CONFIG.copy()
 
 
-# Mantido por compatibilidade com códigos legados (evita erro de import)
-WHATSAPP_CONFIG = load_whatsapp_config()
+# Mantido por compatibilidade com códigos legados (evita erro de import).
+# IMPORTANTE: não consultar o banco em import-time, porque isso força o SQLAlchemy
+# a configurar os mappers cedo demais (antes de todos os models serem importados),
+# podendo quebrar relações declaradas por string (ex.: "CaixaModel").
+WHATSAPP_CONFIG = DEFAULT_WHATSAPP_CONFIG.copy()
 
 
 def get_whatsapp_url(empresa_id: Optional[str] = None, config: Optional[Dict[str, str]] = None) -> str:
