@@ -1,2 +1,0 @@
-"""Adapters do domínio Empresas"""
-

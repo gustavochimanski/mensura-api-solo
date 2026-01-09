@@ -12,7 +12,6 @@ class WhatsAppConfigRepository:
         self.db = db
 
     def create(self, data: Dict[str, Any]) -> WhatsAppConfigModel:
-        from ..models.whatsapp_config_model import WhatsAppConfigModel
         import logging
         logger = logging.getLogger(__name__)
 
@@ -72,6 +71,9 @@ class WhatsAppConfigRepository:
         )
 
     def deactivate_all(self, empresa_id: str) -> None:
+        import logging
+        logger = logging.getLogger(__name__)
+
         result = (
             self.db.query(WhatsAppConfigModel)
             .filter(WhatsAppConfigModel.empresa_id == str(empresa_id))

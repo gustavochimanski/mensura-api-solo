@@ -1,2 +1,0 @@
-"""Repositories do domínio Empresas"""
-

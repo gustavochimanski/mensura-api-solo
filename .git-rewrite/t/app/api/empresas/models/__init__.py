@@ -1,2 +1,0 @@
-"""Models do domínio Empresas"""
-

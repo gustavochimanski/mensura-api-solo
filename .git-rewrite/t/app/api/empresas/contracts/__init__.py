@@ -1,2 +1,0 @@
-"""Contracts do domínio Empresas"""
-

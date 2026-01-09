@@ -1,2 +1,0 @@
-"""Schemas do domínio Empresas"""
-

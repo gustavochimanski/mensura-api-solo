@@ -1,2 +1,0 @@
-# Domínio de Localização/Geolocalização
-
