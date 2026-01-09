@@ -711,9 +711,25 @@ async def send_notification(request: dict, db: Session = Depends(get_db)):
     Aceita telefone e mensagem formatada
     Salva a mensagem no histórico da conversa
     """
-    phone = request.get("phone")
-    message = request.get("message")
-    empresa_id = request.get("empresa_id")
+    # Suporta payload como dict ou string (JSON bruto)
+    if isinstance(request, str):
+        try:
+            import json
+            request_data = json.loads(request)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Payload JSON inválido")
+    elif isinstance(request, dict):
+        request_data = request
+    else:
+        # Pydantic pode entregar outros tipos; tenta converter para dict
+        try:
+            request_data = dict(request)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Payload inválido")
+
+    phone = request_data.get("phone")
+    message = request_data.get("message")
+    empresa_id = request_data.get("empresa_id")
 
     if not phone or not message:
         raise HTTPException(
@@ -724,6 +740,13 @@ async def send_notification(request: dict, db: Session = Depends(get_db)):
     # Envia via WhatsApp
     notifier = OrderNotification()
     result = await notifier.send_whatsapp_message(phone, message, empresa_id=empresa_id)
+
+    # Garante que result seja dict para evitar AttributeError
+    if not isinstance(result, dict):
+        raise HTTPException(
+            status_code=500,
+            detail="Resposta inválida do provedor WhatsApp"
+        )
 
     if result.get("success"):
         # Salva a mensagem enviada no histórico da conversa
@@ -777,10 +800,24 @@ async def send_media(request: dict, db: Session = Depends(get_db)):
     Endpoint para enviar arquivos (imagem, documento, audio, video) via WhatsApp
     Salva a mensagem no histórico da conversa
     """
-    phone = request.get("phone")
-    media_url = request.get("media_url")
-    media_type = request.get("media_type", "image")  # image, document, audio, video
-    caption = request.get("caption", "")
+    if isinstance(request, str):
+        try:
+            import json
+            request_data = json.loads(request)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Payload JSON inválido")
+    elif isinstance(request, dict):
+        request_data = request
+    else:
+        try:
+            request_data = dict(request)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Payload inválido")
+
+    phone = request_data.get("phone")
+    media_url = request_data.get("media_url")
+    media_type = request_data.get("media_type", "image")  # image, document, audio, video
+    caption = request_data.get("caption", "")
 
     if not phone or not media_url:
         raise HTTPException(

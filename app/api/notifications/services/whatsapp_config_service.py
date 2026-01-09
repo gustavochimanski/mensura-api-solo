@@ -10,6 +10,9 @@ logger = logging.getLogger(__name__)
 class WhatsAppConfigService:
     """Regras de negócio para configurações do WhatsApp Business."""
 
+    DEFAULT_BASE_URL = "https://waba-v2.360dialog.io"
+    DEFAULT_PROVIDER = "360dialog"
+
     def __init__(self, repo: WhatsAppConfigRepository):
         self.repo = repo
 
@@ -30,6 +33,9 @@ class WhatsAppConfigService:
     def create_config(self, data: Dict[str, Any]) -> WhatsAppConfigModel:
         empresa_id = str(data["empresa_id"])
 
+        data = self._ensure_defaults(data)
+        self._validate_requirements(data)
+
         # Se marcada como ativa, desativa demais
         if data.get("is_active"):
             self.repo.deactivate_all(empresa_id)
@@ -44,6 +50,9 @@ class WhatsAppConfigService:
         config = self.repo.get_by_id(config_id)
         if not config:
             return None
+
+        data = self._ensure_defaults(data, existing=config)
+        self._validate_requirements(data, existing=config)
 
         should_activate = data.get("is_active") is True
 
@@ -93,6 +102,8 @@ class WhatsAppConfigService:
             "phone_number_id": config.phone_number_id,
             "business_account_id": config.business_account_id,
             "access_token": config.access_token,
+            "base_url": config.base_url,
+            "provider": config.provider,
             "api_version": config.api_version,
             "send_mode": config.send_mode,
             "coexistence_enabled": config.coexistence_enabled,
@@ -101,3 +112,30 @@ class WhatsAppConfigService:
             "updated_at": config.updated_at,
         }
 
+    def _ensure_defaults(
+        self,
+        data: Dict[str, Any],
+        existing: Optional[WhatsAppConfigModel] = None,
+    ) -> Dict[str, Any]:
+        """Define valores padrão de base_url/provider para 360dialog quando não enviados."""
+        data = dict(data)
+        data.setdefault("base_url", existing.base_url if existing else self.DEFAULT_BASE_URL)
+        data.setdefault("provider", existing.provider if existing else self.DEFAULT_PROVIDER)
+        return data
+
+    def _validate_requirements(
+        self,
+        data: Dict[str, Any],
+        existing: Optional[WhatsAppConfigModel] = None,
+    ) -> None:
+        """Valida obrigatoriedades conforme o provedor configurado."""
+        provider = (data.get("provider") or (existing.provider if existing else "") or "").lower()
+        base_url = (data.get("base_url") or (existing.base_url if existing else "") or "").lower()
+        phone_number_id = data.get("phone_number_id") or (existing.phone_number_id if existing else None)
+
+        if "360dialog" not in provider and "360dialog" not in base_url:
+            if not phone_number_id:
+                raise ValueError("phone_number_id é obrigatório para provedores que não sejam 360dialog")
+
+        if not data.get("access_token") and not (existing and existing.access_token):
+            raise ValueError("access_token é obrigatório")
