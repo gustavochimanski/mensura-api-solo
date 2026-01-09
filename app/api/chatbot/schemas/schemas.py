@@ -137,8 +137,6 @@ class WhatsAppConfigUpdate(BaseModel):
     phone_number_id: str
     business_account_id: str
     api_version: Optional[str] = "v22.0"
-    send_mode: Optional[str] = "api"
-    coexistence_enabled: Optional[bool] = False
     is_active: Optional[bool] = True
 
 
@@ -152,8 +150,6 @@ class WhatsAppConfigResponse(BaseModel):
     phone_number_id: str
     business_account_id: str
     api_version: str
-    send_mode: str
-    coexistence_enabled: bool
     is_active: Optional[bool] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None

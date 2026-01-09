@@ -1258,7 +1258,6 @@ async def update_whatsapp_config(config: WhatsAppConfigUpdate):
         "phone_number_id": config.phone_number_id,
         "business_account_id": config.business_account_id,
         "api_version": config.api_version or "v22.0",
-        "send_mode": "api",
     }
 
     # Substitui o conteúdo do arquivo (mantém as funções auxiliares)

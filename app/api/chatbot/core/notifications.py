@@ -364,34 +364,23 @@ _Obrigado pela preferência!_"""
         chat_result = await cls.send_notification_async(db, phone, message, order_type)
         results["chat_interno"] = chat_result
 
-        # Se modo API/coexistência estiver ativado, envia via WhatsApp também
+        # Envia via WhatsApp API
         empresa_id = order_data.get("empresa_id")
-        whatsapp_config = load_whatsapp_config(empresa_id)
-        send_mode = whatsapp_config.get("send_mode")
-        if send_mode in {"api", "coexistence"}:
-            whatsapp_result = await cls.send_whatsapp_message(phone, message, empresa_id=empresa_id)
-            results["whatsapp_api"] = whatsapp_result
+        whatsapp_result = await cls.send_whatsapp_message(phone, message, empresa_id=empresa_id)
+        results["whatsapp_api"] = whatsapp_result
 
-            # Considera sucesso se WhatsApp API funcionou
-            if whatsapp_result.get("success"):
-                results["success"] = True
-                provider_label = (
-                    "WhatsApp API (Coexistência) + Chat Interno"
-                    if send_mode == "coexistence"
-                    else "WhatsApp API + Chat Interno"
-                )
-                results["provider"] = provider_label
-                results["message"] = "Notificação enviada via WhatsApp e salva no chat"
-            else:
-                results["success"] = False
-                results["error"] = whatsapp_result.get("error")
-                results["message"] = (
-                    whatsapp_result.get("coexistence_hint")
-                    or "Erro ao enviar via WhatsApp, mas salvo no chat"
-                )
+        # Considera sucesso se WhatsApp API funcionou
+        if whatsapp_result.get("success"):
+            results["success"] = True
+            results["provider"] = "WhatsApp API + Chat Interno"
+            results["message"] = "Notificação enviada via WhatsApp e salva no chat"
         else:
-            # Modo chat interno apenas
-            results["success"] = chat_result.get("success", False)
+            results["success"] = False
+            results["error"] = whatsapp_result.get("error")
+            results["message"] = (
+                whatsapp_result.get("coexistence_hint")
+                or "Erro ao enviar via WhatsApp, mas salvo no chat"
+            )
             results["provider"] = "Chat Interno"
             results["message"] = "Notificação salva no chat interno"
 

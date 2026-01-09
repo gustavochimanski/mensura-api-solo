@@ -21,8 +21,6 @@ DEFAULT_WHATSAPP_CONFIG: Dict[str, str] = {
     "phone_number_id": "",
     "business_account_id": "",
     "api_version": "v22.0",
-    "send_mode": "api",
-    "coexistence_enabled": False,
     "webhook_url": "",
     "webhook_verify_token": "",
     "webhook_header_key": "",
