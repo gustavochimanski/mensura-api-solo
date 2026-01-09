@@ -224,23 +224,24 @@ class OrderNotification:
                     "phone": phone,
                 }
 
-            # Payload da mensagem
-            # NOTA: Para 360dialog, respostas dentro da janela de conversa (24h) são gratuitas,
-            # mas a conta inteira é bloqueada se houver pendências de pagamento, mesmo para respostas.
-            # O formato abaixo é o correto para mensagens dentro da janela de conversa.
+            # Payload da mensagem conforme documentação 360Dialog
+            # https://docs.360dialog.com/docs/waba-messaging/messaging
             if is_360:
                 # Para 360Dialog, tenta diferentes formatos de número se o primeiro falhar
                 # Formato 1: Com código do país (padrão)
                 phone_to_use = phone_formatted
-                
+
                 # Validação: remove espaços e caracteres especiais do número
                 phone_to_use = ''.join(filter(str.isdigit, phone_to_use))
-                
+
                 # Garante que tem código do país
                 if not phone_to_use.startswith('55'):
                     phone_to_use = '55' + phone_to_use
-                
+
+                # Payload conforme documentação oficial da 360Dialog
                 payload = {
+                    "messaging_product": "whatsapp",
+                    "recipient_type": "individual",
                     "to": phone_to_use,
                     "type": "text",
                     "text": {"body": message},
@@ -302,8 +303,13 @@ class OrderNotification:
                     if phone_to_use.startswith('55') and len(phone_to_use) > 11:
                         phone_alt = phone_to_use[2:]  # Remove o 55
                         print(f"   🔄 Tentando formato alternativo (sem código do país): {phone_alt}")
-                        payload_alt = payload.copy()
-                        payload_alt["to"] = phone_alt
+                        payload_alt = {
+                            "messaging_product": "whatsapp",
+                            "recipient_type": "individual",
+                            "to": phone_alt,
+                            "type": "text",
+                            "text": {"body": message},
+                        }
 
                         response = await client.post(url, json=payload_alt, headers=headers)
                         print(f"   📡 Resposta HTTP (tentativa alternativa): status_code={response.status_code}")
