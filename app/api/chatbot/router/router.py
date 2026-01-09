@@ -1369,44 +1369,119 @@ async def get_webhook_info():
 async def test_whatsapp_token(config: WhatsAppConfigUpdate):
     """
     Testa se a configuração do WhatsApp é válida
-    Valida o access_token fazendo uma requisição para a API do WhatsApp
+    Valida o access_token fazendo uma requisição para a API do WhatsApp (360 Dialog ou Meta)
     """
     try:
-        # URL da API do WhatsApp
-        url = f"https://graph.facebook.com/{config.api_version}/{config.phone_number_id}"
+        from ..core.config_whatsapp import load_whatsapp_config
+        
+        # Busca configuração do banco se empresa_id foi fornecido
+        db_config = None
+        if config.empresa_id:
+            db_config = load_whatsapp_config(config.empresa_id)
+        
+        # Usa configuração do banco se disponível, senão usa dados do request
+        # O access_token do body sempre prevalece (permite testar token específico)
+        access_token = config.access_token
+        base_url = db_config.get("base_url", "") if db_config else ""
+        provider = (db_config.get("provider", "") or "").lower() if db_config else ""
+        
+        # Se não tem provider/base_url do banco, tenta inferir pelo base_url padrão do 360 Dialog
+        # ou assume Meta/Facebook como padrão
+        if not base_url and not provider:
+            # Se não tem configuração no banco, assume padrão do 360 Dialog se empresa_id foi fornecido
+            # Caso contrário, precisa dos dados completos no request
+            pass
+        
+        # Determina se é 360 Dialog baseado no provider ou base_url
+        is_360 = (provider == "360dialog") or (not provider and "360dialog" in (base_url or "").lower())
+        
+        # Se ainda não identificou, assume Meta/Facebook (compatibilidade com código antigo)
+        if not is_360 and not base_url:
+            is_360 = False
+        
+        # Prepara URL e headers baseado no provedor
+        if is_360:
+            # 360 Dialog: valida token tentando buscar informações de configuração
+            # Usa endpoint de webhook config (suporta GET para consultar configuração atual)
+            base_url_clean = (base_url or "https://waba-v2.360dialog.io").rstrip('/')
+            url = f"{base_url_clean}/v1/configs/webhook"
+            
+            headers = {
+                "D360-API-KEY": access_token,
+                "Content-Type": "application/json",
+            }
+        else:
+            # Meta/Facebook: usa Graph API para validar phone number
+            if not config.phone_number_id:
+                return {
+                    "valid": False,
+                    "status": "error",
+                    "message": "phone_number_id é obrigatório para validar token do Meta/Facebook",
+                    "provider": "Meta/Facebook"
+                }
+            
+            url = f"https://graph.facebook.com/{config.api_version}/{config.phone_number_id}"
+            
+            headers = {
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json",
+            }
 
-        # Headers com o token
-        headers = {
-            "Authorization": f"Bearer {config.access_token}",
-            "Content-Type": "application/json",
-        }
-
-        # Faz requisição GET para verificar o phone number
+        # Faz requisição para verificar o token
         async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(url, headers=headers)
+            if is_360:
+                # Para 360 Dialog, tenta GET para consultar configuração do webhook
+                # Se retornar 200 ou 404 (sem webhook configurado), token é válido
+                # Se retornar 401/403, token é inválido
+                response = await client.get(url, headers=headers)
+                
+                # 404 pode significar que não há webhook configurado, mas token é válido
+                if response.status_code == 404:
+                    return {
+                        "valid": True,
+                        "status": "success",
+                        "message": "Token válido! Configuração do 360 Dialog funcionando corretamente. (Webhook não configurado)",
+                        "provider": "360dialog"
+                    }
+            else:
+                # Para Meta, faz GET no phone number endpoint
+                response = await client.get(url, headers=headers)
 
             if response.status_code == 200:
                 data = response.json()
-                return {
-                    "valid": True,
-                    "status": "success",
-                    "message": "Token válido! Configuração do WhatsApp funcionando corretamente.",
-                    "phone_data": {
-                        "id": data.get("id"),
-                        "display_phone_number": data.get("display_phone_number"),
-                        "verified_name": data.get("verified_name"),
-                        "quality_rating": data.get("quality_rating")
+                
+                if is_360:
+                    return {
+                        "valid": True,
+                        "status": "success",
+                        "message": "Token válido! Configuração do 360 Dialog funcionando corretamente.",
+                        "provider": "360dialog",
+                        "config_data": data
                     }
-                }
+                else:
+                    return {
+                        "valid": True,
+                        "status": "success",
+                        "message": "Token válido! Configuração do WhatsApp funcionando corretamente.",
+                        "provider": "Meta/Facebook",
+                        "phone_data": {
+                            "id": data.get("id"),
+                            "display_phone_number": data.get("display_phone_number"),
+                            "verified_name": data.get("verified_name"),
+                            "quality_rating": data.get("quality_rating")
+                        }
+                    }
             elif response.status_code == 401 or response.status_code == 403:
-                error_data = response.json()
-                error_message = error_data.get("error", {}).get("message", "Token inválido")
+                error_data = response.json() if response.text else {}
+                error_message = error_data.get("error", {}).get("message", "Token inválido") if isinstance(error_data, dict) else "Token inválido ou expirado"
+                
                 return {
                     "valid": False,
                     "status": "error",
                     "message": f"Token inválido ou expirado: {error_message}",
-                    "error_code": error_data.get("error", {}).get("code"),
-                    "error_type": error_data.get("error", {}).get("type")
+                    "provider": "360dialog" if is_360 else "Meta/Facebook",
+                    "error_code": error_data.get("error", {}).get("code") if isinstance(error_data, dict) else None,
+                    "error_type": error_data.get("error", {}).get("type") if isinstance(error_data, dict) else None
                 }
             else:
                 error_data = response.json() if response.text else {}
@@ -1414,6 +1489,7 @@ async def test_whatsapp_token(config: WhatsAppConfigUpdate):
                     "valid": False,
                     "status": "error",
                     "message": f"Erro ao validar token (Status {response.status_code})",
+                    "provider": "360dialog" if is_360 else "Meta/Facebook",
                     "error": error_data
                 }
 
