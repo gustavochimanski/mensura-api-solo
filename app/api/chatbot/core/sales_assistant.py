@@ -419,11 +419,19 @@ Já sabe o que quer ou prefere uma sugestão? 😉"""
             # Payload já foi montado no preview, agora é só confirmar
             payload = preview_data.get("payload_original", {})
 
+            # Valida se o token existe e não está vazio
+            token = cliente_data.get('token', '')
+            if not token or token.strip() == "":
+                return {
+                    "erro": True,
+                    "mensagem": "Token de autenticação do cliente não encontrado ou vazio"
+                }
+
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(
                     f"{self.api_base_url}/api/cardapio/client/checkout/finalizar",
                     json=payload,
-                    headers={"Authorization": f"Bearer {cliente_data.get('token', '')}"}
+                    headers={"Authorization": f"Bearer {token}"}
                 )
 
                 if response.status_code in [200, 201]:

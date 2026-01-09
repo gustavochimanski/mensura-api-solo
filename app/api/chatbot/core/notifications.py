@@ -38,14 +38,23 @@ class OrderNotification:
 
             config = load_whatsapp_config(empresa_id)
             is_360 = "360dialog" in str(config.get("base_url", ""))
+            access_token = config.get("access_token") or ""
 
-            if (is_360 and not config.get("access_token")) or (
-                not is_360 and (not config.get("access_token") or not config.get("phone_number_id"))
-            ):
+            # Valida se o token existe e não está vazio
+            if not access_token or access_token.strip() == "":
                 return {
                     "success": False,
                     "provider": "360dialog" if is_360 else "WhatsApp Business API (Meta)",
-                    "error": "Configuração do WhatsApp ausente ou incompleta",
+                    "error": "Configuração do WhatsApp ausente ou incompleta: access_token não configurado",
+                    "phone": phone,
+                }
+
+            # Para Meta Cloud API, também precisa do phone_number_id
+            if not is_360 and not config.get("phone_number_id"):
+                return {
+                    "success": False,
+                    "provider": "WhatsApp Business API (Meta)",
+                    "error": "Configuração do WhatsApp ausente ou incompleta: phone_number_id não configurado",
                     "phone": phone,
                 }
 
@@ -55,8 +64,16 @@ class OrderNotification:
             # URL da API
             url = get_whatsapp_url(empresa_id, config)
 
-            # Headers com token de autorização
-            headers = get_headers(empresa_id, config)
+            # Headers com token de autorização (pode lançar ValueError se token inválido)
+            try:
+                headers = get_headers(empresa_id, config)
+            except ValueError as e:
+                return {
+                    "success": False,
+                    "provider": "360dialog" if is_360 else "WhatsApp Business API (Meta)",
+                    "error": f"Erro na configuração do WhatsApp: {str(e)}",
+                    "phone": phone,
+                }
 
             # Payload da mensagem
             if is_360:
