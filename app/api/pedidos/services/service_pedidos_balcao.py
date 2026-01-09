@@ -201,7 +201,9 @@ class PedidoBalcaoService:
                     pedido.id,
                     produto_cod_barras=it.produto_cod_barras,
                     quantidade=qtd,
+                    preco_unitario=preco_unitario,
                     observacao=it.observacao,
+                    produto_descricao_snapshot=descricao_produto,
                     adicionais_snapshot=adicionais_snapshot if adicionais_snapshot else None,
                 )
                 # Registra histórico de item adicionado
@@ -453,7 +455,9 @@ class PedidoBalcaoService:
                 pedido_id,
                 produto_cod_barras=str(product.identifier),
                 quantidade=qtd,
+                preco_unitario=preco_unitario,
                 observacao=observacao_completa,
+                produto_descricao_snapshot=descricao_produto,
                 adicionais_snapshot=adicionais_snapshot if adicionais_snapshot else None,
             )
             descricao_historico = f"Produto adicionado: {product.identifier} (qtd: {qtd})"

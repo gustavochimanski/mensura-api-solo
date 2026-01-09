@@ -87,7 +87,7 @@ class OrderNotification:
                 response = await client.post(url, json=payload, headers=headers)
                 
                 if response.status_code == 200:
-                    logger.debug(f"[WhatsApp] Mensagem {message_id} marcada como lida")
+                    logger.info(f"[WhatsApp] Mensagem {message_id} marcada como lida")
                     return {
                         "success": True,
                         "message_id": message_id,
@@ -100,15 +100,9 @@ class OrderNotification:
                         error_json = response.json()
                         error_message = json.dumps(error_json, indent=2, ensure_ascii=False)
                         logger.error(f"[WhatsApp] Erro ao marcar mensagem como lida (Status {response.status_code}):\n{error_message}")
-                        print(f"   ❌ ERRO COMPLETO ao marcar como lida:")
-                        print(f"   📊 Status: {response.status_code}")
-                        print(f"   📄 Resposta: {error_message}")
-                        print(f"   🔗 URL: {url}")
-                        print(f"   📦 Payload enviado: {json.dumps(payload, indent=2, ensure_ascii=False)}")
                     except:
                         error_message = error_text
                         logger.error(f"[WhatsApp] Erro ao marcar mensagem como lida (Status {response.status_code}): {error_message}")
-                        print(f"   ❌ ERRO ao marcar como lida: {error_message}")
                     
                     return {
                         "success": False,
@@ -151,17 +145,10 @@ class OrderNotification:
             is_360 = (provider == "360dialog") or (not provider and "360dialog" in base_url)
             access_token = config.get("access_token") or ""
 
-            # Log de debug (também usa print para garantir visibilidade)
-            log_msg = f"[WhatsApp] Enviando mensagem - empresa_id={empresa_id}, provider={provider}, base_url={base_url}, is_360={is_360}, token_length={len(access_token) if access_token else 0}"
-            logger.debug(log_msg)
-            print(f"   🔍 {log_msg}")
-
             # Valida se o token existe e não está vazio
             if not access_token or access_token.strip() == "":
                 error_msg = f"Configuração do WhatsApp ausente ou incompleta: access_token não configurado (empresa_id={empresa_id})"
                 logger.error(f"[WhatsApp] {error_msg}")
-                print(f"   ❌ {error_msg}")
-                print(f"   🔍 Config completa: {config}")
                 return {
                     "success": False,
                     "provider": "360dialog" if is_360 else "WhatsApp Business API (Meta)",
@@ -187,36 +174,22 @@ class OrderNotification:
             # Headers com token de autorização (pode lançar ValueError se token inválido)
             try:
                 headers = get_headers(empresa_id, config)
-                logger.debug(f"[WhatsApp] Headers preparados: {list(headers.keys())}")
-                print(f"   🔍 Headers preparados: {list(headers.keys())}")
-                # Não mostra o token completo por segurança, apenas indica se existe
-                for key in headers.keys():
-                    if "key" in key.lower() or "token" in key.lower() or "authorization" in key.lower():
-                        header_value = headers[key]
-                        if header_value:
-                            # Mostra últimos 10 caracteres para debug
-                            masked = "***" + str(header_value)[-10:] if len(str(header_value)) > 10 else "***"
-                            print(f"   🔍 Header {key}: {masked} (length: {len(str(header_value))})")
-                        else:
-                            print(f"   ⚠️ Header {key}: VAZIO!")
                 
                 # Validação extra para 360dialog
                 if is_360:
                     api_key = headers.get("D360-API-KEY", "")
                     if not api_key or len(api_key.strip()) == 0:
                         error_msg = "API Key do 360dialog está vazia!"
-                        print(f"   ❌ {error_msg}")
+                        logger.error(f"[WhatsApp] {error_msg}")
                         return {
                             "success": False,
                             "provider": "360dialog",
                             "error": error_msg,
                             "phone": phone,
                         }
-                    print(f"   ✅ API Key do 360dialog presente (length: {len(api_key)})")
             except ValueError as e:
                 error_msg = f"Erro na configuração do WhatsApp: {str(e)}"
                 logger.error(f"[WhatsApp] {error_msg}")
-                print(f"   ❌ {error_msg}")
                 return {
                     "success": False,
                     "provider": "360dialog" if is_360 else "WhatsApp Business API (Meta)",
@@ -240,8 +213,7 @@ class OrderNotification:
 
                 # Validação final: deve ter exatamente 13 dígitos para Brasil (55 + 2 DDD + 8 número)
                 if len(phone_clean) != 13:
-                    print(f"   ⚠️ AVISO: Número tem {len(phone_clean)} dígitos, esperado 13 para Brasil")
-                    print(f"   📊 Número limpo: {phone_clean}")
+                    logger.warning(f"[WhatsApp] Número tem {len(phone_clean)} dígitos, esperado 13 para Brasil: {phone_clean}")
 
                 phone_to_use = phone_clean
 
@@ -254,13 +226,6 @@ class OrderNotification:
                     "type": "text",
                     "text": {"body": message},
                 }
-
-                # Log detalhado do número
-                print(f"   📱 Número original: {phone}")
-                print(f"   🔢 Número formatado: {phone_formatted}")
-                print(f"   🧹 Número limpo: {phone_clean}")
-                print(f"   📤 Número para envio: {phone_to_use} ({len(phone_to_use)} dígitos)")
-                print(f"   🌍 País detectado: {'Brasil' if phone_to_use.startswith('55') else 'Internacional'}")
                 
                 # Não precisamos adicionar "context" ou "message_id" - o 360dialog detecta automaticamente
                 # se é uma resposta dentro da janela de conversa baseado no número e timestamp
@@ -276,45 +241,15 @@ class OrderNotification:
                 }
 
             # Envia a mensagem (Cloud API) - compatível com modo de coexistência
-            logger.debug(f"[WhatsApp] Enviando para URL: {url}")
-            print(f"   🔍 URL: {url}")
-            print(f"   🔍 Payload: {json.dumps(payload, indent=2, ensure_ascii=False)}")
-            
-            # Para 360Dialog, tenta diferentes formatos se o primeiro falhar
-            last_error = None
-            last_response = None
-            
             async with httpx.AsyncClient(timeout=30.0) as client:
                 # Primeira tentativa com o formato padrão
                 response = await client.post(url, json=payload, headers=headers)
-                logger.debug(f"[WhatsApp] Resposta recebida - status_code={response.status_code}")
-                print(f"   📡 Resposta HTTP: status_code={response.status_code}")
                 
                 # Se falhar com 400 e for 360Dialog, tenta formato alternativo do número
                 if response.status_code == 400 and is_360:
-                    # Log detalhado do primeiro erro
-                    try:
-                        error_json = response.json()
-                        print(f"   🔄 PRIMEIRO ERRO DETALHADO (Status 400):")
-                        if isinstance(error_json, dict) and "error" in error_json:
-                            error_detail = error_json["error"]
-                            if isinstance(error_detail, dict):
-                                error_code = error_detail.get("code")
-                                error_type = error_detail.get("type")
-                                error_message = error_detail.get("message")
-                                if error_code: print(f"      📋 Code: {error_code}")
-                                if error_type: print(f"      🏷️  Type: {error_type}")
-                                if error_message: print(f"      💬 Message: {error_message}")
-                    except:
-                        print(f"   🔄 Primeiro erro: {response.text}")
-
-                    last_error = response.text or ""
-                    last_response = response
-
                     # Tenta sem código do país (apenas DDD + número)
                     if phone_to_use.startswith('55') and len(phone_to_use) > 11:
                         phone_alt = phone_to_use[2:]  # Remove o 55
-                        print(f"   🔄 Tentando formato alternativo (sem código do país): {phone_alt}")
                         payload_alt = {
                             "messaging_product": "whatsapp",
                             "recipient_type": "individual",
@@ -324,13 +259,12 @@ class OrderNotification:
                         }
 
                         response = await client.post(url, json=payload_alt, headers=headers)
-                        print(f"   📡 Resposta HTTP (tentativa alternativa): status_code={response.status_code}")
 
                         if response.status_code == 200:
                             # Sucesso com formato alternativo
                             result = response.json()
                             message_id = result.get("messages", [{}])[0].get("id") if result.get("messages") else None
-                            print(f"   ✅ Mensagem enviada com sucesso (formato alternativo)! Message ID: {message_id}")
+                            logger.info(f"[WhatsApp] Mensagem enviada com sucesso (formato alternativo). Message ID: {message_id}")
                             return {
                                 "success": True,
                                 "provider": "360dialog",
@@ -348,66 +282,14 @@ class OrderNotification:
                         error_json = response.json()
                         error_message = json.dumps(error_json, indent=2, ensure_ascii=False)
                         logger.error(f"[WhatsApp] Erro ao enviar mensagem (Status {response.status_code}):\n{error_message}")
-
-                        # Extração detalhada dos erros da 360Dialog/Meta
-                        print(f"   ❌ ERRO DETALHADO da API:")
-                        print(f"   📊 Status HTTP: {response.status_code}")
-                        print(f"   🔗 URL: {url}")
-                        print(f"   📦 Payload enviado: {json.dumps(payload, indent=2, ensure_ascii=False)}")
-                        print(f"   🔑 Headers: {json.dumps({k: v if 'key' not in k.lower() and 'token' not in k.lower() else '***' + str(v)[-10:] for k, v in headers.items()}, indent=2)}")
-                        print(f"   📄 Resposta completa: {error_message}")
-
-                        # Extração específica dos campos de erro
-                        if isinstance(error_json, dict):
-                            # Para 360Dialog - estrutura comum
-                            if "error" in error_json:
-                                error_detail = error_json["error"]
-                                if isinstance(error_detail, dict):
-                                    print(f"   🔍 CAMPOS DO ERRO EXTRAÍDOS:")
-                                    error_code = error_detail.get("code")
-                                    error_type = error_detail.get("type")
-                                    error_subcode = error_detail.get("error_subcode")
-                                    error_message = error_detail.get("message")
-                                    error_fbtrace_id = error_detail.get("fbtrace_id")
-
-                                    if error_code: print(f"      📋 Code: {error_code}")
-                                    if error_type: print(f"      🏷️  Type: {error_type}")
-                                    if error_subcode: print(f"      🔢 Subcode: {error_subcode}")
-                                    if error_message: print(f"      💬 Message: {error_message}")
-                                    if error_fbtrace_id: print(f"      🔍 FBTrace ID: {error_fbtrace_id}")
-
-                                    # Interpretação dos códigos de erro comuns
-                                    if error_code == 100:
-                                        print(f"      💡 INTERPRETAÇÃO: Número de telefone inválido ou não registrado")
-                                    elif error_code == 613:
-                                        print(f"      💡 INTERPRETAÇÃO: Número não está na lista de destinatários permitidos")
-                                    elif error_code == 615:
-                                        print(f"      💡 INTERPRETAÇÃO: Limite de mensagens excedido")
-                                    elif error_code == 1003:
-                                        print(f"      💡 INTERPRETAÇÃO: Payload inválido ou formato incorreto")
-                                    elif error_code == 200:
-                                        print(f"      💡 INTERPRETAÇÃO: Permissões insuficientes da API key")
-                                    else:
-                                        print(f"      💡 INTERPRETAÇÃO: Erro genérico - verificar documentação da 360Dialog")
-
-                                elif isinstance(error_detail, str):
-                                    print(f"   🔍 Erro (string): {error_detail}")
-                            else:
-                                # Outras estruturas de erro possíveis
-                                for key, value in error_json.items():
-                                    print(f"   🔍 {key}: {value}")
-
                     except Exception as parse_error:
                         error_message = error_text
                         logger.error(f"[WhatsApp] Erro ao enviar mensagem (Status {response.status_code}): {error_message}")
-                        print(f"   ❌ ERRO ao enviar mensagem: {error_message}")
-                        print(f"   📄 Resposta completa (texto): {error_text[:1000]}")
-                        print(f"   ⚠️ Erro ao parsear JSON: {parse_error}")
 
                 if response.status_code == 200:
                     result = response.json()
                     message_id = result.get("messages", [{}])[0].get("id") if result.get("messages") else None
-                    print(f"   ✅ Mensagem enviada com sucesso! Message ID: {message_id}")
+                    logger.info(f"[WhatsApp] Mensagem enviada com sucesso. Message ID: {message_id}")
                     return {
                         "success": True,
                         "provider": "360dialog" if is_360 else "WhatsApp Business API (Meta)",
@@ -436,8 +318,6 @@ class OrderNotification:
                 except (ValueError, json.JSONDecodeError):
                     # Se não conseguir parsear, usa o texto da resposta
                     error_message = response.text or f"Erro HTTP {response.status_code}"
-                
-                print(f"   ❌ Erro na API: status_code={response.status_code}, error={error_message}")
 
                 coexistence_hint = None
                 # Dica adicional quando houver conflito de registro do número
