@@ -17,7 +17,7 @@ class WhatsAppConfigModel(Base):
     display_phone_number = Column(String, nullable=True)
     phone_number_id = Column(String, nullable=True, index=True)
     business_account_id = Column(String, nullable=True)
-    access_token = Column(Text, nullable=False)
+    access_token = Column(Text, nullable=True)
     base_url = Column(String, nullable=True, default="https://waba-v2.360dialog.io")
     provider = Column(String, nullable=True, default="360dialog")
     api_version = Column(String, nullable=False, default="v22.0")
