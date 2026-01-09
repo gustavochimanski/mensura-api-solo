@@ -84,7 +84,7 @@ def get_whatsapp_url(empresa_id: Optional[str] = None, config: Optional[Dict[str
 
     # 360dialog usa base_url dedicada sem phone_number_id
     if is_360:
-        return f"{(base_url or D360_BASE_URL).rstrip('/')}/v1/messages"
+        return f"{(base_url or D360_BASE_URL).rstrip('/')}/messages"
 
     api_version = cfg.get("api_version", "v22.0")
     phone_number_id = cfg.get("phone_number_id")
