@@ -51,6 +51,9 @@ class DefaultChannelConfigAdapter(IChannelConfigProvider):
         if channel == NotificationChannel.EMAIL:
             return 'username' in config and 'password' in config
         elif channel == NotificationChannel.WHATSAPP:
+            # 360dialog precisa apenas da api key; Meta Cloud requer phone_number_id
+            if "360dialog" in str(config.get("base_url", "")):
+                return bool(config.get("access_token"))
             return all(k in config for k in ['access_token', 'phone_number_id'])
         elif channel == NotificationChannel.WEBHOOK:
             return 'url' in config or 'endpoint' in config
@@ -74,9 +77,11 @@ class DefaultChannelConfigAdapter(IChannelConfigProvider):
                 "headers": {"Content-Type": "application/json"}
             },
             NotificationChannel.WHATSAPP: {
-                "access_token": "your_whatsapp_access_token",
-                "phone_number_id": "your_phone_number_id",
-                "api_version": "v22.0"
+                "access_token": "LLaJ4CTFRHMtE9o8hHRp3YU4AK",  # 360dialog API key
+                "base_url": "https://waba-v2.360dialog.io",
+                "provider": "360dialog",
+                "api_version": "v22.0",
+                "send_mode": "api"
             },
             NotificationChannel.PUSH: {
                 "server_key": "your_firebase_server_key"
@@ -117,6 +122,8 @@ class DatabaseChannelConfigAdapter(IChannelConfigProvider):
                 "coexistence_enabled": config.coexistence_enabled,
                 "display_phone_number": config.display_phone_number,
                 "name": config.name,
+                "base_url": "https://waba-v2.360dialog.io",
+                "provider": "360dialog",
             }
 
         return None
@@ -129,6 +136,8 @@ class DatabaseChannelConfigAdapter(IChannelConfigProvider):
     ) -> bool:
         """Valida configuração"""
         if channel == NotificationChannel.WHATSAPP:
+            if "360dialog" in str(config.get("base_url", "")):
+                return bool(config.get("access_token"))
             return all(config.get(k) for k in ("access_token", "phone_number_id"))
         return True
     

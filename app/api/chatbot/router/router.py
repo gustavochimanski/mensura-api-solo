@@ -15,6 +15,13 @@ from datetime import datetime
 from app.database.db_connection import get_db
 from ..core import database as chatbot_db
 from ..core.notifications import OrderNotification
+from app.api.chatbot.core.config_whatsapp import (
+    load_whatsapp_config,
+    get_headers as get_whatsapp_headers,
+    get_whatsapp_url,
+    format_phone_number,
+    D360_BASE_URL,
+)
 from app.api.notifications.repositories.whatsapp_config_repository import WhatsAppConfigRepository
 from app.api.notifications.services.whatsapp_config_service import WhatsAppConfigService
 
@@ -781,54 +788,54 @@ async def send_media(request: dict, db: Session = Depends(get_db)):
             detail="Telefone e media_url sao obrigatorios"
         )
 
-    # Busca config do WhatsApp
-    config = await get_whatsapp_config()
-    access_token = config.access_token
-    phone_number_id = config.phone_number_id
+    # Busca config do WhatsApp (360dialog por padrão)
+    config = load_whatsapp_config()
+    is_360 = "360dialog" in str(config.get("base_url", ""))
 
-    if not access_token or not phone_number_id:
+    if (is_360 and not config.get("access_token")) or (
+        not is_360 and (not config.get("access_token") or not config.get("phone_number_id"))
+    ):
         raise HTTPException(
             status_code=500,
             detail="Configuracao do WhatsApp incompleta"
         )
 
-    # Formata o numero (remove caracteres especiais)
-    phone_clean = ''.join(filter(str.isdigit, phone))
+    # Formata o numero (remove caracteres especiais e aplica DDI)
+    phone_clean = format_phone_number(phone)
 
     # Monta o payload para enviar media
-    url = f"https://graph.facebook.com/v22.0/{phone_number_id}/messages"
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Content-Type": "application/json"
-    }
+    url = get_whatsapp_url(config=config)
+    headers = get_whatsapp_headers(config=config)
 
-    payload = {
-        "messaging_product": "whatsapp",
+    base_payload = {
         "to": phone_clean,
         "type": media_type
     }
 
+    if not is_360:
+        base_payload["messaging_product"] = "whatsapp"
+
     # Adiciona o objeto de media baseado no tipo
     if media_type == "image":
-        payload["image"] = {"link": media_url}
+        base_payload["image"] = {"link": media_url}
         if caption:
-            payload["image"]["caption"] = caption
+            base_payload["image"]["caption"] = caption
     elif media_type == "document":
-        payload["document"] = {"link": media_url}
+        base_payload["document"] = {"link": media_url}
         if caption:
-            payload["document"]["caption"] = caption
-            payload["document"]["filename"] = caption
+            base_payload["document"]["caption"] = caption
+            base_payload["document"]["filename"] = caption
     elif media_type == "audio":
-        payload["audio"] = {"link": media_url}
+        base_payload["audio"] = {"link": media_url}
     elif media_type == "video":
-        payload["video"] = {"link": media_url}
+        base_payload["video"] = {"link": media_url}
         if caption:
-            payload["video"]["caption"] = caption
+            base_payload["video"]["caption"] = caption
 
     try:
         import httpx
         async with httpx.AsyncClient() as client:
-            response = await client.post(url, headers=headers, json=payload)
+            response = await client.post(url, headers=headers, json=base_payload)
             result = response.json()
 
             if response.status_code == 200:
@@ -1536,19 +1543,16 @@ async def get_webhook_info():
 async def test_whatsapp_token(config: WhatsAppConfigUpdate):
     """
     Testa se a configuração do WhatsApp é válida
-    Valida o access_token fazendo uma requisição para a API do WhatsApp
+    Valida o access_token fazendo uma requisição para a API (360dialog)
     """
     try:
-        # URL da API do WhatsApp
-        url = f"https://graph.facebook.com/{config.api_version}/{config.phone_number_id}"
-
-        # Headers com o token
+        # 360dialog: consulta configuração do webhook para validar a API key
+        url = f"{D360_BASE_URL.rstrip('/')}/v1/configs/webhook"
         headers = {
-            "Authorization": f"Bearer {config.access_token}",
+            "D360-API-KEY": config.access_token,
             "Content-Type": "application/json",
         }
 
-        # Faz requisição GET para verificar o phone number
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.get(url, headers=headers)
 
@@ -1557,23 +1561,17 @@ async def test_whatsapp_token(config: WhatsAppConfigUpdate):
                 return {
                     "valid": True,
                     "status": "success",
-                    "message": "Token válido! Configuração do WhatsApp funcionando corretamente.",
-                    "phone_data": {
-                        "id": data.get("id"),
-                        "display_phone_number": data.get("display_phone_number"),
-                        "verified_name": data.get("verified_name"),
-                        "quality_rating": data.get("quality_rating")
-                    }
+                    "message": "Token válido! 360dialog respondendo corretamente.",
+                    "webhook": data.get("webhook") or data
                 }
-            elif response.status_code == 401 or response.status_code == 403:
-                error_data = response.json()
-                error_message = error_data.get("error", {}).get("message", "Token inválido")
+            elif response.status_code in (401, 403):
+                error_data = response.json() if response.text else {}
+                error_message = error_data.get("message", "Token inválido")
                 return {
                     "valid": False,
                     "status": "error",
                     "message": f"Token inválido ou expirado: {error_message}",
-                    "error_code": error_data.get("error", {}).get("code"),
-                    "error_type": error_data.get("error", {}).get("type")
+                    "error": error_data
                 }
             else:
                 error_data = response.json() if response.text else {}
