@@ -70,6 +70,16 @@ class WhatsAppConfigRepository:
             .first()
         )
 
+    def get_by_phone_number_id(self, phone_number_id: str) -> Optional[WhatsAppConfigModel]:
+        """Busca configuração pelo phone_number_id"""
+        return (
+            self.db.query(WhatsAppConfigModel)
+            .filter(WhatsAppConfigModel.phone_number_id == phone_number_id)
+            .filter(WhatsAppConfigModel.is_active.is_(True))
+            .order_by(desc(WhatsAppConfigModel.updated_at))
+            .first()
+        )
+
     def deactivate_all(self, empresa_id: str) -> None:
         import logging
         logger = logging.getLogger(__name__)

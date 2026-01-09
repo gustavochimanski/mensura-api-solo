@@ -43,12 +43,17 @@ class OrderNotification:
             is_360 = (provider == "360dialog") or (not provider and "360dialog" in base_url)
             access_token = config.get("access_token") or ""
 
+            # Log de debug
+            logger.debug(f"[WhatsApp] Enviando mensagem - empresa_id={empresa_id}, provider={provider}, base_url={base_url}, is_360={is_360}, token_length={len(access_token) if access_token else 0}")
+
             # Valida se o token existe e não está vazio
             if not access_token or access_token.strip() == "":
+                error_msg = f"Configuração do WhatsApp ausente ou incompleta: access_token não configurado (empresa_id={empresa_id})"
+                logger.error(f"[WhatsApp] {error_msg}")
                 return {
                     "success": False,
                     "provider": "360dialog" if is_360 else "WhatsApp Business API (Meta)",
-                    "error": "Configuração do WhatsApp ausente ou incompleta: access_token não configurado",
+                    "error": error_msg,
                     "phone": phone,
                 }
 
@@ -70,11 +75,14 @@ class OrderNotification:
             # Headers com token de autorização (pode lançar ValueError se token inválido)
             try:
                 headers = get_headers(empresa_id, config)
+                logger.debug(f"[WhatsApp] Headers preparados: {list(headers.keys())}")
             except ValueError as e:
+                error_msg = f"Erro na configuração do WhatsApp: {str(e)}"
+                logger.error(f"[WhatsApp] {error_msg}")
                 return {
                     "success": False,
                     "provider": "360dialog" if is_360 else "WhatsApp Business API (Meta)",
-                    "error": f"Erro na configuração do WhatsApp: {str(e)}",
+                    "error": error_msg,
                     "phone": phone,
                 }
 
@@ -97,8 +105,10 @@ class OrderNotification:
                 }
 
             # Envia a mensagem (Cloud API) - compatível com modo de coexistência
+            logger.debug(f"[WhatsApp] Enviando para URL: {url}")
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(url, json=payload, headers=headers)
+                logger.debug(f"[WhatsApp] Resposta recebida - status_code={response.status_code}")
 
                 if response.status_code == 200:
                     result = response.json()
@@ -132,10 +142,12 @@ class OrderNotification:
                 }
 
         except Exception as e:
+            error_msg = str(e)
+            logger.error(f"[WhatsApp] Exceção ao enviar mensagem: {error_msg}", exc_info=True)
             return {
                 "success": False,
                 "provider": "360dialog" if 'is_360' in locals() and is_360 else "WhatsApp Business API (Meta)",
-                "error": str(e),
+                "error": error_msg,
                 "phone": phone
             }
 

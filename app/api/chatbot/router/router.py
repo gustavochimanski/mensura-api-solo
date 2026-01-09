@@ -15,6 +15,7 @@ from datetime import datetime
 from app.database.db_connection import get_db
 from ..core import database as chatbot_db
 from ..core.notifications import OrderNotification
+from app.api.notifications.repositories.whatsapp_config_repository import WhatsAppConfigRepository
 
 # Import ngrok functions optionally (pyngrok may not be installed)
 try:
@@ -895,6 +896,24 @@ async def webhook_verification(request: Request):
         raise HTTPException(status_code=500, detail=f"Erro interno: {str(e)}")
 
 
+def get_empresa_id_by_phone_number_id(db: Session, phone_number_id: str) -> Optional[str]:
+    """
+    Busca o empresa_id baseado no phone_number_id da configuração do WhatsApp
+    """
+    if not phone_number_id:
+        return None
+    
+    try:
+        repo = WhatsAppConfigRepository(db)
+        config = repo.get_by_phone_number_id(phone_number_id)
+        if config:
+            return str(config.empresa_id)
+        return None
+    except Exception as e:
+        print(f"⚠️ Erro ao buscar empresa_id por phone_number_id: {e}")
+        return None
+
+
 @router.post("/webhook")
 async def webhook_handler(request: Request, db: Session = Depends(get_db)):
     """
@@ -940,6 +959,21 @@ async def webhook_handler(request: Request, db: Session = Depends(get_db)):
                 for change in changes:
                     value = change.get("value", {})
 
+                    # Extrai phone_number_id do metadata para identificar a empresa
+                    metadata = value.get("metadata", {})
+                    phone_number_id = metadata.get("phone_number_id")
+                    
+                    # Busca empresa_id baseado no phone_number_id
+                    empresa_id = None
+                    if phone_number_id:
+                        empresa_id = get_empresa_id_by_phone_number_id(db, phone_number_id)
+                        print(f"   📱 phone_number_id: {phone_number_id} -> empresa_id: {empresa_id}")
+                    
+                    # Se não encontrou empresa_id, usa fallback (1) mas avisa
+                    if not empresa_id:
+                        print(f"   ⚠️ Empresa não encontrada para phone_number_id {phone_number_id}, usando fallback empresa_id=1")
+                        empresa_id = "1"
+
                     # Verifica se há mensagens
                     messages = value.get("messages", [])
 
@@ -969,8 +1003,8 @@ async def webhook_handler(request: Request, db: Session = Depends(get_db)):
                         print(f"   Texto: {message_text}")
 
                         if message_text:
-                            # Processa a mensagem com a IA (passa o nome do contato)
-                            await process_whatsapp_message(db, from_number, message_text, contact_name)
+                            # Processa a mensagem com a IA (passa o nome do contato e empresa_id)
+                            await process_whatsapp_message(db, from_number, message_text, contact_name, empresa_id)
 
         return {"status": "ok"}
 
@@ -979,13 +1013,21 @@ async def webhook_handler(request: Request, db: Session = Depends(get_db)):
         return {"status": "error", "message": str(e)}
 
 
-async def process_whatsapp_message(db: Session, phone_number: str, message_text: str, contact_name: str = None):
+async def process_whatsapp_message(db: Session, phone_number: str, message_text: str, contact_name: str = None, empresa_id: str = "1"):
     """
     Processa mensagem recebida via WhatsApp e responde com IA
     VERSÃO 2.0: Usa SalesHandler para fluxo completo de vendas
+    
+    Args:
+        db: Sessão do banco de dados
+        phone_number: Número de telefone do remetente
+        message_text: Texto da mensagem
+        contact_name: Nome do contato (opcional)
+        empresa_id: ID da empresa (obtido automaticamente do phone_number_id do webhook)
     """
     try:
         print(f"\n🤖 Processando mensagem de {phone_number} ({contact_name or 'sem nome'}): {message_text}")
+        print(f"   🏢 empresa_id: {empresa_id}")
 
         # VERIFICA SE O BOT ESTÁ ATIVO PARA ESTE NÚMERO
         if not chatbot_db.is_bot_active_for_phone(db, phone_number):
@@ -1016,6 +1058,7 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
 
             if not conversations:
                 # Cria nova conversa com nome do contato
+                empresa_id_int = int(empresa_id) if empresa_id else 1
                 conversation_id = chatbot_db.create_conversation(
                     db=db,
                     session_id=f"whatsapp_{phone_number}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
@@ -1023,14 +1066,14 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                     prompt_key="default",
                     model="llm-sales",
                     contact_name=contact_name,
-                    empresa_id=1  # TODO: Pegar empresa_id correto
+                    empresa_id=empresa_id_int
                 )
                 print(f"   ✅ Nova conversa criada: {conversation_id} (contato: {contact_name})")
                 
                 # Envia notificação WebSocket de nova conversa
                 from ..core.notifications import send_chatbot_websocket_notification
                 await send_chatbot_websocket_notification(
-                    empresa_id=1,  # TODO: Pegar empresa_id correto
+                    empresa_id=empresa_id_int,
                     notification_type="chatbot_conversation",
                     title="Nova Conversa",
                     message=f"Nova conversa iniciada com {contact_name or phone_number}",
@@ -1057,9 +1100,10 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
             )
             
             # Envia notificação WebSocket de nova mensagem do usuário
+            empresa_id_int = int(empresa_id) if empresa_id else 1
             from ..core.notifications import send_chatbot_websocket_notification
             await send_chatbot_websocket_notification(
-                empresa_id=1,  # TODO: Pegar empresa_id correto
+                empresa_id=empresa_id_int,
                 notification_type="nova_mensagem",
                 title="Nova Mensagem Recebida",
                 message=f"Nova mensagem de {contact_name or phone_number}",
@@ -1082,19 +1126,20 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 db=db,
                 user_id=phone_number,
                 mensagem=message_text,
-                empresa_id=1  # TODO: Pegar empresa_id correto
+                empresa_id=empresa_id_int
             )
 
             print(f"   💬 Resposta do SalesHandler: {resposta[:100]}...")
 
             # Envia resposta via WhatsApp
             notifier = OrderNotification()
-            result = await notifier.send_whatsapp_message(phone_number, resposta)
+            result = await notifier.send_whatsapp_message(phone_number, resposta, empresa_id=empresa_id)
 
-            if result.get("success"):
+            if isinstance(result, dict) and result.get("success"):
                 print(f"   ✅ Resposta enviada via WhatsApp!")
             else:
-                print(f"   ❌ Erro ao enviar resposta: {result.get('error')}")
+                error_msg = result.get("error") if isinstance(result, dict) else str(result)
+                print(f"   ❌ Erro ao enviar resposta: {error_msg}")
 
             return
 
@@ -1113,12 +1158,14 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 print(f"   ↪️ Conversa {conversation_id} atualizada para chat normal")
         else:
             # Cria nova conversa
+            empresa_id_int = int(empresa_id) if empresa_id else 1
             conversation_id = chatbot_db.create_conversation(
                 db=db,
                 session_id=f"whatsapp_{phone_number}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
                 user_id=user_id,
                 prompt_key="default",
-                model=DEFAULT_MODEL
+                model=DEFAULT_MODEL,
+                empresa_id=empresa_id_int
             )
             print(f"   ✅ Nova conversa criada: {conversation_id}")
 
@@ -1191,9 +1238,10 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 )
 
                 # 7.1. Envia notificação WebSocket para atualizar o frontend
+                empresa_id_int = int(empresa_id) if empresa_id else 1
                 from ..core.notifications import send_chatbot_websocket_notification
                 await send_chatbot_websocket_notification(
-                    empresa_id=1,  # TODO: Pegar empresa_id correto
+                    empresa_id=empresa_id_int,
                     notification_type="whatsapp_message",
                     title="Nova Mensagem WhatsApp",
                     message=f"Nova mensagem recebida de {contact_name or phone_number}",
@@ -1209,12 +1257,13 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
 
                 # 8. Envia resposta via WhatsApp
                 notifier = OrderNotification()
-                result = await notifier.send_whatsapp_message(phone_number, ai_response)
+                result = await notifier.send_whatsapp_message(phone_number, ai_response, empresa_id=empresa_id)
 
-                if result.get("success"):
+                if isinstance(result, dict) and result.get("success"):
                     print(f"   ✅ Resposta enviada via WhatsApp!")
                 else:
-                    print(f"   ❌ Erro ao enviar resposta: {result.get('error')}")
+                    error_msg = result.get("error") if isinstance(result, dict) else str(result)
+                    print(f"   ❌ Erro ao enviar resposta: {error_msg}")
             else:
                 print(f"   ❌ Erro na IA: {response.text}")
 
@@ -1620,6 +1669,7 @@ async def simulate_chatbot_message(
         # Importa e usa o Groq Sales Handler
         from ..core.groq_sales_handler import processar_mensagem_groq
 
+        # Função de simulação usa empresa_id padrão (1) pois não vem de webhook
         resposta = await processar_mensagem_groq(
             db=db,
             user_id=phone_number,
