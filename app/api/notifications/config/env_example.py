@@ -54,3 +54,7 @@ ENVIRONMENT = "development"
 
 # Configurações do Chatbot (IA)
 GROQ_API_KEY = "your_groq_api_key_here"
+
+# Configurações do Ngrok (para webhooks do WhatsApp)
+NGROK_AUTHTOKEN = "your_ngrok_authtoken_here"
+NGROK_DOMAIN = "your-static-domain.ngrok-free.dev"

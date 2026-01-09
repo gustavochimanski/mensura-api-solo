@@ -61,12 +61,16 @@ def start_ngrok_tunnel(port: int = 8000) -> Optional[str]:
             logger.warning("⚠️  NGROK_AUTHTOKEN não configurado. Usando modo gratuito (túnel pode expirar)")
 
         # Domínio estático do ngrok
-        static_domain = os.getenv("NGROK_DOMAIN", "coalitional-aspherical-roderick.ngrok-free.dev")
-
-        # Iniciar túnel HTTP com domínio estático
+        static_domain = os.getenv("NGROK_DOMAIN")
+        
+        # Iniciar túnel HTTP
         logger.info(f"🚀 Iniciando túnel ngrok para porta {port}...")
-        logger.info(f"🔗 Usando domínio estático: {static_domain}")
-        tunnel = ngrok.connect(port, bind_tls=True, hostname=static_domain)
+        if static_domain:
+            logger.info(f"🔗 Usando domínio estático: {static_domain}")
+            tunnel = ngrok.connect(port, bind_tls=True, hostname=static_domain)
+        else:
+            logger.warning("⚠️  NGROK_DOMAIN não configurado. Usando túnel dinâmico (pode mudar a cada reinicialização)")
+            tunnel = ngrok.connect(port, bind_tls=True)
 
         _active_tunnel = tunnel
         _public_url = tunnel.public_url
