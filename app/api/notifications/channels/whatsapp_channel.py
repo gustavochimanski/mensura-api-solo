@@ -5,24 +5,33 @@ from .base_channel import BaseNotificationChannel, NotificationResult
 
 logger = logging.getLogger(__name__)
 
+
 class WhatsAppChannel(BaseNotificationChannel):
-    """Canal de notificação via WhatsApp Business API (Meta)"""
+    """Canal de notificação via WhatsApp (agora usando 360dialog por padrão)"""
     
     def __init__(self, config: Dict[str, Any]):
         super().__init__(config)
-        self.access_token = config.get('access_token')
-        self.phone_number_id = config.get('phone_number_id')
-        self.api_version = config.get('api_version', 'v22.0')
+        self.access_token = config.get("access_token")
+        self.phone_number_id = config.get("phone_number_id")
+        self.api_version = config.get("api_version", "v22.0")
+        self.base_url = config.get("base_url", "https://waba-v2.360dialog.io")
+        self.provider = config.get("provider", "360dialog")
+        self.is_360 = "360dialog" in (self.base_url or "")
         
         if not self.validate_config(config):
             raise ValueError("Configuração inválida para canal de WhatsApp")
         
-        # Monta a URL da API do WhatsApp
-        self.api_url = f"https://graph.facebook.com/{self.api_version}/{self.phone_number_id}/messages"
+        # Monta a URL da API conforme o provedor
+        if self.is_360:
+            self.api_url = f"{self.base_url.rstrip('/')}/v1/messages"
+        else:
+            self.api_url = f"https://graph.facebook.com/{self.api_version}/{self.phone_number_id}/messages"
     
     def validate_config(self, config: Dict[str, Any]) -> bool:
         """Valida a configuração do canal de WhatsApp"""
-        required_fields = ['access_token', 'phone_number_id']
+        if "360dialog" in str(config.get("base_url", "")):
+            return bool(config.get("access_token"))
+        required_fields = ["access_token", "phone_number_id"]
         return all(field in config for field in required_fields)
     
     def get_channel_name(self) -> str:
@@ -44,6 +53,11 @@ class WhatsAppChannel(BaseNotificationChannel):
     
     def _get_headers(self) -> Dict[str, str]:
         """Retorna os headers para requisições à API do WhatsApp"""
+        if self.is_360:
+            return {
+                "D360-API-KEY": self.access_token,
+                "Content-Type": "application/json",
+            }
         return {
             "Authorization": f"Bearer {self.access_token}",
             "Content-Type": "application/json",
@@ -56,7 +70,7 @@ class WhatsAppChannel(BaseNotificationChannel):
         message: str,
         channel_metadata: Optional[Dict[str, Any]] = None
     ) -> NotificationResult:
-        """Envia mensagem via WhatsApp Business API (Meta)"""
+        """Envia mensagem via WhatsApp (360dialog ou Meta Cloud API)"""
         try:
             # Formata o número para o padrão WhatsApp
             phone_formatted = self._format_phone_number(recipient)
@@ -70,16 +84,22 @@ class WhatsAppChannel(BaseNotificationChannel):
                 for key, value in channel_metadata.items():
                     full_message += f"• {key}: {value}\n"
             
-            # Payload da mensagem
-            payload = {
-                "messaging_product": "whatsapp",
-                "to": phone_formatted,
-                "type": "text",
-                "text": {
-                    "preview_url": False,
-                    "body": full_message
+            if self.is_360:
+                payload = {
+                    "to": phone_formatted,
+                    "type": "text",
+                    "text": {"body": full_message}
                 }
-            }
+            else:
+                payload = {
+                    "messaging_product": "whatsapp",
+                    "to": phone_formatted,
+                    "type": "text",
+                    "text": {
+                        "preview_url": False,
+                        "body": full_message
+                    }
+                }
             
             # Headers com token de autorização
             headers = self._get_headers()
@@ -98,8 +118,8 @@ class WhatsAppChannel(BaseNotificationChannel):
                     )
                 else:
                     error_data = response.json() if response.text else {}
-                    error_info = error_data.get("error", {})
-                    error_msg = f"Erro ao enviar WhatsApp: {error_info.get('message', 'Erro desconhecido')}"
+                    error_info = error_data.get("error", {}) if isinstance(error_data, dict) else {}
+                    error_msg = error_info.get("message", "Erro ao enviar WhatsApp")
                     self._log_error(phone_formatted, error_msg, error_data)
                     return self._create_error_result(error_msg, {
                         "status_code": response.status_code,

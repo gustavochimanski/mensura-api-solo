@@ -37,10 +37,14 @@ class OrderNotification:
             )
 
             config = load_whatsapp_config(empresa_id)
-            if not config.get("access_token") or not config.get("phone_number_id"):
+            is_360 = "360dialog" in str(config.get("base_url", ""))
+
+            if (is_360 and not config.get("access_token")) or (
+                not is_360 and (not config.get("access_token") or not config.get("phone_number_id"))
+            ):
                 return {
                     "success": False,
-                    "provider": "WhatsApp Business API (Meta)",
+                    "provider": "360dialog" if is_360 else "WhatsApp Business API (Meta)",
                     "error": "Configuração do WhatsApp ausente ou incompleta",
                     "phone": phone,
                 }
@@ -55,15 +59,22 @@ class OrderNotification:
             headers = get_headers(empresa_id, config)
 
             # Payload da mensagem
-            payload = {
-                "messaging_product": "whatsapp",
-                "to": phone_formatted,
-                "type": "text",
-                "text": {
-                    "preview_url": False,
-                    "body": message
+            if is_360:
+                payload = {
+                    "to": phone_formatted,
+                    "type": "text",
+                    "text": {"body": message},
                 }
-            }
+            else:
+                payload = {
+                    "messaging_product": "whatsapp",
+                    "to": phone_formatted,
+                    "type": "text",
+                    "text": {
+                        "preview_url": False,
+                        "body": message
+                    }
+                }
 
             # Envia a mensagem (Cloud API) - compatível com modo de coexistência
             async with httpx.AsyncClient(timeout=30.0) as client:
@@ -73,7 +84,7 @@ class OrderNotification:
                     result = response.json()
                     return {
                         "success": True,
-                        "provider": "WhatsApp Business API (Meta)",
+                        "provider": "360dialog" if is_360 else "WhatsApp Business API (Meta)",
                         "phone": phone_formatted,
                         "message_id": result.get("messages", [{}])[0].get("id"),
                         "status": "sent",
@@ -93,7 +104,7 @@ class OrderNotification:
 
                 return {
                     "success": False,
-                    "provider": "WhatsApp Business API (Meta)",
+                    "provider": "360dialog" if is_360 else "WhatsApp Business API (Meta)",
                     "error": error_detail.get("message", response.text),
                     "status_code": response.status_code,
                     "phone": phone_formatted,
@@ -103,7 +114,7 @@ class OrderNotification:
         except Exception as e:
             return {
                 "success": False,
-                "provider": "WhatsApp Business API (Meta)",
+                "provider": "360dialog" if 'is_360' in locals() and is_360 else "WhatsApp Business API (Meta)",
                 "error": str(e),
                 "phone": phone
             }
