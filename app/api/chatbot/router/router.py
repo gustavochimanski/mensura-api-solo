@@ -816,7 +816,7 @@ async def send_media(request: dict, db: Session = Depends(get_db)):
 
     phone = request_data.get("phone")
     media_url = request_data.get("media_url")
-    media_type = request_data.get("media_type", "image")  # image, document, audio, video
+    media_type = request_data.get("media_type", "image")  # image, document, audio, vide
     caption = request_data.get("caption", "")
 
     if not phone or not media_url:
