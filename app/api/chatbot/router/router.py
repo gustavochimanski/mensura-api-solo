@@ -1029,21 +1029,6 @@ async def serve_file(filename: str):
 
 # ==================== WEBHOOKS DO WHATSAPP ====================
 
-@router.get("/webhook-test")
-async def webhook_test(request: Request):
-    """
-    Endpoint de teste para verificar se a URL está acessível
-    """
-    import json
-    return {
-        "status": "ok",
-        "message": "Webhook endpoint está acessível!",
-        "url": str(request.url),
-        "method": request.method,
-        "headers": dict(request.headers),
-        "query_params": dict(request.query_params)
-    }
-
 @router.get("/webhook")
 async def webhook_verification(request: Request):
     """
