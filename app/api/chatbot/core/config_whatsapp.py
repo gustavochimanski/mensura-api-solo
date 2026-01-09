@@ -83,8 +83,12 @@ def get_whatsapp_url(empresa_id: Optional[str] = None, config: Optional[Dict[str
 def get_headers(empresa_id: Optional[str] = None, config: Optional[Dict[str, str]] = None) -> Dict[str, str]:
     """Retorna os headers para requisições à API do WhatsApp."""
     cfg = config or load_whatsapp_config(empresa_id)
-    access_token = cfg.get("access_token")
+    access_token = cfg.get("access_token") or ""
     base_url = cfg.get("base_url") or ""
+
+    # Valida se o token existe e não está vazio
+    if not access_token or access_token.strip() == "":
+        raise ValueError("Access token do WhatsApp não configurado ou vazio")
 
     # 360dialog: usa header D360-API-KEY
     if "360dialog" in base_url:
