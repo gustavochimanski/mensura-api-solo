@@ -1244,7 +1244,7 @@ async def update_whatsapp_config(config: WhatsAppConfigUpdate):
     import os
     import json
 
-    # Caminho do arquivo de configuração
+    # Caminho do arquivo de configuraçã
     config_file = os.path.join(
         os.path.dirname(__file__),
         "..",
