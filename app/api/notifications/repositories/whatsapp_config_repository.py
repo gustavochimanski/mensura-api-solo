@@ -12,11 +12,25 @@ class WhatsAppConfigRepository:
         self.db = db
 
     def create(self, data: Dict[str, Any]) -> WhatsAppConfigModel:
-        config = WhatsAppConfigModel(**data)
-        self.db.add(config)
-        self.db.commit()
-        self.db.refresh(config)
-        return config
+        from ..models.whatsapp_config_model import WhatsAppConfigModel
+        import logging
+        logger = logging.getLogger(__name__)
+
+        logger.info(f"Creating WhatsAppConfigModel with data: {data}")
+        try:
+            config = WhatsAppConfigModel(**data)
+            logger.info(f"Model created, adding to session")
+            self.db.add(config)
+            logger.info("Added to session, committing")
+            self.db.commit()
+            logger.info("Committed, refreshing")
+            self.db.refresh(config)
+            logger.info(f"Config created successfully: id={config.id}, empresa_id={config.empresa_id}")
+            return config
+        except Exception as e:
+            logger.error(f"Error creating config: {e}")
+            self.db.rollback()
+            raise
 
     def list_by_empresa(
         self,
@@ -58,12 +72,13 @@ class WhatsAppConfigRepository:
         )
 
     def deactivate_all(self, empresa_id: str) -> None:
-        (
+        result = (
             self.db.query(WhatsAppConfigModel)
             .filter(WhatsAppConfigModel.empresa_id == str(empresa_id))
             .update({"is_active": False})
         )
-        self.db.commit()
+        logger.info(f"Deactivated {result} configs for empresa_id: {empresa_id}")
+        # Note: We don't commit here, let the caller handle the transaction
 
     def update(self, config_id: str, data: Dict[str, Any]) -> Optional[WhatsAppConfigModel]:
         config = self.get_by_id(config_id)

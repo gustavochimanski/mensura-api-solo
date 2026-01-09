@@ -32,19 +32,33 @@ class WhatsAppConfigService:
 
     def create_config(self, data: Dict[str, Any]) -> WhatsAppConfigModel:
         empresa_id = str(data["empresa_id"])
+        logger.info(f"Creating WhatsApp config for empresa_id: {empresa_id}, data keys: {list(data.keys())}")
 
         data = self._ensure_defaults(data)
+        logger.info(f"After defaults: data keys: {list(data.keys())}")
+
         self._validate_requirements(data)
+        logger.info("Validation passed")
 
-        # Se marcada como ativa, desativa demais
-        if data.get("is_active"):
-            self.repo.deactivate_all(empresa_id)
-        else:
-            # Se não há ativo para a empresa, força ativar o primeiro cadastrado
-            if not self.repo.get_active_by_empresa(empresa_id):
-                data["is_active"] = True
+        try:
+            # Se marcada como ativa, desativa demais
+            if data.get("is_active"):
+                logger.info(f"Deactivating all configs for empresa_id: {empresa_id}")
+                self.repo.deactivate_all(empresa_id)
+            else:
+                # Se não há ativo para a empresa, força ativar o primeiro cadastrado
+                if not self.repo.get_active_by_empresa(empresa_id):
+                    logger.info(f"No active config found for empresa_id: {empresa_id}, setting is_active=True")
+                    data["is_active"] = True
 
-        return self.repo.create(data)
+            logger.info("Calling repo.create")
+            result = self.repo.create(data)
+            logger.info(f"Config created successfully with id: {result.id}")
+            return result
+        except Exception as e:
+            logger.error(f"Error creating config: {e}")
+            # Note: Let the caller handle rollback if needed
+            raise
 
     def update_config(self, config_id: str, data: Dict[str, Any]) -> Optional[WhatsAppConfigModel]:
         config = self.repo.get_by_id(config_id)
@@ -128,6 +142,9 @@ class WhatsAppConfigService:
         data = dict(data)
         data.setdefault("base_url", existing.base_url if existing else self.DEFAULT_BASE_URL)
         data.setdefault("provider", existing.provider if existing else self.DEFAULT_PROVIDER)
+        data.setdefault("api_version", existing.api_version if existing else "v22.0")
+        data.setdefault("send_mode", existing.send_mode if existing else "api")
+        data.setdefault("coexistence_enabled", existing.coexistence_enabled if existing else False)
         # Webhook: mantém dados existentes se não enviados
         data.setdefault("webhook_url", existing.webhook_url if existing else None)
         data.setdefault("webhook_verify_token", existing.webhook_verify_token if existing else None)
