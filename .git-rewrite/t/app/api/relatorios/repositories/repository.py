@@ -1,0 +1,953 @@
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import date, datetime, time, timedelta
+from decimal import Decimal, ROUND_HALF_UP
+from typing import Dict, List, Tuple
+import calendar
+
+from sqlalchemy import func, cast, String, literal
+from sqlalchemy.orm import Session
+from sqlalchemy.exc import ProgrammingError
+
+from app.api.cardapio.models.model_pedido_dv import PedidoDeliveryModel
+from app.api.cardapio.models.model_pedido_item_dv import PedidoItemModel
+from app.api.cardapio.models.model_pedido_status_historico_dv import (
+    PedidoStatusHistoricoModel,
+)
+from app.api.cadastros.models.model_entregador_dv import EntregadorDeliveryModel
+from app.api.cadastros.models.model_endereco_dv import EnderecoModel
+from app.api.catalogo.models.model_produto import ProdutoModel
+from app.api.mesas.models.model_pedido_mesa import PedidoMesaModel, StatusPedidoMesa
+from app.api.balcao.models.model_pedido_balcao import PedidoBalcaoModel, StatusPedidoBalcao
+from app.api.mesas.models.model_mesa_historico import MesaHistoricoModel, TipoOperacaoMesa
+
+
+def _day_bounds(target_date: date) -> Tuple[datetime, datetime]:
+    start = datetime.combine(target_date, time.min)
+    end = start + timedelta(days=1)
+    return start, end
+
+
+def _previous_day(target_date: date) -> date:
+    return target_date - timedelta(days=1)
+
+
+def _previous_month_bounds(reference_date: date) -> Tuple[datetime, datetime]:
+    first_day_current_month = reference_date.replace(day=1)
+    last_day_previous_month = first_day_current_month - timedelta(days=1)
+    first_day_previous_month = last_day_previous_month.replace(day=1)
+    start = datetime.combine(first_day_previous_month, time.min)
+    end = datetime.combine(first_day_current_month, time.min)
+    return start, end
+
+
+def _decimal_to_float(value: Decimal | float | None) -> float:
+    """Converte Decimal/float para float com 2 casas decimais (meia para cima)."""
+    if value is None:
+        return 0.0
+    if isinstance(value, Decimal):
+        try:
+            return float(value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+        except Exception:
+            try:
+                return float(value)
+            except Exception:
+                return 0.0
+    try:
+        return round(float(value), 2)
+    except Exception:
+        return 0.0
+
+def _shift_month_safe(d: date, months: int) -> date:
+    """Desloca a data para outro mês mantendo o dia quando possível, usando último dia do mês destino quando necessário."""
+    year = d.year + ((d.month - 1 + months) // 12)
+    month = ((d.month - 1 + months) % 12) + 1
+    last_day = calendar.monthrange(year, month)[1]
+    day = min(d.day, last_day)
+    return date(year, month, day)
+
+
+@dataclass
+class PeriodoResumo:
+    quantidade: int
+    faturamento: float
+
+
+class RelatorioRepository:
+    def __init__(self, db: Session) -> None:
+        self.db = db
+
+    def _resumo_periodo(
+        self, empresa_id: int, inicio: datetime, fim: datetime
+    ) -> PeriodoResumo:
+        quantidade_total = 0
+        faturamento_total = Decimal("0")
+
+        # Delivery
+        try:
+            qtd_delivery, fatur_delivery = (
+                self.db.query(
+                    func.count(PedidoDeliveryModel.id),
+                    func.coalesce(func.sum(PedidoDeliveryModel.valor_total), 0),
+                )
+                .filter(
+                    PedidoDeliveryModel.empresa_id == empresa_id,
+                    PedidoDeliveryModel.data_criacao >= inicio,
+                    PedidoDeliveryModel.data_criacao < fim,
+                    PedidoDeliveryModel.status != "C",
+                )
+                .first()
+                or (0, 0)
+            )
+            quantidade_total += int(qtd_delivery or 0)
+            faturamento_total += Decimal(str(fatur_delivery or 0))
+        except ProgrammingError as e:
+            if "does not exist" not in str(e):
+                raise
+
+        # Mesa
+        try:
+            qtd_mesa, fatur_mesa = (
+                self.db.query(
+                    func.count(PedidoMesaModel.id),
+                    func.coalesce(func.sum(PedidoMesaModel.valor_total), 0),
+                )
+                .filter(
+                    PedidoMesaModel.empresa_id == empresa_id,
+                    PedidoMesaModel.created_at >= inicio,
+                    PedidoMesaModel.created_at < fim,
+                    PedidoMesaModel.status != StatusPedidoMesa.CANCELADO.value,
+                )
+                .first()
+                or (0, 0)
+            )
+            quantidade_total += int(qtd_mesa or 0)
+            faturamento_total += Decimal(str(fatur_mesa or 0))
+        except ProgrammingError as e:
+            if "does not exist" not in str(e):
+                raise
+
+        # Balcão
+        try:
+            qtd_balcao, fatur_balcao = (
+                self.db.query(
+                    func.count(PedidoBalcaoModel.id),
+                    func.coalesce(func.sum(PedidoBalcaoModel.valor_total), 0),
+                )
+                .filter(
+                    PedidoBalcaoModel.empresa_id == empresa_id,
+                    PedidoBalcaoModel.created_at >= inicio,
+                    PedidoBalcaoModel.created_at < fim,
+                    PedidoBalcaoModel.status != StatusPedidoBalcao.CANCELADO.value,
+                )
+                .first()
+                or (0, 0)
+            )
+            quantidade_total += int(qtd_balcao or 0)
+            faturamento_total += Decimal(str(fatur_balcao or 0))
+        except ProgrammingError as e:
+            if "does not exist" not in str(e):
+                raise
+
+        return PeriodoResumo(
+            quantidade=quantidade_total,
+            faturamento=_decimal_to_float(faturamento_total),
+        )
+
+    def _cancelados_periodo(
+        self, empresa_id: int, inicio: datetime, fim: datetime
+    ) -> int:
+        """Conta pedidos cancelados (status = 'C') no período."""
+        total_cancelados = 0
+
+        try:
+            cancelados_delivery = (
+                self.db.query(func.count(PedidoDeliveryModel.id))
+                .filter(
+                    PedidoDeliveryModel.empresa_id == empresa_id,
+                    PedidoDeliveryModel.data_criacao >= inicio,
+                    PedidoDeliveryModel.data_criacao < fim,
+                    PedidoDeliveryModel.status == "C",
+                )
+                .scalar()
+            )
+            total_cancelados += int(cancelados_delivery or 0)
+        except ProgrammingError as e:
+            if "does not exist" not in str(e):
+                raise
+
+        try:
+            cancelados_mesa = (
+                self.db.query(func.count(PedidoMesaModel.id))
+                .filter(
+                    PedidoMesaModel.empresa_id == empresa_id,
+                    PedidoMesaModel.created_at >= inicio,
+                    PedidoMesaModel.created_at < fim,
+                    PedidoMesaModel.status == StatusPedidoMesa.CANCELADO.value,
+                )
+                .scalar()
+            )
+            total_cancelados += int(cancelados_mesa or 0)
+        except ProgrammingError as e:
+            if "does not exist" not in str(e):
+                raise
+
+        try:
+            cancelados_balcao = (
+                self.db.query(func.count(PedidoBalcaoModel.id))
+                .filter(
+                    PedidoBalcaoModel.empresa_id == empresa_id,
+                    PedidoBalcaoModel.created_at >= inicio,
+                    PedidoBalcaoModel.created_at < fim,
+                    PedidoBalcaoModel.status == StatusPedidoBalcao.CANCELADO.value,
+                )
+                .scalar()
+            )
+            total_cancelados += int(cancelados_balcao or 0)
+        except ProgrammingError as e:
+            if "does not exist" not in str(e):
+                raise
+
+        return total_cancelados
+
+    def _media_tempo_entrega_minutos(
+        self, empresa_id: int, inicio: datetime, fim: datetime
+    ) -> tuple[float, float]:
+        # Calcular tempo médio para pedidos de delivery
+        # Buscar pedidos entregues (status E) no período
+        try:
+            pedidos_delivery_entregues = (
+                self.db.query(PedidoDeliveryModel)
+                .filter(
+                    PedidoDeliveryModel.empresa_id == empresa_id,
+                    PedidoDeliveryModel.data_criacao >= inicio,
+                    PedidoDeliveryModel.data_criacao < fim,
+                    PedidoDeliveryModel.status == "E",  # Apenas entregues
+                )
+                .all()
+            )
+        except ProgrammingError as e:
+            # Se a tabela não existir, retorna valores padrão
+            if "does not exist" in str(e):
+                return 0.0, 0.0
+            raise
+        
+        # Calcular tempo médio para pedidos de mesa (entrega local)
+        # Buscar pedidos de mesa que foram entregues no período
+        pedidos_mesa_entregues = (
+            self.db.query(PedidoMesaModel)
+            .filter(
+                PedidoMesaModel.empresa_id == empresa_id,
+                PedidoMesaModel.status == StatusPedidoMesa.ENTREGUE.value,
+                PedidoMesaModel.mesa_id.isnot(None),
+                PedidoMesaModel.created_at >= inicio,
+                PedidoMesaModel.created_at < fim,
+            )
+            .all()
+        )
+
+        pedidos_balcao_entregues = (
+            self.db.query(PedidoBalcaoModel)
+            .filter(
+                PedidoBalcaoModel.empresa_id == empresa_id,
+                PedidoBalcaoModel.status == StatusPedidoBalcao.ENTREGUE.value,
+                PedidoBalcaoModel.created_at >= inicio,
+                PedidoBalcaoModel.created_at < fim,
+            )
+            .all()
+        )
+
+        # Calcular tempo médio para delivery
+        tempo_delivery_minutos = 0.0
+        if pedidos_delivery_entregues:
+            tempos_delivery = []
+            for pedido in pedidos_delivery_entregues:
+                # Buscar quando foi finalizado (status E no histórico)
+                finalizacao = (
+                    self.db.query(PedidoStatusHistoricoModel.criado_em)
+                    .filter(
+                        PedidoStatusHistoricoModel.pedido_id == pedido.id,
+                        PedidoStatusHistoricoModel.status == "E"
+                    )
+                    .order_by(PedidoStatusHistoricoModel.criado_em.desc())
+                    .first()
+                )
+                
+                if finalizacao:
+                    tempo_segundos = (finalizacao[0] - pedido.data_criacao).total_seconds()
+                    if tempo_segundos > 0:
+                        tempos_delivery.append(tempo_segundos)
+                else:
+                    # Fallback: usar data_atualizacao se não encontrar no histórico
+                    tempo_segundos = (pedido.data_atualizacao - pedido.data_criacao).total_seconds()
+                    if tempo_segundos > 0:
+                        tempos_delivery.append(tempo_segundos)
+            
+            if tempos_delivery:
+                tempo_medio_segundos = sum(tempos_delivery) / len(tempos_delivery)
+                tempo_delivery_minutos = round(tempo_medio_segundos / 60.0, 2)
+
+        # Calcular tempo médio para pedidos presenciais (mesa + balcão)
+        tempos_locais: list[float] = []
+
+        for pedido in pedidos_mesa_entregues:
+            if pedido.updated_at and pedido.created_at:
+                tempo_segundos = (pedido.updated_at - pedido.created_at).total_seconds()
+                if tempo_segundos > 0:
+                    tempos_locais.append(tempo_segundos)
+        
+        for pedido in pedidos_balcao_entregues:
+            if pedido.updated_at and pedido.created_at:
+                tempo_segundos = (pedido.updated_at - pedido.created_at).total_seconds()
+                if tempo_segundos > 0:
+                    tempos_locais.append(tempo_segundos)
+
+        tempo_local_minutos = (
+            round(sum(tempos_locais) / len(tempos_locais) / 60.0, 2)
+            if tempos_locais
+            else 0.0
+        )
+        
+        return tempo_delivery_minutos, tempo_local_minutos
+
+    def _vendas_por_hora(
+        self, empresa_id: int, inicio: datetime, fim: datetime
+    ) -> List[Dict[str, float | int]]:
+        def _rows_delivery():
+            return (
+                self.db.query(
+                    func.date_part("hour", func.timezone('America/Sao_Paulo', PedidoDeliveryModel.data_criacao)).label("hora"),
+                    func.count(PedidoDeliveryModel.id).label("quantidade"),
+                    func.coalesce(func.sum(PedidoDeliveryModel.valor_total), 0).label("faturamento"),
+                )
+                .filter(
+                    PedidoDeliveryModel.empresa_id == empresa_id,
+                    PedidoDeliveryModel.data_criacao >= inicio,
+                    PedidoDeliveryModel.data_criacao < fim,
+                    PedidoDeliveryModel.status != "C",
+                )
+                .group_by("hora")
+                .all()
+            )
+
+        def _rows_mesa():
+            return (
+                self.db.query(
+                    func.date_part("hour", func.timezone('America/Sao_Paulo', PedidoMesaModel.created_at)).label("hora"),
+                    func.count(PedidoMesaModel.id).label("quantidade"),
+                    func.coalesce(func.sum(PedidoMesaModel.valor_total), 0).label("faturamento"),
+                )
+                .filter(
+                    PedidoMesaModel.empresa_id == empresa_id,
+                    PedidoMesaModel.created_at >= inicio,
+                    PedidoMesaModel.created_at < fim,
+                    PedidoMesaModel.status != StatusPedidoMesa.CANCELADO.value,
+                )
+                .group_by("hora")
+                .all()
+            )
+
+        def _rows_balcao():
+            return (
+                self.db.query(
+                    func.date_part("hour", func.timezone('America/Sao_Paulo', PedidoBalcaoModel.created_at)).label("hora"),
+                    func.count(PedidoBalcaoModel.id).label("quantidade"),
+                    func.coalesce(func.sum(PedidoBalcaoModel.valor_total), 0).label("faturamento"),
+                )
+                .filter(
+                    PedidoBalcaoModel.empresa_id == empresa_id,
+                    PedidoBalcaoModel.created_at >= inicio,
+                    PedidoBalcaoModel.created_at < fim,
+                    PedidoBalcaoModel.status != StatusPedidoBalcao.CANCELADO.value,
+                )
+                .group_by("hora")
+                .all()
+            )
+
+        def _safe_query(fn):
+            try:
+                return fn()
+            except ProgrammingError as e:
+                if "does not exist" in str(e):
+                    return []
+                raise
+
+        rows_delivery = _safe_query(_rows_delivery)
+        rows_mesa = _safe_query(_rows_mesa)
+        rows_balcao = _safe_query(_rows_balcao)
+
+        agregados: dict[int, dict[str, float | int]] = {}
+
+        def _acumular(rows):
+            for row in rows:
+                hora = int(row.hora)
+                bucket = agregados.setdefault(hora, {"hora": hora, "quantidade": 0, "faturamento": 0.0})
+                bucket["quantidade"] = int(bucket["quantidade"]) + int(row.quantidade or 0)
+                bucket["faturamento"] = float(bucket["faturamento"]) + _decimal_to_float(row.faturamento)
+
+        _acumular(rows_delivery)
+        _acumular(rows_mesa)
+        _acumular(rows_balcao)
+
+        return [
+            agregados.get(
+                hora,
+                {"hora": hora, "quantidade": 0, "faturamento": 0.0},
+            )
+            for hora in range(24)
+        ]
+
+    def _vendas_por_dia(
+        self, empresa_id: int, inicio: datetime, fim: datetime
+    ) -> List[Dict[str, float | int | str]]:
+        """Agrega por dia (timezone America/Sao_Paulo) retornando lista ordenada por dia."""
+        try:
+            rows = (
+                self.db.query(
+                    func.date_trunc(
+                        "day",
+                        func.timezone('America/Sao_Paulo', PedidoDeliveryModel.data_criacao),
+                    ).label("dia"),
+                    func.count(PedidoDeliveryModel.id).label("quantidade"),
+                    func.coalesce(func.sum(PedidoDeliveryModel.valor_total), 0).label(
+                        "faturamento"
+                    ),
+                )
+                .filter(
+                    PedidoDeliveryModel.empresa_id == empresa_id,
+                    PedidoDeliveryModel.data_criacao >= inicio,
+                    PedidoDeliveryModel.data_criacao < fim,
+                    PedidoDeliveryModel.status != "C",
+                )
+                .group_by("dia")
+                .order_by("dia")
+                .all()
+            )
+        except ProgrammingError as e:
+            # Se a tabela não existir, retorna lista vazia
+            if "does not exist" in str(e):
+                return []
+            raise
+
+        resultados: List[Dict[str, float | int | str]] = []
+        for row in rows:
+            quantidade = int(row.quantidade or 0)
+            faturamento = _decimal_to_float(row.faturamento)
+            ticket_medio = round(faturamento / quantidade, 2) if quantidade else 0.0
+            resultados.append({
+                "data": row.dia.date().isoformat(),
+                "quantidade": quantidade,
+                "faturamento": faturamento,
+                "ticket_medio": ticket_medio,
+            })
+        return resultados
+
+    def _top_produtos(
+        self, empresa_id: int, inicio: datetime, fim: datetime, limite: int = 10
+    ) -> List[Dict[str, float | int | str]]:
+        def _query_itens(
+            itens_model,
+            pedido_model,
+            pedido_criacao_attr,
+            status_cancelado_value,
+        ):
+            descricao_expr_local = func.coalesce(
+                itens_model.produto_descricao_snapshot,
+                ProdutoModel.descricao,
+                itens_model.produto_cod_barras,
+            )
+
+            return (
+                self.db.query(
+                    descricao_expr_local.label("descricao"),
+                    func.sum(itens_model.quantidade).label("quantidade"),
+                    func.coalesce(
+                        func.sum(itens_model.quantidade * itens_model.preco_unitario), 0
+                    ).label("faturamento"),
+                )
+                .join(pedido_model, pedido_model.id == itens_model.pedido_id)
+                .outerjoin(ProdutoModel, ProdutoModel.cod_barras == itens_model.produto_cod_barras)
+                .filter(
+                    pedido_model.empresa_id == empresa_id,
+                    pedido_criacao_attr >= inicio,
+                    pedido_criacao_attr < fim,
+                    pedido_model.status != status_cancelado_value,
+                )
+                .group_by(descricao_expr_local)
+                .all()
+            )
+
+        rows_delivery = []
+        rows_mesa = []
+        rows_balcao = []
+
+        try:
+            rows_delivery = _query_itens(
+                PedidoItemModel,
+                PedidoDeliveryModel,
+                PedidoDeliveryModel.data_criacao,
+                "C",
+            )
+        except ProgrammingError as e:
+            if "does not exist" not in str(e):
+                raise
+
+        try:
+            from app.api.mesas.models.model_pedido_mesa_item import PedidoMesaItemModel
+
+            rows_mesa = _query_itens(
+                PedidoMesaItemModel,
+                PedidoMesaModel,
+                PedidoMesaModel.created_at,
+                StatusPedidoMesa.CANCELADO.value,
+            )
+        except ProgrammingError as e:
+            if "does not exist" not in str(e):
+                raise
+
+        try:
+            from app.api.balcao.models.model_pedido_balcao_item import PedidoBalcaoItemModel
+
+            rows_balcao = _query_itens(
+                PedidoBalcaoItemModel,
+                PedidoBalcaoModel,
+                PedidoBalcaoModel.created_at,
+                StatusPedidoBalcao.CANCELADO.value,
+            )
+        except ProgrammingError as e:
+            if "does not exist" not in str(e):
+                raise
+
+        acumulado: dict[str, dict[str, float | int | str]] = {}
+
+        def _somar(rows):
+            for row in rows:
+                key = row.descricao or "Não identificado"
+                entry = acumulado.setdefault(
+                    key,
+                    {"descricao": key, "quantidade": 0, "faturamento": 0.0},
+                )
+                entry["quantidade"] = int(entry["quantidade"]) + int(row.quantidade or 0)
+                entry["faturamento"] = float(entry["faturamento"]) + _decimal_to_float(row.faturamento)
+
+        _somar(rows_delivery)
+        _somar(rows_mesa)
+        _somar(rows_balcao)
+
+        return sorted(
+            acumulado.values(),
+            key=lambda item: item["quantidade"],
+            reverse=True,
+        )[:limite]
+
+    def _top_entregadores(
+        self, empresa_id: int, inicio: datetime, fim: datetime, limite: int = 5
+    ) -> List[Dict[str, float | int | str]]:
+        try:
+            rows = (
+                self.db.query(
+                    EntregadorDeliveryModel.nome.label("nome"),
+                    EntregadorDeliveryModel.telefone.label("telefone"),
+                    func.count(PedidoDeliveryModel.id).label("quantidade_pedidos"),
+                    func.coalesce(
+                        func.sum(PedidoDeliveryModel.valor_total),
+                        0,
+                    ).label("faturamento_total"),
+                )
+                .join(
+                    PedidoDeliveryModel,
+                    PedidoDeliveryModel.entregador_id == EntregadorDeliveryModel.id,
+                )
+                .filter(
+                    PedidoDeliveryModel.empresa_id == empresa_id,
+                    PedidoDeliveryModel.data_criacao >= inicio,
+                    PedidoDeliveryModel.data_criacao < fim,
+                    PedidoDeliveryModel.status != "C",  # Exclui apenas cancelados
+                    PedidoDeliveryModel.entregador_id.isnot(None),  # Apenas pedidos com entregador
+                )
+                .group_by(
+                    EntregadorDeliveryModel.id,
+                    EntregadorDeliveryModel.nome,
+                    EntregadorDeliveryModel.telefone,
+                )
+                .order_by(func.count(PedidoDeliveryModel.id).desc())
+                .limit(limite)
+                .all()
+            )
+        except ProgrammingError as e:
+            # Se a tabela não existir, retorna lista vazia
+            if "does not exist" in str(e):
+                return []
+            raise
+
+        return [
+            {
+                "nome": row.nome or "Não identificado",
+                "telefone": row.telefone or "Não informado",
+                "quantidade_pedidos": int(row.quantidade_pedidos or 0),
+                "faturamento_total": _decimal_to_float(row.faturamento_total),
+            }
+            for row in rows
+        ]
+
+    def obter_panoramico_periodo(
+        self,
+        empresa_id: int,
+        inicio: date,
+        fim: date,
+    ) -> Dict[str, object]:
+        inicio_periodo = datetime.combine(inicio, time.min)
+        fim_periodo = datetime.combine(fim + timedelta(days=1), time.min)
+
+        resumo_periodo = self._resumo_periodo(empresa_id, inicio_periodo, fim_periodo)
+        cancelados_periodo = self._cancelados_periodo(empresa_id, inicio_periodo, fim_periodo)
+
+        # Período anterior: MESMO INTERVALO no mês anterior (ex.: 10-20 vs 10-20 do mês passado)
+        inicio_prev = _shift_month_safe(inicio, -1)
+        fim_prev = _shift_month_safe(fim, -1)
+        inicio_periodo_anterior = datetime.combine(inicio_prev, time.min)
+        fim_periodo_anterior = datetime.combine(fim_prev + timedelta(days=1), time.min)
+        resumo_periodo_anterior = self._resumo_periodo(
+            empresa_id,
+            inicio_periodo_anterior,
+            fim_periodo_anterior,
+        )
+        cancelados_periodo_anterior = self._cancelados_periodo(
+            empresa_id, inicio_periodo_anterior, fim_periodo_anterior
+        )
+
+        ticket_medio_periodo = (
+            round(resumo_periodo.faturamento / resumo_periodo.quantidade, 2)
+            if resumo_periodo.quantidade
+            else 0.0
+        )
+        ticket_medio_periodo_anterior = (
+            round(
+                resumo_periodo_anterior.faturamento
+                / resumo_periodo_anterior.quantidade,
+                2,
+            )
+            if resumo_periodo_anterior.quantidade
+            else 0.0
+        )
+
+        tempo_medio_delivery, tempo_medio_local = self._media_tempo_entrega_minutos(
+            empresa_id,
+            inicio_periodo,
+            fim_periodo,
+        )
+
+        return {
+            "periodo": {
+                "inicio": inicio,
+                "fim": fim,
+            },
+            "empresa": {
+                "id": empresa_id,
+            },
+            "pedidos": {
+                "periodo": resumo_periodo.quantidade,
+                "periodo_anterior": resumo_periodo_anterior.quantidade,
+            },
+            "cancelados": {
+                "periodo": cancelados_periodo,
+                "periodo_anterior": cancelados_periodo_anterior,
+            },
+            "faturamento": {
+                "periodo": resumo_periodo.faturamento,
+                "periodo_anterior": resumo_periodo_anterior.faturamento,
+            },
+            "ticket_medio": {
+                "periodo": ticket_medio_periodo,
+                "periodo_anterior": ticket_medio_periodo_anterior,
+            },
+            "tempo_entrega": {
+                "delivery_minutos": tempo_medio_delivery,
+                "local_minutos": tempo_medio_local,
+            },
+            "vendas_por_hora": self._vendas_por_hora(
+                empresa_id,
+                inicio_periodo,
+                fim_periodo,
+            ),
+            "top_produtos": self._top_produtos(
+                empresa_id,
+                inicio_periodo,
+                fim_periodo,
+            ),
+            "top_entregadores": self._top_entregadores(
+                empresa_id,
+                inicio_periodo,
+                fim_periodo,
+            ),
+        }
+
+    def obter_panoramico_mes_anterior(
+        self,
+        empresa_id: int,
+        referencia: date,
+    ) -> Dict[str, object]:
+        """[DEPRECATED] Mantido por compatibilidade, mas o panorâmico principal não usa mais 'mês anterior'."""
+        inicio_mes_passado, fim_mes_passado = _previous_month_bounds(referencia)
+
+        resumo_mes_passado = self._resumo_periodo(
+            empresa_id,
+            inicio_mes_passado,
+            fim_mes_passado,
+        )
+
+        ticket_medio_mes_passado = (
+            round(
+                resumo_mes_passado.faturamento / resumo_mes_passado.quantidade,
+                2,
+            )
+            if resumo_mes_passado.quantidade
+            else 0.0
+        )
+
+        tempo_medio_delivery, tempo_medio_local = self._media_tempo_entrega_minutos(
+            empresa_id,
+            inicio_mes_passado,
+            fim_mes_passado,
+        )
+
+        return {
+            "periodo": {
+                "inicio": inicio_mes_passado.date(),
+                "fim": (fim_mes_passado - timedelta(days=1)).date(),
+            },
+            "empresa": {"id": empresa_id},
+            "pedidos": {"mes_anterior": resumo_mes_passado.quantidade},
+            "faturamento": {"mes_anterior": resumo_mes_passado.faturamento},
+            "ticket_medio": {"mes_anterior": ticket_medio_mes_passado},
+            "tempo_entrega": {
+                "delivery_minutos": tempo_medio_delivery,
+                "local_minutos": tempo_medio_local,
+            },
+            "vendas_por_hora": self._vendas_por_hora(
+                empresa_id,
+                inicio_mes_passado,
+                fim_mes_passado,
+            ),
+            "top_produtos": self._top_produtos(
+                empresa_id,
+                inicio_mes_passado,
+                fim_mes_passado,
+            ),
+            "top_entregadores": self._top_entregadores(
+                empresa_id,
+                inicio_mes_passado,
+                fim_mes_passado,
+            ),
+        }
+
+    def ranking_por_bairro(
+        self,
+        empresa_id: int,
+        inicio: date,
+        fim: date,
+        limite: int = 10,
+    ) -> List[Dict[str, object]]:
+        inicio_dt = datetime.combine(inicio, time.min)
+        fim_dt = datetime.combine(fim + timedelta(days=1), time.min)
+
+        bairro_expr = func.coalesce(
+            cast(PedidoDeliveryModel.endereco_snapshot['bairro'].astext, String),
+            EnderecoModel.bairro,
+            literal("Não informado"),
+        )
+
+        try:
+            rows = (
+                self.db.query(
+                    bairro_expr.label("bairro"),
+                    func.count(PedidoDeliveryModel.id).label("quantidade"),
+                    func.coalesce(func.sum(PedidoDeliveryModel.valor_total), 0).label("faturamento"),
+                )
+                .outerjoin(
+                    EnderecoModel,
+                    EnderecoModel.id == PedidoDeliveryModel.endereco_id,
+                )
+                .filter(
+                    PedidoDeliveryModel.empresa_id == empresa_id,
+                    PedidoDeliveryModel.data_criacao >= inicio_dt,
+                    PedidoDeliveryModel.data_criacao < fim_dt,
+                    PedidoDeliveryModel.status != "C",
+                )
+                .group_by(bairro_expr)
+                .order_by(func.coalesce(func.sum(PedidoDeliveryModel.valor_total), 0).desc())
+                .limit(limite)
+                .all()
+            )
+        except ProgrammingError as e:
+            # Se a tabela não existir, retorna lista vazia
+            if "does not exist" in str(e):
+                return []
+            raise
+
+        return [
+            {
+                "bairro": (row.bairro or "Não informado"),
+                "quantidade": int(row.quantidade or 0),
+                "faturamento": _decimal_to_float(row.faturamento),
+            }
+            for row in rows
+        ]
+
+    def vendas_ultimos_7_dias_comparativo(
+        self,
+        empresa_id: int,
+        referencia: date,
+    ) -> Dict[str, object]:
+        atual_inicio = referencia - timedelta(days=6)
+        atual_fim = referencia + timedelta(days=1)
+        anterior_inicio = atual_inicio - timedelta(days=7)
+        anterior_fim = atual_inicio
+
+        atual = self._vendas_por_dia(
+            empresa_id,
+            datetime.combine(atual_inicio, time.min),
+            datetime.combine(atual_fim, time.min),
+        )
+        anterior = self._vendas_por_dia(
+            empresa_id,
+            datetime.combine(anterior_inicio, time.min),
+            datetime.combine(anterior_fim, time.min),
+        )
+
+        # Normalize as datas em listas indexadas por string ISO (para alinhar)
+        def to_map(rows: List[Dict[str, object]]) -> Dict[str, Dict[str, object]]:
+            return {r["data"]: r for r in rows}
+
+        atual_map = to_map(atual)
+        anterior_map = to_map(anterior)
+
+        dias_atual = [
+            (atual_inicio + timedelta(days=i)).isoformat() for i in range(7)
+        ]
+        dias_anterior = [
+            (anterior_inicio + timedelta(days=i)).isoformat() for i in range(7)
+        ]
+
+        serie_atual = [
+            atual_map.get(
+                d,
+                {"data": d, "quantidade": 0, "faturamento": 0.0},
+            )
+            for d in dias_atual
+        ]
+        serie_anterior = [
+            anterior_map.get(
+                d,
+                {"data": d, "quantidade": 0, "faturamento": 0.0},
+            )
+            for d in dias_anterior
+        ]
+
+        # Cálculo das variações percentuais vs. ontem (apenas do período atual)
+        variacao_percentual_vs_ontem = {
+            "quantidade": 0.0,
+            "faturamento": 0.0,
+            "ticket_medio": 0.0,
+        }
+
+        if len(serie_atual) >= 2:
+            hoje = serie_atual[-1]
+            ontem = serie_atual[-2]
+
+            q_ant = float(ontem.get("quantidade", 0) or 0)
+            q_atu = float(hoje.get("quantidade", 0) or 0)
+            f_ant = float(ontem.get("faturamento", 0.0) or 0.0)
+            f_atu = float(hoje.get("faturamento", 0.0) or 0.0)
+            t_ant = float(ontem.get("ticket_medio", 0.0) or 0.0)
+            t_atu = float(hoje.get("ticket_medio", 0.0) or 0.0)
+
+            def pct(atual: float, anterior: float) -> float:
+                if anterior == 0:
+                    return 100.0 if atual > 0 else 0.0
+                return round(((atual - anterior) / anterior) * 100.0, 2)
+
+            variacao_percentual_vs_ontem = {
+                "quantidade": pct(q_atu, q_ant),
+                "faturamento": pct(f_atu, f_ant),
+                "ticket_medio": pct(t_atu, t_ant),
+            }
+
+        return {
+            "dias_atual": dias_atual,
+            "dias_anterior": dias_anterior,
+            "atual": serie_atual,
+            "anterior": serie_anterior,
+            "variacao_percentual_vs_ontem": variacao_percentual_vs_ontem,
+        }
+
+    def vendas_por_pico_hora(
+        self,
+        empresa_id: int,
+        inicio: date,
+        fim: date,
+    ) -> List[Dict[str, object]]:
+        inicio_dt = datetime.combine(inicio, time.min)
+        fim_dt = datetime.combine(fim + timedelta(days=1), time.min)
+        return self._vendas_por_hora(empresa_id, inicio_dt, fim_dt)
+
+    def obter_panoramico_diario(
+        self,
+        empresa_id: int,
+        dia: date,
+    ) -> Dict[str, object]:
+        """Panorâmico de um único dia, comparando sempre com ontem."""
+        inicio_periodo = datetime.combine(dia, time.min)
+        fim_periodo = datetime.combine(dia + timedelta(days=1), time.min)
+
+        ontem = dia - timedelta(days=1)
+        inicio_ontem = datetime.combine(ontem, time.min)
+        fim_ontem = datetime.combine(dia, time.min)
+
+        resumo_hoje = self._resumo_periodo(empresa_id, inicio_periodo, fim_periodo)
+        resumo_ontem = self._resumo_periodo(empresa_id, inicio_ontem, fim_ontem)
+        cancelados_hoje = self._cancelados_periodo(empresa_id, inicio_periodo, fim_periodo)
+        cancelados_ontem = self._cancelados_periodo(empresa_id, inicio_ontem, fim_ontem)
+
+        fatur_hoje = float(resumo_hoje.faturamento or 0.0)
+        qtd_hoje = int(resumo_hoje.quantidade or 0)
+        ticket_hoje = round(fatur_hoje / qtd_hoje, 2) if qtd_hoje else 0.0
+
+        fatur_ontem = float(resumo_ontem.faturamento or 0.0)
+        qtd_ontem = int(resumo_ontem.quantidade or 0)
+        ticket_ontem = round(fatur_ontem / qtd_ontem, 2) if qtd_ontem else 0.0
+
+        tempo_medio_delivery, tempo_medio_local = self._media_tempo_entrega_minutos(
+            empresa_id, inicio_periodo, fim_periodo
+        )
+
+        return {
+            "periodo": {"inicio": dia, "fim": dia},
+            "empresa": {"id": empresa_id},
+            "pedidos": {
+                "periodo": resumo_hoje.quantidade,
+                "periodo_anterior": resumo_ontem.quantidade,
+            },
+            "cancelados": {
+                "periodo": cancelados_hoje,
+                "periodo_anterior": cancelados_ontem,
+            },
+            "faturamento": {
+                "periodo": resumo_hoje.faturamento,
+                "periodo_anterior": resumo_ontem.faturamento,
+            },
+            "ticket_medio": {
+                "periodo": ticket_hoje,
+                "periodo_anterior": ticket_ontem,
+            },
+            "tempo_entrega": {
+                "delivery_minutos": tempo_medio_delivery,
+                "local_minutos": tempo_medio_local,
+            },
+            "vendas_por_hora": self._vendas_por_hora(empresa_id, inicio_periodo, fim_periodo),
+            "top_produtos": self._top_produtos(empresa_id, inicio_periodo, fim_periodo),
+            "top_entregadores": self._top_entregadores(empresa_id, inicio_periodo, fim_periodo),
+        }
+

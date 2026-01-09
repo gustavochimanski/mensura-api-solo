@@ -1,0 +1,23 @@
+# Cache e compilados
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Ambiente virtual
+.venv/
+venv/
+
+# Configuração de IDE
+.idea/
+.vscode/
+
+# Git e logs
+.git/
+logs/
+
+# Arquivos locais
+.env*
+*.bak
+*.log
+*.old
