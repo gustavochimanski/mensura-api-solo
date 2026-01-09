@@ -279,20 +279,35 @@ class OrderNotification:
                 
                 # Se falhar com 400 e for 360Dialog, tenta formato alternativo do número
                 if response.status_code == 400 and is_360:
-                    error_text = response.text or ""
-                    last_error = error_text
+                    # Log detalhado do primeiro erro
+                    try:
+                        error_json = response.json()
+                        print(f"   🔄 PRIMEIRO ERRO DETALHADO (Status 400):")
+                        if isinstance(error_json, dict) and "error" in error_json:
+                            error_detail = error_json["error"]
+                            if isinstance(error_detail, dict):
+                                error_code = error_detail.get("code")
+                                error_type = error_detail.get("type")
+                                error_message = error_detail.get("message")
+                                if error_code: print(f"      📋 Code: {error_code}")
+                                if error_type: print(f"      🏷️  Type: {error_type}")
+                                if error_message: print(f"      💬 Message: {error_message}")
+                    except:
+                        print(f"   🔄 Primeiro erro: {response.text}")
+
+                    last_error = response.text or ""
                     last_response = response
-                    
+
                     # Tenta sem código do país (apenas DDD + número)
                     if phone_to_use.startswith('55') and len(phone_to_use) > 11:
                         phone_alt = phone_to_use[2:]  # Remove o 55
                         print(f"   🔄 Tentando formato alternativo (sem código do país): {phone_alt}")
                         payload_alt = payload.copy()
                         payload_alt["to"] = phone_alt
-                        
+
                         response = await client.post(url, json=payload_alt, headers=headers)
                         print(f"   📡 Resposta HTTP (tentativa alternativa): status_code={response.status_code}")
-                        
+
                         if response.status_code == 200:
                             # Sucesso com formato alternativo
                             result = response.json()
@@ -315,28 +330,55 @@ class OrderNotification:
                         error_json = response.json()
                         error_message = json.dumps(error_json, indent=2, ensure_ascii=False)
                         logger.error(f"[WhatsApp] Erro ao enviar mensagem (Status {response.status_code}):\n{error_message}")
-                        print(f"   ❌ ERRO COMPLETO ao enviar mensagem:")
-                        print(f"   📊 Status: {response.status_code}")
-                        print(f"   📄 Resposta completa: {error_message}")
+
+                        # Extração detalhada dos erros da 360Dialog/Meta
+                        print(f"   ❌ ERRO DETALHADO da API:")
+                        print(f"   📊 Status HTTP: {response.status_code}")
                         print(f"   🔗 URL: {url}")
                         print(f"   📦 Payload enviado: {json.dumps(payload, indent=2, ensure_ascii=False)}")
                         print(f"   🔑 Headers: {json.dumps({k: v if 'key' not in k.lower() and 'token' not in k.lower() else '***' + str(v)[-10:] for k, v in headers.items()}, indent=2)}")
-                        
-                        # Tenta extrair mais detalhes do erro
+                        print(f"   📄 Resposta completa: {error_message}")
+
+                        # Extração específica dos campos de erro
                         if isinstance(error_json, dict):
-                            error_detail = error_json.get("error", {})
-                            if isinstance(error_detail, dict):
-                                error_code = error_detail.get("code")
-                                error_type = error_detail.get("type")
-                                error_subcode = error_detail.get("error_subcode")
-                                if error_code or error_type:
-                                    print(f"   🔍 Detalhes do erro:")
-                                    if error_code:
-                                        print(f"      Code: {error_code}")
-                                    if error_type:
-                                        print(f"      Type: {error_type}")
-                                    if error_subcode:
-                                        print(f"      Subcode: {error_subcode}")
+                            # Para 360Dialog - estrutura comum
+                            if "error" in error_json:
+                                error_detail = error_json["error"]
+                                if isinstance(error_detail, dict):
+                                    print(f"   🔍 CAMPOS DO ERRO EXTRAÍDOS:")
+                                    error_code = error_detail.get("code")
+                                    error_type = error_detail.get("type")
+                                    error_subcode = error_detail.get("error_subcode")
+                                    error_message = error_detail.get("message")
+                                    error_fbtrace_id = error_detail.get("fbtrace_id")
+
+                                    if error_code: print(f"      📋 Code: {error_code}")
+                                    if error_type: print(f"      🏷️  Type: {error_type}")
+                                    if error_subcode: print(f"      🔢 Subcode: {error_subcode}")
+                                    if error_message: print(f"      💬 Message: {error_message}")
+                                    if error_fbtrace_id: print(f"      🔍 FBTrace ID: {error_fbtrace_id}")
+
+                                    # Interpretação dos códigos de erro comuns
+                                    if error_code == 100:
+                                        print(f"      💡 INTERPRETAÇÃO: Número de telefone inválido ou não registrado")
+                                    elif error_code == 613:
+                                        print(f"      💡 INTERPRETAÇÃO: Número não está na lista de destinatários permitidos")
+                                    elif error_code == 615:
+                                        print(f"      💡 INTERPRETAÇÃO: Limite de mensagens excedido")
+                                    elif error_code == 1003:
+                                        print(f"      💡 INTERPRETAÇÃO: Payload inválido ou formato incorreto")
+                                    elif error_code == 200:
+                                        print(f"      💡 INTERPRETAÇÃO: Permissões insuficientes da API key")
+                                    else:
+                                        print(f"      💡 INTERPRETAÇÃO: Erro genérico - verificar documentação da 360Dialog")
+
+                                elif isinstance(error_detail, str):
+                                    print(f"   🔍 Erro (string): {error_detail}")
+                            else:
+                                # Outras estruturas de erro possíveis
+                                for key, value in error_json.items():
+                                    print(f"   🔍 {key}: {value}")
+
                     except Exception as parse_error:
                         error_message = error_text
                         logger.error(f"[WhatsApp] Erro ao enviar mensagem (Status {response.status_code}): {error_message}")
