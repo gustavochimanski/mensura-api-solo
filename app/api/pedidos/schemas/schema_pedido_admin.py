@@ -12,7 +12,7 @@ from app.api.pedidos.schemas.schema_pedido import (
     ItemPedidoRequest,
     MeioPagamentoParcialRequest,
 )
-from app.api.shared.schemas.schema_shared_enums import PedidoStatusEnum
+from app.api.shared.schemas.schema_shared_enums import PedidoStatusEnum, TipoEntregaEnum
 
 
 class PedidoCreateRequest(FinalizarPedidoRequest):
@@ -95,6 +95,10 @@ class PedidoItemMutationAction(str, Enum):
 
 class PedidoItemMutationRequest(BaseModel):
     acao: PedidoItemMutationAction = Field(description="Ação a ser executada sobre o item.")
+    tipo: Optional[TipoEntregaEnum] = Field(
+        default=None,
+        description="Tipo de pedido (DELIVERY, BALCAO, MESA). Opcional - será detectado automaticamente pelo pedido_id se não informado.",
+    )
     item_id: Optional[int] = Field(default=None, description="Identificador do item existente.")
     produto_cod_barras: Optional[str] = Field(
         default=None, description="Código de barras do produto (obrigatório para adicionar item simples)."
@@ -105,7 +109,7 @@ class PedidoItemMutationRequest(BaseModel):
     observacao: Optional[str] = Field(default=None, description="Observação livre.")
     complementos: Optional[List[ItemComplementoRequest]] = Field(
         default=None,
-        description="Complementos do item com seus adicionais selecionados (mesa/balcão).",
+        description="Complementos do item com seus adicionais selecionados (suportado em delivery, mesa e balcão).",
     )
 
     def to_item_pedido_request(self) -> ItemPedidoRequest:

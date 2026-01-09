@@ -98,13 +98,16 @@ def get_abertura_aberta(
     Opcionalmente pode filtrar por caixa_id específico.
     Retorna 404 se não houver abertura aberta.
     """
+    logger.info(f"[CaixaAbertura] Buscar aberta - empresa_id={empresa_id} caixa_id={caixa_id}")
     svc = CaixaAberturaService(db)
     abertura = svc.get_caixa_aberto(empresa_id, caixa_id)
     if not abertura:
+        logger.warning(f"[CaixaAbertura] Nenhuma abertura aberta encontrada - empresa_id={empresa_id} caixa_id={caixa_id}")
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Não há abertura aberta para esta empresa"
         )
+    logger.info(f"[CaixaAbertura] Abertura aberta encontrada - abertura_id={abertura.id} empresa_id={empresa_id}")
     return abertura
 
 # ======================================================================
