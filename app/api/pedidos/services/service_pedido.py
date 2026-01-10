@@ -1049,12 +1049,17 @@ class PedidoService:
 
     def listar_pedidos_completo(self, cliente_id: int, skip: int = 0, limit: int = 50) -> list[PedidoResponseSimplificado]:
         """Lista pedidos com dados simplificados incluindo nome do meio de pagamento"""
+        from sqlalchemy.orm import selectinload
+        from app.api.pedidos.models.model_pedido_item_unificado import PedidoItemUnificadoModel
+        from app.api.pedidos.models.model_pedido_item_complemento import PedidoItemComplementoModel
         pedidos = (
             self.repo.db.query(PedidoUnificadoModel)
             .options(
                 joinedload(PedidoUnificadoModel.cliente),
                 joinedload(PedidoUnificadoModel.meio_pagamento),
-                joinedload(PedidoUnificadoModel.itens)
+                selectinload(PedidoUnificadoModel.itens)
+                .selectinload(PedidoItemUnificadoModel.complementos)
+                .selectinload(PedidoItemComplementoModel.adicionais)
             )
             .filter(
                 PedidoUnificadoModel.tipo_entrega == TipoEntrega.DELIVERY.value,

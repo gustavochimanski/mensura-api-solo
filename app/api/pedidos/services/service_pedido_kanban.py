@@ -126,10 +126,6 @@ class KanbanService:
         query = (
             self.db.query(PedidoUnificadoModel)
             .options(
-                joinedload(PedidoUnificadoModel.itens),
-                selectinload(PedidoUnificadoModel.itens)
-                .selectinload(PedidoItemUnificadoModel.complementos)
-                .selectinload(PedidoItemComplementoModel.adicionais),
                 joinedload(PedidoUnificadoModel.cliente),
                 joinedload(PedidoUnificadoModel.mesa),
                 joinedload(PedidoUnificadoModel.empresa),
