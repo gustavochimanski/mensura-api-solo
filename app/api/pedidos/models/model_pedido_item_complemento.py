@@ -10,7 +10,7 @@ class PedidoItemComplementoModel(Base):
     """
     Complementos selecionados para um item do pedido (produto/receita/combo).
 
-    Normaliza o que antes era persistido em `PedidoItemUnificadoModel.adicionais_snapshot`.
+    Substitui o antigo campo JSON `adicionais_snapshot` por modelo relacional.
     """
 
     __tablename__ = "pedidos_itens_complementos"

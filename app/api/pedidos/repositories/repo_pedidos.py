@@ -224,30 +224,14 @@ class PedidoRepository:
     # -------------------- Helpers para cálculos -------------------
     def _sum_complementos_total_relacional(self, item: PedidoItemUnificadoModel) -> Decimal:
         """
-        Soma totais de complementos usando o modelo relacional (novo).
-        Mantém fallback para o JSON legado quando necessário.
+        Soma totais de complementos usando o modelo relacional.
         """
         total = Decimal("0")
 
-        complementos_rel = getattr(item, "complementos", None)
-        if complementos_rel:
-            for comp in complementos_rel:
-                try:
-                    total += Decimal(str(getattr(comp, "total", 0) or 0))
-                except Exception:
-                    continue
-            return total
-
-        # Fallback legado: adicionais_snapshot (na verdade, snapshot de complementos)
-        adicionais_snapshot = getattr(item, "adicionais_snapshot", None) or []
-        for elemento in adicionais_snapshot:
+        complementos_rel = getattr(item, "complementos", None) or []
+        for comp in complementos_rel:
             try:
-                elemento_total = (
-                    elemento.get("total")
-                    if isinstance(elemento, dict)
-                    else getattr(elemento, "total", 0)
-                )
-                total += Decimal(str(elemento_total or 0))
+                total += Decimal(str(getattr(comp, "total", 0) or 0))
             except Exception:
                 continue
 
