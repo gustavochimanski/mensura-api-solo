@@ -13,6 +13,8 @@ from .model_pedido_unificado import (
     CanalPedidoEnum,
 )
 from .model_pedido_item_unificado import PedidoItemUnificadoModel
+from .model_pedido_item_complemento import PedidoItemComplementoModel
+from .model_pedido_item_complemento_adicional import PedidoItemComplementoAdicionalModel
 from .model_pedido_historico_unificado import (
     PedidoHistoricoUnificadoModel,
     TipoOperacaoPedido,
@@ -26,6 +28,8 @@ __all__ = [
     # Modelos unificados
     "PedidoUnificadoModel",
     "PedidoItemUnificadoModel",
+    "PedidoItemComplementoModel",
+    "PedidoItemComplementoAdicionalModel",
     "PedidoHistoricoUnificadoModel",
     # Enums e tipos
     "StatusPedido",

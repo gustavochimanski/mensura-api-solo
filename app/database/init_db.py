@@ -275,6 +275,8 @@ def importar_models():
     from app.api.pedidos.models.model_pedido_unificado import PedidoUnificadoModel
     from app.api.pedidos.models.model_pedido_item_unificado import PedidoItemUnificadoModel
     from app.api.pedidos.models.model_pedido_historico_unificado import PedidoHistoricoUnificadoModel
+    from app.api.pedidos.models.model_pedido_item_complemento import PedidoItemComplementoModel
+    from app.api.pedidos.models.model_pedido_item_complemento_adicional import PedidoItemComplementoAdicionalModel
     from app.api.cadastros.models.model_cupom import CupomDescontoModel
     from app.api.cadastros.models.model_cliente_dv import ClienteModel
     from app.api.cadastros.models.model_endereco_dv import EnderecoModel
@@ -341,6 +343,8 @@ def criar_tabelas_cardapio_antes():
         from app.api.pedidos.models.model_pedido_unificado import PedidoUnificadoModel
         from app.api.pedidos.models.model_pedido_item_unificado import PedidoItemUnificadoModel
         from app.api.pedidos.models.model_pedido_historico_unificado import PedidoHistoricoUnificadoModel
+        from app.api.pedidos.models.model_pedido_item_complemento import PedidoItemComplementoModel
+        from app.api.pedidos.models.model_pedido_item_complemento_adicional import PedidoItemComplementoAdicionalModel
         
         # Tabelas de pedidos foram movidas para o schema pedidos
         cardapio_tables = [
@@ -352,6 +356,8 @@ def criar_tabelas_cardapio_antes():
             PedidoUnificadoModel.__table__,
             PedidoItemUnificadoModel.__table__,
             PedidoHistoricoUnificadoModel.__table__,
+            PedidoItemComplementoModel.__table__,
+            PedidoItemComplementoAdicionalModel.__table__,
         ]
         
         # Criar tabelas do schema cardapio (modelos antigos)
@@ -476,6 +482,8 @@ def criar_tabelas():
                 from app.api.pedidos.models.model_pedido_unificado import PedidoUnificadoModel
                 from app.api.pedidos.models.model_pedido_item_unificado import PedidoItemUnificadoModel
                 from app.api.pedidos.models.model_pedido_historico_unificado import PedidoHistoricoUnificadoModel
+                from app.api.pedidos.models.model_pedido_item_complemento import PedidoItemComplementoModel
+                from app.api.pedidos.models.model_pedido_item_complemento_adicional import PedidoItemComplementoAdicionalModel
                 
                 # Garante que os modelos estão registrados no Base
                 # Tabelas de pedidos foram movidas para o schema pedidos
@@ -488,6 +496,8 @@ def criar_tabelas():
                     PedidoUnificadoModel.__table__,
                     PedidoItemUnificadoModel.__table__,
                     PedidoHistoricoUnificadoModel.__table__,
+                    PedidoItemComplementoModel.__table__,
+                    PedidoItemComplementoAdicionalModel.__table__,
                 ]
                 
                 # Cria cada tabela individualmente para melhor controle de erros

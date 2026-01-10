@@ -113,8 +113,10 @@ def build_produtos_out_from_items(
     combos_out: list[ComboPedidoOut] = []
     
     for item in itens or []:
-        complementos_snapshot = getattr(item, "adicionais_snapshot", None)
-        # O snapshot de adicionais_snapshot na verdade contém complementos com adicionais dentro
+        # Novo modelo relacional (preferencial)
+        complementos_rel = getattr(item, "complementos", None)
+        complementos_snapshot = complementos_rel if complementos_rel else getattr(item, "adicionais_snapshot", None)
+        # OBS: `adicionais_snapshot` (legado) na verdade contém complementos com adicionais dentro
         
         item_id = getattr(item, "id", None)
         produto_cod_barras = getattr(item, "produto_cod_barras", None)

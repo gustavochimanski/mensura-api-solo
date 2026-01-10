@@ -4,10 +4,12 @@ from datetime import date, datetime as dt, timedelta
 from decimal import Decimal
 from typing import Optional
 from sqlalchemy import and_, func
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.api.pedidos.repositories.repo_pedidos import PedidoRepository
 from app.api.pedidos.models.model_pedido_unificado import PedidoUnificadoModel, TipoEntrega, StatusPedido
+from app.api.pedidos.models.model_pedido_item_unificado import PedidoItemUnificadoModel
+from app.api.pedidos.models.model_pedido_item_complemento import PedidoItemComplementoModel
 from app.api.pedidos.schemas.schema_pedido import (
     KanbanAgrupadoResponse,
     MeioPagamentoKanbanResponse,
@@ -68,30 +70,28 @@ class KanbanService:
             # Calcula o total base do item (preco_unitario * quantidade)
             item_total = (item.preco_unitario or Dec("0")) * (item.quantidade or 0)
             
-            # Adiciona complementos/adicionais do snapshot
-            # NOTA: O snapshot contém complementos (não adicionais diretos)
-            # Cada complemento tem um campo 'total' que já é a soma de seus adicionais
-            adicionais_snapshot = getattr(item, "adicionais_snapshot", None) or []
-            if adicionais_snapshot:
-                for elemento in adicionais_snapshot:
+            # Adiciona complementos/adicionais (preferencialmente via modelo relacional)
+            complementos_rel = getattr(item, "complementos", None) or []
+            if complementos_rel:
+                for comp in complementos_rel:
                     try:
-                        if isinstance(elemento, dict):
-                            # Verifica se é um complemento (tem complemento_id e total)
-                            if "complemento_id" in elemento:
-                                # É um complemento: usa o total do complemento
+                        item_total += Dec(str(getattr(comp, "total", 0) or 0))
+                    except Exception:
+                        pass
+            else:
+                # Fallback legado: snapshot JSON
+                adicionais_snapshot = getattr(item, "adicionais_snapshot", None) or []
+                if adicionais_snapshot:
+                    for elemento in adicionais_snapshot:
+                        try:
+                            if isinstance(elemento, dict):
                                 complemento_total = elemento.get("total", 0) or 0
                                 item_total += Dec(str(complemento_total))
-                            elif "total" in elemento:
-                                # Pode ser um adicional direto (estrutura antiga)
-                                adicional_total = elemento.get("total", 0) or 0
-                                item_total += Dec(str(adicional_total))
-                        else:
-                            # Objeto - tenta pegar o total
-                            total = getattr(elemento, "total", 0) or 0
-                            item_total += Dec(str(total))
-                    except (AttributeError, ValueError, TypeError):
-                        # Se houver erro, ignora e continua
-                        pass
+                            else:
+                                total = getattr(elemento, "total", 0) or 0
+                                item_total += Dec(str(total))
+                        except Exception:
+                            pass
             
             subtotal += item_total
         
@@ -127,6 +127,9 @@ class KanbanService:
             self.db.query(PedidoUnificadoModel)
             .options(
                 joinedload(PedidoUnificadoModel.itens),
+                selectinload(PedidoUnificadoModel.itens)
+                .selectinload(PedidoItemUnificadoModel.complementos)
+                .selectinload(PedidoItemComplementoModel.adicionais),
                 joinedload(PedidoUnificadoModel.cliente),
                 joinedload(PedidoUnificadoModel.mesa),
                 joinedload(PedidoUnificadoModel.empresa),

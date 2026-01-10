@@ -120,10 +120,14 @@ class PedidoRepository:
 
     def get_pedido(self, pedido_id: int, tipo_entrega: TipoEntrega | None = None) -> Optional[PedidoUnificadoModel]:
         """Busca um pedido por ID. Se tipo_entrega for fornecido, filtra por tipo."""
+        from app.api.pedidos.models.model_pedido_item_complemento import PedidoItemComplementoModel
         query = (
             self.db.query(PedidoUnificadoModel)
             .options(
                 joinedload(PedidoUnificadoModel.itens),
+                selectinload(PedidoUnificadoModel.itens)
+                .selectinload(PedidoItemUnificadoModel.complementos)
+                .selectinload(PedidoItemComplementoModel.adicionais),
                 joinedload(PedidoUnificadoModel.cliente).joinedload(ClienteModel.enderecos),
                 joinedload(PedidoUnificadoModel.endereco),
                 joinedload(PedidoUnificadoModel.meio_pagamento),
@@ -219,20 +223,41 @@ class PedidoRepository:
 
     # -------------------- Mutations -------------------
     # -------------------- Helpers para cálculos -------------------
+    def _sum_complementos_total_relacional(self, item: PedidoItemUnificadoModel) -> Decimal:
+        """
+        Soma totais de complementos usando o modelo relacional (novo).
+        Mantém fallback para o JSON legado quando necessário.
+        """
+        total = Decimal("0")
+
+        complementos_rel = getattr(item, "complementos", None)
+        if complementos_rel:
+            for comp in complementos_rel:
+                try:
+                    total += Decimal(str(getattr(comp, "total", 0) or 0))
+                except Exception:
+                    continue
+            return total
+
+        # Fallback legado: adicionais_snapshot (na verdade, snapshot de complementos)
+        adicionais_snapshot = getattr(item, "adicionais_snapshot", None) or []
+        for elemento in adicionais_snapshot:
+            try:
+                elemento_total = (
+                    elemento.get("total")
+                    if isinstance(elemento, dict)
+                    else getattr(elemento, "total", 0)
+                )
+                total += Decimal(str(elemento_total or 0))
+            except Exception:
+                continue
+
+        return total
+
     def _calc_item_total(self, item: PedidoItemUnificadoModel) -> Decimal:
         """Calcula o total de um item incluindo adicionais."""
         total = (item.preco_unitario or Decimal("0")) * (item.quantidade or 0)
-        adicionais_snapshot = getattr(item, "adicionais_snapshot", None) or []
-        for adicional in adicionais_snapshot:
-            try:
-                adicional_total = (
-                    adicional.get("total")
-                    if isinstance(adicional, dict)
-                    else getattr(adicional, "total", 0)
-                )
-            except AttributeError:
-                adicional_total = 0
-            total += Decimal(str(adicional_total or 0))
+        total += self._sum_complementos_total_relacional(item)
         return total
 
     def _calc_total(self, pedido: PedidoUnificadoModel) -> Decimal:
@@ -679,11 +704,78 @@ class PedidoRepository:
             produto_descricao_snapshot=produto_descricao_snapshot,
             produto_imagem_snapshot=produto_imagem_snapshot,
         )
-        if adicionais_snapshot:
-            item.adicionais_snapshot = adicionais_snapshot
         self.db.add(item)
         self.db.flush()
+
+        # Persistência relacional de complementos/adicionais (novo)
+        if adicionais_snapshot:
+            self._persistir_complementos_relacionais(item, adicionais_snapshot)
+            # Mantém também o JSON legado por compatibilidade (pode ser removido no futuro)
+            item.adicionais_snapshot = adicionais_snapshot
+
         return item
+
+    def _persistir_complementos_relacionais(self, item: PedidoItemUnificadoModel, complementos_snapshot: list):
+        """
+        Persiste complementos e adicionais do snapshot em tabelas relacionais.
+
+        Espera a estrutura produzida por:
+        - app.api.pedidos.utils.complementos.resolve_produto_complementos
+        - ProductCore.calcular_preco_com_complementos
+        """
+        from decimal import Decimal as Dec
+        from app.api.pedidos.models.model_pedido_item_complemento import PedidoItemComplementoModel
+        from app.api.pedidos.models.model_pedido_item_complemento_adicional import (
+            PedidoItemComplementoAdicionalModel,
+        )
+
+        if not complementos_snapshot:
+            return
+
+        # Garante lista
+        if not isinstance(complementos_snapshot, list):
+            return
+
+        for comp in complementos_snapshot:
+            comp_dict = comp if isinstance(comp, dict) else None
+            if not comp_dict:
+                continue
+
+            complemento_id = comp_dict.get("complemento_id")
+            if complemento_id is None:
+                continue
+
+            comp_row = PedidoItemComplementoModel(
+                pedido_item_id=item.id,
+                complemento_id=int(complemento_id),
+                complemento_nome=comp_dict.get("complemento_nome") or comp_dict.get("nome"),
+                obrigatorio=bool(comp_dict.get("obrigatorio", False)),
+                quantitativo=bool(comp_dict.get("quantitativo", False)),
+                total=Dec(str(comp_dict.get("total") or 0)),
+            )
+            self.db.add(comp_row)
+            self.db.flush()
+
+            adicionais_list = comp_dict.get("adicionais") or []
+            if not isinstance(adicionais_list, list):
+                continue
+
+            for ad in adicionais_list:
+                if not isinstance(ad, dict):
+                    continue
+                adicional_id = ad.get("adicional_id")
+                if adicional_id is None:
+                    continue
+                self.db.add(
+                    PedidoItemComplementoAdicionalModel(
+                        item_complemento_id=comp_row.id,
+                        adicional_id=int(adicional_id),
+                        nome=ad.get("nome"),
+                        quantidade=int(ad.get("quantidade") or 1),
+                        preco_unitario=Dec(str(ad.get("preco_unitario") or 0)),
+                        total=Dec(str(ad.get("total") or 0)),
+                    )
+                )
 
     def atualizar_item(
         self,

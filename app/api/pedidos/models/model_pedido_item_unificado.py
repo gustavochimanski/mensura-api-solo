@@ -82,6 +82,13 @@ class PedidoItemUnificadoModel(Base):
     produto_descricao_snapshot = Column(String(255), nullable=True)
     produto_imagem_snapshot = Column(String(255), nullable=True)
     adicionais_snapshot = Column(JSON, nullable=True)  # JSON dos adicionais selecionados
+
+    # Normalização: complementos/adicionais em tabelas relacionais
+    complementos = relationship(
+        "PedidoItemComplementoModel",
+        back_populates="pedido_item",
+        cascade="all, delete-orphan",
+    )
     
     @validates('produto_cod_barras', 'combo_id', 'receita_id')
     def validate_item_tipo(self, key, value):
