@@ -828,9 +828,11 @@ class PedidoService:
             logger.info(f"[finalizar_pedido] get_pedido cliente_id={pedido.cliente_id if pedido else None}")
 
         except HTTPException:
+            logger.exception("[finalizar_pedido] HTTPException - rollback acionado")
             self.repo.rollback()
             raise
         except Exception as e:
+            logger.exception("[finalizar_pedido] Exception inesperada - rollback acionado: %s", e)
             self.repo.rollback()
             raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Erro ao finalizar pedido: {e}")
 
