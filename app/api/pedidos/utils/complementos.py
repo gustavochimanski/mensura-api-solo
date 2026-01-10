@@ -134,6 +134,8 @@ def resolve_complementos_diretos(
     empresa_id: int,
     complementos_request: Sequence | None,
     quantidade_item: int,
+    combo_id: int | None = None,
+    receita_id: int | None = None,
 ) -> tuple[Decimal, List[Dict[str, Any]]]:
     """
     Calcula o total de complementos e adicionais diretamente pelos IDs (para receitas e combos).
@@ -144,6 +146,8 @@ def resolve_complementos_diretos(
         empresa_id: ID da empresa
         complementos_request: Lista de complementos com seus adicionais selecionados
         quantidade_item: Quantidade do item no pedido
+        combo_id: ID do combo (opcional, para validar vínculos)
+        receita_id: ID da receita (opcional, para validar vínculos)
     
     Returns:
         Tupla com (total_decimal, snapshot_list)
@@ -180,8 +184,19 @@ def resolve_complementos_diretos(
     if not complemento_ids:
         return Decimal("0"), []
 
-    # Busca complementos diretamente por IDs
-    complementos_db = complemento_contract.buscar_por_ids(empresa_id, complemento_ids)
+    # Busca complementos: se for combo, usa listar_por_combo para validar vínculos
+    if combo_id is not None:
+        complementos_db_all = complemento_contract.listar_por_combo(combo_id, apenas_ativos=True)
+        ids_set = set(complemento_ids)
+        complementos_db = [c for c in complementos_db_all if c.id in ids_set]
+    elif receita_id is not None:
+        complementos_db_all = complemento_contract.listar_por_receita(receita_id, apenas_ativos=True)
+        ids_set = set(complemento_ids)
+        complementos_db = [c for c in complementos_db_all if c.id in ids_set]
+    else:
+        # Fallback: busca por empresa (menos seguro, mas funciona)
+        complementos_db = complemento_contract.buscar_por_ids(empresa_id, complemento_ids)
+    
     if not complementos_db:
         return Decimal("0"), []
 

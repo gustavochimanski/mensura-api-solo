@@ -391,11 +391,20 @@ class ProductCore:
             )
         else:
             # Combos e receitas usam busca direta por IDs
+            combo_id = None
+            receita_id = None
+            if product.product_type == ProductType.COMBO:
+                combo_id = product.identifier
+            elif product.product_type == ProductType.RECEITA:
+                receita_id = product.identifier
+            
             total_complementos, snapshot = resolve_complementos_diretos(
                 complemento_contract=self.complemento_contract,
                 empresa_id=product.empresa_id,
                 complementos_request=complementos_request,
                 quantidade_item=quantidade,
+                combo_id=combo_id,
+                receita_id=receita_id,
             )
         
         preco_total = preco_base + total_complementos

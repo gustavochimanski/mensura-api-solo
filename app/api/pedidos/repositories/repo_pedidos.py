@@ -745,7 +745,7 @@ class PedidoRepository:
             comp_row = PedidoItemComplementoModel(
                 pedido_item_id=item.id,
                 complemento_id=int(complemento_id),
-                complemento_nome=comp_dict.get("complemento_nome") or comp_dict.get("nome"),
+                complemento_nome=comp_dict.get("complemento_nome") or comp_dict.get("nome") or "",
                 obrigatorio=bool(comp_dict.get("obrigatorio", False)),
                 quantitativo=bool(comp_dict.get("quantitativo", False)),
                 total=Dec(str(comp_dict.get("total") or 0)),
@@ -763,16 +763,15 @@ class PedidoRepository:
                 adicional_id = ad.get("adicional_id")
                 if adicional_id is None:
                     continue
-                self.db.add(
-                    PedidoItemComplementoAdicionalModel(
-                        item_complemento_id=comp_row.id,
-                        adicional_id=int(adicional_id),
-                        nome=ad.get("nome"),
-                        quantidade=int(ad.get("quantidade") or 1),
-                        preco_unitario=Dec(str(ad.get("preco_unitario") or 0)),
-                        total=Dec(str(ad.get("total") or 0)),
-                    )
+                adicional_row = PedidoItemComplementoAdicionalModel(
+                    item_complemento_id=comp_row.id,
+                    adicional_id=int(adicional_id),
+                    nome=ad.get("nome") or "",
+                    quantidade=int(ad.get("quantidade") or 1),
+                    preco_unitario=Dec(str(ad.get("preco_unitario") or 0)),
+                    total=Dec(str(ad.get("total") or 0)),
                 )
+                self.db.add(adicional_row)
 
     def atualizar_item(
         self,

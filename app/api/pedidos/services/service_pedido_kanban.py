@@ -70,28 +70,13 @@ class KanbanService:
             # Calcula o total base do item (preco_unitario * quantidade)
             item_total = (item.preco_unitario or Dec("0")) * (item.quantidade or 0)
             
-            # Adiciona complementos/adicionais (preferencialmente via modelo relacional)
+            # Adiciona complementos/adicionais via modelo relacional
             complementos_rel = getattr(item, "complementos", None) or []
-            if complementos_rel:
-                for comp in complementos_rel:
-                    try:
-                        item_total += Dec(str(getattr(comp, "total", 0) or 0))
-                    except Exception:
-                        pass
-            else:
-                # Fallback legado: snapshot JSON
-                adicionais_snapshot = getattr(item, "adicionais_snapshot", None) or []
-                if adicionais_snapshot:
-                    for elemento in adicionais_snapshot:
-                        try:
-                            if isinstance(elemento, dict):
-                                complemento_total = elemento.get("total", 0) or 0
-                                item_total += Dec(str(complemento_total))
-                            else:
-                                total = getattr(elemento, "total", 0) or 0
-                                item_total += Dec(str(total))
-                        except Exception:
-                            pass
+            for comp in complementos_rel:
+                try:
+                    item_total += Dec(str(getattr(comp, "total", 0) or 0))
+                except Exception:
+                    pass
             
             subtotal += item_total
         

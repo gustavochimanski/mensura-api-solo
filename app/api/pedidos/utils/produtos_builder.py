@@ -29,33 +29,20 @@ def _to_float(value: Any) -> float:
 
 
 def _build_adicionais_out(adicionais_list) -> list[ProdutoPedidoAdicionalOut]:
-    """Constrói lista de adicionais a partir de uma lista de adicionais."""
+    """Constrói lista de adicionais a partir das relações SQLAlchemy (PedidoItemComplementoAdicionalModel)."""
     if not adicionais_list:
         return []
     adicionais_out: list[ProdutoPedidoAdicionalOut] = []
     for adicional in adicionais_list:
         try:
+            # Usa o modelo relacional PedidoItemComplementoAdicionalModel
             adicionais_out.append(
                 ProdutoPedidoAdicionalOut(
-                    adicional_id=getattr(adicional, "adicional_id", None)
-                    if not isinstance(adicional, dict)
-                    else adicional.get("adicional_id"),
-                    nome=getattr(adicional, "nome", None)
-                    if not isinstance(adicional, dict)
-                    else adicional.get("nome"),
-                    quantidade=getattr(adicional, "quantidade", None)
-                    if not isinstance(adicional, dict)
-                    else adicional.get("quantidade", 1),
-                    preco_unitario=_to_float(
-                        getattr(adicional, "preco_unitario", None)
-                        if not isinstance(adicional, dict)
-                        else adicional.get("preco_unitario")
-                    ),
-                    total=_to_float(
-                        getattr(adicional, "total", None)
-                        if not isinstance(adicional, dict)
-                        else adicional.get("total")
-                    ),
+                    adicional_id=getattr(adicional, "adicional_id", None),
+                    nome=getattr(adicional, "nome", None),
+                    quantidade=int(getattr(adicional, "quantidade", 1) or 1),
+                    preco_unitario=_to_float(getattr(adicional, "preco_unitario", 0)),
+                    total=_to_float(getattr(adicional, "total", 0)),
                 )
             )
         except ValidationError:
@@ -105,10 +92,8 @@ def build_produtos_out_from_items(
     combos_out: list[ComboPedidoOut] = []
     
     for item in itens or []:
-        # Novo modelo relacional (preferencial)
-        complementos_rel = getattr(item, "complementos", None)
-        complementos_snapshot = complementos_rel if complementos_rel else getattr(item, "adicionais_snapshot", None)
-        # OBS: `adicionais_snapshot` (legado) na verdade contém complementos com adicionais dentro
+        # Usa modelo relacional (PedidoItemComplementoModel via relação item.complementos)
+        complementos_rel = getattr(item, "complementos", None) or []
         
         item_id = getattr(item, "id", None)
         produto_cod_barras = getattr(item, "produto_cod_barras", None)
@@ -127,7 +112,7 @@ def build_produtos_out_from_items(
                     quantidade=getattr(item, "quantidade", 0) or 0,
                     preco_unitario=_to_float(getattr(item, "preco_unitario", 0)),
                     observacao=getattr(item, "observacao", None),
-                    complementos=_build_complementos_out(complementos_snapshot),
+                    complementos=_build_complementos_out(complementos_rel),
                 )
             )
         elif receita_id:
@@ -140,7 +125,7 @@ def build_produtos_out_from_items(
                     quantidade=getattr(item, "quantidade", 0) or 0,
                     preco_unitario=_to_float(getattr(item, "preco_unitario", 0)),
                     observacao=getattr(item, "observacao", None),
-                    complementos=_build_complementos_out(complementos_snapshot),
+                    complementos=_build_complementos_out(complementos_rel),
                 )
             )
         elif combo_id:
@@ -152,7 +137,7 @@ def build_produtos_out_from_items(
                     quantidade=getattr(item, "quantidade", 0) or 0,
                     preco_unitario=_to_float(getattr(item, "preco_unitario", 0)),
                     observacao=getattr(item, "observacao", None),
-                    complementos=_build_complementos_out(complementos_snapshot),
+                    complementos=_build_complementos_out(complementos_rel),
                 )
             )
 
