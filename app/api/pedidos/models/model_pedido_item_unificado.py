@@ -81,7 +81,6 @@ class PedidoItemUnificadoModel(Base):
     # Snapshots para não "mudar o passado" se o produto/combo/receita for atualizado
     produto_descricao_snapshot = Column(String(255), nullable=True)
     produto_imagem_snapshot = Column(String(255), nullable=True)
-    adicionais_snapshot = Column(JSON, nullable=True)  # JSON dos adicionais selecionados
 
     # Normalização: complementos/adicionais em tabelas relacionais
     complementos = relationship(

@@ -706,11 +706,9 @@ class PedidoRepository:
         self.db.add(item)
         self.db.flush()
 
-        # Persistência relacional de complementos/adicionais (novo)
+        # Persistência relacional de complementos/adicionais
         if adicionais_snapshot:
             self._persistir_complementos_relacionais(item, adicionais_snapshot)
-            # Mantém também o JSON legado por compatibilidade (pode ser removido no futuro)
-            item.adicionais_snapshot = adicionais_snapshot
 
         return item
 

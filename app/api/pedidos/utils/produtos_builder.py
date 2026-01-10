@@ -63,28 +63,20 @@ def _build_adicionais_out(adicionais_list) -> list[ProdutoPedidoAdicionalOut]:
     return adicionais_out
 
 
-def _build_complementos_out(complementos_snapshot) -> list[ComplementoPedidoOut]:
-    """Constrói lista de complementos a partir do snapshot de complementos."""
-    if not complementos_snapshot:
+def _build_complementos_out(complementos_rel) -> list[ComplementoPedidoOut]:
+    """Constrói lista de complementos a partir das relações SQLAlchemy."""
+    if not complementos_rel:
         return []
     complementos_out: list[ComplementoPedidoOut] = []
-    for complemento in complementos_snapshot:
+    for complemento in complementos_rel:
         try:
-            # O snapshot pode ser dict ou objeto
-            if isinstance(complemento, dict):
-                complemento_id = complemento.get("complemento_id")
-                complemento_nome = complemento.get("complemento_nome", "")
-                obrigatorio = complemento.get("obrigatorio", False)
-                quantitativo = complemento.get("quantitativo", False)
-                total = _to_float(complemento.get("total", 0))
-                adicionais_list = complemento.get("adicionais", [])
-            else:
-                complemento_id = getattr(complemento, "complemento_id", None)
-                complemento_nome = getattr(complemento, "complemento_nome", "")
-                obrigatorio = getattr(complemento, "obrigatorio", False)
-                quantitativo = getattr(complemento, "quantitativo", False)
-                total = _to_float(getattr(complemento, "total", 0))
-                adicionais_list = getattr(complemento, "adicionais", [])
+            # Usa o modelo relacional PedidoItemComplementoModel
+            complemento_id = getattr(complemento, "complemento_id", None)
+            complemento_nome = getattr(complemento, "complemento_nome", "") or ""
+            obrigatorio = bool(getattr(complemento, "obrigatorio", False))
+            quantitativo = bool(getattr(complemento, "quantitativo", False))
+            total = _to_float(getattr(complemento, "total", 0))
+            adicionais_list = getattr(complemento, "adicionais", []) or []
             
             if complemento_id is None:
                 continue
