@@ -1072,10 +1072,7 @@ class PedidoService:
             .limit(limit)
             .all()
         )
-        # Filtra itens para manter apenas produtos (remove receitas e combos)
-        for pedido in pedidos:
-            if hasattr(pedido, 'itens') and pedido.itens:
-                pedido.itens = [item for item in pedido.itens if item.produto_cod_barras is not None]
+        # ⚠️ NUNCA mutar `pedido.itens` aqui: o relacionamento tem `delete-orphan` e isso pode deletar itens no commit do get_db().
         return [self.response_builder.pedido_to_response_simplificado(p) for p in pedidos]
 
     def get_pedido_by_id(self, pedido_id: int) -> PedidoResponse:

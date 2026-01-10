@@ -650,10 +650,7 @@ class PedidoMesaService:
     def list_pedidos_by_cliente(self, cliente_id: int, *, empresa_id: int, skip: int = 0, limit: int = 50) -> list[PedidoResponseCompleto]:
         """Lista todos os pedidos de mesa/balcão de um cliente específico"""
         pedidos = self.repo.list_by_cliente_id(cliente_id, TipoEntrega.MESA, skip=skip, limit=limit, empresa_id=empresa_id)
-        # Filtra itens para manter apenas produtos (remove receitas e combos)
-        for pedido in pedidos:
-            if hasattr(pedido, 'itens') and pedido.itens:
-                pedido.itens = [item for item in pedido.itens if item.produto_cod_barras is not None]
+        # ⚠️ Não mutar `pedido.itens` aqui (delete-orphan). Filtragem deve ser feita apenas na camada de response/DTO.
         return [PedidoResponseBuilder.pedido_to_response_completo(p) for p in pedidos]
 
     def atualizar_observacoes(self, pedido_id: int, payload: AtualizarObservacoesRequest) -> PedidoResponseCompleto:
