@@ -17,5 +17,5 @@ api_empresas = APIRouter(
 api_empresas.include_router(router_empresa_public)
 
 # Routers para admin (usam get_current_user)
-api_empresas.include_router(router_empresa_admin)
+api_empresas.include_router(router_empresa_admin, prefix="/api/empresas/admin")
 

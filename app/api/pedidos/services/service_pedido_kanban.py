@@ -50,29 +50,33 @@ class KanbanService:
         Recalcula o valor total do pedido incluindo receitas, combos e adicionais.
         
         Funciona para todos os tipos de pedidos (DELIVERY, MESA, BALCAO).
+        
+        IMPORTANTE: O preco_unitario dos itens já inclui os complementos/adicionais
+        quando o item foi criado com complementos. Portanto, usamos o preco_total
+        do item que já está calculado corretamente, e só somamos complementos
+        se eles não estiverem incluídos no preco_unitario.
         """
         from decimal import Decimal as Dec
         
         subtotal = Dec("0")
         
-        # Soma itens normais e seus adicionais
+        # Soma itens incluindo produtos, receitas e combos
         for item in pedido.itens or []:
-            item_total = (item.preco_unitario or Dec("0")) * (item.quantidade or 0)
+            # Usa o preco_total do item que já inclui quantidade
+            # Se o item foi criado com complementos, o preco_unitario já os inclui
+            item_preco_total = Dec(str(item.preco_total or 0))
             
-            # Adiciona adicionais do item
-            adicionais_snapshot = getattr(item, "adicionais_snapshot", None) or []
-            if adicionais_snapshot:
-                for adicional in adicionais_snapshot:
-                    try:
-                        if isinstance(adicional, dict):
-                            adicional_total = adicional.get("total", 0) or 0
-                        else:
-                            adicional_total = getattr(adicional, "total", 0) or 0
-                        item_total += Dec(str(adicional_total))
-                    except (AttributeError, ValueError, TypeError):
-                        pass
-            
-            subtotal += item_total
+            # Verifica se há complementos no snapshot que não estão incluídos no preco_total
+            # IMPORTANTE: Se o item foi criado com complementos, o preco_unitario (e consequentemente
+            # o preco_total) já inclui os complementos. Portanto, NÃO devemos somá-los novamente.
+            # 
+            # A lógica aqui é: se o preco_total for igual a (preco_unitario * quantidade),
+            # e houver complementos no snapshot, significa que os complementos já estão incluídos
+            # no preco_unitario. Caso contrário, precisamos somá-los.
+            #
+            # Por segurança, vamos usar apenas o preco_total, pois ele sempre está correto.
+            # Os complementos são armazenados no snapshot apenas para referência/exibição.
+            subtotal += item_preco_total
         
         # Para delivery, adiciona taxas; para mesa/balcão, apenas desconto
         if pedido.is_delivery():

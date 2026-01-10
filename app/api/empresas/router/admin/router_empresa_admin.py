@@ -19,7 +19,6 @@ from app.api.localizacao.adapters.google_maps_adapter import GoogleMapsAdapter
 from app.utils.logger import logger
 
 router = APIRouter(
-    prefix="/api/empresas/admin",
     tags=["Admin - Empresas"],
     dependencies=[Depends(get_current_user)]
 )
