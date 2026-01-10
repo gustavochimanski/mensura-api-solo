@@ -4,7 +4,6 @@ from sqlalchemy import (
     Column, Integer, String, ForeignKey, Numeric, Text, Index, CheckConstraint
 )
 from sqlalchemy.orm import relationship, validates
-from sqlalchemy.dialects.postgresql import JSON
 
 from app.database.db_connection import Base
 

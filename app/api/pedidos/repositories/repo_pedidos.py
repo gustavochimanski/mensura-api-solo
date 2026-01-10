@@ -713,47 +713,59 @@ class PedidoRepository:
         if not complementos_snapshot:
             return
 
-        # Garante lista
+        def _get(obj, key, default=None):
+            """Lê campo tanto de dict quanto de objetos (ex.: Pydantic)."""
+            if obj is None:
+                return default
+            if isinstance(obj, dict):
+                return obj.get(key, default)
+            return getattr(obj, key, default)
+
+        # Normaliza formatos aceitos:
+        # - list[dict] (formato esperado)
+        # - list[obj]  (ex.: modelos Pydantic)
+        # - {"complementos": [...]} (alguns payloads/snapshots legados)
+        if isinstance(complementos_snapshot, dict):
+            complementos_snapshot = complementos_snapshot.get("complementos") or []
         if not isinstance(complementos_snapshot, list):
             return
 
         for comp in complementos_snapshot:
-            comp_dict = comp if isinstance(comp, dict) else None
-            if not comp_dict:
+            if comp is None:
                 continue
 
-            complemento_id = comp_dict.get("complemento_id")
+            complemento_id = _get(comp, "complemento_id")
             if complemento_id is None:
                 continue
 
             comp_row = PedidoItemComplementoModel(
                 pedido_item_id=item.id,
                 complemento_id=int(complemento_id),
-                complemento_nome=comp_dict.get("complemento_nome") or comp_dict.get("nome") or "",
-                obrigatorio=bool(comp_dict.get("obrigatorio", False)),
-                quantitativo=bool(comp_dict.get("quantitativo", False)),
-                total=Dec(str(comp_dict.get("total") or 0)),
+                complemento_nome=_get(comp, "complemento_nome") or _get(comp, "nome") or "",
+                obrigatorio=bool(_get(comp, "obrigatorio", False)),
+                quantitativo=bool(_get(comp, "quantitativo", False)),
+                total=Dec(str(_get(comp, "total") or 0)),
             )
             self.db.add(comp_row)
             self.db.flush()
 
-            adicionais_list = comp_dict.get("adicionais") or []
+            adicionais_list = _get(comp, "adicionais") or []
             if not isinstance(adicionais_list, list):
                 continue
 
             for ad in adicionais_list:
-                if not isinstance(ad, dict):
+                if ad is None:
                     continue
-                adicional_id = ad.get("adicional_id")
+                adicional_id = _get(ad, "adicional_id")
                 if adicional_id is None:
                     continue
                 adicional_row = PedidoItemComplementoAdicionalModel(
                     item_complemento_id=comp_row.id,
                     adicional_id=int(adicional_id),
-                    nome=ad.get("nome") or "",
-                    quantidade=int(ad.get("quantidade") or 1),
-                    preco_unitario=Dec(str(ad.get("preco_unitario") or 0)),
-                    total=Dec(str(ad.get("total") or 0)),
+                    nome=_get(ad, "nome") or "",
+                    quantidade=int(_get(ad, "quantidade") or 1),
+                    preco_unitario=Dec(str(_get(ad, "preco_unitario") or 0)),
+                    total=Dec(str(_get(ad, "total") or 0)),
                 )
                 self.db.add(adicional_row)
 

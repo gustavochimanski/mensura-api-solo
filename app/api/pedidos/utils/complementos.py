@@ -186,11 +186,13 @@ def resolve_complementos_diretos(
 
     # Busca complementos: se for combo, usa listar_por_combo para validar vínculos
     if combo_id is not None:
-        complementos_db_all = complemento_contract.listar_por_combo(combo_id, apenas_ativos=True)
+        combo_id_int = int(combo_id) if not isinstance(combo_id, int) else combo_id
+        complementos_db_all = complemento_contract.listar_por_combo(combo_id_int, apenas_ativos=True)
         ids_set = set(complemento_ids)
         complementos_db = [c for c in complementos_db_all if c.id in ids_set]
     elif receita_id is not None:
-        complementos_db_all = complemento_contract.listar_por_receita(receita_id, apenas_ativos=True)
+        receita_id_int = int(receita_id) if not isinstance(receita_id, int) else receita_id
+        complementos_db_all = complemento_contract.listar_por_receita(receita_id_int, apenas_ativos=True)
         ids_set = set(complemento_ids)
         complementos_db = [c for c in complementos_db_all if c.id in ids_set]
     else:
