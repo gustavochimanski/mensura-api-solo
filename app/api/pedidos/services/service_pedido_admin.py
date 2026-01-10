@@ -612,8 +612,8 @@ class PedidoAdminService:
                 if not product_core.validar_empresa(product, empresa_id):
                     raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Produto não pertence à empresa {empresa_id}")
                 
-                # Calcula preço COM complementos (agora suportado para delivery)
-                preco_total, adicionais_snapshot = product_core.calcular_preco_com_complementos(
+                # Calcula preço COM complementos
+                preco_total, _ = product_core.calcular_preco_com_complementos(
                     product=product,
                     quantidade=qtd,
                     complementos_request=body.complementos,  # Agora suporta complementos
@@ -631,7 +631,7 @@ class PedidoAdminService:
                         preco_unitario=preco_unitario,
                         observacao=body.observacao,
                         produto_descricao_snapshot=descricao_produto,
-                        adicionais_snapshot=adicionais_snapshot if adicionais_snapshot else None,
+                        complementos=body.complementos if body.complementos else None,
                     )
                     descricao_historico = f"Produto adicionado: {product.identifier} (qtd: {qtd})"
                 elif product.product_type.value == "receita":
@@ -642,7 +642,7 @@ class PedidoAdminService:
                         preco_unitario=preco_unitario,
                         observacao=body.observacao,
                         produto_descricao_snapshot=descricao_produto,
-                        adicionais_snapshot=adicionais_snapshot if adicionais_snapshot else None,
+                        complementos=body.complementos if body.complementos else None,
                     )
                     descricao_historico = f"Receita adicionada: {descricao_produto} (ID: {product.identifier}, qtd: {qtd})"
                 elif product.product_type.value == "combo":
@@ -653,7 +653,7 @@ class PedidoAdminService:
                         preco_unitario=preco_unitario,
                         observacao=body.observacao,
                         produto_descricao_snapshot=descricao_produto,
-                        adicionais_snapshot=adicionais_snapshot if adicionais_snapshot else None,
+                        complementos=body.complementos if body.complementos else None,
                     )
                     descricao_historico = f"Combo adicionado: {descricao_produto} (ID: {product.identifier}, qtd: {qtd})"
                 else:

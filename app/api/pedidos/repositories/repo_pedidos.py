@@ -660,7 +660,7 @@ class PedidoRepository:
         observacao: str | None,
         produto_descricao_snapshot: str | None = None,
         produto_imagem_snapshot: str | None = None,
-        adicionais_snapshot: list | None = None,
+        complementos: list | None = None,
     ) -> PedidoItemUnificadoModel:
         """
         Adiciona um item ao pedido. Suporta produto (cod_barras), receita (receita_id) ou combo (combo_id).
@@ -694,82 +694,143 @@ class PedidoRepository:
         self.db.add(item)
         self.db.flush()
 
-        # Persistência relacional de complementos/adicionais
-        if adicionais_snapshot:
-            self._persistir_complementos_relacionais(item, adicionais_snapshot)
+        # Persistência relacional (tabelas do schema pedidos) a partir do request (sem snapshot JSON)
+        if complementos:
+            self._persistir_complementos_do_request(
+                item=item,
+                pedido_id=pedido_id,
+                complementos_request=complementos,
+            )
 
         return item
 
-    def _persistir_complementos_relacionais(self, item: PedidoItemUnificadoModel, complementos_snapshot: list):
+    def _persistir_complementos_do_request(
+        self,
+        *,
+        item: PedidoItemUnificadoModel,
+        pedido_id: int,
+        complementos_request: list,
+    ) -> None:
         """
-        Persiste complementos e adicionais do snapshot em tabelas relacionais.
-
-        Espera a estrutura produzida por:
-        - app.api.pedidos.utils.complementos.resolve_produto_complementos
-        - ProductCore.calcular_preco_com_complementos
+        Persiste complementos/adicionais em tabelas relacionais (schema pedidos)
+        DIRETAMENTE a partir do request (ItemComplementoRequest / ItemAdicionalComplementoRequest),
+        consultando o catálogo para validar vínculos e obter preço/nome.
         """
         from decimal import Decimal as Dec
+        from app.api.catalogo.adapters.complemento_adapter import ComplementoAdapter
+        from app.api.pedidos.models.model_pedido_unificado import PedidoUnificadoModel
         from app.api.pedidos.models.model_pedido_item_complemento import PedidoItemComplementoModel
         from app.api.pedidos.models.model_pedido_item_complemento_adicional import (
             PedidoItemComplementoAdicionalModel,
         )
 
-        if not complementos_snapshot:
+        if not complementos_request or not isinstance(complementos_request, list):
             return
 
-        def _get(obj, key, default=None):
-            """Lê campo tanto de dict quanto de objetos (ex.: Pydantic)."""
-            if obj is None:
-                return default
-            if isinstance(obj, dict):
-                return obj.get(key, default)
-            return getattr(obj, key, default)
+        complemento_contract = ComplementoAdapter(self.db)
 
-        # Normaliza formatos aceitos:
-        # - list[dict] (formato esperado)
-        # - list[obj]  (ex.: modelos Pydantic)
-        # - {"complementos": [...]} (alguns payloads/snapshots legados)
-        if isinstance(complementos_snapshot, dict):
-            complementos_snapshot = complementos_snapshot.get("complementos") or []
-        if not isinstance(complementos_snapshot, list):
+        # Dados do pedido (para fallback por empresa quando necessário)
+        pedido = self.db.get(PedidoUnificadoModel, pedido_id)
+        empresa_id = getattr(pedido, "empresa_id", None) if pedido is not None else None
+
+        # Extrai seleção do request: complemento_id -> lista de (adicional_id, quantidade)
+        complemento_ids: list[int] = []
+        selecionados_por_complemento: dict[int, list[dict]] = {}
+
+        for comp_req in complementos_request:
+            comp_id = getattr(comp_req, "complemento_id", None)
+            if comp_id is None:
+                continue
+            comp_id_int = int(comp_id)
+            complemento_ids.append(comp_id_int)
+            adicionais_req = getattr(comp_req, "adicionais", None) or []
+            selecionados_por_complemento[comp_id_int] = [
+                {
+                    "adicional_id": int(getattr(a, "adicional_id")),
+                    "quantidade": int(getattr(a, "quantidade", 1) or 1),
+                }
+                for a in adicionais_req
+                if getattr(a, "adicional_id", None) is not None
+            ]
+
+        if not complemento_ids:
             return
 
-        for comp in complementos_snapshot:
-            if comp is None:
+        # Busca/valida complementos conforme tipo do item
+        complementos_db = []
+        if item.produto_cod_barras:
+            complementos_db = complemento_contract.buscar_por_ids_para_produto(
+                str(item.produto_cod_barras),
+                complemento_ids,
+            )
+        elif item.combo_id is not None:
+            all_db = complemento_contract.listar_por_combo(int(item.combo_id), apenas_ativos=True)
+            ids_set = set(complemento_ids)
+            complementos_db = [c for c in all_db if getattr(c, "id", None) in ids_set]
+        elif item.receita_id is not None:
+            all_db = complemento_contract.listar_por_receita(int(item.receita_id), apenas_ativos=True)
+            ids_set = set(complemento_ids)
+            complementos_db = [c for c in all_db if getattr(c, "id", None) in ids_set]
+        elif empresa_id is not None:
+            complementos_db = complemento_contract.buscar_por_ids(int(empresa_id), complemento_ids)
+
+        if not complementos_db:
+            return
+
+        qtd_item = int(getattr(item, "quantidade", 1) or 1)
+
+        for comp in complementos_db:
+            comp_id = getattr(comp, "id", None)
+            if comp_id is None:
+                continue
+            selecionados = selecionados_por_complemento.get(int(comp_id), [])
+            if not selecionados:
                 continue
 
-            complemento_id = _get(comp, "complemento_id")
-            if complemento_id is None:
+            adicionais_catalogo = {getattr(a, "id", None): a for a in (getattr(comp, "adicionais", None) or [])}
+            comp_total = Dec("0")
+
+            # Monta lista de adicionais válidos
+            adicionais_rows: list[tuple[int, str, int, Dec, Dec]] = []
+            for sel in selecionados:
+                ad_id = sel.get("adicional_id")
+                if ad_id is None or ad_id not in adicionais_catalogo:
+                    continue
+                ad = adicionais_catalogo[ad_id]
+                preco_unit = Dec(str(getattr(ad, "preco", 0) or 0))
+                qtd_ad = int(sel.get("quantidade") or 1)
+                if qtd_ad < 1:
+                    qtd_ad = 1
+                # Se o complemento não for quantitativo, força qtd_ad = 1
+                if not bool(getattr(comp, "quantitativo", False)):
+                    qtd_ad = 1
+                total_ad = preco_unit * Dec(str(qtd_ad)) * Dec(str(qtd_item))
+                comp_total += total_ad
+                adicionais_rows.append((int(ad_id), str(getattr(ad, "nome", "") or ""), qtd_ad, preco_unit, total_ad))
+
+            if not adicionais_rows:
                 continue
 
             comp_row = PedidoItemComplementoModel(
                 pedido_item_id=item.id,
-                complemento_id=int(complemento_id),
-                complemento_nome=_get(comp, "complemento_nome") or _get(comp, "nome") or "",
-                total=Dec(str(_get(comp, "total") or 0)),
+                complemento_id=int(comp_id),
+                complemento_nome=str(getattr(comp, "nome", "") or ""),
+                total=comp_total,
             )
             self.db.add(comp_row)
             self.db.flush()
 
-            adicionais_list = _get(comp, "adicionais") or []
-            if not isinstance(adicionais_list, list):
-                continue
-
-            for ad in adicionais_list:
-                if ad is None:
-                    continue
-                adicional_id = _get(ad, "adicional_id")
-                if adicional_id is None:
-                    continue
-                adicional_row = PedidoItemComplementoAdicionalModel(
-                    item_complemento_id=comp_row.id,
-                    adicional_id=int(adicional_id),
-                    nome=_get(ad, "nome") or "",
-                    quantidade=int(_get(ad, "quantidade") or 1),
-                    preco_unitario=Dec(str(_get(ad, "preco_unitario") or 0)),
-                    total=Dec(str(_get(ad, "total") or 0)),
+            for adicional_id, nome, qtd_ad, preco_unit, total_ad in adicionais_rows:
+                self.db.add(
+                    PedidoItemComplementoAdicionalModel(
+                        item_complemento_id=comp_row.id,
+                        adicional_id=adicional_id,
+                        nome=nome,
+                        quantidade=qtd_ad,
+                        preco_unitario=preco_unit,
+                        total=total_ad,
+                    )
                 )
-                self.db.add(adicional_row)
 
     def atualizar_item(
         self,
@@ -800,7 +861,7 @@ class PedidoRepository:
         observacao: str | None,
         produto_descricao_snapshot: str | None = None,
         produto_imagem_snapshot: str | None = None,
-        adicionais_snapshot: list | None = None,
+        complementos: list | None = None,
     ) -> PedidoItemUnificadoModel:
         """Adiciona um item de produto ao pedido."""
         return self.adicionar_item(
@@ -811,7 +872,7 @@ class PedidoRepository:
             observacao=observacao,
             produto_descricao_snapshot=produto_descricao_snapshot,
             produto_imagem_snapshot=produto_imagem_snapshot,
-            adicionais_snapshot=adicionais_snapshot,
+            complementos=complementos,
         )
 
     def adicionar_item_receita(
@@ -822,7 +883,7 @@ class PedidoRepository:
         quantidade: int,
         preco_unitario: Decimal,
         observacao: str | None,
-        adicionais_snapshot: list | None = None,
+        complementos: list | None = None,
     ) -> PedidoItemUnificadoModel:
         """Adiciona um item de receita ao pedido."""
         return self.adicionar_item(
@@ -831,7 +892,7 @@ class PedidoRepository:
             quantidade=quantidade,
             preco_unitario=preco_unitario,
             observacao=observacao,
-            adicionais_snapshot=adicionais_snapshot,
+            complementos=complementos,
         )
 
     def adicionar_item_combo(
@@ -842,7 +903,7 @@ class PedidoRepository:
         quantidade: int,
         preco_unitario: Decimal,
         observacao: str | None,
-        adicionais_snapshot: list | None = None,
+        complementos: list | None = None,
     ) -> PedidoItemUnificadoModel:
         """Adiciona um item de combo ao pedido."""
         return self.adicionar_item(
@@ -851,7 +912,7 @@ class PedidoRepository:
             quantidade=quantidade,
             preco_unitario=preco_unitario,
             observacao=observacao,
-            adicionais_snapshot=adicionais_snapshot,
+            complementos=complementos,
         )
 
     # -------------------- Métodos unificados para balcão e mesa -------------------
@@ -867,7 +928,7 @@ class PedidoRepository:
         preco_unitario: Optional[Decimal] = None,
         produto_descricao_snapshot: Optional[str] = None,
         produto_imagem_snapshot: Optional[str] = None,
-        adicionais_snapshot: list | None = None,
+        complementos: list | None = None,
     ) -> PedidoUnificadoModel:
         """Adiciona um item ao pedido (balcão ou mesa). Busca preço automaticamente se for produto."""
         pedido = self.get_pedido(pedido_id)
@@ -921,7 +982,7 @@ class PedidoRepository:
             observacao=observacao,
             produto_descricao_snapshot=descricao_snapshot,
             produto_imagem_snapshot=imagem_snapshot,
-            adicionais_snapshot=adicionais_snapshot,
+            complementos=complementos,
         )
         self.db.commit()
         return self._refresh_total(pedido)

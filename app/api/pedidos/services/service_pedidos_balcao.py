@@ -186,8 +186,8 @@ class PedidoBalcaoService:
                         "Produto não disponível"
                     )
                 
-                # Calcula preço com complementos
-                preco_total, adicionais_snapshot = self.product_core.calcular_preco_com_complementos(
+                # Calcula preço com complementos (persistência é relacional a partir do request)
+                preco_total, _ = self.product_core.calcular_preco_com_complementos(
                     product=product,
                     quantidade=qtd,
                     complementos_request=it.complementos,
@@ -204,7 +204,7 @@ class PedidoBalcaoService:
                     preco_unitario=preco_unitario,
                     observacao=it.observacao,
                     produto_descricao_snapshot=descricao_produto,
-                    adicionais_snapshot=adicionais_snapshot if adicionais_snapshot else None,
+                    complementos=it.complementos if it.complementos else None,
                 )
                 # Registra histórico de item adicionado
                 self.repo.add_historico(
@@ -251,7 +251,7 @@ class PedidoBalcaoService:
                     )
                 
                 # Calcula preço com complementos
-                preco_total, adicionais_snapshot = self.product_core.calcular_preco_com_complementos(
+                preco_total, _ = self.product_core.calcular_preco_com_complementos(
                     product=product,
                     quantidade=qtd,
                     complementos_request=receita_req.complementos,
@@ -268,7 +268,7 @@ class PedidoBalcaoService:
                     preco_unitario=preco_unitario,
                     observacao=receita_req.observacao,
                     produto_descricao_snapshot=descricao_produto,
-                    adicionais_snapshot=adicionais_snapshot if adicionais_snapshot else None,
+                    complementos=receita_req.complementos if receita_req.complementos else None,
                 )
                 # Registra histórico
                 self.repo.add_historico(
@@ -307,7 +307,7 @@ class PedidoBalcaoService:
                     )
                 
                 # Calcula preço com complementos
-                preco_total, adicionais_snapshot = self.product_core.calcular_preco_com_complementos(
+                preco_total, _ = self.product_core.calcular_preco_com_complementos(
                     product=product,
                     quantidade=qtd,
                     complementos_request=combo_req.complementos,
@@ -327,7 +327,7 @@ class PedidoBalcaoService:
                     preco_unitario=preco_unitario,
                     observacao=observacao_completa,
                     produto_descricao_snapshot=descricao_produto,
-                    adicionais_snapshot=adicionais_snapshot if adicionais_snapshot else None,
+                    complementos=combo_req.complementos if combo_req.complementos else None,
                 )
                 # Registra histórico
                 self.repo.add_historico(
@@ -432,7 +432,7 @@ class PedidoBalcaoService:
             )
         
         # Calcula preço com complementos usando ProductCore
-        preco_total, adicionais_snapshot = self.product_core.calcular_preco_com_complementos(
+        preco_total, _ = self.product_core.calcular_preco_com_complementos(
             product=product,
             quantidade=qtd,
             complementos_request=body.complementos,
@@ -458,7 +458,7 @@ class PedidoBalcaoService:
                 preco_unitario=preco_unitario,
                 observacao=observacao_completa,
                 produto_descricao_snapshot=descricao_produto,
-                adicionais_snapshot=adicionais_snapshot if adicionais_snapshot else None,
+                complementos=body.complementos if body.complementos else None,
             )
             descricao_historico = f"Produto adicionado: {product.identifier} (qtd: {qtd})"
             
@@ -470,7 +470,7 @@ class PedidoBalcaoService:
                 preco_unitario=preco_unitario,
                 observacao=observacao_completa,
                 produto_descricao_snapshot=descricao_produto,
-                adicionais_snapshot=adicionais_snapshot if adicionais_snapshot else None,
+                complementos=body.complementos if body.complementos else None,
             )
             descricao_historico = f"Receita adicionada: {descricao_produto} (ID: {product.identifier}, qtd: {qtd})"
             
@@ -482,7 +482,7 @@ class PedidoBalcaoService:
                 preco_unitario=preco_unitario,
                 observacao=observacao_completa,
                 produto_descricao_snapshot=descricao_produto,
-                adicionais_snapshot=adicionais_snapshot if adicionais_snapshot else None,
+                complementos=body.complementos if body.complementos else None,
             )
             descricao_historico = f"Combo adicionado: {descricao_produto} (ID: {product.identifier}, qtd: {qtd})"
         

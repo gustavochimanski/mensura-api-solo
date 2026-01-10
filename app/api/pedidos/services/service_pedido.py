@@ -586,7 +586,7 @@ class PedidoService:
                         observacao=self._montar_observacao_item(it),
                         produto_descricao_snapshot=(pe_dto.produto.descricao if pe_dto.produto else None),
                         produto_imagem_snapshot=None,
-                        adicionais_snapshot=self._resolver_adicionais_item_snapshot(it)[1],
+                        complementos=getattr(it, "complementos", None),
                     )
                 else:
                     pe = self.repo.get_produto_emp(empresa_id, it.produto_cod_barras)
@@ -605,10 +605,10 @@ class PedidoService:
                         observacao=self._montar_observacao_item(it),
                         produto_descricao_snapshot=pe.produto.descricao if pe.produto else None,
                         produto_imagem_snapshot=pe.produto.imagem if pe.produto else None,
-                        adicionais_snapshot=self._resolver_adicionais_item_snapshot(it)[1],
+                        complementos=getattr(it, "complementos", None),
                     )
 
-                adicionais_total, _adicionais_snapshot = self._resolver_adicionais_item_snapshot(it)
+                adicionais_total, _ = self._resolver_adicionais_item_snapshot(it)
                 subtotal += adicionais_total
 
             # Receitas (sem produto_cod_barras no payload, usam apenas receita_id)
@@ -645,7 +645,7 @@ class PedidoService:
 
                 # Calcula preço com complementos usando ProductCore
                 complementos_rec = getattr(rec, "complementos", None) or []
-                preco_total_rec, adicionais_snapshot_rec = self.product_core.calcular_preco_com_complementos(
+                preco_total_rec, _ = self.product_core.calcular_preco_com_complementos(
                     product=product,
                     quantidade=qtd_rec,
                     complementos_request=complementos_rec,
@@ -661,7 +661,7 @@ class PedidoService:
                     preco_unitario=preco_unit_rec,
                     observacao=self._montar_observacao_item(rec) if hasattr(rec, 'observacao') else None,
                     produto_descricao_snapshot=product.nome or product.descricao,
-                    adicionais_snapshot=adicionais_snapshot_rec,
+                    complementos=complementos_rec,
                 )
 
             # Combos opcionais: adiciona ao subtotal, cria item de combo e aplica adicionais de combo (se existirem)
@@ -688,7 +688,7 @@ class PedidoService:
 
                 # Calcula preço com complementos usando ProductCore
                 complementos_combo = getattr(cb, "complementos", None) or []
-                preco_total_combo, adicionais_snapshot_combo = self.product_core.calcular_preco_com_complementos(
+                preco_total_combo, _ = self.product_core.calcular_preco_com_complementos(
                     product=product,
                     quantidade=qtd_combo,
                     complementos_request=complementos_combo,
@@ -708,7 +708,7 @@ class PedidoService:
                     preco_unitario=preco_unit_combo,
                     observacao=observacao_combo,
                     produto_descricao_snapshot=product.nome or product.descricao,
-                    adicionais_snapshot=adicionais_snapshot_combo,
+                    complementos=complementos_combo,
                 )
             desconto = self._aplicar_cupom(
                 cupom_id=payload.cupom_id,

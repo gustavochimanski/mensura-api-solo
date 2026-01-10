@@ -182,8 +182,8 @@ class PedidoMesaService:
                         "Produto não disponível"
                     )
                 
-                # Calcula preço com complementos
-                preco_total, adicionais_snapshot = self.product_core.calcular_preco_com_complementos(
+                # Calcula preço com complementos (persistência é relacional a partir do request)
+                preco_total, _ = self.product_core.calcular_preco_com_complementos(
                     product=product,
                     quantidade=qtd,
                     complementos_request=it.complementos,
@@ -197,7 +197,7 @@ class PedidoMesaService:
                     produto_cod_barras=it.produto_cod_barras,
                     quantidade=qtd,
                     observacao=it.observacao,
-                    adicionais_snapshot=adicionais_snapshot if adicionais_snapshot else None,
+                    complementos=it.complementos if it.complementos else None,
                 )
             self.repo.commit()
         
@@ -238,7 +238,7 @@ class PedidoMesaService:
                     )
                 
                 # Calcula preço com complementos
-                preco_total, adicionais_snapshot = self.product_core.calcular_preco_com_complementos(
+                preco_total, _ = self.product_core.calcular_preco_com_complementos(
                     product=product,
                     quantidade=qtd,
                     complementos_request=receita_req.complementos,
@@ -255,7 +255,7 @@ class PedidoMesaService:
                     preco_unitario=preco_unitario,
                     observacao=receita_req.observacao,
                     produto_descricao_snapshot=descricao_produto,
-                    adicionais_snapshot=adicionais_snapshot if adicionais_snapshot else None,
+                    complementos=receita_req.complementos if receita_req.complementos else None,
                 )
             self.repo.commit()
         
@@ -288,7 +288,7 @@ class PedidoMesaService:
                     )
                 
                 # Calcula preço com complementos
-                preco_total, adicionais_snapshot = self.product_core.calcular_preco_com_complementos(
+                preco_total, _ = self.product_core.calcular_preco_com_complementos(
                     product=product,
                     quantidade=qtd,
                     complementos_request=combo_req.complementos,
@@ -308,7 +308,7 @@ class PedidoMesaService:
                     preco_unitario=preco_unitario,
                     observacao=observacao_completa,
                     produto_descricao_snapshot=descricao_produto,
-                    adicionais_snapshot=adicionais_snapshot if adicionais_snapshot else None,
+                    complementos=combo_req.complementos if combo_req.complementos else None,
                 )
             self.repo.commit()
         
@@ -397,7 +397,7 @@ class PedidoMesaService:
             )
         
         # Calcula preço com complementos usando ProductCore
-        preco_total, adicionais_snapshot = self.product_core.calcular_preco_com_complementos(
+        preco_total, _ = self.product_core.calcular_preco_com_complementos(
             product=product,
             quantidade=qtd,
             complementos_request=body.complementos,
@@ -425,7 +425,7 @@ class PedidoMesaService:
                 produto_cod_barras=str(product.identifier),
                 quantidade=qtd,
                 observacao=observacao_completa,
-                adicionais_snapshot=adicionais_snapshot if adicionais_snapshot else None,
+                complementos=body.complementos if body.complementos else None,
             )
             
         elif product.product_type.value == "receita":
@@ -436,7 +436,7 @@ class PedidoMesaService:
                 preco_unitario=preco_unitario,
                 observacao=observacao_completa,
                 produto_descricao_snapshot=descricao_produto,
-                adicionais_snapshot=adicionais_snapshot if adicionais_snapshot else None,
+                complementos=body.complementos if body.complementos else None,
             )
             
         elif product.product_type.value == "combo":
@@ -447,7 +447,7 @@ class PedidoMesaService:
                 preco_unitario=preco_unitario,
                 observacao=observacao_completa,
                 produto_descricao_snapshot=descricao_produto,
-                adicionais_snapshot=adicionais_snapshot if adicionais_snapshot else None,
+                complementos=body.complementos if body.complementos else None,
             )
         
         else:
