@@ -60,8 +60,10 @@ def _build_complementos_out(complementos_rel) -> list[ComplementoPedidoOut]:
             # Usa o modelo relacional PedidoItemComplementoModel
             complemento_id = getattr(complemento, "complemento_id", None)
             complemento_nome = getattr(complemento, "complemento_nome", "") or ""
-            obrigatorio = bool(getattr(complemento, "obrigatorio", False))
-            quantitativo = bool(getattr(complemento, "quantitativo", False))
+            # `obrigatorio`/`quantitativo` não ficam mais no registro do pedido; vêm do catálogo
+            catalogo_comp = getattr(complemento, "complemento", None)
+            obrigatorio = bool(getattr(catalogo_comp, "obrigatorio", False)) if catalogo_comp is not None else False
+            quantitativo = bool(getattr(catalogo_comp, "quantitativo", False)) if catalogo_comp is not None else False
             total = _to_float(getattr(complemento, "total", 0))
             adicionais_list = getattr(complemento, "adicionais", []) or []
             

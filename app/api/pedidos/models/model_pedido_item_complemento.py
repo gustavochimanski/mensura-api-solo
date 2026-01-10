@@ -39,8 +39,6 @@ class PedidoItemComplementoModel(Base):
 
     # Snapshot no momento do pedido (para não “mudar o passado”)
     complemento_nome = Column(String(120), nullable=True)
-    obrigatorio = Column(Boolean, nullable=False, default=False)
-    quantitativo = Column(Boolean, nullable=False, default=False)
 
     # Total deste complemento (soma dos adicionais considerando quantidade do item)
     total = Column(Numeric(18, 2), nullable=False, default=0)

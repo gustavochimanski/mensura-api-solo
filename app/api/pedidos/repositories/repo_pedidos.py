@@ -127,6 +127,10 @@ class PedidoRepository:
                 selectinload(PedidoUnificadoModel.itens)
                 .selectinload(PedidoItemUnificadoModel.complementos)
                 .selectinload(PedidoItemComplementoModel.adicionais),
+                # Carrega o complemento do catálogo para expor obrigatorio/quantitativo no response
+                selectinload(PedidoUnificadoModel.itens)
+                .selectinload(PedidoItemUnificadoModel.complementos)
+                .joinedload(PedidoItemComplementoModel.complemento),
                 joinedload(PedidoUnificadoModel.cliente).joinedload(ClienteModel.enderecos),
                 joinedload(PedidoUnificadoModel.endereco),
                 joinedload(PedidoUnificadoModel.meio_pagamento),
@@ -742,8 +746,6 @@ class PedidoRepository:
                 pedido_item_id=item.id,
                 complemento_id=int(complemento_id),
                 complemento_nome=_get(comp, "complemento_nome") or _get(comp, "nome") or "",
-                obrigatorio=bool(_get(comp, "obrigatorio", False)),
-                quantitativo=bool(_get(comp, "quantitativo", False)),
                 total=Dec(str(_get(comp, "total") or 0)),
             )
             self.db.add(comp_row)
@@ -1011,7 +1013,10 @@ class PedidoRepository:
             .options(
                 selectinload(PedidoUnificadoModel.itens)
                 .selectinload(PedidoItemUnificadoModel.complementos)
-                .selectinload(PedidoItemComplementoModel.adicionais)
+                .selectinload(PedidoItemComplementoModel.adicionais),
+                selectinload(PedidoUnificadoModel.itens)
+                .selectinload(PedidoItemUnificadoModel.complementos)
+                .joinedload(PedidoItemComplementoModel.complemento),
             )
             .filter(
                 PedidoUnificadoModel.tipo_entrega == tipo_entrega.value,
@@ -1031,7 +1036,10 @@ class PedidoRepository:
             .options(
                 selectinload(PedidoUnificadoModel.itens)
                 .selectinload(PedidoItemUnificadoModel.complementos)
-                .selectinload(PedidoItemComplementoModel.adicionais)
+                .selectinload(PedidoItemComplementoModel.adicionais),
+                selectinload(PedidoUnificadoModel.itens)
+                .selectinload(PedidoItemUnificadoModel.complementos)
+                .joinedload(PedidoItemComplementoModel.complemento),
             )
             .filter(
                 PedidoUnificadoModel.tipo_entrega == tipo_entrega.value,
@@ -1064,7 +1072,10 @@ class PedidoRepository:
             .options(
                 selectinload(PedidoUnificadoModel.itens)
                 .selectinload(PedidoItemUnificadoModel.complementos)
-                .selectinload(PedidoItemComplementoModel.adicionais)
+                .selectinload(PedidoItemComplementoModel.adicionais),
+                selectinload(PedidoUnificadoModel.itens)
+                .selectinload(PedidoItemUnificadoModel.complementos)
+                .joinedload(PedidoItemComplementoModel.complemento),
             )
             .filter(
                 PedidoUnificadoModel.tipo_entrega == tipo_entrega.value,
@@ -1104,6 +1115,9 @@ class PedidoRepository:
                 selectinload(PedidoUnificadoModel.itens)
                 .selectinload(PedidoItemUnificadoModel.complementos)
                 .selectinload(PedidoItemComplementoModel.adicionais),
+                selectinload(PedidoUnificadoModel.itens)
+                .selectinload(PedidoItemUnificadoModel.complementos)
+                .joinedload(PedidoItemComplementoModel.complemento),
                 joinedload(PedidoUnificadoModel.mesa),
                 joinedload(PedidoUnificadoModel.cliente)
             )
