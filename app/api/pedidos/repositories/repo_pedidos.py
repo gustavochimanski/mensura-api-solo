@@ -121,6 +121,9 @@ class PedidoRepository:
     def get_pedido(self, pedido_id: int, tipo_entrega: TipoEntrega | None = None) -> Optional[PedidoUnificadoModel]:
         """Busca um pedido por ID. Se tipo_entrega for fornecido, filtra por tipo."""
         from app.api.pedidos.models.model_pedido_item_complemento import PedidoItemComplementoModel
+        from app.api.pedidos.models.model_pedido_item_complemento_adicional import (
+            PedidoItemComplementoAdicionalModel,
+        )
         query = (
             self.db.query(PedidoUnificadoModel)
             .options(
@@ -131,6 +134,11 @@ class PedidoRepository:
                 selectinload(PedidoUnificadoModel.itens)
                 .selectinload(PedidoItemUnificadoModel.complementos)
                 .joinedload(PedidoItemComplementoModel.complemento),
+                # Carrega o adicional do catálogo para expor nome no response
+                selectinload(PedidoUnificadoModel.itens)
+                .selectinload(PedidoItemUnificadoModel.complementos)
+                .selectinload(PedidoItemComplementoModel.adicionais)
+                .joinedload(PedidoItemComplementoAdicionalModel.adicional),
                 joinedload(PedidoUnificadoModel.cliente).joinedload(ClienteModel.enderecos),
                 joinedload(PedidoUnificadoModel.endereco),
                 joinedload(PedidoUnificadoModel.meio_pagamento),
@@ -814,7 +822,6 @@ class PedidoRepository:
             comp_row = PedidoItemComplementoModel(
                 pedido_item_id=item.id,
                 complemento_id=int(comp_id),
-                complemento_nome=str(getattr(comp, "nome", "") or ""),
                 total=comp_total,
             )
             self.db.add(comp_row)
@@ -825,7 +832,6 @@ class PedidoRepository:
                     PedidoItemComplementoAdicionalModel(
                         item_complemento_id=comp_row.id,
                         adicional_id=adicional_id,
-                        nome=nome,
                         quantidade=qtd_ad,
                         preco_unitario=preco_unit,
                         total=total_ad,
@@ -1069,6 +1075,9 @@ class PedidoRepository:
     def list_abertos_by_mesa(self, mesa_id: int, tipo_entrega: TipoEntrega, *, empresa_id: Optional[int] = None) -> list[PedidoUnificadoModel]:
         """Lista pedidos abertos de balcão ou mesa associados a uma mesa específica"""
         from app.api.pedidos.models.model_pedido_item_complemento import PedidoItemComplementoModel
+        from app.api.pedidos.models.model_pedido_item_complemento_adicional import (
+            PedidoItemComplementoAdicionalModel,
+        )
         query = (
             self.db.query(PedidoUnificadoModel)
             .options(
@@ -1078,6 +1087,10 @@ class PedidoRepository:
                 selectinload(PedidoUnificadoModel.itens)
                 .selectinload(PedidoItemUnificadoModel.complementos)
                 .joinedload(PedidoItemComplementoModel.complemento),
+                selectinload(PedidoUnificadoModel.itens)
+                .selectinload(PedidoItemUnificadoModel.complementos)
+                .selectinload(PedidoItemComplementoModel.adicionais)
+                .joinedload(PedidoItemComplementoAdicionalModel.adicional),
             )
             .filter(
                 PedidoUnificadoModel.tipo_entrega == tipo_entrega.value,
@@ -1092,6 +1105,9 @@ class PedidoRepository:
     def list_abertos_all(self, tipo_entrega: TipoEntrega, *, empresa_id: Optional[int] = None) -> list[PedidoUnificadoModel]:
         """Lista todos os pedidos abertos de balcão ou mesa"""
         from app.api.pedidos.models.model_pedido_item_complemento import PedidoItemComplementoModel
+        from app.api.pedidos.models.model_pedido_item_complemento_adicional import (
+            PedidoItemComplementoAdicionalModel,
+        )
         query = (
             self.db.query(PedidoUnificadoModel)
             .options(
@@ -1101,6 +1117,10 @@ class PedidoRepository:
                 selectinload(PedidoUnificadoModel.itens)
                 .selectinload(PedidoItemUnificadoModel.complementos)
                 .joinedload(PedidoItemComplementoModel.complemento),
+                selectinload(PedidoUnificadoModel.itens)
+                .selectinload(PedidoItemUnificadoModel.complementos)
+                .selectinload(PedidoItemComplementoModel.adicionais)
+                .joinedload(PedidoItemComplementoAdicionalModel.adicional),
             )
             .filter(
                 PedidoUnificadoModel.tipo_entrega == tipo_entrega.value,
@@ -1128,6 +1148,9 @@ class PedidoRepository:
     def list_finalizados(self, tipo_entrega: TipoEntrega, data_filtro: Optional[date] = None, *, empresa_id: Optional[int] = None, mesa_id: Optional[int] = None) -> list[PedidoUnificadoModel]:
         """Lista pedidos finalizados (ENTREGUE) de balcão ou mesa"""
         from app.api.pedidos.models.model_pedido_item_complemento import PedidoItemComplementoModel
+        from app.api.pedidos.models.model_pedido_item_complemento_adicional import (
+            PedidoItemComplementoAdicionalModel,
+        )
         query = (
             self.db.query(PedidoUnificadoModel)
             .options(
@@ -1137,6 +1160,10 @@ class PedidoRepository:
                 selectinload(PedidoUnificadoModel.itens)
                 .selectinload(PedidoItemUnificadoModel.complementos)
                 .joinedload(PedidoItemComplementoModel.complemento),
+                selectinload(PedidoUnificadoModel.itens)
+                .selectinload(PedidoItemUnificadoModel.complementos)
+                .selectinload(PedidoItemComplementoModel.adicionais)
+                .joinedload(PedidoItemComplementoAdicionalModel.adicional),
             )
             .filter(
                 PedidoUnificadoModel.tipo_entrega == tipo_entrega.value,
@@ -1170,6 +1197,9 @@ class PedidoRepository:
     def list_by_cliente_id(self, cliente_id: int, tipo_entrega: TipoEntrega, *, empresa_id: Optional[int] = None, skip: int = 0, limit: int = 50) -> list[PedidoUnificadoModel]:
         """Lista pedidos de um cliente específico por tipo"""
         from app.api.pedidos.models.model_pedido_item_complemento import PedidoItemComplementoModel
+        from app.api.pedidos.models.model_pedido_item_complemento_adicional import (
+            PedidoItemComplementoAdicionalModel,
+        )
         query = (
             self.db.query(PedidoUnificadoModel)
             .options(
@@ -1179,6 +1209,10 @@ class PedidoRepository:
                 selectinload(PedidoUnificadoModel.itens)
                 .selectinload(PedidoItemUnificadoModel.complementos)
                 .joinedload(PedidoItemComplementoModel.complemento),
+                selectinload(PedidoUnificadoModel.itens)
+                .selectinload(PedidoItemUnificadoModel.complementos)
+                .selectinload(PedidoItemComplementoModel.adicionais)
+                .joinedload(PedidoItemComplementoAdicionalModel.adicional),
                 joinedload(PedidoUnificadoModel.mesa),
                 joinedload(PedidoUnificadoModel.cliente)
             )

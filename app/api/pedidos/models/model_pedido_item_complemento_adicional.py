@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import Column, Integer, ForeignKey, Numeric, String, Index
+from sqlalchemy import Column, Integer, ForeignKey, Numeric, Index
 from sqlalchemy.orm import relationship
 
 from app.database.db_connection import Base
@@ -33,9 +33,6 @@ class PedidoItemComplementoAdicionalModel(Base):
         nullable=False,
     )
     adicional = relationship("AdicionalModel", lazy="select")
-
-    # Snapshot no momento do pedido
-    nome = Column(String(120), nullable=True)
 
     quantidade = Column(Integer, nullable=False, default=1)
     preco_unitario = Column(Numeric(18, 2), nullable=False, default=0)

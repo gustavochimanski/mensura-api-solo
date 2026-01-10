@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import Column, Integer, ForeignKey, Numeric, String, Boolean, Index
+from sqlalchemy import Column, Integer, ForeignKey, Numeric, Index
 from sqlalchemy.orm import relationship
 
 from app.database.db_connection import Base
@@ -36,9 +36,6 @@ class PedidoItemComplementoModel(Base):
         nullable=False,
     )
     complemento = relationship("ComplementoModel", lazy="select")
-
-    # Snapshot no momento do pedido (para não “mudar o passado”)
-    complemento_nome = Column(String(120), nullable=True)
 
     # Total deste complemento (soma dos adicionais considerando quantidade do item)
     total = Column(Numeric(18, 2), nullable=False, default=0)
