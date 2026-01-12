@@ -1907,20 +1907,8 @@ class PedidoService:
 
     # --------------- Itens auxiliares ---------------
     def _montar_observacao_item(self, item_req):
-        obs = item_req.observacao or None
-        # Processa complementos
-        complementos = getattr(item_req, "complementos", None)
-        if complementos and self.complemento_contract:
-            nomes_complementos = []
-            for comp in complementos:
-                comp_nome = getattr(comp, "complemento_id", None)
-                adicionais = getattr(comp, "adicionais", []) or []
-                if adicionais:
-                    adic_nomes = [f"{getattr(a, 'adicional_id', '')}" for a in adicionais]
-                    nomes_complementos.append(f"Comp {comp_nome}: {', '.join(adic_nomes)}")
-            if nomes_complementos:
-                obs = (obs + " | " if obs else "") + f"Complementos: {'; '.join(nomes_complementos)}"
-        return obs
+        # Observação é um campo livre para o cliente/atendimento; não anexar dados de complementos aqui.
+        return item_req.observacao or None
 
     def _resolver_adicionais_item_snapshot(self, item_req):
         from app.api.pedidos.utils.complementos import resolve_produto_complementos
