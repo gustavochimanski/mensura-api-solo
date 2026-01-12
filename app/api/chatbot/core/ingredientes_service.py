@@ -573,13 +573,17 @@ class IngredientesService:
             print(f"Erro ao buscar complementos da receita: {e}")
             return []
 
-    def buscar_complementos_produto(self, cod_barras: str) -> List[Dict[str, Any]]:
+    def buscar_complementos_produto(self, cod_barras: str, tipo_pedido: str = "delivery") -> List[Dict[str, Any]]:
         """
         Busca complementos disponíveis para um produto via API interna
+        
+        Args:
+            cod_barras: Código de barras do produto
+            tipo_pedido: Tipo de pedido (balcao, mesa ou delivery). Padrão: delivery
         """
         import httpx
         try:
-            url = f"http://localhost:8000/api/catalogo/public/complementos/produto/{cod_barras}?apenas_ativos=true"
+            url = f"http://localhost:8000/api/catalogo/public/complementos?tipo=produto&identificador={cod_barras}&tipo_pedido={tipo_pedido}&apenas_ativos=true"
             response = httpx.get(url, timeout=10.0)
 
             if response.status_code == 200:
@@ -589,13 +593,17 @@ class IngredientesService:
             print(f"Erro ao buscar complementos do produto: {e}")
             return []
 
-    def buscar_complementos_combo(self, combo_id: int) -> List[Dict[str, Any]]:
+    def buscar_complementos_combo(self, combo_id: int, tipo_pedido: str = "delivery") -> List[Dict[str, Any]]:
         """
         Busca complementos disponíveis para um combo via API interna
+        
+        Args:
+            combo_id: ID do combo
+            tipo_pedido: Tipo de pedido (balcao, mesa ou delivery). Padrão: delivery
         """
         import httpx
         try:
-            url = f"http://localhost:8000/api/catalogo/public/complementos/combo/{combo_id}?apenas_ativos=true"
+            url = f"http://localhost:8000/api/catalogo/public/complementos?tipo=combo&identificador={combo_id}&tipo_pedido={tipo_pedido}&apenas_ativos=true"
             response = httpx.get(url, timeout=10.0)
 
             if response.status_code == 200:
