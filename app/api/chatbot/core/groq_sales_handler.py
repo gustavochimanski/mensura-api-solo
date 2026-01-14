@@ -558,9 +558,13 @@ class GroqSalesHandler:
             print(f"🎯 Regras interpretaram: {resultado_regras['funcao']}({resultado_regras['params']})")
             return resultado_regras
 
-        # SE GROQ_API_KEY não estiver configurado, usa fallback
-        if not GROQ_API_KEY:
-            print(f"⚠️ GROQ_API_KEY não configurado, usando fallback")
+        # SE GROQ_API_KEY não estiver configurado ou estiver vazio, usa fallback
+        if not GROQ_API_KEY or not GROQ_API_KEY.strip():
+            print(f"⚠️ GROQ_API_KEY não configurado ou vazio, usando fallback")
+            # Tenta usar regras novamente como fallback mais inteligente
+            resultado_fallback = self._interpretar_intencao_regras(mensagem, produtos, carrinho)
+            if resultado_fallback:
+                return resultado_fallback
             return {"funcao": "conversar", "params": {"tipo_conversa": "pergunta_vaga"}}
 
         # Monta lista de produtos para o prompt
@@ -593,7 +597,7 @@ class GroqSalesHandler:
                 }
 
                 headers = {
-                    "Authorization": f"Bearer {GROQ_API_KEY}",
+                    "Authorization": f"Bearer {GROQ_API_KEY.strip()}" if GROQ_API_KEY else "Bearer ",
                     "Content-Type": "application/json"
                 }
 
@@ -631,6 +635,11 @@ class GroqSalesHandler:
 
         except Exception as e:
             print(f"❌ Erro ao interpretar intenção: {e}")
+            # Tenta usar regras como fallback quando a IA falha
+            resultado_fallback = self._interpretar_intencao_regras(mensagem, produtos, carrinho)
+            if resultado_fallback:
+                print(f"🔄 Usando regras como fallback após erro da IA")
+                return resultado_fallback
             return {"funcao": "conversar", "params": {"tipo_conversa": "resposta_generica"}}
 
     def _buscar_produto_por_termo(self, termo: str, produtos: List[Dict]) -> Optional[Dict]:
@@ -776,12 +785,74 @@ class GroqSalesHandler:
         import json
         import re
 
+        # PRIMEIRO: Tenta interpretar com regras (funciona mesmo sem IA)
+        # Isso garante que perguntas sobre produtos específicos sejam detectadas
+        todos_produtos = self._buscar_todos_produtos()
+        carrinho = dados.get('carrinho', [])
+        resultado_regras = self._interpretar_intencao_regras(mensagem, todos_produtos, carrinho)
+        
+        if resultado_regras:
+            funcao = resultado_regras.get("funcao")
+            params = resultado_regras.get("params", {})
+            print(f"🎯 Regras detectaram no modo conversacional: {funcao}({params})")
+            
+            # Se detectou uma função específica (não apenas "conversar"), executa ela
+            if funcao != "conversar":
+                # Atualiza histórico
+                historico = dados.get('historico', [])
+                historico.append({"role": "user", "content": mensagem})
+                dados['historico'] = historico
+                
+                # Executa a função detectada
+                if funcao == "informar_sobre_produto":
+                    produto_busca = params.get("produto_busca", "")
+                    pergunta = params.get("pergunta", "")
+                    produto = self._buscar_produto_por_termo(produto_busca, todos_produtos)
+                    if produto:
+                        return await self._gerar_resposta_sobre_produto(user_id, produto, pergunta, dados)
+                    else:
+                        return f"Não encontrei '{produto_busca}' no cardápio. Quer que eu mostre o que temos? 😊"
+                elif funcao == "ver_cardapio":
+                    pedido_contexto = dados.get('pedido_contexto', [])
+                    return self._gerar_lista_produtos(todos_produtos, pedido_contexto)
+                elif funcao == "ver_carrinho":
+                    if carrinho:
+                        msg = self._formatar_carrinho(carrinho)
+                        msg += "\n\nQuer mais algo ou posso fechar?"
+                        return msg
+                    else:
+                        return "Carrinho vazio ainda! O que vai ser hoje?"
+                elif funcao == "ver_combos":
+                    return self.ingredientes_service.formatar_combos_para_chat()
+                elif funcao == "ver_adicionais":
+                    produto_busca = params.get("produto_busca", "")
+                    if not produto_busca:
+                        produto_busca = dados.get('ultimo_produto_adicionado', '')
+                    if not produto_busca and carrinho:
+                        produto_busca = carrinho[-1]['nome']
+                    
+                    if produto_busca:
+                        complementos = self.ingredientes_service.buscar_complementos_por_nome_receita(produto_busca)
+                        if complementos:
+                            msg = self.ingredientes_service.formatar_complementos_para_chat(complementos, produto_busca)
+                            msg += "\n\nPara adicionar, diga o nome do item 😊"
+                            return msg
+                    
+                    todos_adicionais = self.ingredientes_service.buscar_todos_adicionais()
+                    if todos_adicionais:
+                        msg = "➕ *Adicionais disponíveis:*\n\n"
+                        for add in todos_adicionais:
+                            msg += f"• {add['nome']} - +R$ {add['preco']:.2f}\n"
+                        msg += "\nPara adicionar, diga o nome do item 😊"
+                        return msg
+                    else:
+                        return "No momento não temos adicionais extras disponíveis 😅"
+
         # Atualiza histórico
         historico = dados.get('historico', [])
         historico.append({"role": "user", "content": mensagem})
 
         # Busca dados do cardápio
-        todos_produtos = self._buscar_todos_produtos()
         pedido_contexto = dados.get('pedido_contexto', [])
 
         # Verifica se cliente está pedindo cardápio - responde direto sem IA
@@ -935,7 +1006,7 @@ REGRA PARA COMPLEMENTOS:
                 }
 
                 headers = {
-                    "Authorization": f"Bearer {GROQ_API_KEY}",
+                    "Authorization": f"Bearer {GROQ_API_KEY.strip()}" if GROQ_API_KEY else "Bearer ",
                     "Content-Type": "application/json"
                 }
 
@@ -3375,7 +3446,7 @@ Responda de forma natural e curta:"""
                 }
 
                 headers = {
-                    "Authorization": f"Bearer {GROQ_API_KEY}",
+                    "Authorization": f"Bearer {GROQ_API_KEY.strip()}" if GROQ_API_KEY else "Bearer ",
                     "Content-Type": "application/json"
                 }
 
@@ -3468,7 +3539,7 @@ Responda:"""
                 }
 
                 headers = {
-                    "Authorization": f"Bearer {GROQ_API_KEY}",
+                    "Authorization": f"Bearer {GROQ_API_KEY.strip()}" if GROQ_API_KEY else "Bearer ",
                     "Content-Type": "application/json"
                 }
 
