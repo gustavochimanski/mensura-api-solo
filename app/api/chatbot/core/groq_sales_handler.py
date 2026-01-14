@@ -109,17 +109,17 @@ AI_FUNCTIONS = [
         "type": "function",
         "function": {
             "name": "informar_sobre_produto",
-            "description": "Cliente quer SABER MAIS sobre um produto específico. Exemplos: 'o que vem no x-bacon?', 'qual o tamanho da pizza?', 'tem lactose?', 'é picante?', 'o que tem na calabresa?'",
+            "description": "Cliente quer SABER MAIS sobre um PRODUTO ESPECÍFICO mencionado na mensagem. Use quando a pergunta menciona um produto concreto. Exemplos: 'o que vem no x-bacon?', 'o que tem no x-bacon?', 'ingredientes da pizza', 'qual o tamanho da pizza?', 'tem lactose no hamburguer?', 'o que tem na calabresa?'. NÃO use para perguntas genéricas como 'o que tem?' sem mencionar produto específico.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "produto_busca": {
                         "type": "string",
-                        "description": "Nome do produto que o cliente quer saber mais"
+                        "description": "Nome do produto específico que o cliente quer saber mais (ex: 'x-bacon', 'pizza calabresa', 'hamburguer')"
                     },
                     "pergunta": {
                         "type": "string",
-                        "description": "O que o cliente quer saber (ingredientes, tamanho, etc)"
+                        "description": "O que o cliente quer saber (ingredientes, tamanho, etc) - opcional"
                     }
                 },
                 "required": ["produto_busca"]
@@ -436,7 +436,25 @@ class GroqSalesHandler:
         if re.search(r'(cardapio|cardápio|menu|lista|catalogo|catálogo)', msg):
             return {"funcao": "ver_cardapio", "params": {}}
 
-        # Perguntas sobre o que tem disponível (DEVE vir ANTES de adicionar produto)
+        # Informação sobre produto ESPECÍFICO (DEVE vir ANTES da detecção genérica de "o que tem")
+        # Detecta: "o que tem no X", "o que vem no X", "o que tem na X", "ingredientes do X", etc.
+        if re.search(r'(o\s*q(ue)?\s*(vem|tem|ve|é)\s*(n[oa]|d[oa])|qu?al.*(ingrediente|composi[çc][aã]o)|ingredientes?\s*(d[oa])|composi[çc][aã]o)', msg):
+            # Tenta extrair o produto mencionado após "no/na/do/da"
+            match = re.search(r'(n[oa]|d[oa]|da|do)\s+([a-záàâãéêíóôõúç\-\s]+?)(\?|$|,|\.)', msg, re.IGNORECASE)
+            if match:
+                produto_extraido = match.group(2).strip()
+                # Verifica se extraiu algo que parece um produto (não apenas palavras genéricas)
+                palavras_genericas = ['cardapio', 'menu', 'lista', 'catalogo', 'catálogo', 'ai', 'aí', 'vocês', 'vcs']
+                if produto_extraido and produto_extraido.lower() not in palavras_genericas and len(produto_extraido) > 2:
+                    return {"funcao": "informar_sobre_produto", "params": {"produto_busca": produto_extraido}}
+            
+            # Tenta extrair produto de outra forma (produtos conhecidos)
+            match2 = re.search(r'(pizza|x-?\w+|coca|guarana|água|agua|cerveja|batata|onion|hamburguer|hambúrguer|refrigerante|suco|bebida)[\w\s\-]*', msg, re.IGNORECASE)
+            if match2:
+                produto_match = match2.group(0).strip()
+                return {"funcao": "informar_sobre_produto", "params": {"produto_busca": produto_match}}
+
+        # Perguntas sobre o que tem disponível (genérico - DEVE vir DEPOIS da detecção de produto específico)
         if re.search(r'(o\s*que\s*(mais\s*)?(tem|vende|vocês? tem|vcs tem)|quais?\s*(que\s*)?(tem|produto|opç[oõ]es)|mostra\s*(ai|aí|os\s*produto)|que\s*produto|tem\s*o\s*que)', msg):
             return {"funcao": "ver_cardapio", "params": {}}
 
@@ -484,16 +502,6 @@ class GroqSalesHandler:
         # Ver adicionais
         if re.search(r'(adicionais|extras|o\s*que\s*posso\s*adicionar)', msg):
             return {"funcao": "ver_adicionais", "params": {}}
-
-        # Informação sobre produto (o que tem, o q tem, ingredientes, etc.)
-        if re.search(r'(o\s*q(ue)?\s*(vem|tem|ve|é)\s*(n[oa]|d[oa])?|qu?al.*(ingrediente|composi[çc][aã]o)|ingredientes?\s*(d[oa])|composi[çc][aã]o)', msg):
-            match = re.search(r'(n[oa]|d[oa]|da|do)\s+(.+?)(\?|$)', msg)
-            if match:
-                return {"funcao": "informar_sobre_produto", "params": {"produto_busca": match.group(2).strip()}}
-            # Tenta extrair produto de outra forma
-            match2 = re.search(r'(pizza|x-\w+|coca|guarana|agua|cerveja|batata|onion)[\w\s]*', msg)
-            if match2:
-                return {"funcao": "informar_sobre_produto", "params": {"produto_busca": match2.group(0).strip()}}
 
         # Adicionar produto (padrões: "quero X", "me ve X", "manda X", "X por favor")
         patterns_pedido = [
