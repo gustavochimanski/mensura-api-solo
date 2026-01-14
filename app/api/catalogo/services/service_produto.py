@@ -281,3 +281,20 @@ class ProdutosMensuraService:
 
         return {"data": data, "total": total, "page": page, "limit": limit, "has_more": offset + limit < total}
 
+    def deletar_produto(self, empresa_id: int, cod_barras: str):
+        """Remove o vínculo entre produto e empresa"""
+        # garante que a empresa existe antes de prosseguir
+        self._empresa_or_404(empresa_id)
+
+        # verifica se o produto está vinculado à empresa
+        produto_emp = self.repo.get_produto_emp(empresa_id, cod_barras)
+        if not produto_emp:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Produto não está vinculado a esta empresa."
+            )
+
+        # remove o vínculo
+        self.db.delete(produto_emp)
+        self.db.commit()
+

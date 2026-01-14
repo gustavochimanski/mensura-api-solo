@@ -847,6 +847,24 @@ class GroqSalesHandler:
                         return msg
                     else:
                         return "No momento não temos adicionais extras disponíveis 😅"
+                elif funcao == "personalizar_produto":
+                    acao = params.get("acao", "")
+                    item_nome = params.get("item", "")
+                    produto_busca = params.get("produto_busca", "")
+                    
+                    print(f"🔧 Personalizando no modo conversacional: acao={acao}, item={item_nome}, produto={produto_busca}")
+                    
+                    if not acao or not item_nome:
+                        return "Não entendi a personalização 😅 Tenta de novo!"
+                    
+                    sucesso, mensagem_resposta = self._personalizar_item_carrinho(
+                        dados, acao, item_nome, produto_busca
+                    )
+                    self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
+                    
+                    if sucesso:
+                        mensagem_resposta += "\n\nMais alguma coisa? 😊"
+                    return mensagem_resposta
 
         # Atualiza histórico
         historico = dados.get('historico', [])
@@ -1313,6 +1331,45 @@ REGRA PARA COMPLEMENTOS:
                                                 'adicionais': adicionais_do_comp
                                             })
 
+                                # VALIDAÇÃO: Verifica regras de obrigatório, mínimo e máximo
+                                erros_validacao = []
+                                for comp in complementos_disponiveis:
+                                    comp_id = comp.get('id')
+                                    comp_nome = comp.get('nome', '')
+                                    comp_obrigatorio = comp.get('obrigatorio', False)
+                                    comp_minimo = comp.get('minimo_itens', 0)
+                                    comp_maximo = comp.get('maximo_itens', 0)
+                                    
+                                    # Conta quantos itens deste complemento foram selecionados (existentes + novos)
+                                    # Considera a quantidade de cada adicional (não apenas a contagem)
+                                    qtd_selecionada = 0
+                                    for checkout_comp in checkout_existente + novos_checkout:
+                                        if checkout_comp.get('complemento_id') == comp_id:
+                                            for add in checkout_comp.get('adicionais', []):
+                                                # Soma a quantidade de cada adicional
+                                                qtd_selecionada += add.get('quantidade', 1)
+                                    
+                                    # Valida obrigatório
+                                    if comp_obrigatorio and qtd_selecionada == 0:
+                                        erros_validacao.append(f"⚠️ *{comp_nome}* é obrigatório! Escolha pelo menos {comp_minimo} opção(ões).")
+                                    
+                                    # Valida mínimo
+                                    if comp_minimo > 0 and qtd_selecionada < comp_minimo:
+                                        erros_validacao.append(f"⚠️ *{comp_nome}*: escolha pelo menos {comp_minimo} opção(ões). Você escolheu {qtd_selecionada}.")
+                                    
+                                    # Valida máximo
+                                    if comp_maximo > 0 and qtd_selecionada > comp_maximo:
+                                        erros_validacao.append(f"⚠️ *{comp_nome}*: máximo {comp_maximo} opção(ões). Você escolheu {qtd_selecionada}.")
+                                
+                                # Se houver erros de validação, não finaliza e mostra os erros
+                                if erros_validacao:
+                                    mensagem_erro = "\n".join(erros_validacao)
+                                    mensagem_erro += f"\n\n{self.ingredientes_service.formatar_complementos_para_chat(complementos_disponiveis, ultimo_item.get('nome', ''))}"
+                                    mensagem_erro += "\n\nEscolha novamente seguindo as regras acima! 😊"
+                                    dados['aguardando_complemento'] = True  # Mantém aguardando
+                                    self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
+                                    return mensagem_erro
+                                
                                 # Mescla com existentes
                                 todos_adicionais = adicionais_existentes + novos_nomes
                                 total_preco = preco_existente + novo_preco
@@ -1332,13 +1389,50 @@ REGRA PARA COMPLEMENTOS:
                                 mostrar_resumo = True
 
                         elif acao == "pular_complementos":
-                            # Cliente não quer complementos
+                            # Cliente não quer complementos - VALIDA se há obrigatórios
                             if pedido_contexto:
+                                # Verifica se há complementos obrigatórios não selecionados
+                                tem_obrigatorio_nao_selecionado = False
+                                mensagem_obrigatorio = ""
+                                
+                                for comp in complementos_disponiveis:
+                                    if comp.get('obrigatorio', False):
+                                        comp_id = comp.get('id')
+                                        comp_nome = comp.get('nome', '')
+                                        comp_minimo = comp.get('minimo_itens', 1)
+                                        
+                                        # Verifica se foi selecionado (considera quantidade total)
+                                        foi_selecionado = False
+                                        if pedido_contexto:
+                                            ultimo_item = pedido_contexto[-1]
+                                            checkout_existente = ultimo_item.get('complementos_checkout', [])
+                                            qtd_total = 0
+                                            for checkout_comp in checkout_existente:
+                                                if checkout_comp.get('complemento_id') == comp_id:
+                                                    # Soma as quantidades de todos os adicionais deste complemento
+                                                    for add in checkout_comp.get('adicionais', []):
+                                                        qtd_total += add.get('quantidade', 1)
+                                                    if qtd_total >= comp_minimo:
+                                                        foi_selecionado = True
+                                                        break
+                                        
+                                        if not foi_selecionado:
+                                            tem_obrigatorio_nao_selecionado = True
+                                            mensagem_obrigatorio += f"\n⚠️ *{comp_nome}* é obrigatório! Escolha pelo menos {comp_minimo} opção(ões)."
+                                
+                                if tem_obrigatorio_nao_selecionado:
+                                    mensagem_erro = "Não posso pular! Você precisa escolher os complementos obrigatórios:" + mensagem_obrigatorio
+                                    mensagem_erro += f"\n\n{self.ingredientes_service.formatar_complementos_para_chat(complementos_disponiveis, pedido_contexto[-1].get('nome', ''))}"
+                                    dados['aguardando_complemento'] = True  # Mantém aguardando
+                                    self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
+                                    return mensagem_erro
+                                
+                                # Se não há obrigatórios ou todos foram selecionados, pode pular
                                 dados['aguardando_complemento'] = False
                                 dados['complementos_disponiveis'] = []
                                 # IMPORTANTE: Limpa ultimo_produto_adicionado para não mostrar complementos novamente
                                 dados['ultimo_produto_adicionado'] = None
-                                print(f"⏭️ Cliente pulou complementos")
+                                print(f"⏭️ Cliente pulou complementos (opcionais ou já selecionados)")
                                 mostrar_resumo = True
 
                         elif acao == "nenhuma" and itens and pedido_contexto:
