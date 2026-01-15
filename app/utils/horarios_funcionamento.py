@@ -55,17 +55,33 @@ def _weekday_sun0(local_dt: datetime) -> int:
 def _interval_contains(start: time, end: time, t: time) -> bool:
     """
     Retorna True se t estiver dentro do intervalo.
-    - Intervalo normal: start < end  => start <= t <= end (inclusivo no fim)
-    - Overnight: start > end         => t >= start OR t <= end
+    - Intervalo normal: start < end  => start <= t < end (exclusivo no fim, mas considera até 59 segundos)
+    - Overnight: start > end         => t >= start OR t < end
+    
+    Nota: Quando o horário de fechamento é "23:30", significa que está aberto até 23:30:59,
+    então comparamos apenas horas e minutos, ignorando segundos.
     """
     if start == end:
         # Se início e fim são iguais, considera aberto apenas nesse horário exato
-        return t == start
+        return t.hour == start.hour and t.minute == start.minute
+    
     if start < end:
-        # Intervalo normal: inclui o horário de fechamento (até o final do minuto)
-        return start <= t <= end
+        # Intervalo normal: compara horas e minutos (ignora segundos)
+        # Se t está entre start e end (inclusive), está aberto
+        t_hm = (t.hour, t.minute)
+        start_hm = (start.hour, start.minute)
+        end_hm = (end.hour, end.minute)
+        
+        # Se está no mesmo minuto do início ou depois, e antes ou no mesmo minuto do fim
+        if t_hm >= start_hm and t_hm <= end_hm:
+            return True
+        return False
+    
     # overnight (ex: 22:00 até 02:00)
-    return (t >= start) or (t <= end)
+    t_hm = (t.hour, t.minute)
+    start_hm = (start.hour, start.minute)
+    end_hm = (end.hour, end.minute)
+    return (t_hm >= start_hm) or (t_hm <= end_hm)
 
 
 def empresa_esta_aberta_agora(
