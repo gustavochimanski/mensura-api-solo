@@ -3,7 +3,7 @@ Módulo de notificações de pedidos
 Integra com cardápio, mesas e balcão para enviar notificações aos clientes
 Suporta envio via WhatsApp Business API (Meta) e chat interno
 """
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 from datetime import datetime
 from sqlalchemy.orm import Session
 import httpx
