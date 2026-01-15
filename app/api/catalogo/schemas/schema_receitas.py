@@ -43,13 +43,11 @@ class ReceitaIngredienteIn(BaseModel):
     Schema para vincular um item a uma receita.
     
     Deve fornecer exatamente um dos seguintes:
-    - ingrediente_id: para vincular um ingrediente básico
     - receita_ingrediente_id: para vincular uma receita como ingrediente
     - produto_cod_barras: para vincular um produto normal
     - combo_id: para vincular um combo
     """
     receita_id: int
-    ingrediente_id: Optional[int] = None
     receita_ingrediente_id: Optional[int] = None
     produto_cod_barras: Optional[str] = None
     combo_id: Optional[int] = None
@@ -59,7 +57,6 @@ class ReceitaIngredienteIn(BaseModel):
     def validate_exactly_one(self):
         """Valida que exatamente um dos campos seja fornecido"""
         campos_preenchidos = [
-            self.ingrediente_id is not None,
             self.receita_ingrediente_id is not None,
             self.produto_cod_barras is not None,
             self.combo_id is not None
@@ -68,18 +65,17 @@ class ReceitaIngredienteIn(BaseModel):
         quantidade_preenchidos = sum(campos_preenchidos)
         
         if quantidade_preenchidos == 0:
-            raise ValueError("Deve fornecer exatamente um: ingrediente_id, receita_ingrediente_id, produto_cod_barras ou combo_id")
+            raise ValueError("Deve fornecer exatamente um: receita_ingrediente_id, produto_cod_barras ou combo_id")
         if quantidade_preenchidos > 1:
-            raise ValueError("Deve fornecer apenas um dos campos: ingrediente_id, receita_ingrediente_id, produto_cod_barras ou combo_id")
+            raise ValueError("Deve fornecer apenas um dos campos: receita_ingrediente_id, produto_cod_barras ou combo_id")
         
         return self
 
 
 class ReceitaIngredienteOut(BaseModel):
-    """Schema de resposta para ingrediente de receita (pode ser ingrediente, receita, produto ou combo)"""
+    """Schema de resposta para item de receita (pode ser sub-receita, produto ou combo)"""
     id: int
     receita_id: int
-    ingrediente_id: Optional[int] = None
     receita_ingrediente_id: Optional[int] = None
     produto_cod_barras: Optional[str] = None
     combo_id: Optional[int] = None
@@ -89,22 +85,15 @@ class ReceitaIngredienteOut(BaseModel):
 
 class ReceitaIngredienteDetalhadoOut(BaseModel):
     """
-    Schema de resposta para ingrediente de receita com dados detalhados.
-    Pode representar um ingrediente básico, sub-receita, produto ou combo.
+    Schema de resposta para item de receita com dados detalhados.
+    Pode representar sub-receita, produto ou combo.
     """
     id: int
     receita_id: int
-    ingrediente_id: Optional[int] = None
     receita_ingrediente_id: Optional[int] = None
     produto_cod_barras: Optional[str] = None
     combo_id: Optional[int] = None
     quantidade: Optional[float] = None
-    
-    # Dados do ingrediente básico (se ingrediente_id estiver preenchido)
-    ingrediente_nome: Optional[str] = None
-    ingrediente_descricao: Optional[str] = None
-    ingrediente_unidade_medida: Optional[str] = None
-    ingrediente_custo: Optional[Decimal] = None
     
     # Dados da sub-receita (se receita_ingrediente_id estiver preenchido)
     receita_ingrediente_nome: Optional[str] = None
@@ -124,7 +113,7 @@ class ReceitaIngredienteDetalhadoOut(BaseModel):
 
 
 class ReceitaComIngredientesOut(BaseModel):
-    """Schema de resposta para receita com seus ingredientes incluídos"""
+    """Schema de resposta para receita com seus itens incluídos"""
     id: int
     empresa_id: int
     nome: str

@@ -7,7 +7,6 @@ from decimal import Decimal
 from app.api.catalogo.models.model_produto import ProdutoModel
 from app.api.catalogo.models.model_produto_emp import ProdutoEmpModel
 from app.api.catalogo.models.model_adicional import AdicionalModel
-from app.api.catalogo.models.model_ingrediente import IngredienteModel
 from app.api.catalogo.models.model_receita import ReceitaIngredienteModel, ReceitaAdicionalModel, ReceitaModel
 from app.api.catalogo.models.model_combo import ComboModel
 from app.api.catalogo.schemas.schema_receitas import (
@@ -93,7 +92,11 @@ class ReceitasRepository:
         """Lista receitas com seus ingredientes carregados e suporte a busca textual."""
         query = (
             self.db.query(ReceitaModel)
-            .options(joinedload(ReceitaModel.ingredientes).joinedload(ReceitaIngredienteModel.ingrediente))
+            .options(
+                joinedload(ReceitaModel.ingredientes).joinedload(ReceitaIngredienteModel.receita_ingrediente),
+                joinedload(ReceitaModel.ingredientes).joinedload(ReceitaIngredienteModel.produto),
+                joinedload(ReceitaModel.ingredientes).joinedload(ReceitaIngredienteModel.combo),
+            )
         )
         
         if empresa_id is not None:
@@ -188,9 +191,9 @@ class ReceitasRepository:
         self.db.delete(receita)
         self.db.commit()
 
-    # Ingredientes - Usa ReceitaIngredienteModel (receita_ingrediente)
-    # Relacionamento N:N (um ingrediente pode estar em várias receitas, uma receita pode ter vários ingredientes)
-    # Agora suporta: ingredientes, receitas, produtos e combos
+    # Itens - Usa ReceitaIngredienteModel (receita_ingrediente)
+    # Relacionamento N:N (uma receita pode ter vários itens)
+    # Suporta: sub-receitas, produtos e combos
     def add_ingrediente(self, data: ReceitaIngredienteIn) -> ReceitaIngredienteModel:
         # Verifica se a receita existe
         receita = self.get_receita_by_id(data.receita_id)
@@ -198,33 +201,7 @@ class ReceitasRepository:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Receita não encontrada")
         
         # Determina qual tipo de item está sendo adicionado
-        if data.ingrediente_id is not None:
-            # Ingrediente básico
-            ingrediente = self.db.query(IngredienteModel).filter_by(id=data.ingrediente_id).first()
-            if not ingrediente:
-                raise HTTPException(status.HTTP_404_NOT_FOUND, "Ingrediente não encontrado")
-            
-            exists = (
-                self.db.query(ReceitaIngredienteModel)
-                .filter_by(receita_id=data.receita_id, ingrediente_id=data.ingrediente_id)
-                .filter(ReceitaIngredienteModel.receita_ingrediente_id.is_(None))
-                .filter(ReceitaIngredienteModel.produto_cod_barras.is_(None))
-                .filter(ReceitaIngredienteModel.combo_id.is_(None))
-                .first()
-            )
-            if exists:
-                raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ingrediente já cadastrado nesta receita")
-            
-            obj = ReceitaIngredienteModel(
-                receita_id=data.receita_id,
-                ingrediente_id=data.ingrediente_id,
-                receita_ingrediente_id=None,
-                produto_cod_barras=None,
-                combo_id=None,
-                quantidade=data.quantidade,
-            )
-        
-        elif data.receita_ingrediente_id is not None:
+        if data.receita_ingrediente_id is not None:
             # Sub-receita
             receita_ingrediente = self.get_receita_by_id(data.receita_ingrediente_id)
             if not receita_ingrediente:
@@ -236,7 +213,6 @@ class ReceitasRepository:
             exists = (
                 self.db.query(ReceitaIngredienteModel)
                 .filter_by(receita_id=data.receita_id, receita_ingrediente_id=data.receita_ingrediente_id)
-                .filter(ReceitaIngredienteModel.ingrediente_id.is_(None))
                 .filter(ReceitaIngredienteModel.produto_cod_barras.is_(None))
                 .filter(ReceitaIngredienteModel.combo_id.is_(None))
                 .first()
@@ -246,7 +222,6 @@ class ReceitasRepository:
             
             obj = ReceitaIngredienteModel(
                 receita_id=data.receita_id,
-                ingrediente_id=None,
                 receita_ingrediente_id=data.receita_ingrediente_id,
                 produto_cod_barras=None,
                 combo_id=None,
@@ -262,7 +237,6 @@ class ReceitasRepository:
             exists = (
                 self.db.query(ReceitaIngredienteModel)
                 .filter_by(receita_id=data.receita_id, produto_cod_barras=data.produto_cod_barras)
-                .filter(ReceitaIngredienteModel.ingrediente_id.is_(None))
                 .filter(ReceitaIngredienteModel.receita_ingrediente_id.is_(None))
                 .filter(ReceitaIngredienteModel.combo_id.is_(None))
                 .first()
@@ -272,7 +246,6 @@ class ReceitasRepository:
             
             obj = ReceitaIngredienteModel(
                 receita_id=data.receita_id,
-                ingrediente_id=None,
                 receita_ingrediente_id=None,
                 produto_cod_barras=data.produto_cod_barras,
                 combo_id=None,
@@ -288,7 +261,6 @@ class ReceitasRepository:
             exists = (
                 self.db.query(ReceitaIngredienteModel)
                 .filter_by(receita_id=data.receita_id, combo_id=data.combo_id)
-                .filter(ReceitaIngredienteModel.ingrediente_id.is_(None))
                 .filter(ReceitaIngredienteModel.receita_ingrediente_id.is_(None))
                 .filter(ReceitaIngredienteModel.produto_cod_barras.is_(None))
                 .first()
@@ -298,7 +270,6 @@ class ReceitasRepository:
             
             obj = ReceitaIngredienteModel(
                 receita_id=data.receita_id,
-                ingrediente_id=None,
                 receita_ingrediente_id=None,
                 produto_cod_barras=None,
                 combo_id=data.combo_id,
@@ -306,7 +277,7 @@ class ReceitasRepository:
             )
         
         else:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Deve fornecer ingrediente_id, receita_ingrediente_id, produto_cod_barras ou combo_id")
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Deve fornecer receita_ingrediente_id, produto_cod_barras ou combo_id")
         
         self.db.add(obj)
         self.db.commit()
@@ -319,7 +290,7 @@ class ReceitasRepository:
         
         Args:
             receita_id: ID da receita
-            tipo: Tipo de item a filtrar ('ingrediente', 'sub-receita', 'produto' ou 'combo')
+            tipo: Tipo de item a filtrar ('sub-receita', 'produto' ou 'combo')
         """
         # Verifica se a receita existe
         receita = self.get_receita_by_id(receita_id)
@@ -329,7 +300,6 @@ class ReceitasRepository:
         query = (
             self.db.query(ReceitaIngredienteModel)
             .options(
-                joinedload(ReceitaIngredienteModel.ingrediente),
                 joinedload(ReceitaIngredienteModel.receita_ingrediente),
                 joinedload(ReceitaIngredienteModel.produto),
                 joinedload(ReceitaIngredienteModel.combo)
@@ -339,9 +309,7 @@ class ReceitasRepository:
         
         # Aplica filtro por tipo se fornecido
         if tipo:
-            if tipo == "ingrediente":
-                query = query.filter(ReceitaIngredienteModel.ingrediente_id.isnot(None))
-            elif tipo == "sub-receita":
+            if tipo == "sub-receita":
                 query = query.filter(ReceitaIngredienteModel.receita_ingrediente_id.isnot(None))
             elif tipo == "produto":
                 query = query.filter(ReceitaIngredienteModel.produto_cod_barras.isnot(None))
@@ -350,7 +318,7 @@ class ReceitasRepository:
             else:
                 raise HTTPException(
                     status.HTTP_400_BAD_REQUEST,
-                    f"Tipo inválido: {tipo}. Tipos válidos: ingrediente, sub-receita, produto, combo"
+                    f"Tipo inválido: {tipo}. Tipos válidos: sub-receita, produto, combo"
                 )
         
         return query.all()
@@ -524,8 +492,9 @@ class ReceitasRepository:
         ingredientes = (
             self.db.query(ReceitaIngredienteModel)
             .options(
-                joinedload(ReceitaIngredienteModel.ingrediente),
-                joinedload(ReceitaIngredienteModel.receita_ingrediente)
+                joinedload(ReceitaIngredienteModel.receita_ingrediente),
+                joinedload(ReceitaIngredienteModel.produto),
+                joinedload(ReceitaIngredienteModel.combo),
             )
             .filter(ReceitaIngredienteModel.receita_id == receita_id)
             .all()
@@ -535,19 +504,29 @@ class ReceitasRepository:
         for receita_ingrediente in ingredientes:
             quantidade = receita_ingrediente.quantidade if receita_ingrediente.quantidade else Decimal('0.00')
             
-            # Se for um ingrediente básico
-            if receita_ingrediente.ingrediente_id is not None and receita_ingrediente.ingrediente:
-                custo_ingrediente = receita_ingrediente.ingrediente.custo if receita_ingrediente.ingrediente.custo else Decimal('0.00')
-                custo_total += quantidade * custo_ingrediente
-            
             # Se for uma sub-receita
-            elif receita_ingrediente.receita_ingrediente_id is not None:
+            if receita_ingrediente.receita_ingrediente_id is not None:
                 # Calcula o custo da sub-receita recursivamente
                 custo_sub_receita = self.calcular_custo_receita(
                     receita_ingrediente.receita_ingrediente_id,
                     receitas_visitadas.copy()  # Passa uma cópia para evitar modificar o set original
                 )
                 custo_total += quantidade * custo_sub_receita
+            
+            # Se for um produto
+            elif receita_ingrediente.produto_cod_barras is not None:
+                produto_emp = (
+                    self.db.query(ProdutoEmpModel)
+                    .filter_by(empresa_id=receita.empresa_id, cod_barras=receita_ingrediente.produto_cod_barras)
+                    .first()
+                )
+                custo_produto = produto_emp.custo if produto_emp and produto_emp.custo is not None else Decimal('0.00')
+                custo_total += quantidade * custo_produto
+            
+            # Se for um combo, usa o preço total como referência de custo
+            elif receita_ingrediente.combo_id is not None and receita_ingrediente.combo:
+                custo_combo = receita_ingrediente.combo.preco_total if receita_ingrediente.combo.preco_total is not None else Decimal('0.00')
+                custo_total += quantidade * custo_combo
         
         return custo_total
 

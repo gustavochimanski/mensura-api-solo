@@ -19,7 +19,6 @@ from app.api.catalogo.schemas.schema_complemento import (
     VincularComplementosReceitaRequest,
     VincularComplementosReceitaResponse,
 )
-from app.api.catalogo.router.admin.router_ingredientes import router as router_ingredientes
 from app.core.admin_dependencies import get_current_user
 from app.database.db_connection import get_db
 from app.utils.logger import logger
@@ -34,13 +33,9 @@ router = APIRouter(
 
 class TipoItemReceita(str, Enum):
     """Tipos de itens que podem ser vinculados a uma receita"""
-    INGREDIENTE = "ingrediente"
     SUB_RECEITA = "sub-receita"
     PRODUTO = "produto"
     COMBO = "combo"
-
-# Inclui router de ingredientes dentro de receitas
-router.include_router(router_ingredientes)
 
 
 # Receitas - CRUD completo
@@ -123,55 +118,51 @@ def delete_receita(
     return None
 
 
-# Itens de receitas (ingredientes, sub-receitas, produtos e combos)
+# Itens de receitas (sub-receitas, produtos e combos)
 @router.get("/itens", response_model=list[ReceitaIngredienteOut])
-def list_ingredientes(
+def list_itens(
     receita_id: int = Query(..., description="ID da receita"),
-    tipo: Optional[TipoItemReceita] = Query(None, description="Filtrar por tipo de item: ingrediente, sub-receita, produto ou combo"),
+    tipo: Optional[TipoItemReceita] = Query(None, description="Filtrar por tipo de item: sub-receita, produto ou combo"),
     db: Session = Depends(get_db),
 ):
     """
     Lista todos os itens de uma receita.
-    
+
     Pode filtrar por tipo usando o parâmetro `tipo`:
-    - ingrediente: Ingredientes básicos
-    - sub-receita: Outras receitas usadas como ingrediente
+    - sub-receita: Outras receitas usadas como item
     - produto: Produtos normais
     - combo: Combos
     """
     return ReceitasService(db).list_ingredientes(receita_id, tipo=tipo.value if tipo else None)
 
 
-@router.post("/ingredientes", response_model=ReceitaIngredienteOut, status_code=status.HTTP_201_CREATED)
-def add_ingrediente(
+@router.post("/itens", response_model=ReceitaIngredienteOut, status_code=status.HTTP_201_CREATED)
+def add_item(
     body: ReceitaIngredienteIn,
     db: Session = Depends(get_db),
 ):
     """
-    Adiciona um ingrediente a uma receita.
-    
-    IMPORTANTE: Um ingrediente pode estar vinculado a VÁRIAS receitas (relacionamento N:N).
-    Se o ingrediente já estiver vinculado à mesma receita, retornará erro 400 (duplicata).
+    Adiciona um item (sub-receita, produto ou combo) a uma receita.
     """
     return ReceitasService(db).add_ingrediente(body)
 
 
-@router.put("/ingredientes/{receita_ingrediente_id}", response_model=ReceitaIngredienteOut)
-def update_ingrediente(
-    receita_ingrediente_id: int = Path(..., description="ID do vínculo item-receita (pode ser ingrediente, receita, produto ou combo)"),
+@router.put("/itens/{receita_ingrediente_id}", response_model=ReceitaIngredienteOut)
+def update_item(
+    receita_ingrediente_id: int = Path(..., description="ID do vínculo item-receita (pode ser sub-receita, produto ou combo)"),
     quantidade: Optional[float] = Body(None, description="Quantidade do item"),
     db: Session = Depends(get_db),
 ):
-    """Atualiza a quantidade de um item (ingrediente, receita, produto ou combo) em uma receita"""
+    """Atualiza a quantidade de um item (sub-receita, produto ou combo) em uma receita"""
     return ReceitasService(db).update_ingrediente(receita_ingrediente_id, quantidade)
 
 
-@router.delete("/ingredientes/{receita_ingrediente_id}", status_code=status.HTTP_204_NO_CONTENT)
-def remove_ingrediente(
-    receita_ingrediente_id: int = Path(..., description="ID do vínculo item-receita (pode ser ingrediente, receita, produto ou combo)"),
+@router.delete("/itens/{receita_ingrediente_id}", status_code=status.HTTP_204_NO_CONTENT)
+def remove_item(
+    receita_ingrediente_id: int = Path(..., description="ID do vínculo item-receita (pode ser sub-receita, produto ou combo)"),
     db: Session = Depends(get_db),
 ):
-    """Remove um item (ingrediente, receita, produto ou combo) de uma receita (desvincula, mas não deleta o item original)"""
+    """Remove um item (sub-receita, produto ou combo) de uma receita (desvincula, mas não deleta o item original)"""
     ReceitasService(db).remove_ingrediente(receita_ingrediente_id)
     return None
 

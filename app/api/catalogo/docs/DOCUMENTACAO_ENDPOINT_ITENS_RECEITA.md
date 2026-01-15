@@ -19,12 +19,11 @@ Authorization: Bearer <seu_token>
 | Parâmetro | Tipo | Obrigatório | Descrição |
 |-----------|------|-------------|-----------|
 | `receita_id` | integer | Sim | ID da receita |
-| `tipo` | string | Não | Filtro por tipo de item. Valores válidos: `ingrediente`, `sub-receita`, `produto`, `combo` |
+| `tipo` | string | Não | Filtro por tipo de item. Valores válidos: `sub-receita`, `produto`, `combo` |
 
 ## Tipos de Itens
 
-- **`ingrediente`**: Ingredientes básicos cadastrados
-- **`sub-receita`**: Outras receitas usadas como ingrediente
+- **`sub-receita`**: Outras receitas usadas como item
 - **`produto`**: Produtos normais do catálogo
 - **`combo`**: Combos cadastrados
 
@@ -43,16 +42,14 @@ Authorization: Bearer <seu_token>
   {
     "id": 10,
     "receita_id": 1,
-    "ingrediente_id": 5,
     "receita_ingrediente_id": null,
-    "produto_cod_barras": null,
+    "produto_cod_barras": "PROD001",
     "combo_id": null,
     "quantidade": 2.0
   },
   {
     "id": 11,
     "receita_id": 1,
-    "ingrediente_id": null,
     "receita_ingrediente_id": 3,
     "produto_cod_barras": null,
     "combo_id": null,
@@ -61,16 +58,14 @@ Authorization: Bearer <seu_token>
   {
     "id": 12,
     "receita_id": 1,
-    "ingrediente_id": null,
     "receita_ingrediente_id": null,
-    "produto_cod_barras": "PROD001",
+    "produto_cod_barras": "PROD002",
     "combo_id": null,
     "quantidade": 3.0
   },
   {
     "id": 13,
     "receita_id": 1,
-    "ingrediente_id": null,
     "receita_ingrediente_id": null,
     "produto_cod_barras": null,
     "combo_id": 2,
@@ -79,29 +74,7 @@ Authorization: Bearer <seu_token>
 ]
 ```
 
-### 2. Filtrar Apenas Ingredientes
-
-```http
-GET /api/catalogo/admin/receitas/itens?receita_id=1&tipo=ingrediente
-Authorization: Bearer <seu_token>
-```
-
-**Resposta (200):**
-```json
-[
-  {
-    "id": 10,
-    "receita_id": 1,
-    "ingrediente_id": 5,
-    "receita_ingrediente_id": null,
-    "produto_cod_barras": null,
-    "combo_id": null,
-    "quantidade": 2.0
-  }
-]
-```
-
-### 3. Filtrar Apenas Sub-receitas
+### 2. Filtrar Apenas Sub-receitas
 
 ```http
 GET /api/catalogo/admin/receitas/itens?receita_id=1&tipo=sub-receita
@@ -114,7 +87,6 @@ Authorization: Bearer <seu_token>
   {
     "id": 11,
     "receita_id": 1,
-    "ingrediente_id": null,
     "receita_ingrediente_id": 3,
     "produto_cod_barras": null,
     "combo_id": null,
@@ -123,14 +95,14 @@ Authorization: Bearer <seu_token>
 ]
 ```
 
-### 4. Filtrar Apenas Produtos
+### 3. Filtrar Apenas Produtos
 
 ```http
 GET /api/catalogo/admin/receitas/itens?receita_id=1&tipo=produto
 Authorization: Bearer <seu_token>
 ```
 
-### 5. Filtrar Apenas Combos
+### 4. Filtrar Apenas Combos
 
 ```http
 GET /api/catalogo/admin/receitas/itens?receita_id=1&tipo=combo
@@ -141,7 +113,6 @@ Authorization: Bearer <seu_token>
 
 Para identificar o tipo de item na resposta, verifique qual campo não é `null`:
 
-- **Ingrediente**: `ingrediente_id` não é `null`
 - **Sub-receita**: `receita_ingrediente_id` não é `null`
 - **Produto**: `produto_cod_barras` não é `null`
 - **Combo**: `combo_id` não é `null`
@@ -173,7 +144,7 @@ async function listarItensReceita(receitaId: number) {
 }
 
 // Filtrar por tipo
-async function listarItensPorTipo(receitaId: number, tipo: 'ingrediente' | 'sub-receita' | 'produto' | 'combo') {
+async function listarItensPorTipo(receitaId: number, tipo: 'sub-receita' | 'produto' | 'combo') {
   const token = localStorage.getItem('auth_token');
   
   const response = await fetch(
@@ -195,7 +166,6 @@ async function listarItensPorTipo(receitaId: number, tipo: 'ingrediente' | 'sub-
 
 // Exemplo de uso
 const todosItens = await listarItensReceita(1);
-const apenasIngredientes = await listarItensPorTipo(1, 'ingrediente');
 const apenasSubReceitas = await listarItensPorTipo(1, 'sub-receita');
 ```
 
@@ -312,7 +282,7 @@ async function listarItensReceita(receitaId: number) {
 // Filtrar por tipo
 async function listarItensPorTipo(
   receitaId: number, 
-  tipo: 'ingrediente' | 'sub-receita' | 'produto' | 'combo'
+  tipo: 'sub-receita' | 'produto' | 'combo'
 ) {
   const response = await api.get('/receitas/itens', {
     params: { 
@@ -339,12 +309,12 @@ async function listarItensPorTipo(
 
 1. O parâmetro `tipo` é opcional. Se não for fornecido, retorna todos os tipos de itens.
 
-2. O filtro por tipo é case-sensitive. Use exatamente: `ingrediente`, `sub-receita`, `produto` ou `combo`.
+2. O filtro por tipo é case-sensitive. Use exatamente: `sub-receita`, `produto` ou `combo`.
 
 3. O campo `id` na resposta é o ID do vínculo na tabela `receita_ingrediente`, não o ID do item original. Use este ID para atualizar ou remover o item.
 
 4. Para remover um item, use o endpoint:
    ```
-   DELETE /api/catalogo/admin/receitas/ingredientes/{id}
+   DELETE /api/catalogo/admin/receitas/itens/{id}
    ```
    Onde `{id}` é o `id` retornado neste endpoint.

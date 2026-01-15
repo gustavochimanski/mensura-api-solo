@@ -9,7 +9,7 @@ from sqlalchemy import text
 
 class IngredientesService:
     """
-    Serviço para consultar e manipular ingredientes e adicionais de receitas
+    Serviço para consultar e manipular itens (produtos, sub-receitas e combos) e adicionais de receitas
     """
 
     def __init__(self, db: Session, empresa_id: int = 1):
@@ -18,23 +18,31 @@ class IngredientesService:
 
     def buscar_ingredientes_receita(self, receita_id: int) -> List[Dict[str, Any]]:
         """
-        Busca todos os ingredientes de uma receita
+        Busca todos os itens de uma receita (produtos, sub-receitas e combos)
 
         Returns:
-            Lista de ingredientes com id, nome, quantidade
+            Lista de itens com id, nome, quantidade e tipo
         """
         try:
             query = text("""
                 SELECT
-                    i.id,
-                    i.nome,
-                    i.descricao,
+                    ri.id,
+                    COALESCE(p.descricao, r.nome, c.titulo, 'Item') AS nome,
+                    COALESCE(p.descricao, r.descricao, c.descricao) AS descricao,
                     ri.quantidade,
-                    i.unidade_medida
+                    p.unidade_medida,
+                    CASE
+                        WHEN ri.produto_cod_barras IS NOT NULL THEN 'produto'
+                        WHEN ri.receita_ingrediente_id IS NOT NULL THEN 'sub-receita'
+                        WHEN ri.combo_id IS NOT NULL THEN 'combo'
+                        ELSE 'item'
+                    END AS tipo
                 FROM catalogo.receita_ingrediente ri
-                JOIN catalogo.ingredientes i ON i.id = ri.ingrediente_id
+                LEFT JOIN catalogo.produtos p ON p.cod_barras = ri.produto_cod_barras
+                LEFT JOIN catalogo.receitas r ON r.id = ri.receita_ingrediente_id
+                LEFT JOIN catalogo.combos c ON c.id = ri.combo_id
                 WHERE ri.receita_id = :receita_id
-                ORDER BY i.nome
+                ORDER BY nome
             """)
 
             result = self.db.execute(query, {"receita_id": receita_id})
@@ -46,7 +54,8 @@ class IngredientesService:
                     "nome": row[1],
                     "descricao": row[2],
                     "quantidade": float(row[3]) if row[3] else 0,
-                    "unidade": row[4]
+                    "unidade": row[4],
+                    "tipo": row[5],
                 })
 
             return ingredientes
@@ -57,7 +66,7 @@ class IngredientesService:
 
     def buscar_ingredientes_por_nome_receita(self, nome_receita: str) -> List[Dict[str, Any]]:
         """
-        Busca ingredientes pelo nome da receita
+        Busca itens pelo nome da receita
         """
         try:
             # Primeiro busca o ID da receita
@@ -174,10 +183,10 @@ class IngredientesService:
 
     def verificar_ingrediente_na_receita(self, receita_id: int, nome_ingrediente: str) -> Optional[Dict[str, Any]]:
         """
-        Verifica se um ingrediente específico está na receita
+        Verifica se um item específico está na receita
 
         Returns:
-            Dict com dados do ingrediente se encontrado, None se não
+            Dict com dados do item se encontrado, None se não
         """
         ingredientes = self.buscar_ingredientes_receita(receita_id)
 
@@ -212,10 +221,10 @@ class IngredientesService:
         nome_ingrediente: str
     ) -> Optional[Dict[str, Any]]:
         """
-        Verifica se um ingrediente está na receita buscando pelo nome da receita
+        Verifica se um item está na receita buscando pelo nome da receita
 
         Returns:
-            Dict com dados do ingrediente se encontrado, None se não
+            Dict com dados do item se encontrado, None se não
         """
         try:
             # Primeiro busca o ID da receita
@@ -292,7 +301,7 @@ class IngredientesService:
         Formata a composição de um produto para exibir ao cliente
 
         Returns:
-            Mensagem formatada com ingredientes e adicionais disponíveis
+            Mensagem formatada com itens e adicionais disponíveis
         """
         ingredientes = self.buscar_ingredientes_por_nome_receita(nome_receita)
         adicionais = self.buscar_adicionais_por_nome_receita(nome_receita)
@@ -301,7 +310,7 @@ class IngredientesService:
             return f"Não encontrei informações sobre a composição de {nome_receita}"
 
         mensagem = f"*{nome_receita}*\n\n"
-        mensagem += "📋 *Ingredientes:*\n"
+        mensagem += "📋 *Composição:*\n"
 
         for ing in ingredientes:
             mensagem += f"• {ing['nome']}\n"

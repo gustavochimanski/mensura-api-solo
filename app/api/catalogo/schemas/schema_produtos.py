@@ -55,7 +55,7 @@ class ProdutoBaseDTO(BaseModel):
     unidade_medida: Optional[str] = None
 	    # diretivas removido
     exibir_delivery: bool = True
-    tem_receita: bool = False  # Indica se o produto é composto por uma receita (tem ingredientes)
+    tem_receita: bool = False  # Indica se o produto é composto por uma receita (tem itens)
 
     created_at: datetime
     updated_at: datetime
@@ -96,7 +96,7 @@ class ProdutoListItem(BaseModel):
 	    # diretivas removido
     disponivel: bool
     exibir_delivery: bool = True
-    tem_receita: bool = False  # Indica se o produto é composto por uma receita (tem ingredientes)
+    tem_receita: bool = False  # Indica se o produto é composto por uma receita (tem itens)
     adicionais: Optional[List[dict]] = None  # Lista de adicionais (quando produto tiver diretiva CPA)
     model_config = ConfigDict(from_attributes=True)
 

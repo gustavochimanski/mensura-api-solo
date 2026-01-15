@@ -818,6 +818,11 @@ class GroqSalesHandler:
         import json
         import re
 
+        # Obtém o estado atual da conversa
+        estado, dados_atualizados = self._obter_estado_conversa(user_id)
+        # Atualiza dados com os mais recentes
+        dados.update(dados_atualizados)
+
         # PRIMEIRO: Tenta interpretar com regras (funciona mesmo sem IA)
         # Isso garante que perguntas sobre produtos específicos sejam detectadas
         todos_produtos = self._buscar_todos_produtos()
@@ -4392,9 +4397,11 @@ Responda de forma natural e curta:"""
             if tipo_produto == 'receita' or (isinstance(produto_id, str) and produto_id.startswith('receita_')):
                 try:
                     receita_id = int(produto_id.replace('receita_', ''))
-                    print(f"   📝 É uma receita, ID: {receita_id}")
-                except:
-                    pass
+                    print(f"   📝 É uma receita, ID extraído: {receita_id} (produto_id original: {produto_id})")
+                except Exception as e:
+                    print(f"   ⚠️ Erro ao extrair ID da receita: {e} (produto_id: {produto_id})")
+                    # Tenta buscar pelo nome se não conseguiu extrair o ID
+                    receita_id = None
             
             ingredientes = []
             adicionais = []
@@ -4404,14 +4411,25 @@ Responda de forma natural e curta:"""
                 # Busca direto pelo ID da receita (mais preciso)
                 ingredientes = self.ingredientes_service.buscar_ingredientes_receita(receita_id)
                 adicionais = self.ingredientes_service.buscar_adicionais_receita(receita_id)
-                print(f"   ✅ Encontrados {len(ingredientes)} ingredientes e {len(adicionais)} adicionais (busca por ID)")
+                print(f"   ✅ Encontrados {len(ingredientes)} ingredientes e {len(adicionais)} adicionais (busca por ID: {receita_id})")
             else:
-                # Tenta buscar pelo nome (pode ser receita ou produto)
-                ingredientes = self.ingredientes_service.buscar_ingredientes_por_nome_receita(nome_produto)
-                adicionais = self.ingredientes_service.buscar_adicionais_por_nome_receita(nome_produto)
-                print(f"   ✅ Encontrados {len(ingredientes)} ingredientes e {len(adicionais)} adicionais (busca por nome)")
+                # Se não tem receita_id mas é tipo receita, tenta extrair do ID
+                if tipo_produto == 'receita' and isinstance(produto_id, str) and 'receita_' in produto_id:
+                    try:
+                        receita_id_from_str = int(produto_id.replace('receita_', ''))
+                        ingredientes = self.ingredientes_service.buscar_ingredientes_receita(receita_id_from_str)
+                        adicionais = self.ingredientes_service.buscar_adicionais_receita(receita_id_from_str)
+                        print(f"   ✅ Encontrados {len(ingredientes)} ingredientes e {len(adicionais)} adicionais (busca por ID extraído: {receita_id_from_str})")
+                    except Exception as e:
+                        print(f"   ⚠️ Erro ao extrair ID da receita: {e}")
                 
-                # Se não encontrou e é um produto simples, tenta buscar complementos
+                # Se ainda não encontrou, tenta buscar pelo nome (pode ser receita ou produto)
+                if not ingredientes:
+                    ingredientes = self.ingredientes_service.buscar_ingredientes_por_nome_receita(nome_produto)
+                    adicionais = self.ingredientes_service.buscar_adicionais_por_nome_receita(nome_produto)
+                    print(f"   ✅ Encontrados {len(ingredientes)} ingredientes e {len(adicionais)} adicionais (busca por nome: '{nome_produto}')")
+                
+                # Se não encontrou e é um produto simples, tenta buscar receita associada
                 if not ingredientes and tipo_produto == 'produto':
                     # Para produtos simples, busca complementos se disponíveis
                     try:
