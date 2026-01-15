@@ -1166,15 +1166,26 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
         try:
             from app.api.empresas.models.empresa_model import EmpresaModel
             from app.utils.horarios_funcionamento import empresa_esta_aberta_agora, formatar_horarios_funcionamento_mensagem
+            from datetime import datetime
             
             empresa_id_int = int(empresa_id) if empresa_id else 1
             empresa = db.query(EmpresaModel).filter(EmpresaModel.id == empresa_id_int).first()
             
             if empresa and empresa.horarios_funcionamento:
+                # Logs para debug
+                agora = datetime.now()
+                timezone_empresa = empresa.timezone or "America/Sao_Paulo"
+                print(f"   🕐 Verificando horário de funcionamento:")
+                print(f"      Hora atual (servidor): {agora.strftime('%Y-%m-%d %H:%M:%S')}")
+                print(f"      Timezone empresa: {timezone_empresa}")
+                print(f"      Horários configurados: {empresa.horarios_funcionamento}")
+                
                 esta_aberta = empresa_esta_aberta_agora(
                     horarios_funcionamento=empresa.horarios_funcionamento,
-                    timezone=empresa.timezone or "America/Sao_Paulo"
+                    timezone=timezone_empresa
                 )
+                
+                print(f"   🕐 Resultado da verificação: {esta_aberta} (True=Aberta, False=Fechada, None=Não configurado)")
                 
                 # Se a loja estiver fechada (False), envia mensagem com horários
                 if esta_aberta is False:

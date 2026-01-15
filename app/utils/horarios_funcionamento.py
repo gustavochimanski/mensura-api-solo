@@ -55,15 +55,17 @@ def _weekday_sun0(local_dt: datetime) -> int:
 def _interval_contains(start: time, end: time, t: time) -> bool:
     """
     Retorna True se t estiver dentro do intervalo.
-    - Intervalo normal: start < end  => start <= t < end
-    - Overnight: start > end         => t >= start OR t < end
+    - Intervalo normal: start < end  => start <= t <= end (inclusivo no fim)
+    - Overnight: start > end         => t >= start OR t <= end
     """
     if start == end:
-        return False
+        # Se início e fim são iguais, considera aberto apenas nesse horário exato
+        return t == start
     if start < end:
-        return start <= t < end
-    # overnight
-    return (t >= start) or (t < end)
+        # Intervalo normal: inclui o horário de fechamento (até o final do minuto)
+        return start <= t <= end
+    # overnight (ex: 22:00 até 02:00)
+    return (t >= start) or (t <= end)
 
 
 def empresa_esta_aberta_agora(
@@ -94,6 +96,13 @@ def empresa_esta_aberta_agora(
     local_dt = _to_local(now, timezone)
     dow = _weekday_sun0(local_dt)
     t = local_dt.time()
+    
+    # Logs para debug
+    dias_nomes = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"]
+    print(f"      [DEBUG] Hora atual (naive): {now.strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"      [DEBUG] Hora local (timezone {timezone}): {local_dt.strftime('%Y-%m-%d %H:%M:%S') if hasattr(local_dt, 'strftime') else str(local_dt)}")
+    print(f"      [DEBUG] Dia da semana: {dow} ({dias_nomes[dow] if dow < len(dias_nomes) else 'Desconhecido'})")
+    print(f"      [DEBUG] Hora atual (time): {t.strftime('%H:%M:%S')}")
 
     def iter_day_entries(entries: Iterable[dict], day: int) -> Iterable[dict]:
         for e in entries:
@@ -118,16 +127,28 @@ def empresa_esta_aberta_agora(
     entries = horarios_funcionamento
 
     # 1) Intervalos do dia atual
+    print(f"      [DEBUG] Verificando intervalos do dia {dow} ({dias_nomes[dow] if dow < len(dias_nomes) else 'Desconhecido'})")
     for start, end in iter_intervals(iter_day_entries(entries, dow)):
-        if _interval_contains(start, end, t):
+        print(f"      [DEBUG] Intervalo: {start.strftime('%H:%M')} - {end.strftime('%H:%M')}, Hora atual: {t.strftime('%H:%M')}")
+        contem = _interval_contains(start, end, t)
+        print(f"      [DEBUG] Intervalo contém hora atual? {contem}")
+        if contem:
+            print(f"      [DEBUG] ✅ LOJA ABERTA - encontrado intervalo válido")
             return True
 
     # 2) Intervalos overnight do dia anterior que avançam para hoje
     prev_dow = (dow - 1) % 7
+    print(f"      [DEBUG] Verificando intervalos overnight do dia anterior ({prev_dow})")
     for start, end in iter_intervals(iter_day_entries(entries, prev_dow)):
-        if start > end and t < end:
-            return True
+        if start > end:
+            print(f"      [DEBUG] Intervalo overnight: {start.strftime('%H:%M')} - {end.strftime('%H:%M')}, Hora atual: {t.strftime('%H:%M')}")
+            contem = t < end
+            print(f"      [DEBUG] Intervalo overnight contém? {contem}")
+            if contem:
+                print(f"      [DEBUG] ✅ LOJA ABERTA - encontrado intervalo overnight válido")
+                return True
 
+    print(f"      [DEBUG] ❌ LOJA FECHADA - nenhum intervalo válido encontrado")
     return False
 
 
