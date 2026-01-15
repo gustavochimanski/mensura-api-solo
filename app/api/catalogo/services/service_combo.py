@@ -45,7 +45,13 @@ class CombosService:
             custo_total=(Decimal(str(req.custo_total)) if req.custo_total is not None else None),
             ativo=req.ativo,
             imagem_url=imagem_url,
-            itens=[{"produto_cod_barras": it.produto_cod_barras, "quantidade": it.quantidade} for it in req.itens],
+            itens=[
+                {
+                    "produto_cod_barras": it.produto_cod_barras if it.produto_cod_barras else None,
+                    "receita_id": it.receita_id if it.receita_id else None,
+                    "quantidade": it.quantidade
+                } for it in req.itens
+            ],
         )
         self.db.commit()
         self.db.refresh(combo)
@@ -69,7 +75,13 @@ class CombosService:
             ativo=req.ativo,
             imagem_url=imagem_url,
             itens=(
-                [{"produto_cod_barras": it.produto_cod_barras, "quantidade": it.quantidade} for it in (req.itens or [])]
+                [
+                    {
+                        "produto_cod_barras": it.produto_cod_barras if it.produto_cod_barras else None,
+                        "receita_id": it.receita_id if it.receita_id else None,
+                        "quantidade": it.quantidade
+                    } for it in (req.itens or [])
+                ]
                 if req.itens is not None else None
             ),
         )

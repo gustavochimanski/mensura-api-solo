@@ -65,7 +65,7 @@ class ReceitasService:
             # Monta lista de ingredientes detalhados
             ingredientes_detalhados = []
             for ri in receita.ingredientes:
-                # Verifica se é um ingrediente básico ou uma sub-receita
+                # Determina o tipo de item e monta o objeto detalhado
                 if ri.ingrediente_id is not None:
                     # Ingrediente básico
                     ingrediente_detalhado = ReceitaIngredienteDetalhadoOut(
@@ -73,6 +73,8 @@ class ReceitasService:
                         receita_id=ri.receita_id,
                         ingrediente_id=ri.ingrediente_id,
                         receita_ingrediente_id=None,
+                        produto_cod_barras=None,
+                        combo_id=None,
                         quantidade=float(ri.quantidade) if ri.quantidade else None,
                         ingrediente_nome=ri.ingrediente.nome if ri.ingrediente else None,
                         ingrediente_descricao=ri.ingrediente.descricao if ri.ingrediente else None,
@@ -81,14 +83,21 @@ class ReceitasService:
                         receita_ingrediente_nome=None,
                         receita_ingrediente_descricao=None,
                         receita_ingrediente_preco_venda=None,
+                        produto_descricao=None,
+                        produto_imagem=None,
+                        combo_titulo=None,
+                        combo_descricao=None,
+                        combo_preco_total=None,
                     )
-                else:
+                elif ri.receita_ingrediente_id is not None:
                     # Sub-receita
                     ingrediente_detalhado = ReceitaIngredienteDetalhadoOut(
                         id=ri.id,
                         receita_id=ri.receita_id,
                         ingrediente_id=None,
                         receita_ingrediente_id=ri.receita_ingrediente_id,
+                        produto_cod_barras=None,
+                        combo_id=None,
                         quantidade=float(ri.quantidade) if ri.quantidade else None,
                         ingrediente_nome=None,
                         ingrediente_descricao=None,
@@ -97,7 +106,62 @@ class ReceitasService:
                         receita_ingrediente_nome=ri.receita_ingrediente.nome if ri.receita_ingrediente else None,
                         receita_ingrediente_descricao=ri.receita_ingrediente.descricao if ri.receita_ingrediente else None,
                         receita_ingrediente_preco_venda=ri.receita_ingrediente.preco_venda if ri.receita_ingrediente else None,
+                        produto_descricao=None,
+                        produto_imagem=None,
+                        combo_titulo=None,
+                        combo_descricao=None,
+                        combo_preco_total=None,
                     )
+                elif ri.produto_cod_barras is not None:
+                    # Produto normal
+                    ingrediente_detalhado = ReceitaIngredienteDetalhadoOut(
+                        id=ri.id,
+                        receita_id=ri.receita_id,
+                        ingrediente_id=None,
+                        receita_ingrediente_id=None,
+                        produto_cod_barras=ri.produto_cod_barras,
+                        combo_id=None,
+                        quantidade=float(ri.quantidade) if ri.quantidade else None,
+                        ingrediente_nome=None,
+                        ingrediente_descricao=None,
+                        ingrediente_unidade_medida=None,
+                        ingrediente_custo=None,
+                        receita_ingrediente_nome=None,
+                        receita_ingrediente_descricao=None,
+                        receita_ingrediente_preco_venda=None,
+                        produto_descricao=ri.produto.descricao if ri.produto else None,
+                        produto_imagem=ri.produto.imagem if ri.produto else None,
+                        combo_titulo=None,
+                        combo_descricao=None,
+                        combo_preco_total=None,
+                    )
+                elif ri.combo_id is not None:
+                    # Combo
+                    ingrediente_detalhado = ReceitaIngredienteDetalhadoOut(
+                        id=ri.id,
+                        receita_id=ri.receita_id,
+                        ingrediente_id=None,
+                        receita_ingrediente_id=None,
+                        produto_cod_barras=None,
+                        combo_id=ri.combo_id,
+                        quantidade=float(ri.quantidade) if ri.quantidade else None,
+                        ingrediente_nome=None,
+                        ingrediente_descricao=None,
+                        ingrediente_unidade_medida=None,
+                        ingrediente_custo=None,
+                        receita_ingrediente_nome=None,
+                        receita_ingrediente_descricao=None,
+                        receita_ingrediente_preco_venda=None,
+                        produto_descricao=None,
+                        produto_imagem=None,
+                        combo_titulo=ri.combo.titulo if ri.combo else None,
+                        combo_descricao=ri.combo.descricao if ri.combo else None,
+                        combo_preco_total=ri.combo.preco_total if ri.combo else None,
+                    )
+                else:
+                    # Item inválido (não deveria acontecer devido à constraint)
+                    continue
+                
                 ingredientes_detalhados.append(ingrediente_detalhado)
             
             # Calcula o custo_total da receita baseado no custo dos ingredientes

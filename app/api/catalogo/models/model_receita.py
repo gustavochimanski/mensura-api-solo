@@ -44,11 +44,13 @@ class ReceitaIngredienteModel(Base):
     """
     Modelo de Ingrediente de Receita - Relacionamento N:N 
     
-    Suporta dois tipos de ingredientes:
+    Suporta múltiplos tipos de itens:
     1. Ingredientes básicos (ingrediente_id preenchido)
     2. Sub-receitas (receita_ingrediente_id preenchido)
+    3. Produtos normais (produto_cod_barras preenchido)
+    4. Combos (combo_id preenchido)
     
-    A constraint CHECK garante que exatamente um dos dois campos seja preenchido.
+    A constraint CHECK garante que exatamente um dos quatro campos seja preenchido.
     """
     __tablename__ = "receita_ingrediente"
     __table_args__ = (
@@ -58,11 +60,11 @@ class ReceitaIngredienteModel(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     receita_id = Column(Integer, ForeignKey("catalogo.receitas.id", ondelete="CASCADE"), nullable=False)
     
-    # Ingrediente básico (opcional se receita_ingrediente_id estiver preenchido)
+    # Tipos de itens (mutuamente exclusivos - exatamente um deve ser preenchido)
     ingrediente_id = Column(Integer, ForeignKey("catalogo.ingredientes.id", ondelete="RESTRICT"), nullable=True)
-    
-    # Sub-receita usada como ingrediente (opcional se ingrediente_id estiver preenchido)
     receita_ingrediente_id = Column(Integer, ForeignKey("catalogo.receitas.id", ondelete="RESTRICT"), nullable=True)
+    produto_cod_barras = Column(String, ForeignKey("catalogo.produtos.cod_barras", ondelete="RESTRICT"), nullable=True)
+    combo_id = Column(Integer, ForeignKey("catalogo.combos.id", ondelete="RESTRICT"), nullable=True)
     
     quantidade = Column(Numeric(18, 4), nullable=True)
 
@@ -70,6 +72,8 @@ class ReceitaIngredienteModel(Base):
     receita = relationship("ReceitaModel", foreign_keys=[receita_id], back_populates="ingredientes")
     ingrediente = relationship("IngredienteModel", back_populates="receitas_ingrediente")
     receita_ingrediente = relationship("ReceitaModel", foreign_keys=[receita_ingrediente_id])
+    produto = relationship("ProdutoModel", foreign_keys=[produto_cod_barras])
+    combo = relationship("ComboModel", foreign_keys=[combo_id])
 
 
 class ReceitaAdicionalModel(Base):

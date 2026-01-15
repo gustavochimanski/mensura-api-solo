@@ -9,6 +9,7 @@ from app.api.catalogo.models.model_produto_emp import ProdutoEmpModel
 from app.api.catalogo.models.model_adicional import AdicionalModel
 from app.api.catalogo.models.model_ingrediente import IngredienteModel
 from app.api.catalogo.models.model_receita import ReceitaIngredienteModel, ReceitaAdicionalModel, ReceitaModel
+from app.api.catalogo.models.model_combo import ComboModel
 from app.api.catalogo.schemas.schema_receitas import (
     ReceitaIngredienteIn,
     AdicionalIn,
@@ -145,73 +146,123 @@ class ReceitasRepository:
 
     # Ingredientes - Usa ReceitaIngredienteModel (receita_ingrediente)
     # Relacionamento N:N (um ingrediente pode estar em várias receitas, uma receita pode ter vários ingredientes)
-    # Agora também suporta receitas como ingredientes (sub-receitas)
+    # Agora suporta: ingredientes, receitas, produtos e combos
     def add_ingrediente(self, data: ReceitaIngredienteIn) -> ReceitaIngredienteModel:
         # Verifica se a receita existe
         receita = self.get_receita_by_id(data.receita_id)
         if not receita:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Receita não encontrada")
         
-        # Valida que exatamente um dos campos foi fornecido (validação do schema já faz isso, mas garantimos aqui também)
-        has_ingrediente = data.ingrediente_id is not None
-        has_receita_ingrediente = data.receita_ingrediente_id is not None
-        
-        if not (has_ingrediente or has_receita_ingrediente):
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Deve fornecer ingrediente_id ou receita_ingrediente_id")
-        if has_ingrediente and has_receita_ingrediente:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Deve fornecer apenas um: ingrediente_id ou receita_ingrediente_id")
-        
-        # Se for um ingrediente básico
-        if has_ingrediente:
-            # Verifica se o ingrediente existe
+        # Determina qual tipo de item está sendo adicionado
+        if data.ingrediente_id is not None:
+            # Ingrediente básico
             ingrediente = self.db.query(IngredienteModel).filter_by(id=data.ingrediente_id).first()
             if not ingrediente:
                 raise HTTPException(status.HTTP_404_NOT_FOUND, "Ingrediente não encontrado")
             
-            # Verifica se já existe na mesma receita (evita duplicatas)
-            exists_mesma_receita = (
+            exists = (
                 self.db.query(ReceitaIngredienteModel)
                 .filter_by(receita_id=data.receita_id, ingrediente_id=data.ingrediente_id)
                 .filter(ReceitaIngredienteModel.receita_ingrediente_id.is_(None))
+                .filter(ReceitaIngredienteModel.produto_cod_barras.is_(None))
+                .filter(ReceitaIngredienteModel.combo_id.is_(None))
                 .first()
             )
-            if exists_mesma_receita:
+            if exists:
                 raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ingrediente já cadastrado nesta receita")
             
             obj = ReceitaIngredienteModel(
                 receita_id=data.receita_id,
                 ingrediente_id=data.ingrediente_id,
                 receita_ingrediente_id=None,
+                produto_cod_barras=None,
+                combo_id=None,
                 quantidade=data.quantidade,
             )
         
-        # Se for uma sub-receita
-        else:
-            # Verifica se a receita usada como ingrediente existe
+        elif data.receita_ingrediente_id is not None:
+            # Sub-receita
             receita_ingrediente = self.get_receita_by_id(data.receita_ingrediente_id)
             if not receita_ingrediente:
                 raise HTTPException(status.HTTP_404_NOT_FOUND, "Receita ingrediente não encontrada")
             
-            # Evita referência circular (uma receita não pode ser ingrediente de si mesma)
             if data.receita_id == data.receita_ingrediente_id:
                 raise HTTPException(status.HTTP_400_BAD_REQUEST, "Uma receita não pode ser ingrediente de si mesma")
             
-            # Verifica se já existe na mesma receita (evita duplicatas)
-            exists_mesma_receita = (
+            exists = (
                 self.db.query(ReceitaIngredienteModel)
                 .filter_by(receita_id=data.receita_id, receita_ingrediente_id=data.receita_ingrediente_id)
                 .filter(ReceitaIngredienteModel.ingrediente_id.is_(None))
+                .filter(ReceitaIngredienteModel.produto_cod_barras.is_(None))
+                .filter(ReceitaIngredienteModel.combo_id.is_(None))
                 .first()
             )
-            if exists_mesma_receita:
+            if exists:
                 raise HTTPException(status.HTTP_400_BAD_REQUEST, "Sub-receita já cadastrada nesta receita")
             
             obj = ReceitaIngredienteModel(
                 receita_id=data.receita_id,
                 ingrediente_id=None,
                 receita_ingrediente_id=data.receita_ingrediente_id,
+                produto_cod_barras=None,
+                combo_id=None,
                 quantidade=data.quantidade,
             )
+        
+        elif data.produto_cod_barras is not None:
+            # Produto normal
+            produto = self.db.query(ProdutoModel).filter_by(cod_barras=data.produto_cod_barras).first()
+            if not produto:
+                raise HTTPException(status.HTTP_404_NOT_FOUND, "Produto não encontrado")
+            
+            exists = (
+                self.db.query(ReceitaIngredienteModel)
+                .filter_by(receita_id=data.receita_id, produto_cod_barras=data.produto_cod_barras)
+                .filter(ReceitaIngredienteModel.ingrediente_id.is_(None))
+                .filter(ReceitaIngredienteModel.receita_ingrediente_id.is_(None))
+                .filter(ReceitaIngredienteModel.combo_id.is_(None))
+                .first()
+            )
+            if exists:
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, "Produto já cadastrado nesta receita")
+            
+            obj = ReceitaIngredienteModel(
+                receita_id=data.receita_id,
+                ingrediente_id=None,
+                receita_ingrediente_id=None,
+                produto_cod_barras=data.produto_cod_barras,
+                combo_id=None,
+                quantidade=data.quantidade,
+            )
+        
+        elif data.combo_id is not None:
+            # Combo
+            combo = self.db.query(ComboModel).filter_by(id=data.combo_id).first()
+            if not combo:
+                raise HTTPException(status.HTTP_404_NOT_FOUND, "Combo não encontrado")
+            
+            exists = (
+                self.db.query(ReceitaIngredienteModel)
+                .filter_by(receita_id=data.receita_id, combo_id=data.combo_id)
+                .filter(ReceitaIngredienteModel.ingrediente_id.is_(None))
+                .filter(ReceitaIngredienteModel.receita_ingrediente_id.is_(None))
+                .filter(ReceitaIngredienteModel.produto_cod_barras.is_(None))
+                .first()
+            )
+            if exists:
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, "Combo já cadastrado nesta receita")
+            
+            obj = ReceitaIngredienteModel(
+                receita_id=data.receita_id,
+                ingrediente_id=None,
+                receita_ingrediente_id=None,
+                produto_cod_barras=None,
+                combo_id=data.combo_id,
+                quantidade=data.quantidade,
+            )
+        
+        else:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Deve fornecer ingrediente_id, receita_ingrediente_id, produto_cod_barras ou combo_id")
         
         self.db.add(obj)
         self.db.commit()
@@ -228,7 +279,9 @@ class ReceitasRepository:
             self.db.query(ReceitaIngredienteModel)
             .options(
                 joinedload(ReceitaIngredienteModel.ingrediente),
-                joinedload(ReceitaIngredienteModel.receita_ingrediente)
+                joinedload(ReceitaIngredienteModel.receita_ingrediente),
+                joinedload(ReceitaIngredienteModel.produto),
+                joinedload(ReceitaIngredienteModel.combo)
             )
             .filter(ReceitaIngredienteModel.receita_id == receita_id)
             .all()

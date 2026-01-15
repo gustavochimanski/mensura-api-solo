@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.api.catalogo.models.model_combo import ComboModel, ComboItemModel
 from app.api.catalogo.models.model_produto import ProdutoModel
+from app.api.catalogo.models.model_receita import ReceitaModel
 
 
 class ComboRepository:
@@ -22,7 +23,10 @@ class ComboRepository:
     def list_paginado(self, empresa_id: int, offset: int, limit: int, search: Optional[str] = None) -> List[ComboModel]:
         query = (
             self.db.query(ComboModel)
-            .options(joinedload(ComboModel.itens))
+            .options(
+                joinedload(ComboModel.itens).joinedload(ComboItemModel.produto),
+                joinedload(ComboModel.itens).joinedload(ComboItemModel.receita)
+            )
             .filter(ComboModel.empresa_id == empresa_id)
         )
 
@@ -82,15 +86,29 @@ class ComboRepository:
         self.db.flush()
 
         for it in itens:
-            # valida existência do produto
-            prod = self.db.query(ProdutoModel).filter_by(cod_barras=it["produto_cod_barras"]).first()
-            if not prod:
-                raise ValueError(f"Produto inexistente: {it['produto_cod_barras']}")
-            self.db.add(ComboItemModel(
-                combo_id=combo.id,
-                produto_cod_barras=it["produto_cod_barras"],
-                quantidade=it["quantidade"],
-            ))
+            # Valida e cria item (produto ou receita)
+            if "produto_cod_barras" in it and it["produto_cod_barras"]:
+                prod = self.db.query(ProdutoModel).filter_by(cod_barras=it["produto_cod_barras"]).first()
+                if not prod:
+                    raise ValueError(f"Produto inexistente: {it['produto_cod_barras']}")
+                self.db.add(ComboItemModel(
+                    combo_id=combo.id,
+                    produto_cod_barras=it["produto_cod_barras"],
+                    receita_id=None,
+                    quantidade=it["quantidade"],
+                ))
+            elif "receita_id" in it and it["receita_id"]:
+                receita = self.db.query(ReceitaModel).filter_by(id=it["receita_id"]).first()
+                if not receita:
+                    raise ValueError(f"Receita inexistente: {it['receita_id']}")
+                self.db.add(ComboItemModel(
+                    combo_id=combo.id,
+                    produto_cod_barras=None,
+                    receita_id=it["receita_id"],
+                    quantidade=it["quantidade"],
+                ))
+            else:
+                raise ValueError("Item deve ter produto_cod_barras ou receita_id")
 
         self.db.flush()
         return combo
@@ -125,14 +143,28 @@ class ComboRepository:
             self.db.query(ComboItemModel).filter(ComboItemModel.combo_id == combo.id).delete()
             self.db.flush()
             for it in itens:
-                prod = self.db.query(ProdutoModel).filter_by(cod_barras=it["produto_cod_barras"]).first()
-                if not prod:
-                    raise ValueError(f"Produto inexistente: {it['produto_cod_barras']}")
-                self.db.add(ComboItemModel(
-                    combo_id=combo.id,
-                    produto_cod_barras=it["produto_cod_barras"],
-                    quantidade=it["quantidade"],
-                ))
+                if "produto_cod_barras" in it and it["produto_cod_barras"]:
+                    prod = self.db.query(ProdutoModel).filter_by(cod_barras=it["produto_cod_barras"]).first()
+                    if not prod:
+                        raise ValueError(f"Produto inexistente: {it['produto_cod_barras']}")
+                    self.db.add(ComboItemModel(
+                        combo_id=combo.id,
+                        produto_cod_barras=it["produto_cod_barras"],
+                        receita_id=None,
+                        quantidade=it["quantidade"],
+                    ))
+                elif "receita_id" in it and it["receita_id"]:
+                    receita = self.db.query(ReceitaModel).filter_by(id=it["receita_id"]).first()
+                    if not receita:
+                        raise ValueError(f"Receita inexistente: {it['receita_id']}")
+                    self.db.add(ComboItemModel(
+                        combo_id=combo.id,
+                        produto_cod_barras=None,
+                        receita_id=it["receita_id"],
+                        quantidade=it["quantidade"],
+                    ))
+                else:
+                    raise ValueError("Item deve ter produto_cod_barras ou receita_id")
 
         self.db.flush()
         return combo

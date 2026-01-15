@@ -37,16 +37,30 @@ class ComboModel(Base):
 
 
 class ComboItemModel(Base):
+    """
+    Modelo de Item de Combo - Relacionamento N:N
+    
+    Suporta dois tipos de itens:
+    1. Produtos normais (produto_cod_barras preenchido)
+    2. Receitas (receita_id preenchido)
+    
+    A constraint CHECK garante que exatamente um dos dois campos seja preenchido.
+    """
     __tablename__ = "combos_itens"
     __table_args__ = {"schema": "catalogo"}
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     combo_id = Column(Integer, ForeignKey("catalogo.combos.id", ondelete="CASCADE"), nullable=False)
-    produto_cod_barras = Column(String, ForeignKey("catalogo.produtos.cod_barras", ondelete="RESTRICT"), nullable=False)
+    
+    # Tipos de itens (mutuamente exclusivos - exatamente um deve ser preenchido)
+    produto_cod_barras = Column(String, ForeignKey("catalogo.produtos.cod_barras", ondelete="RESTRICT"), nullable=True)
+    receita_id = Column(Integer, ForeignKey("catalogo.receitas.id", ondelete="RESTRICT"), nullable=True)
+    
     quantidade = Column(Integer, nullable=False, default=1)
 
     combo = relationship("ComboModel", back_populates="itens")
-    produto = relationship("ProdutoModel")
+    produto = relationship("ProdutoModel", foreign_keys=[produto_cod_barras])
+    receita = relationship("ReceitaModel", foreign_keys=[receita_id])
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -4,12 +4,33 @@ Centralizado no schema de catalogo
 """
 from datetime import datetime
 from typing import List, Optional
-from pydantic import BaseModel, ConfigDict, Field, condecimal, constr
+from pydantic import BaseModel, ConfigDict, Field, condecimal, constr, model_validator
 
 
 class ComboItemIn(BaseModel):
-    produto_cod_barras: constr(min_length=1)
+    """
+    Schema para item de combo.
+    
+    Deve fornecer exatamente um dos seguintes:
+    - produto_cod_barras: para vincular um produto normal
+    - receita_id: para vincular uma receita
+    """
+    produto_cod_barras: Optional[constr(min_length=1)] = None
+    receita_id: Optional[int] = None
     quantidade: int = Field(ge=1, default=1)
+    
+    @model_validator(mode='after')
+    def validate_exactly_one(self):
+        """Valida que exatamente um dos campos seja fornecido"""
+        has_produto = self.produto_cod_barras is not None
+        has_receita = self.receita_id is not None
+        
+        if not (has_produto or has_receita):
+            raise ValueError("Deve fornecer produto_cod_barras ou receita_id")
+        if has_produto and has_receita:
+            raise ValueError("Deve fornecer apenas um: produto_cod_barras ou receita_id")
+        
+        return self
 
 
 class CriarComboRequest(BaseModel):
@@ -32,7 +53,8 @@ class AtualizarComboRequest(BaseModel):
 
 
 class ComboItemDTO(BaseModel):
-    produto_cod_barras: str
+    produto_cod_barras: Optional[str] = None
+    receita_id: Optional[int] = None
     quantidade: int
 
     model_config = ConfigDict(from_attributes=True)
