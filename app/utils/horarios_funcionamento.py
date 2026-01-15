@@ -131,3 +131,69 @@ def empresa_esta_aberta_agora(
     return False
 
 
+def formatar_horarios_funcionamento_mensagem(horarios_funcionamento: Any) -> str:
+    """
+    Formata os horários de funcionamento em uma mensagem bonita para WhatsApp.
+    
+    Args:
+        horarios_funcionamento: Lista de horários no formato esperado
+        
+    Returns:
+        Mensagem formatada com os horários
+    """
+    if not horarios_funcionamento or not isinstance(horarios_funcionamento, list):
+        return "Horários de funcionamento não configurados."
+    
+    # Nomes dos dias da semana
+    dias_semana = {
+        0: "Domingo",
+        1: "Segunda-feira",
+        2: "Terça-feira",
+        3: "Quarta-feira",
+        4: "Quinta-feira",
+        5: "Sexta-feira",
+        6: "Sábado"
+    }
+    
+    # Agrupa horários por dia
+    horarios_por_dia = {}
+    for item in horarios_funcionamento:
+        if not isinstance(item, dict):
+            continue
+        dia = item.get("dia_semana")
+        intervalos = item.get("intervalos", [])
+        
+        if dia is not None and isinstance(intervalos, list) and intervalos:
+            if dia not in horarios_por_dia:
+                horarios_por_dia[dia] = []
+            horarios_por_dia[dia].extend(intervalos)
+    
+    if not horarios_por_dia:
+        return "Horários de funcionamento não configurados."
+    
+    # Monta a mensagem
+    mensagem = "🕐 *HORÁRIOS DE FUNCIONAMENTO*\n\n"
+    
+    # Ordena os dias (0=domingo até 6=sábado)
+    for dia in sorted(horarios_por_dia.keys()):
+        nome_dia = dias_semana.get(dia, f"Dia {dia}")
+        intervalos = horarios_por_dia[dia]
+        
+        # Formata os intervalos
+        intervalos_formatados = []
+        for intervalo in intervalos:
+            if isinstance(intervalo, dict):
+                inicio = intervalo.get("inicio", "")
+                fim = intervalo.get("fim", "")
+                if inicio and fim:
+                    intervalos_formatados.append(f"{inicio} às {fim}")
+        
+        if intervalos_formatados:
+            horarios_str = " e ".join(intervalos_formatados)
+            mensagem += f"• *{nome_dia}:* {horarios_str}\n"
+    
+    mensagem += "\n💬 Retornaremos em breve quando estivermos abertos!"
+    
+    return mensagem
+
+

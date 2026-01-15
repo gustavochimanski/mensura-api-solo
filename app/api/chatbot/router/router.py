@@ -1162,6 +1162,82 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 print(f"   🔄 Ignorando processamento duplicado para evitar resposta repetida.")
                 return  # Ignora mensagem duplicada
 
+        # VERIFICA SE A LOJA ESTÁ ABERTA
+        try:
+            from app.api.empresas.models.empresa_model import EmpresaModel
+            from app.utils.horarios_funcionamento import empresa_esta_aberta_agora, formatar_horarios_funcionamento_mensagem
+            
+            empresa_id_int = int(empresa_id) if empresa_id else 1
+            empresa = db.query(EmpresaModel).filter(EmpresaModel.id == empresa_id_int).first()
+            
+            if empresa and empresa.horarios_funcionamento:
+                esta_aberta = empresa_esta_aberta_agora(
+                    horarios_funcionamento=empresa.horarios_funcionamento,
+                    timezone=empresa.timezone or "America/Sao_Paulo"
+                )
+                
+                # Se a loja estiver fechada (False), envia mensagem com horários
+                if esta_aberta is False:
+                    print(f"   🕐 Loja está FECHADA no momento - enviando mensagem com horários")
+                    
+                    # Salva a mensagem do usuário no histórico
+                    if conversations:
+                        conversation_id = conversations[0]['id']
+                    else:
+                        # Cria conversa temporária para salvar a mensagem
+                        conversation_id = chatbot_db.create_conversation(
+                            db=db,
+                            session_id=f"whatsapp_{user_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                            user_id=user_id,
+                            prompt_key="default",
+                            model="groq-sales",
+                            contact_name=contact_name,
+                            empresa_id=empresa_id_int
+                        )
+                    
+                    # Salva mensagem do usuário
+                    chatbot_db.create_message(
+                        db=db,
+                        conversation_id=conversation_id,
+                        role="user",
+                        content=message_text
+                    )
+                    
+                    # Formata mensagem bonita com horários
+                    mensagem_horarios = "😊 Olá! Obrigado por entrar em contato!\n\n"
+                    mensagem_horarios += "⏰ *No momento, estamos fechados.*\n\n"
+                    mensagem_horarios += formatar_horarios_funcionamento_mensagem(empresa.horarios_funcionamento)
+                    
+                    # Salva resposta do bot
+                    chatbot_db.create_message(
+                        db=db,
+                        conversation_id=conversation_id,
+                        role="assistant",
+                        content=mensagem_horarios
+                    )
+                    
+                    # Envia mensagem via WhatsApp
+                    notifier = OrderNotification()
+                    result = await notifier.send_whatsapp_message(phone_number, mensagem_horarios, empresa_id=empresa_id)
+                    
+                    if isinstance(result, dict) and result.get("success"):
+                        print(f"   ✅ Mensagem de horários enviada com sucesso!")
+                    else:
+                        error_msg = result.get("error") if isinstance(result, dict) else str(result)
+                        print(f"   ⚠️ Erro ao enviar mensagem de horários: {error_msg}")
+                    
+                    return  # Não processa a mensagem normalmente
+                elif esta_aberta is True:
+                    print(f"   ✅ Loja está ABERTA - processando mensagem normalmente")
+                else:
+                    # None = horários não configurados, processa normalmente
+                    print(f"   ℹ️ Horários não configurados - processando mensagem normalmente")
+        except Exception as e:
+            print(f"   ⚠️ Erro ao verificar horário de funcionamento: {e}")
+            import traceback
+            traceback.print_exc()
+            # Continua processando normalmente em caso de erro
+
         # VERIFICA SE O BOT ESTÁ ATIVO PARA ESTE NÚMERO
         if not chatbot_db.is_bot_active_for_phone(db, phone_number):
             print(f"   ⏸️ Bot PAUSADO para {phone_number} - mensagem ignorada")
