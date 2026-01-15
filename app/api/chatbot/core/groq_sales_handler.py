@@ -8,8 +8,9 @@ import json
 import re
 from typing import Dict, Any, List, Tuple, Optional
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, text
+from sqlalchemy import and_, text, or_, func
 from datetime import datetime
+from difflib import SequenceMatcher, get_close_matches
 
 from .sales_prompts import SALES_SYSTEM_PROMPT
 from .address_service import ChatbotAddressService
@@ -647,85 +648,101 @@ class GroqSalesHandler:
                 return resultado_fallback
             return {"funcao": "conversar", "params": {"tipo_conversa": "resposta_generica"}}
 
-    def _buscar_produto_por_termo(self, termo: str, produtos: List[Dict]) -> Optional[Dict]:
+    def _buscar_produto_por_termo(self, termo: str, produtos: List[Dict] = None) -> Optional[Dict]:
         """
-        Busca um produto na lista usando o termo fornecido pela IA.
-        Usa busca fuzzy para encontrar o melhor match.
+        Busca um produto usando busca inteligente no banco (produtos + receitas + combos).
+        Se produtos for fornecido, também busca na lista como fallback.
+        Usa busca fuzzy com correção de erros e suporte a variações.
         """
-        termo_lower = termo.lower().strip()
+        if not termo or len(termo.strip()) < 2:
+            return None
+        
+        termo = termo.strip()
+        
+        # PRIMEIRO: Tenta busca inteligente no banco (produtos + receitas + combos)
+        resultados_banco = self._buscar_produtos_inteligente(termo, limit=1)
+        
+        if resultados_banco:
+            produto_encontrado = resultados_banco[0]
+            print(f"✅ Produto encontrado no banco: {produto_encontrado['nome']} (tipo: {produto_encontrado.get('tipo', 'produto')})")
+            return produto_encontrado
+        
+        # FALLBACK: Se não encontrou no banco e tem lista de produtos, busca na lista
+        if produtos:
+            termo_lower = termo.lower().strip()
 
-        # Remove acentos
-        def remover_acentos(texto):
-            acentos = {'á': 'a', 'à': 'a', 'ã': 'a', 'â': 'a', 'é': 'e', 'ê': 'e',
-                       'í': 'i', 'ó': 'o', 'ô': 'o', 'õ': 'o', 'ú': 'u', 'ç': 'c'}
-            for acentuado, sem_acento in acentos.items():
-                texto = texto.replace(acentuado, sem_acento)
-            return texto
+            # Remove acentos
+            def remover_acentos(texto):
+                acentos = {'á': 'a', 'à': 'a', 'ã': 'a', 'â': 'a', 'é': 'e', 'ê': 'e',
+                           'í': 'i', 'ó': 'o', 'ô': 'o', 'õ': 'o', 'ú': 'u', 'ç': 'c'}
+                for acentuado, sem_acento in acentos.items():
+                    texto = texto.replace(acentuado, sem_acento)
+                return texto
 
-        # Normaliza removendo hífens, espaços e caracteres especiais
-        def normalizar(texto):
-            texto = remover_acentos(texto.lower())
-            return re.sub(r'[-\s_.]', '', texto)
+            # Normaliza removendo hífens, espaços e caracteres especiais
+            def normalizar(texto):
+                texto = remover_acentos(texto.lower())
+                return re.sub(r'[-\s_.]', '', texto)
 
-        termo_sem_acento = remover_acentos(termo_lower)
-        termo_normalizado = normalizar(termo_lower)
+            termo_sem_acento = remover_acentos(termo_lower)
+            termo_normalizado = normalizar(termo_lower)
 
-        # 1. Match exato no nome
-        for produto in produtos:
-            nome_lower = produto['nome'].lower()
-            nome_sem_acento = remover_acentos(nome_lower)
-            if termo_lower == nome_lower or termo_sem_acento == nome_sem_acento:
-                print(f"✅ Match exato: {produto['nome']}")
-                return produto
-
-        # 1.5 Match normalizado (xbacon = x-bacon, coca cola = cocacola)
-        for produto in produtos:
-            nome_normalizado = normalizar(produto['nome'])
-            if termo_normalizado == nome_normalizado:
-                print(f"✅ Match normalizado: {produto['nome']}")
-                return produto
-
-        # 2. Nome contém o termo (também normalizado)
-        for produto in produtos:
-            nome_lower = produto['nome'].lower()
-            nome_sem_acento = remover_acentos(nome_lower)
-            nome_normalizado = normalizar(produto['nome'])
-            if termo_sem_acento in nome_sem_acento or termo_lower in nome_lower or termo_normalizado in nome_normalizado:
-                print(f"✅ Match parcial (termo no nome): {produto['nome']}")
-                return produto
-
-        # 3. Termo contém o nome do produto
-        for produto in produtos:
-            nome_lower = produto['nome'].lower()
-            nome_sem_acento = remover_acentos(nome_lower)
-            # Busca cada palavra do nome no termo
-            palavras_nome = nome_sem_acento.split()
-            for palavra in palavras_nome:
-                if len(palavra) > 3 and palavra in termo_sem_acento:
-                    print(f"✅ Match por palavra '{palavra}': {produto['nome']}")
+            # 1. Match exato no nome
+            for produto in produtos:
+                nome_lower = produto['nome'].lower()
+                nome_sem_acento = remover_acentos(nome_lower)
+                if termo_lower == nome_lower or termo_sem_acento == nome_sem_acento:
+                    print(f"✅ Match exato na lista: {produto['nome']}")
                     return produto
 
-        # 4. Match por palavras-chave comuns
-        mapeamento = {
-            'coca': ['coca-cola', 'coca cola', 'cocacola'],
-            'pepsi': ['pepsi'],
-            'guarana': ['guarana', 'guaraná'],
-            'pizza': ['pizza'],
-            'hamburguer': ['hamburguer', 'hamburger', 'burger', 'burguer'],
-            'x-': ['x-bacon', 'x-tudo', 'x-salada', 'x-burguer'],
-            'batata': ['batata', 'fritas'],
-            'calabresa': ['calabresa'],
-            'frango': ['frango'],
-            'bacon': ['bacon'],
-        }
+            # 1.5 Match normalizado (xbacon = x-bacon, coca cola = cocacola)
+            for produto in produtos:
+                nome_normalizado = normalizar(produto['nome'])
+                if termo_normalizado == nome_normalizado:
+                    print(f"✅ Match normalizado na lista: {produto['nome']}")
+                    return produto
 
-        for chave, variantes in mapeamento.items():
-            if chave in termo_sem_acento or any(v in termo_sem_acento for v in variantes):
-                for produto in produtos:
-                    nome_sem_acento = remover_acentos(produto['nome'].lower())
-                    if chave in nome_sem_acento or any(v in nome_sem_acento for v in variantes):
-                        print(f"✅ Match por mapeamento '{chave}': {produto['nome']}")
+            # 2. Nome contém o termo (também normalizado)
+            for produto in produtos:
+                nome_lower = produto['nome'].lower()
+                nome_sem_acento = remover_acentos(nome_lower)
+                nome_normalizado = normalizar(produto['nome'])
+                if termo_sem_acento in nome_sem_acento or termo_lower in nome_lower or termo_normalizado in nome_normalizado:
+                    print(f"✅ Match parcial na lista (termo no nome): {produto['nome']}")
+                    return produto
+
+            # 3. Termo contém o nome do produto
+            for produto in produtos:
+                nome_lower = produto['nome'].lower()
+                nome_sem_acento = remover_acentos(nome_lower)
+                # Busca cada palavra do nome no termo
+                palavras_nome = nome_sem_acento.split()
+                for palavra in palavras_nome:
+                    if len(palavra) > 3 and palavra in termo_sem_acento:
+                        print(f"✅ Match por palavra '{palavra}' na lista: {produto['nome']}")
                         return produto
+
+            # 4. Match por palavras-chave comuns
+            mapeamento = {
+                'coca': ['coca-cola', 'coca cola', 'cocacola'],
+                'pepsi': ['pepsi'],
+                'guarana': ['guarana', 'guaraná'],
+                'pizza': ['pizza'],
+                'hamburguer': ['hamburguer', 'hamburger', 'burger', 'burguer'],
+                'x-': ['x-bacon', 'x-tudo', 'x-salada', 'x-burguer'],
+                'batata': ['batata', 'fritas'],
+                'calabresa': ['calabresa'],
+                'frango': ['frango'],
+                'bacon': ['bacon'],
+            }
+
+            for chave, variantes in mapeamento.items():
+                if chave in termo_sem_acento or any(v in termo_sem_acento for v in variantes):
+                    for produto in produtos:
+                        nome_sem_acento = remover_acentos(produto['nome'].lower())
+                        if chave in nome_sem_acento or any(v in nome_sem_acento for v in variantes):
+                            print(f"✅ Match por mapeamento '{chave}' na lista: {produto['nome']}")
+                            return produto
 
         print(f"❌ Produto não encontrado para termo: {termo}")
         return None
@@ -830,15 +847,49 @@ class GroqSalesHandler:
                 # Se não tem pedido_contexto, pergunta qual produto
                 return "Qual produto você quer saber? Me fala o nome! 😊"
         
+        # Detecta perguntas do tipo "tem X?" ou "vocês tem X?" - usa busca inteligente
+        padrao_tem = re.search(r'(?:tem|têm|vocês?\s+tem|vcs\s+tem)\s+([a-záàâãéêíóôõúç\-\s]+?)(?:\?|$|,|\.)', msg_lower)
+        if padrao_tem:
+            produto_pergunta = padrao_tem.group(1).strip()
+            # Remove palavras genéricas
+            palavras_ignorar = ['ai', 'aí', 'no', 'cardapio', 'menu', 'aqui', 'disponivel', 'disponível']
+            produto_pergunta_limpo = ' '.join([p for p in produto_pergunta.split() if p.lower() not in palavras_ignorar])
+            
+            if produto_pergunta_limpo and len(produto_pergunta_limpo) > 2:
+                print(f"🔍 [IA] Detectada pergunta 'tem X?': '{produto_pergunta_limpo}'")
+                # Usa busca inteligente diretamente no banco
+                produtos_encontrados = self._buscar_produtos_inteligente(produto_pergunta_limpo, limit=3)
+                if produtos_encontrados:
+                    # Se encontrou exatamente 1, mostra detalhes
+                    if len(produtos_encontrados) == 1:
+                        produto = produtos_encontrados[0]
+                        return await self._gerar_resposta_sobre_produto(user_id, produto, mensagem, dados)
+                    else:
+                        # Se encontrou vários, lista os principais
+                        resposta = f"Sim! Temos:\n\n"
+                        for i, p in enumerate(produtos_encontrados[:3], 1):
+                            resposta += f"{i}. *{p['nome']}* - R$ {p['preco']:.2f}\n"
+                        resposta += "\nQual você quer saber mais? 😊"
+                        return resposta
+                else:
+                    return f"Desculpa, não encontrei '{produto_pergunta_limpo}' no cardápio. Quer ver o que temos disponível? 😊"
+        
         # Detecta perguntas com nome de produto explícito
         quer_saber, nome_produto = detectar_pergunta_ingredientes(mensagem)
         if quer_saber and nome_produto:
             print(f"🔍 [IA] Detectada pergunta sobre produto: '{nome_produto}'")
-            produto_encontrado = self._buscar_produto_por_termo(nome_produto, todos_produtos)
-            if produto_encontrado:
+            # Usa busca inteligente diretamente no banco
+            produtos_encontrados = self._buscar_produtos_inteligente(nome_produto, limit=1)
+            if produtos_encontrados:
+                produto_encontrado = produtos_encontrados[0]
                 return await self._gerar_resposta_sobre_produto(user_id, produto_encontrado, mensagem, dados)
             else:
-                return f"Hmm, não encontrei o produto '{nome_produto}' no cardápio. Quer ver o cardápio completo? 😊"
+                # Fallback para busca na lista
+                produto_encontrado = self._buscar_produto_por_termo(nome_produto, todos_produtos)
+                if produto_encontrado:
+                    return await self._gerar_resposta_sobre_produto(user_id, produto_encontrado, mensagem, dados)
+                else:
+                    return f"Hmm, não encontrei o produto '{nome_produto}' no cardápio. Quer ver o cardápio completo? 😊"
         
         # Detecta múltiplas ações na mensagem (ex: "Quero 2 xbacon. Um é sem tomate")
         acoes_detectadas = []
@@ -3095,6 +3146,315 @@ REGRA PARA COMPLEMENTOS:
             return produtos
         except Exception as e:
             print(f"Erro ao buscar todos produtos: {e}")
+            import traceback
+            traceback.print_exc()
+            return []
+
+    def _normalizar_termo_busca(self, termo: str) -> str:
+        """
+        Normaliza termo de busca removendo acentos, espaços extras e caracteres especiais.
+        """
+        def remover_acentos(texto: str) -> str:
+            acentos = {
+                'á': 'a', 'à': 'a', 'ã': 'a', 'â': 'a', 'ä': 'a',
+                'é': 'e', 'ê': 'e', 'ë': 'e',
+                'í': 'i', 'î': 'i', 'ï': 'i',
+                'ó': 'o', 'ô': 'o', 'õ': 'o', 'ö': 'o',
+                'ú': 'u', 'û': 'u', 'ü': 'u',
+                'ç': 'c', 'ñ': 'n'
+            }
+            for acentuado, sem_acento in acentos.items():
+                texto = texto.replace(acentuado, sem_acento)
+                texto = texto.replace(acentuado.upper(), sem_acento.upper())
+            return texto
+        
+        # Remove acentos e converte para minúsculas
+        termo_normalizado = remover_acentos(termo.lower().strip())
+        # Remove espaços extras e caracteres especiais (mantém apenas letras e números)
+        termo_normalizado = re.sub(r'[^\w\s]', '', termo_normalizado)
+        termo_normalizado = re.sub(r'\s+', ' ', termo_normalizado).strip()
+        return termo_normalizado
+
+    def _corrigir_termo_busca(self, termo: str, lista_referencia: List[str], threshold: float = 0.6) -> str:
+        """
+        Corrige erros de digitação usando difflib.
+        Exemplo: "te hmburg" -> "hamburg"
+        """
+        if not termo or not lista_referencia:
+            return termo
+        
+        termo_normalizado = self._normalizar_termo_busca(termo)
+        
+        # Tenta encontrar correspondência mais próxima
+        matches = get_close_matches(
+            termo_normalizado,
+            [self._normalizar_termo_busca(ref) for ref in lista_referencia],
+            n=1,
+            cutoff=threshold
+        )
+        
+        if matches:
+            # Encontra o termo original correspondente
+            for ref in lista_referencia:
+                if self._normalizar_termo_busca(ref) == matches[0]:
+                    print(f"🔧 Correção: '{termo}' -> '{ref}'")
+                    return ref
+        
+        return termo
+
+    def _expandir_sinonimos(self, termo: str) -> List[str]:
+        """
+        Expande termo com sinônimos e variações comuns.
+        Exemplo: "hamburg" -> ["hamburg", "hamburger", "burger", "hamburguer"]
+        """
+        # Dicionário de sinônimos e variações comuns
+        sinonimos = {
+            'hamburg': ['hamburger', 'burger', 'hamburguer', 'hambúrguer'],
+            'burger': ['hamburger', 'hamburg', 'hamburguer', 'hambúrguer'],
+            'hamburger': ['hamburg', 'burger', 'hamburguer', 'hambúrguer'],
+            'pizza': ['pizzas'],
+            'refri': ['refrigerante', 'refris'],
+            'refrigerante': ['refri', 'refris'],
+            'coca': ['coca cola', 'cocacola'],
+            'batata': ['batatas', 'fritas'],
+            'batata frita': ['batatas fritas', 'fritas'],
+            'x': ['x-', 'xis'],
+            'xis': ['x-', 'x'],
+        }
+        
+        termo_lower = termo.lower().strip()
+        termos_expandidos = [termo]
+        
+        # Adiciona sinônimos se encontrar
+        for chave, valores in sinonimos.items():
+            if chave in termo_lower:
+                termos_expandidos.extend(valores)
+                # Substitui a chave pelos sinônimos no termo
+                for valor in valores:
+                    termo_substituido = termo_lower.replace(chave, valor)
+                    if termo_substituido != termo_lower:
+                        termos_expandidos.append(termo_substituido)
+        
+        # Remove duplicatas mantendo ordem
+        termos_unicos = []
+        for t in termos_expandidos:
+            if t not in termos_unicos:
+                termos_unicos.append(t)
+        
+        return termos_unicos[:5]  # Limita a 5 variações para não sobrecarregar
+
+    def _buscar_produtos_inteligente(self, termo_busca: str, limit: int = 5) -> List[Dict[str, Any]]:
+        """
+        Busca inteligente em produtos, receitas e combos com:
+        - Correção de erros de digitação
+        - Suporte a variações (burger/hamburg)
+        - Busca rápida e otimizada
+        - Limitada para escalabilidade
+        
+        Args:
+            termo_busca: Termo digitado pelo cliente (pode ter erros)
+            limit: Limite de resultados (padrão 5 para ser rápido)
+        
+        Returns:
+            Lista de produtos encontrados (produtos + receitas + combos)
+        """
+        if not termo_busca or len(termo_busca.strip()) < 2:
+            return []
+        
+        try:
+            from sqlalchemy import text
+            
+            termo_original = termo_busca.strip()
+            termo_normalizado = self._normalizar_termo_busca(termo_original)
+            
+            # Expande com sinônimos
+            termos_busca = self._expandir_sinonimos(termo_original)
+            termos_busca.append(termo_normalizado)  # Adiciona versão normalizada
+            
+            # Remove duplicatas
+            termos_busca = list(dict.fromkeys(termos_busca))[:3]  # Limita a 3 termos para performance
+            
+            resultados = []
+            
+            # Busca em produtos
+            for termo in termos_busca:
+                termo_sql = f"%{termo}%"
+                query_produtos = text("""
+                    SELECT p.cod_barras, p.descricao, pe.preco_venda, 'produto' as tipo
+                    FROM catalogo.produtos p
+                    JOIN catalogo.produtos_empresa pe ON p.cod_barras = pe.cod_barras
+                    WHERE pe.empresa_id = :empresa_id
+                    AND p.ativo = true
+                    AND pe.disponivel = true
+                    AND (
+                        LOWER(REPLACE(REPLACE(p.descricao, '-', ''), ' ', '')) LIKE LOWER(REPLACE(REPLACE(:termo, '-', ''), ' ', ''))
+                        OR LOWER(p.descricao) LIKE LOWER(:termo)
+                    )
+                    ORDER BY 
+                        CASE 
+                            WHEN LOWER(p.descricao) = LOWER(:termo_exato) THEN 1
+                            WHEN LOWER(p.descricao) LIKE LOWER(:termo_inicio) THEN 2
+                            ELSE 3
+                        END,
+                        p.descricao
+                    LIMIT :limit
+                """)
+                
+                result = self.db.execute(query_produtos, {
+                    "empresa_id": self.empresa_id,
+                    "termo": termo_sql,
+                    "termo_exato": termo,
+                    "termo_inicio": f"{termo}%",
+                    "limit": limit
+                })
+                
+                for row in result.fetchall():
+                    produto = {
+                        "id": row[0],
+                        "nome": row[1],
+                        "preco": float(row[2]),
+                        "tipo": row[3]
+                    }
+                    # Evita duplicatas
+                    if not any(r.get("id") == produto["id"] and r.get("tipo") == produto["tipo"] for r in resultados):
+                        resultados.append(produto)
+                
+                if len(resultados) >= limit:
+                    break
+            
+            # Se ainda não encontrou o suficiente, busca em receitas
+            if len(resultados) < limit:
+                for termo in termos_busca:
+                    termo_sql = f"%{termo}%"
+                    query_receitas = text("""
+                        SELECT id, nome, preco_venda, 'receita' as tipo
+                        FROM catalogo.receitas
+                        WHERE empresa_id = :empresa_id
+                        AND ativo = true
+                        AND disponivel = true
+                        AND (
+                            LOWER(REPLACE(REPLACE(nome, '-', ''), ' ', '')) LIKE LOWER(REPLACE(REPLACE(:termo, '-', ''), ' ', ''))
+                            OR LOWER(nome) LIKE LOWER(:termo)
+                            OR (descricao IS NOT NULL AND LOWER(descricao) LIKE LOWER(:termo))
+                        )
+                        ORDER BY 
+                            CASE 
+                                WHEN LOWER(nome) = LOWER(:termo_exato) THEN 1
+                                WHEN LOWER(nome) LIKE LOWER(:termo_inicio) THEN 2
+                                ELSE 3
+                            END,
+                            nome
+                        LIMIT :limit
+                    """)
+                    
+                    result = self.db.execute(query_receitas, {
+                        "empresa_id": self.empresa_id,
+                        "termo": termo_sql,
+                        "termo_exato": termo,
+                        "termo_inicio": f"{termo}%",
+                        "limit": limit - len(resultados)
+                    })
+                    
+                    for row in result.fetchall():
+                        receita = {
+                            "id": f"receita_{row[0]}",
+                            "nome": row[1],
+                            "preco": float(row[2]) if row[2] else 0.0,
+                            "tipo": row[3]
+                        }
+                        # Evita duplicatas
+                        if not any(r.get("id") == receita["id"] and r.get("tipo") == receita["tipo"] for r in resultados):
+                            resultados.append(receita)
+                    
+                    if len(resultados) >= limit:
+                        break
+            
+            # Se ainda não encontrou o suficiente, busca em combos
+            if len(resultados) < limit:
+                for termo in termos_busca:
+                    termo_sql = f"%{termo}%"
+                    query_combos = text("""
+                        SELECT id, titulo, preco_total, 'combo' as tipo
+                        FROM catalogo.combos
+                        WHERE empresa_id = :empresa_id
+                        AND ativo = true
+                        AND (
+                            (titulo IS NOT NULL AND (
+                                LOWER(REPLACE(REPLACE(titulo, '-', ''), ' ', '')) LIKE LOWER(REPLACE(REPLACE(:termo, '-', ''), ' ', ''))
+                                OR LOWER(titulo) LIKE LOWER(:termo)
+                            ))
+                            OR LOWER(descricao) LIKE LOWER(:termo)
+                        )
+                        ORDER BY 
+                            CASE 
+                                WHEN titulo IS NOT NULL AND LOWER(titulo) = LOWER(:termo_exato) THEN 1
+                                WHEN titulo IS NOT NULL AND LOWER(titulo) LIKE LOWER(:termo_inicio) THEN 2
+                                ELSE 3
+                            END,
+                            titulo
+                        LIMIT :limit
+                    """)
+                    
+                    result = self.db.execute(query_combos, {
+                        "empresa_id": self.empresa_id,
+                        "termo": termo_sql,
+                        "termo_exato": termo,
+                        "termo_inicio": f"{termo}%",
+                        "limit": limit - len(resultados)
+                    })
+                    
+                    for row in result.fetchall():
+                        combo = {
+                            "id": f"combo_{row[0]}",
+                            "nome": row[1] or f"Combo {row[0]}",
+                            "preco": float(row[2]) if row[2] else 0.0,
+                            "tipo": row[3]
+                        }
+                        # Evita duplicatas
+                        if not any(r.get("id") == combo["id"] and r.get("tipo") == combo["tipo"] for r in resultados):
+                            resultados.append(combo)
+                    
+                    if len(resultados) >= limit:
+                        break
+            
+            # Se não encontrou nada, tenta correção de erros usando lista de referência
+            if not resultados:
+                # Busca lista de referência (primeiros 100 nomes de produtos/receitas/combos)
+                query_referencia = text("""
+                    (
+                        SELECT descricao as nome FROM catalogo.produtos p
+                        JOIN catalogo.produtos_empresa pe ON p.cod_barras = pe.cod_barras
+                        WHERE pe.empresa_id = :empresa_id AND p.ativo = true AND pe.disponivel = true
+                        LIMIT 50
+                    )
+                    UNION
+                    (
+                        SELECT nome FROM catalogo.receitas
+                        WHERE empresa_id = :empresa_id AND ativo = true AND disponivel = true
+                        LIMIT 30
+                    )
+                    UNION
+                    (
+                        SELECT COALESCE(titulo, descricao) as nome FROM catalogo.combos
+                        WHERE empresa_id = :empresa_id AND ativo = true
+                        LIMIT 20
+                    )
+                """)
+                
+                result_ref = self.db.execute(query_referencia, {"empresa_id": self.empresa_id})
+                lista_referencia = [row[0] for row in result_ref.fetchall()]
+                
+                # Tenta corrigir o termo
+                termo_corrigido = self._corrigir_termo_busca(termo_original, lista_referencia)
+                
+                # Se corrigiu, busca novamente
+                if termo_corrigido != termo_original:
+                    return self._buscar_produtos_inteligente(termo_corrigido, limit)
+            
+            return resultados[:limit]  # Garante que não retorna mais que o limite
+            
+        except Exception as e:
+            print(f"❌ Erro ao buscar produtos inteligente: {e}")
             import traceback
             traceback.print_exc()
             return []
