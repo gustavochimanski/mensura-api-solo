@@ -204,18 +204,6 @@ AI_FUNCTIONS = [
                 "required": []
             }
         }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "cadastrar_cliente",
-            "description": "Cliente quer se CADASTRAR ou ATUALIZAR seus dados. Use quando: 'quero me cadastrar', 'cadastrar meu nome', 'atualizar meus dados', 'cadastro', 'registrar', 'quero cadastrar meu cpf', 'atualizar cadastro'",
-            "parameters": {
-                "type": "object",
-                "properties": {},
-                "required": []
-            }
-        }
     }
 ]
 
@@ -284,15 +272,6 @@ REGRA DE OURO: Na dúvida, use "conversar". É melhor conversar do que fazer aç
    - "combo família" → ver_combos
    - "combos" → ver_combos
 
-✅ cadastrar_cliente - Quando quer se CADASTRAR ou ATUALIZAR dados:
-   - "quero me cadastrar" → cadastrar_cliente
-   - "cadastrar meu nome" → cadastrar_cliente
-   - "atualizar meus dados" → cadastrar_cliente
-   - "cadastro" → cadastrar_cliente
-   - "registrar" → cadastrar_cliente
-   - "quero cadastrar meu cpf" → cadastrar_cliente
-   - "atualizar cadastro" → cadastrar_cliente
-
 === PRODUTOS DISPONÍVEIS ===
 {produtos_lista}
 
@@ -315,11 +294,8 @@ STATE_SELECIONANDO_ENDERECO_GOOGLE = "selecionando_endereco_google"
 STATE_COLETANDO_COMPLEMENTO = "coletando_complemento"
 STATE_COLETANDO_PAGAMENTO = "coletando_pagamento"
 STATE_CONFIRMANDO_PEDIDO = "confirmando_pedido"
-# Estados para cadastro de cliente
+# Estado para cadastro rápido de cliente (durante pedido)
 STATE_CADASTRO_NOME = "cadastro_nome"
-STATE_CADASTRO_CPF = "cadastro_cpf"
-STATE_CADASTRO_EMAIL = "cadastro_email"
-STATE_CADASTRO_DATA_NASCIMENTO = "cadastro_data_nascimento"
 
 
 class GroqSalesHandler:
@@ -915,6 +891,21 @@ class GroqSalesHandler:
         carrinho = dados.get('carrinho', [])
         pedido_contexto = dados.get('pedido_contexto', [])
         
+        # VERIFICAÇÃO PRIORITÁRIA: Se detectar finalizar_pedido, segue fluxo estruturado
+        resultado_finalizar = self._interpretar_intencao_regras(mensagem, todos_produtos, carrinho)
+        if resultado_finalizar and resultado_finalizar.get("funcao") == "finalizar_pedido":
+            # Se tem itens no carrinho ou no pedido_contexto, inicia fluxo de finalização
+            if carrinho or pedido_contexto:
+                # Se tem pedido_contexto mas não carrinho, converte primeiro
+                if pedido_contexto and not carrinho:
+                    dados['carrinho'] = self._converter_contexto_para_carrinho(pedido_contexto)
+                    dados['pedido_contexto'] = pedido_contexto
+                
+                print("🛒 [Modo Conversacional] Detectado finalizar_pedido, iniciando fluxo estruturado")
+                return self._perguntar_entrega_ou_retirada(user_id, dados)
+            else:
+                return "Opa, seu carrinho tá vazio ainda! O que vai querer?"
+        
         # ANTES DE TUDO: Detecta perguntas sobre ingredientes/composição de produtos
         # Isso funciona mesmo sem IA e deve ter prioridade
         msg_lower = mensagem.lower()
@@ -1274,7 +1265,7 @@ class GroqSalesHandler:
                     if produto:
                         return await self._gerar_resposta_sobre_produto(user_id, produto, pergunta, dados)
                     else:
-                        return f"Não encontrei '{produto_busca}' no cardápio. Quer que eu mostre o que temos? 😊"
+                        return f"❌ Não encontrei *{produto_busca}* no cardápio 😔\n\nQuer que eu mostre o que temos disponível? 😊"
                 elif funcao == "ver_cardapio":
                     pedido_contexto = dados.get('pedido_contexto', [])
                     return self._gerar_lista_produtos(todos_produtos, pedido_contexto)
@@ -2090,7 +2081,7 @@ REGRA PARA COMPLEMENTOS:
             # Fallback inteligente - analisa a mensagem e responde de forma natural
             return self._fallback_resposta_inteligente(mensagem, dados)
 
-    def _fallback_resposta_inteligente(self, mensagem: str, dados: dict) -> str:
+    def _fallback_resposta_inteligente(self, mensagem: str, dados: dict, user_id: str = None) -> str:
         """
         Fallback quando a IA falha - analisa a mensagem e toma uma decisão inteligente.
         Nunca retorna erro genérico.
@@ -2098,7 +2089,8 @@ REGRA PARA COMPLEMENTOS:
         msg_lower = mensagem.lower().strip()
         pedido_contexto = dados.get('pedido_contexto', [])
         todos_produtos = self._buscar_todos_produtos()
-        user_id = dados.get('user_id', '')
+        if not user_id:
+            user_id = dados.get('user_id', '')
 
         # 0. PRIMEIRO: Verifica se está aguardando seleção de complementos
         aguardando_complemento = dados.get('aguardando_complemento', False)
@@ -2406,11 +2398,19 @@ REGRA PARA COMPLEMENTOS:
                 self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
                 return resp
 
-        # 5. Finalizar pedido
+        # 5. Finalizar pedido - segue fluxo estruturado
         if any(p in msg_lower for p in ['so isso', 'só isso', 'fechar', 'finalizar', 'nao quero mais', 'não quero mais', 'pronto', 'acabou']):
             if pedido_contexto:
-                total = sum((i['preco'] + i.get('preco_adicionais', 0)) * i.get('quantidade', 1) for i in pedido_contexto)
-                return f"Perfeito! Seu pedido ficou em R$ {total:.2f}. Vou precisar do seu endereço para entrega. Pode me passar? 📍"
+                # Converte pedido_contexto para carrinho se necessário
+                carrinho_fallback = dados.get('carrinho', [])
+                if not carrinho_fallback:
+                    dados['carrinho'] = self._converter_contexto_para_carrinho(pedido_contexto)
+                    dados['pedido_contexto'] = pedido_contexto
+                
+                # Inicia fluxo estruturado de finalização
+                print("🛒 [Fallback] Detectado finalizar_pedido, iniciando fluxo estruturado")
+                self._salvar_estado_conversa(user_id, STATE_PERGUNTANDO_ENTREGA_RETIRADA, dados)
+                return self._perguntar_entrega_ou_retirada(user_id, dados)
             return "Você ainda não pediu nada! O que vai querer? 😊"
 
         # 5. Ver pedido atual
@@ -4032,8 +4032,11 @@ Sua única função é ajudar a ESCOLHER PRODUTOS. Nada mais!
             dados['enderecos_salvos'] = enderecos
             self._salvar_estado_conversa(user_id, STATE_LISTANDO_ENDERECOS, dados)
 
-            mensagem = self.address_service.formatar_lista_enderecos_para_chat(enderecos)
-            mensagem += "\n*Quer usar um desses endereços?*\n\n"
+            mensagem = "📍 *ENDEREÇO DE ENTREGA*\n"
+            mensagem += "━━━━━━━━━━━━━━━━━━━━\n\n"
+            mensagem += "Você tem endereços salvos:\n\n"
+            mensagem += self.address_service.formatar_lista_enderecos_para_chat(enderecos)
+            mensagem += "\n━━━━━━━━━━━━━━━━━━━━\n\n"
             mensagem += "📌 Digite o *número* do endereço (ex: 1, 2, 3...)\n"
             mensagem += "🆕 Ou digite *NOVO* para cadastrar outro endereço"
 
@@ -4042,8 +4045,13 @@ Sua única função é ajudar a ESCOLHER PRODUTOS. Nada mais!
             # Cliente não tem endereços - pedir para digitar direto
             self._salvar_estado_conversa(user_id, STATE_BUSCANDO_ENDERECO_GOOGLE, dados)
 
-            mensagem = "📍 Agora preciso do endereço de entrega!\n\n"
-            mensagem += "Digite seu endereço completo com rua, número e bairro:\n"
+            mensagem = "📍 *ENDEREÇO DE ENTREGA*\n"
+            mensagem += "━━━━━━━━━━━━━━━━━━━━\n\n"
+            mensagem += "Para onde vamos entregar?\n\n"
+            mensagem += "Digite seu endereço completo:\n"
+            mensagem += "• Rua e número\n"
+            mensagem += "• Bairro\n"
+            mensagem += "• Cidade\n\n"
             mensagem += "_Exemplo: Rua das Flores 123 Centro Brasília_"
 
             return mensagem
@@ -4075,9 +4083,13 @@ Sua única função é ajudar a ESCOLHER PRODUTOS. Nada mais!
             dados['endereco_id'] = endereco_selecionado['id']
 
             # Ir para pagamento (ou resumo se já foi detectado)
+            msg_endereco = "✅ *Endereço selecionado!*\n"
+            msg_endereco += "━━━━━━━━━━━━━━━━━━━━\n\n"
+            msg_endereco += f"📍 {endereco_selecionado['endereco_completo']}\n\n"
+            
             return await self._ir_para_pagamento_ou_resumo(
                 user_id, dados,
-                f"✅ Endereço selecionado:\n📍 {endereco_selecionado['endereco_completo']}\n\n"
+                msg_endereco
             )
 
         # Verifica se o usuário digitou um endereço diretamente (ao invés de número)
@@ -4221,9 +4233,13 @@ Sua única função é ajudar a ESCOLHER PRODUTOS. Nada mais!
         dados['endereco_texto'] = endereco_completo
 
         # Ir para pagamento (ou resumo se já foi detectado)
+        msg_endereco = "✅ *Endereço salvo!*\n"
+        msg_endereco += "━━━━━━━━━━━━━━━━━━━━\n\n"
+        msg_endereco += f"📍 {endereco_completo}\n\n"
+        
         return await self._ir_para_pagamento_ou_resumo(
             user_id, dados,
-            f"✅ Endereço salvo!\n📍 {endereco_completo}\n\n"
+            msg_endereco
         )
 
     def _mensagem_formas_pagamento(self) -> str:
@@ -4242,14 +4258,17 @@ Sua única função é ajudar a ESCOLHER PRODUTOS. Nada mais!
         # Números em emoji
         numeros_emoji = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟']
 
-        mensagem = "Agora me fala, como vai ser o pagamento?\n\n💳 *Formas disponíveis:*\n"
+        mensagem = "💳 *FORMA DE PAGAMENTO*\n"
+        mensagem += "━━━━━━━━━━━━━━━━━━━━\n\n"
+        mensagem += "Como você prefere pagar?\n\n"
 
         for i, meio in enumerate(meios):
             emoji_num = numeros_emoji[i] if i < len(numeros_emoji) else f"{i+1}."
             emoji_tipo = emoji_por_tipo.get(meio.get('tipo', 'OUTROS'), '💰')
-            mensagem += f"{emoji_num} {emoji_tipo} {meio['nome']}\n"
+            mensagem += f"{emoji_num} {emoji_tipo} *{meio['nome']}*\n"
 
-        mensagem += "\nDigite o número da opção ou a forma de pagamento!"
+        mensagem += "\n━━━━━━━━━━━━━━━━━━━━\n"
+        mensagem += "Digite o *número* ou o *nome* da forma de pagamento 😊"
         return mensagem
 
     async def _ir_para_pagamento_ou_resumo(self, user_id: str, dados: Dict, mensagem_prefixo: str = "") -> str:
@@ -4273,7 +4292,26 @@ Sua única função é ajudar a ESCOLHER PRODUTOS. Nada mais!
     def _perguntar_entrega_ou_retirada(self, user_id: str, dados: Dict) -> str:
         """
         Pergunta ao cliente se é para entrega ou retirada
+        Verifica se o cliente está cadastrado (tem nome completo), se não, pede o nome primeiro
         """
+        # Verifica se o cliente está cadastrado (tem nome completo, não apenas "Cliente WhatsApp")
+        cliente = self.address_service.get_cliente_by_telefone(user_id)
+        nome_cliente = cliente.get('nome', '') if cliente else ''
+        
+        # Se não está cadastrado ou tem apenas nome genérico, pede o nome primeiro
+        if not cliente or nome_cliente in ['Cliente WhatsApp', 'Cliente', ''] or len(nome_cliente.split()) < 2:
+            # Inicia cadastro rápido - pede apenas o nome
+            dados['cadastro_rapido'] = True  # Flag para indicar que é cadastro rápido durante pedido
+            self._salvar_estado_conversa(user_id, STATE_CADASTRO_NOME, dados)
+            
+            msg = "👋 *Olá! Antes de finalizar seu pedido, preciso do seu nome completo*\n"
+            msg += "━━━━━━━━━━━━━━━━━━━━\n\n"
+            msg += "Como você gostaria de ser chamado?\n\n"
+            msg += "Digite seu *nome completo*:"
+            
+            return msg
+        
+        # Cliente já está cadastrado - pergunta entrega/retirada normalmente
         self._salvar_estado_conversa(user_id, STATE_PERGUNTANDO_ENTREGA_RETIRADA, dados)
         
         # Mostra resumo rápido do pedido antes de perguntar
@@ -4314,14 +4352,21 @@ Sua única função é ajudar a ESCOLHER PRODUTOS. Nada mais!
             dados['endereco_texto'] = 'Retirada na loja'
 
             print("🏪 Cliente escolheu RETIRADA, indo para pagamento")
+            
+            # Mensagem bonita de confirmação
+            msg_retirada = "✅ *Retirada na loja selecionada!*\n"
+            msg_retirada += "━━━━━━━━━━━━━━━━━━━━\n\n"
+            msg_retirada += "🏪 Você vai buscar aqui conosco\n"
+            msg_retirada += "   Sem taxa de entrega! 😊\n\n"
+            
             return await self._ir_para_pagamento_ou_resumo(
                 user_id, dados,
-                "Beleza! Você vai retirar aqui na loja 🏪\n\n"
+                msg_retirada
             )
 
         else:
             # Não entendeu
-            return "Não entendi 😅\nDigite *1* pra entrega ou *2* pra retirada na loja"
+            return "❓ Não entendi 😅\n\nDigite *1* para entrega ou *2* para retirada na loja 😊"
 
     async def _processar_pagamento(self, user_id: str, mensagem: str, dados: Dict) -> str:
         """
@@ -4352,7 +4397,7 @@ Sua única função é ajudar a ESCOLHER PRODUTOS. Nada mais!
         opcoes_str = "\n".join([f"*{i+1}* - {meio['nome']}" for i, meio in enumerate(meios)])
         nomes_str = ", ".join([f"*{meio['nome'].lower()}*" for meio in meios[:3]])  # Mostra até 3 exemplos
 
-        return f"Ops! Escolhe uma das opções:\n{opcoes_str}\n\nOu digite diretamente: {nomes_str} 😊"
+        return f"❓ Não entendi 😅\n\nEscolha uma das opções:\n{opcoes_str}\n\nOu digite diretamente: {nomes_str} 😊"
 
     async def _gerar_resumo_pedido(self, user_id: str, dados: Dict) -> str:
         """Gera o resumo final do pedido"""
@@ -4386,37 +4431,56 @@ Sua única função é ajudar a ESCOLHER PRODUTOS. Nada mais!
         }
         self._salvar_estado_conversa(user_id, STATE_CONFIRMANDO_PEDIDO, dados)
 
-        # Montar mensagem
-        mensagem = "📋 *RESUMO DO PEDIDO*\n\n"
-        mensagem += "*Itens:*\n"
-        for item in carrinho:
+        # Montar mensagem bonita e dinâmica
+        mensagem = "📋 *RESUMO DO SEU PEDIDO*\n"
+        mensagem += "━━━━━━━━━━━━━━━━━━━━\n\n"
+        
+        mensagem += "🛒 *ITENS:*\n"
+        for idx, item in enumerate(carrinho, 1):
             qtd = item.get('quantidade', 1)
             preco_adicionais = item.get('personalizacoes', {}).get('preco_adicionais', 0.0)
             subtotal_item = (item['preco'] + preco_adicionais) * qtd
-            mensagem += f"• {qtd}x {item['nome']} - R$ {subtotal_item:.2f}\n"
-            # Mostra adicionais se tiver
-            adicionais = item.get('personalizacoes', {}).get('adicionais', [])
-            if adicionais:
-                mensagem += f"  _Complemento: {', '.join(adicionais)}_\n"
-            # Mostra removidos se tiver
-            removidos = item.get('personalizacoes', {}).get('removidos', [])
+            mensagem += f"*{idx}. {qtd}x {item['nome']}*\n"
+            mensagem += f"   R$ {subtotal_item:.2f}\n"
+            
+            # Mostra personalizações se houver
+            personalizacoes = item.get('personalizacoes', {})
+            removidos = personalizacoes.get('removidos', [])
+            adicionais = personalizacoes.get('adicionais', [])
+            
             if removidos:
-                mensagem += f"  _Sem: {', '.join(removidos)}_\n"
+                mensagem += f"   🚫 Sem: {', '.join(removidos)}\n"
+            
+            if adicionais:
+                for add in adicionais:
+                    if isinstance(add, dict):
+                        mensagem += f"   ➕ {add.get('nome', add)} (+R$ {add.get('preco', 0):.2f})\n"
+                    else:
+                        mensagem += f"   ➕ {add}\n"
+            
+            mensagem += "\n"
 
-        # Mostrar tipo de entrega
+        mensagem += "━━━━━━━━━━━━━━━━━━━━\n\n"
+        
+        # Mostrar tipo de entrega/retirada
         if tipo_entrega == 'RETIRADA':
-            mensagem += f"\n🏪 *Retirada na loja*\n"
+            mensagem += "🏪 *RETIRADA NA LOJA*\n"
+            mensagem += "   Você busca aqui conosco\n\n"
         else:
-            mensagem += f"\n📍 *Endereço:* {endereco}\n"
+            mensagem += "📍 *ENTREGA*\n"
+            mensagem += f"   {endereco}\n\n"
 
-        mensagem += f"💳 *Pagamento:* {forma_pagamento}\n\n"
-
+        mensagem += f"💳 *PAGAMENTO*\n"
+        mensagem += f"   {forma_pagamento}\n\n"
+        
+        mensagem += "━━━━━━━━━━━━━━━━━━━━\n"
         mensagem += f"Subtotal: R$ {subtotal:.2f}\n"
         if taxa_entrega > 0:
             mensagem += f"Taxa de entrega: R$ {taxa_entrega:.2f}\n"
-        mensagem += f"\n*TOTAL: R$ {total:.2f}*\n\n"
+        mensagem += f"\n💰 *TOTAL: R$ {total:.2f}*\n"
+        mensagem += "━━━━━━━━━━━━━━━━━━━━\n\n"
 
-        mensagem += "✅ Digite *OK* para confirmar o pedido\n"
+        mensagem += "✅ Digite *OK* para confirmar\n"
         mensagem += "❌ Ou *CANCELAR* para desistir"
 
         return mensagem
@@ -4943,15 +5007,28 @@ Responda de forma natural e curta:"""
                     self._salvar_estado_conversa(user_id, STATE_WELCOME, dados)
 
                     if resultado:
-                        return f"🎉 *PEDIDO CONFIRMADO!*\n\n📋 Número do pedido: *#{resultado}*\n\nSeu pedido foi enviado para a cozinha!\nVocê receberá atualizações sobre a entrega.\n\nObrigado pela preferência! 😊"
+                        msg_confirmacao = "🎉 *PEDIDO CONFIRMADO!*\n"
+                        msg_confirmacao += "━━━━━━━━━━━━━━━━━━━━\n\n"
+                        msg_confirmacao += f"📋 *Número do pedido:* #{resultado}\n\n"
+                        msg_confirmacao += "✅ Seu pedido foi enviado para a cozinha!\n"
+                        msg_confirmacao += "📱 Você receberá atualizações sobre a entrega\n\n"
+                        msg_confirmacao += "━━━━━━━━━━━━━━━━━━━━\n"
+                        msg_confirmacao += "Obrigado pela preferência! 😊"
+                        return msg_confirmacao
                     else:
-                        return "🎉 *PEDIDO CONFIRMADO!*\n\nSeu pedido foi enviado para a cozinha!\nVocê receberá atualizações sobre a entrega.\n\nObrigado pela preferência! 😊"
+                        msg_confirmacao = "🎉 *PEDIDO CONFIRMADO!*\n"
+                        msg_confirmacao += "━━━━━━━━━━━━━━━━━━━━\n\n"
+                        msg_confirmacao += "✅ Seu pedido foi enviado para a cozinha!\n"
+                        msg_confirmacao += "📱 Você receberá atualizações sobre a entrega\n\n"
+                        msg_confirmacao += "━━━━━━━━━━━━━━━━━━━━\n"
+                        msg_confirmacao += "Obrigado pela preferência! 😊"
+                        return msg_confirmacao
                 elif 'cancelar' in mensagem.lower():
                     dados['carrinho'] = []
                     self._salvar_estado_conversa(user_id, STATE_WELCOME, dados)
-                    return "Tudo bem! Pedido cancelado 😊\n\nQuando quiser fazer um pedido, é só me chamar!"
+                    return "✅ *Pedido cancelado!*\n\nQuando quiser fazer um pedido, é só me chamar! 😊"
                 else:
-                    return "Digite *OK* para confirmar ou *CANCELAR* para desistir"
+                    return "❓ Não entendi 😅\n\nDigite *OK* para confirmar ou *CANCELAR* para desistir"
 
             # ========== INTERPRETAÇÃO POR IA (FUNCTION CALLING) ==========
             # A IA analisa a mensagem e decide qual ação tomar
@@ -5000,26 +5077,51 @@ Responda de forma natural e curta:"""
                     carrinho = dados.get('carrinho', [])
                     total = sum(item['preco'] * item.get('quantidade', 1) for item in carrinho)
 
-                    # Monta mensagem de confirmação
+                    # Monta mensagem de confirmação bonita e dinâmica
                     import random
-                    msg_resposta = f"✅ *{quantidade}x {produto['nome']}* adicionado!\n"
+                    msg_resposta = "✅ *Produto adicionado!*\n"
+                    msg_resposta += "━━━━━━━━━━━━━━━━━━━━\n\n"
+                    msg_resposta += f"*{quantidade}x {produto['nome']}*\n"
+                    msg_resposta += f"R$ {produto['preco'] * quantidade:.2f}\n"
                     
                     # Adiciona mensagem de personalização se foi aplicada
                     if personalizacao:
                         acao = personalizacao.get("acao")
                         item_nome = personalizacao.get("item")
                         if acao == "remover_ingrediente":
-                            msg_resposta += f"   🚫 Sem {item_nome}\n"
+                            msg_resposta += f"🚫 Sem: {item_nome}\n"
                         elif acao == "adicionar_extra":
-                            msg_resposta += f"   ➕ Com {item_nome} extra\n"
+                            msg_resposta += f"➕ Extra: {item_nome}\n"
+                        msg_resposta += "\n"
 
-                    # Busca ingredientes para mostrar descrição do produto
+                    # Busca ingredientes para mostrar descrição do produto (opcional - não muito longo)
                     ingredientes = self.ingredientes_service.buscar_ingredientes_por_nome_receita(produto['nome'])
-                    if ingredientes:
-                        ing_lista = [i['nome'] for i in ingredientes[:5]]  # Máximo 5 ingredientes
-                        msg_resposta += f"📋 _{', '.join(ing_lista)}_\n"
+                    if ingredientes and len(ingredientes) <= 3:
+                        ing_lista = [i['nome'] for i in ingredientes[:3]]
+                        msg_resposta += f"📋 _{', '.join(ing_lista)}_\n\n"
 
-                    msg_resposta += f"\n💰 Total: R$ {total:.2f}"
+                    # Mostra resumo do pedido atual
+                    msg_resposta += "━━━━━━━━━━━━━━━━━━━━\n"
+                    msg_resposta += "🛒 *SEU PEDIDO:*\n\n"
+                    for item in carrinho:
+                        qtd = item.get('quantidade', 1)
+                        preco_item = item['preco'] * qtd
+                        msg_resposta += f"• {qtd}x {item['nome']} - R$ {preco_item:.2f}\n"
+                        
+                        # Mostra personalizações se houver
+                        pers = item.get('personalizacoes', {})
+                        if pers.get('removidos'):
+                            msg_resposta += f"  🚫 Sem: {', '.join(pers['removidos'])}\n"
+                        if pers.get('adicionais'):
+                            for add in pers['adicionais']:
+                                if isinstance(add, dict):
+                                    msg_resposta += f"  ➕ {add.get('nome', add)} (+R$ {add.get('preco', 0):.2f})\n"
+                                else:
+                                    msg_resposta += f"  ➕ {add}\n"
+                    
+                    msg_resposta += "\n━━━━━━━━━━━━━━━━━━━━\n"
+                    msg_resposta += f"💰 *TOTAL: R$ {total:.2f}*\n"
+                    msg_resposta += "━━━━━━━━━━━━━━━━━━━━\n"
 
                     # Busca complementos disponíveis para o produto
                     complementos = self.ingredientes_service.buscar_complementos_por_nome_receita(produto['nome'])
@@ -5042,7 +5144,7 @@ Responda de forma natural e curta:"""
                         dados['complementos_disponiveis'] = complementos
                         self._salvar_estado_conversa(user_id, STATE_AGUARDANDO_PEDIDO, dados)
                     else:
-                        msg_resposta += "\n\nMais alguma coisa? 😊"
+                        msg_resposta += "\n\n💬 Quer adicionar mais alguma coisa ou posso fechar o pedido? 😊"
 
                     return msg_resposta
                 else:
@@ -5050,7 +5152,7 @@ Responda de forma natural e curta:"""
                     termos_genericos = ['fazer', 'pedido', 'pedir', 'quero um', 'quero uma', 'algo', 'alguma coisa']
                     if any(t in produto_busca.lower() for t in termos_genericos):
                         return "Claro! O que você gostaria de pedir? Posso te mostrar o cardápio se quiser! 😊"
-                    return f"Hmm, não achei '{produto_busca}' aqui 🤔\n\nQuer que eu te mostre o que temos?"
+                    return f"❌ Não encontrei *{produto_busca}* no cardápio 🤔\n\nQuer que eu mostre o que temos disponível? 😊"
 
             # REMOVER PRODUTO
             elif funcao == "remover_produto":
@@ -5064,11 +5166,15 @@ Responda de forma natural e curta:"""
                     carrinho = dados.get('carrinho', [])
                     if carrinho:
                         total = sum(item['preco'] * item.get('quantidade', 1) for item in carrinho)
-                        return f"Ok, tirei! 👍\nTotal agora: R$ {total:.2f}\n\nMais alguma coisa?"
+                        msg_remocao = "✅ *Produto removido!*\n"
+                        msg_remocao += "━━━━━━━━━━━━━━━━━━━━\n\n"
+                        msg_remocao += f"💰 *Total agora: R$ {total:.2f}*\n\n"
+                        msg_remocao += "💬 Quer adicionar mais alguma coisa? 😊"
+                        return msg_remocao
                     else:
-                        return "Pronto, tirei! Seu carrinho tá vazio agora.\n\nO que vai querer?"
+                        return "✅ *Produto removido!*\n\n🛒 Seu carrinho está vazio agora.\n\nO que você gostaria de pedir? 😊"
                 else:
-                    return f"Não achei '{produto_busca}' no seu pedido 🤔"
+                    return f"❌ Não encontrei *{produto_busca}* no seu pedido 🤔\n\nQuer ver o que tem no carrinho?"
 
             # FINALIZAR PEDIDO
             elif funcao == "finalizar_pedido":
@@ -5084,7 +5190,7 @@ Responda de forma natural e curta:"""
                     print("🛒 Cliente quer finalizar, perguntando entrega ou retirada")
                     return self._perguntar_entrega_ou_retirada(user_id, dados)
                 else:
-                    return "Opa, seu carrinho tá vazio ainda! O que vai querer?"
+                    return "🛒 *Seu carrinho está vazio!*\n\nO que você gostaria de pedir hoje? 😊"
 
             # VER CARDÁPIO
             elif funcao == "ver_cardapio":
@@ -5096,10 +5202,10 @@ Responda de forma natural e curta:"""
                 print("🛒 Cliente pediu para ver o carrinho")
                 if carrinho:
                     msg = self._formatar_carrinho(carrinho)
-                    msg += "\n\nQuer mais algo ou posso fechar?"
+                    msg += "\n\n💬 Quer adicionar mais alguma coisa ou posso fechar o pedido? 😊"
                     return msg
                 else:
-                    return "Carrinho vazio ainda! O que vai ser hoje?"
+                    return "🛒 *Seu carrinho está vazio!*\n\nO que você gostaria de pedir hoje? 😊"
 
             # INFORMAR SOBRE PRODUTO
             elif funcao == "informar_sobre_produto":
@@ -5202,14 +5308,14 @@ Responda de forma natural e curta:"""
 
         except httpx.TimeoutException:
             print("⏰ Timeout no Groq - usando fallback")
-            return self._fallback_resposta_inteligente(mensagem, dados)
+            return self._fallback_resposta_inteligente(mensagem, dados, user_id)
 
         except Exception as e:
             print(f"❌ Erro ao processar: {e}")
             import traceback
             traceback.print_exc()
             # Fallback inteligente - nunca retorna erro
-            return self._fallback_resposta_inteligente(mensagem, dados)
+            return self._fallback_resposta_inteligente(mensagem, dados, user_id)
 
 
 # Função principal para usar no webhook
