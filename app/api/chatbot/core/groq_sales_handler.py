@@ -4808,6 +4808,12 @@ Responda de forma natural e curta:"""
                 self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
                 return self._gerar_mensagem_boas_vindas_conversacional()
 
+            # ========== FLUXO DE CADASTRO RÁPIDO DE CLIENTE ==========
+            
+            # Estado: Coletando nome do cliente (cadastro rápido durante pedido)
+            if estado == STATE_CADASTRO_NOME:
+                return await self._processar_cadastro_nome_rapido(user_id, mensagem, dados)
+
             # ========== MODO CONVERSACIONAL (IA LIVRE) ==========
             if estado == STATE_CONVERSANDO:
                 return await self._processar_conversa_ia(user_id, mensagem, dados)
