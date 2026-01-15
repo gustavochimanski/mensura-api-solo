@@ -837,15 +837,125 @@ class GroqSalesHandler:
         ]
         for padrao in padroes_nele:
             if re.search(padrao, msg_lower):
-                # Se tem pedido_contexto, usa o último produto
+                produto_encontrado = None
+                fonte_produto = None
+                
+                # 1. Tenta usar pedido_contexto (último produto mencionado na conversa)
                 if pedido_contexto:
                     ultimo_produto = pedido_contexto[-1]
                     produto_encontrado = self._buscar_produto_por_termo(ultimo_produto.get('nome', ''), todos_produtos)
                     if produto_encontrado:
-                        print(f"🔍 [IA] Detectada pergunta 'nele' sobre último produto: '{produto_encontrado['nome']}'")
-                        return await self._gerar_resposta_sobre_produto(user_id, produto_encontrado, mensagem, dados)
-                # Se não tem pedido_contexto, pergunta qual produto
-                return "Qual produto você quer saber? Me fala o nome! 😊"
+                        fonte_produto = "pedido_contexto"
+                
+                # 2. Se não encontrou, tenta usar o carrinho
+                if not produto_encontrado and carrinho:
+                    ultimo_item_carrinho = carrinho[-1]
+                    produto_encontrado = self._buscar_produto_por_termo(ultimo_item_carrinho.get('nome', ''), todos_produtos)
+                    if produto_encontrado:
+                        fonte_produto = "carrinho"
+                
+                # 3. Se não encontrou, tenta usar ultimo_produto_adicionado
+                if not produto_encontrado:
+                    ultimo_produto_adicionado = dados.get('ultimo_produto_adicionado')
+                    if ultimo_produto_adicionado:
+                        if isinstance(ultimo_produto_adicionado, dict):
+                            nome_produto = ultimo_produto_adicionado.get('nome', '')
+                        else:
+                            nome_produto = str(ultimo_produto_adicionado)
+                        produto_encontrado = self._buscar_produto_por_termo(nome_produto, todos_produtos)
+                        if produto_encontrado:
+                            fonte_produto = "ultimo_produto_adicionado"
+                
+                # 4. Se ainda não encontrou, busca no histórico da conversa (mensagens do usuário e assistente)
+                if not produto_encontrado:
+                    historico = dados.get('historico', [])
+                    # Busca nas últimas 10 mensagens (usuário e assistente)
+                    for msg in reversed(historico[-10:]):
+                        conteudo = msg.get('content', '')
+                        role = msg.get('role', '')
+                        
+                        # 4.1. Extrai produtos mencionados com * (formato markdown)
+                        matches_asterisco = re.findall(r'\*([^*]+)\*', conteudo)
+                        for match in reversed(matches_asterisco):
+                            # Ignora palavras comuns que não são produtos
+                            palavras_ignorar = ['cardápio', 'cardapio', 'menu', 'pedido', 'carrinho', 'total', 'ingredientes', 'adicionais', 'sim', 'temos', 'quero', 'adicionar']
+                            match_limpo = match.strip()
+                            if match_limpo.lower() not in palavras_ignorar and len(match_limpo) > 3:
+                                # Tenta buscar o produto
+                                produto_encontrado = self._buscar_produto_por_termo(match_limpo, todos_produtos)
+                                if produto_encontrado:
+                                    fonte_produto = f"historico_{role}"
+                                    print(f"🔍 Produto encontrado no histórico ({role}): '{match_limpo}' -> '{produto_encontrado['nome']}'")
+                                    break
+                        
+                        if produto_encontrado:
+                            break
+                        
+                        # 4.2. Se não encontrou com *, busca por padrões de nomes de produtos na mensagem do usuário
+                        if role == 'user' and not produto_encontrado:
+                            # Extrai possíveis nomes de produtos (palavras com mais de 3 caracteres que não são comuns)
+                            palavras_comuns = ['tem', 'têm', 'vocês', 'vcs', 'quero', 'gostaria', 'pode', 'me', 've', 'ver', 'mostra', 'mostrar', 'o', 'que', 'vem', 'nele', 'nela', 'tem', 'tem', 'qual', 'quais', 'quero', 'adicionar', 'pedir']
+                            palavras_msg = re.findall(r'\b[a-záàâãéêíóôõúç\-]+\b', conteudo.lower())
+                            for palavra in reversed(palavras_msg):
+                                if len(palavra) > 3 and palavra not in palavras_comuns:
+                                    produto_encontrado = self._buscar_produto_por_termo(palavra, todos_produtos)
+                                    if produto_encontrado:
+                                        fonte_produto = f"historico_user_palavra"
+                                        print(f"🔍 Produto encontrado no histórico (palavra do usuário): '{palavra}' -> '{produto_encontrado['nome']}'")
+                                        break
+                        
+                        if produto_encontrado:
+                            break
+                        
+                        # 4.3. Busca por padrões específicos como "x-burger", "x burger", "hamburguer", etc
+                        if not produto_encontrado:
+                            padroes_produtos = [
+                                r'x[\s\-]?([a-z]+)',  # x-burger, x burger, xbacon
+                                r'([a-z]+)[\s\-]?burger',  # hamburguer, hamburger
+                                r'pizza[\s\-]?([a-z]+)',  # pizza calabresa
+                            ]
+                            for padrao in padroes_produtos:
+                                match_produto = re.search(padrao, conteudo.lower())
+                                if match_produto:
+                                    termo_busca = match_produto.group(0).strip()
+                                    produto_encontrado = self._buscar_produto_por_termo(termo_busca, todos_produtos)
+                                    if produto_encontrado:
+                                        fonte_produto = f"historico_padrao"
+                                        print(f"🔍 Produto encontrado no histórico (padrão): '{termo_busca}' -> '{produto_encontrado['nome']}'")
+                                        break
+                        
+                        if produto_encontrado:
+                            break
+                
+                # 5. Se encontrou produto, gera resposta
+                if produto_encontrado:
+                    print(f"🔍 [IA] Detectada pergunta 'nele' sobre produto ({fonte_produto}): '{produto_encontrado['nome']}'")
+                    
+                    # Atualiza histórico
+                    historico = dados.get('historico', [])
+                    historico.append({"role": "user", "content": mensagem})
+                    
+                    # Gera resposta
+                    resposta = await self._gerar_resposta_sobre_produto(user_id, produto_encontrado, mensagem, dados)
+                    
+                    # Salva resposta no histórico
+                    historico.append({"role": "assistant", "content": resposta})
+                    dados['historico'] = historico
+                    self._salvar_estado_conversa(user_id, estado, dados)
+                    
+                    return resposta
+                
+                # 6. Se não encontrou nenhum produto, pergunta qual produto
+                resposta = "Qual produto você quer saber? Me fala o nome! 😊"
+                
+                # Salva no histórico
+                historico = dados.get('historico', [])
+                historico.append({"role": "user", "content": mensagem})
+                historico.append({"role": "assistant", "content": resposta})
+                dados['historico'] = historico
+                self._salvar_estado_conversa(user_id, estado, dados)
+                
+                return resposta
         
         # Detecta perguntas do tipo "tem X?" ou "vocês tem X?" - usa busca inteligente
         padrao_tem = re.search(r'(?:tem|têm|vocês?\s+tem|vcs\s+tem)\s+([a-záàâãéêíóôõúç\-\s]+?)(?:\?|$|,|\.)', msg_lower)
@@ -857,22 +967,57 @@ class GroqSalesHandler:
             
             if produto_pergunta_limpo and len(produto_pergunta_limpo) > 2:
                 print(f"🔍 [IA] Detectada pergunta 'tem X?': '{produto_pergunta_limpo}'")
+                # Atualiza histórico com mensagem do usuário
+                historico = dados.get('historico', [])
+                historico.append({"role": "user", "content": mensagem})
+                
                 # Usa busca inteligente diretamente no banco
                 produtos_encontrados = self._buscar_produtos_inteligente(produto_pergunta_limpo, limit=3)
                 if produtos_encontrados:
-                    # Se encontrou exatamente 1, mostra detalhes
+                    # Se encontrou exatamente 1, mostra detalhes completos
                     if len(produtos_encontrados) == 1:
                         produto = produtos_encontrados[0]
-                        return await self._gerar_resposta_sobre_produto(user_id, produto, mensagem, dados)
+                        # Salva o produto no contexto para perguntas futuras "o que vem nele?"
+                        if 'pedido_contexto' not in dados:
+                            dados['pedido_contexto'] = []
+                        dados['pedido_contexto'].append({
+                            'nome': produto['nome'],
+                            'tipo': produto.get('tipo', 'produto'),
+                            'id': produto.get('id')
+                        })
+                        dados['ultimo_produto_adicionado'] = produto['nome']
+                        
+                        # Gera resposta sobre o produto
+                        resposta = await self._gerar_resposta_sobre_produto(user_id, produto, mensagem, dados)
+                        
+                        # Salva resposta no histórico
+                        historico.append({"role": "assistant", "content": resposta})
+                        dados['historico'] = historico
+                        self._salvar_estado_conversa(user_id, estado, dados)
+                        
+                        return resposta
                     else:
                         # Se encontrou vários, lista os principais
                         resposta = f"Sim! Temos:\n\n"
                         for i, p in enumerate(produtos_encontrados[:3], 1):
                             resposta += f"{i}. *{p['nome']}* - R$ {p['preco']:.2f}\n"
                         resposta += "\nQual você quer saber mais? 😊"
+                        
+                        # Salva no histórico
+                        historico.append({"role": "assistant", "content": resposta})
+                        dados['historico'] = historico
+                        self._salvar_estado_conversa(user_id, estado, dados)
+                        
                         return resposta
                 else:
-                    return f"Desculpa, não encontrei '{produto_pergunta_limpo}' no cardápio. Quer ver o que temos disponível? 😊"
+                    resposta = f"Desculpa, não encontrei '{produto_pergunta_limpo}' no cardápio. Quer ver o que temos disponível? 😊"
+                    
+                    # Salva no histórico
+                    historico.append({"role": "assistant", "content": resposta})
+                    dados['historico'] = historico
+                    self._salvar_estado_conversa(user_id, estado, dados)
+                    
+                    return resposta
         
         # Detecta perguntas com nome de produto explícito
         quer_saber, nome_produto = detectar_pergunta_ingredientes(mensagem)
