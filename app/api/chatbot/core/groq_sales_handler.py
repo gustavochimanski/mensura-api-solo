@@ -3184,204 +3184,53 @@ REGRA PARA COMPLEMENTOS:
         ]
         return any(p in msg_lower for p in palavras_retirada)
 
-    # ========== FLUXO DE CADASTRO DE CLIENTE ==========
+    # ========== FLUXO DE CADASTRO RÁPIDO DE CLIENTE (durante pedido) ==========
 
-    def _iniciar_cadastro_cliente(self, user_id: str, dados: Dict) -> str:
+    async def _processar_cadastro_nome_rapido(self, user_id: str, mensagem: str, dados: Dict) -> str:
         """
-        Inicia o fluxo de cadastro de cliente
+        Processa o nome do cliente durante o cadastro rápido (durante pedido)
+        Após coletar o nome, atualiza o cliente e continua com o fluxo de pedido
         """
-        # Verifica se já existe cliente
-        cliente = self.address_service.get_cliente_by_telefone(user_id)
-        if cliente:
-            # Cliente já existe, pergunta se quer atualizar
-            dados['cadastro_cliente'] = {
-                'nome': cliente.get('nome'),
-                'cpf': cliente.get('cpf'),
-                'email': cliente.get('email'),
-                'data_nascimento': cliente.get('data_nascimento')
-            }
-            return "Você já está cadastrado! 😊\n\nQuer atualizar seus dados?\n\nDigite *SIM* para atualizar ou *NÃO* para cancelar."
-        
-        # Inicia cadastro novo
-        dados['cadastro_cliente'] = {}
-        self._salvar_estado_conversa(user_id, STATE_CADASTRO_NOME, dados)
-        return "Perfeito! Vamos cadastrar seus dados 📝\n\nPrimeiro, qual é seu *nome completo*?"
-
-    async def _processar_cadastro_nome(self, user_id: str, mensagem: str, dados: Dict) -> str:
-        """
-        Processa o nome do cliente
-        """
-        # Verifica se cancelou
-        if mensagem.lower().strip() in ['não', 'nao', 'cancelar', 'cancel']:
-            self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
-            return "Tudo bem! Cadastro cancelado 😊\n\nComo posso ajudar?"
-        
-        # Verifica se confirmou atualização
-        if mensagem.lower().strip() in ['sim', 's', 'quero', 'atualizar']:
-            # Se já tinha dados, inicia atualização
-            cadastro = dados.get('cadastro_cliente', {})
-            if cadastro.get('nome'):
-                self._salvar_estado_conversa(user_id, STATE_CADASTRO_NOME, dados)
-                return "Ok! Vamos atualizar seus dados 📝\n\nQual é seu *nome completo*?"
-            else:
-                self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
-                return "Tudo bem! Cadastro cancelado 😊\n\nComo posso ajudar?"
-        
         nome = mensagem.strip()
         if len(nome) < 2:
-            return "Nome muito curto! Por favor, digite seu nome completo 😊"
+            return "❓ Nome muito curto! Por favor, digite seu nome completo 😊"
         
-        # Salva o nome
-        if 'cadastro_cliente' not in dados:
-            dados['cadastro_cliente'] = {}
-        dados['cadastro_cliente']['nome'] = nome
+        # Valida se tem pelo menos nome e sobrenome
+        partes_nome = nome.split()
+        if len(partes_nome) < 2:
+            return "❓ Por favor, digite seu *nome completo* (nome e sobrenome) 😊"
         
-        # Próximo passo: CPF (opcional)
-        self._salvar_estado_conversa(user_id, STATE_CADASTRO_CPF, dados)
-        return f"Ótimo, {nome}! 👋\n\nAgora, qual é seu *CPF*? (opcional - pode digitar *PULAR* se não quiser informar)"
-
-    async def _processar_cadastro_cpf(self, user_id: str, mensagem: str, dados: Dict) -> str:
-        """
-        Processa o CPF do cliente
-        """
-        if mensagem.lower().strip() in ['pular', 'pula', 'não', 'nao', 'não tenho', 'nao tenho']:
-            # Pula CPF e vai para email
-            self._salvar_estado_conversa(user_id, STATE_CADASTRO_EMAIL, dados)
-            return "Tudo bem! Vamos pular o CPF 😊\n\nQual é seu *email*? (opcional - pode digitar *PULAR* se não quiser informar)"
-        
-        # Remove caracteres não numéricos
-        cpf = re.sub(r'[^0-9]', '', mensagem.strip())
-        
-        if len(cpf) != 11:
-            return "CPF deve ter 11 dígitos! Por favor, digite novamente ou digite *PULAR* para não informar 😊"
-        
-        # Salva o CPF
-        dados['cadastro_cliente']['cpf'] = cpf
-        
-        # Próximo passo: Email (opcional)
-        self._salvar_estado_conversa(user_id, STATE_CADASTRO_EMAIL, dados)
-        return "CPF anotado! ✅\n\nQual é seu *email*? (opcional - pode digitar *PULAR* se não quiser informar)"
-
-    async def _processar_cadastro_email(self, user_id: str, mensagem: str, dados: Dict) -> str:
-        """
-        Processa o email do cliente
-        """
-        if mensagem.lower().strip() in ['pular', 'pula', 'não', 'nao', 'não tenho', 'nao tenho']:
-            # Pula email e vai para data de nascimento
-            self._salvar_estado_conversa(user_id, STATE_CADASTRO_DATA_NASCIMENTO, dados)
-            return "Tudo bem! Vamos pular o email 😊\n\nQual é sua *data de nascimento*? (opcional - formato: DD/MM/AAAA ou digite *PULAR* se não quiser informar)"
-        
-        # Validação básica de email
-        email = mensagem.strip()
-        if '@' not in email or '.' not in email.split('@')[1]:
-            return "Email inválido! Por favor, digite um email válido ou digite *PULAR* para não informar 😊"
-        
-        # Salva o email
-        dados['cadastro_cliente']['email'] = email
-        
-        # Próximo passo: Data de nascimento (opcional)
-        self._salvar_estado_conversa(user_id, STATE_CADASTRO_DATA_NASCIMENTO, dados)
-        return "Email anotado! ✅\n\nQual é sua *data de nascimento*? (opcional - formato: DD/MM/AAAA ou digite *PULAR* se não quiser informar)"
-
-    async def _processar_cadastro_data_nascimento(self, user_id: str, mensagem: str, dados: Dict) -> str:
-        """
-        Processa a data de nascimento do cliente e finaliza o cadastro
-        """
-        if mensagem.lower().strip() in ['pular', 'pula', 'não', 'nao', 'não tenho', 'nao tenho']:
-            # Finaliza cadastro sem data de nascimento
-            return await self._finalizar_cadastro_cliente(user_id, dados)
-        
-        # Tenta parsear a data
-        data_str = mensagem.strip()
-        data_nascimento = None
-        
-        # Tenta formatos: DD/MM/AAAA, DD-MM-AAAA, DDMMAAAA
-        formatos = ['%d/%m/%Y', '%d-%m-%Y', '%d%m%Y']
-        for fmt in formatos:
-            try:
-                if fmt == '%d%m%Y' and len(data_str) == 8:
-                    # Formato sem separadores
-                    data_nascimento = datetime.strptime(data_str, fmt).date()
-                elif fmt != '%d%m%Y':
-                    data_nascimento = datetime.strptime(data_str, fmt).date()
-                break
-            except ValueError:
-                continue
-        
-        if not data_nascimento:
-            return "Data inválida! Por favor, digite no formato DD/MM/AAAA (ex: 15/03/1990) ou digite *PULAR* para não informar 😊"
-        
-        # Verifica se a data não é futura
-        if data_nascimento > datetime.now().date():
-            return "Data de nascimento não pode ser no futuro! Por favor, digite novamente ou digite *PULAR* para não informar 😊"
-        
-        # Salva a data de nascimento
-        dados['cadastro_cliente']['data_nascimento'] = data_nascimento.strftime('%Y-%m-%d')
-        
-        # Finaliza cadastro
-        return await self._finalizar_cadastro_cliente(user_id, dados)
-
-    async def _finalizar_cadastro_cliente(self, user_id: str, dados: Dict) -> str:
-        """
-        Finaliza o cadastro do cliente salvando no banco
-        """
         try:
-            cadastro = dados.get('cadastro_cliente', {})
-            if not cadastro.get('nome'):
-                self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
-                return "Ops! Não foi possível completar o cadastro. Tente novamente mais tarde 😊"
-            
-            # Busca ou cria cliente
-            cliente = self.address_service.get_cliente_by_telefone(user_id)
-            
-            # Prepara dados para atualização/criação
+            # Atualiza ou cria o cliente com o nome
             from app.api.cadastros.schemas.schema_cliente import ClienteCreate, ClienteUpdate
             from app.api.cadastros.services.service_cliente import ClienteService
+            from app.api.cadastros.repositories.repo_cliente import ClienteRepository
             
             cliente_service = ClienteService(self.db)
+            repo = ClienteRepository(self.db)
+            cliente_existente = repo.get_by_telefone(user_id)
             
-            if cliente:
+            if cliente_existente:
                 # Atualiza cliente existente
-                from app.api.cadastros.repositories.repo_cliente import ClienteRepository
-                repo = ClienteRepository(self.db)
-                cliente_obj = repo.get_by_telefone(user_id)
-                
-                if cliente_obj:
-                    update_data = ClienteUpdate(
-                        nome=cadastro.get('nome'),
-                        cpf=cadastro.get('cpf') if cadastro.get('cpf') else None,
-                        email=cadastro.get('email') if cadastro.get('email') else None,
-                        data_nascimento=cadastro.get('data_nascimento') if cadastro.get('data_nascimento') else None
-                    )
-                    cliente_service.update(cliente_obj.super_token, update_data)
-                    mensagem = "✅ *Cadastro atualizado com sucesso!*\n\n"
+                update_data = ClienteUpdate(nome=nome)
+                cliente_service.update(cliente_existente.super_token, update_data)
             else:
                 # Cria novo cliente
-                create_data = ClienteCreate(
-                    nome=cadastro.get('nome'),
-                    telefone=user_id,
-                    cpf=cadastro.get('cpf') if cadastro.get('cpf') else None,
-                    email=cadastro.get('email') if cadastro.get('email') else None,
-                    data_nascimento=cadastro.get('data_nascimento') if cadastro.get('data_nascimento') else None
-                )
+                create_data = ClienteCreate(nome=nome, telefone=user_id)
                 cliente_service.create(create_data)
-                mensagem = "✅ *Cadastro realizado com sucesso!*\n\n"
             
-            mensagem += "Seus dados foram salvos! 😊\n\n"
-            mensagem += "Como posso ajudar agora?"
+            # Nome salvo - continua com o fluxo de pedido (pergunta entrega/retirada)
+            dados.pop('cadastro_rapido', None)
+            print(f"✅ Cliente cadastrado/atualizado: {nome}")
             
-            # Limpa dados de cadastro e volta para conversação
-            dados.pop('cadastro_cliente', None)
-            self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
-            
-            return mensagem
+            # Continua com o fluxo normal de pedido
+            return self._perguntar_entrega_ou_retirada(user_id, dados)
             
         except Exception as e:
-            print(f"❌ Erro ao finalizar cadastro: {e}")
+            print(f"❌ Erro ao salvar nome do cliente: {e}")
             import traceback
             traceback.print_exc()
-            self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
-            return "Ops! Ocorreu um erro ao salvar seus dados. Tente novamente mais tarde 😊"
+            return "❌ Ops! Ocorreu um erro ao salvar seu nome. Tente novamente 😊"
 
     def _buscar_produtos(self, termo_busca: str = "") -> List[Dict[str, Any]]:
         """Busca produtos no banco de dados usando SQL direto"""
@@ -5282,11 +5131,6 @@ Responda de forma natural e curta:"""
             elif funcao == "ver_combos":
                 print("🎁 Cliente pediu para ver os combos")
                 return self.ingredientes_service.formatar_combos_para_chat()
-
-            # CADASTRAR CLIENTE
-            elif funcao == "cadastrar_cliente":
-                print("👤 Cliente quer se cadastrar")
-                return self._iniciar_cadastro_cliente(user_id, dados)
 
             # CONVERSAR (função principal para interação natural)
             elif funcao == "conversar":
