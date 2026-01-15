@@ -141,6 +141,50 @@ class ReceitasRepository:
         if not receita:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Receita não encontrada")
         
+        # Verifica se a receita está sendo usada como sub-receita em outras receitas
+        receitas_que_usam = (
+            self.db.query(ReceitaIngredienteModel)
+            .filter(ReceitaIngredienteModel.receita_ingrediente_id == receita_id)
+            .count()
+        )
+        
+        if receitas_que_usam > 0:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                f"Não é possível deletar a receita. Ela está sendo usada como ingrediente em {receitas_que_usam} receita(s). "
+                f"Remova a receita das receitas que a utilizam antes de deletá-la."
+            )
+        
+        # Verifica se a receita está sendo usada em combos
+        from app.api.catalogo.models.model_combo import ComboItemModel
+        combos_que_usam = (
+            self.db.query(ComboItemModel)
+            .filter(ComboItemModel.receita_id == receita_id)
+            .count()
+        )
+        
+        if combos_que_usam > 0:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                f"Não é possível deletar a receita. Ela está sendo usada como item em {combos_que_usam} combo(s). "
+                f"Remova a receita dos combos que a utilizam antes de deletá-la."
+            )
+        
+        # Verifica se a receita está sendo usada em pedidos
+        from app.api.pedidos.models.model_pedido_item_unificado import PedidoItemUnificadoModel
+        pedidos_que_usam = (
+            self.db.query(PedidoItemUnificadoModel)
+            .filter(PedidoItemUnificadoModel.receita_id == receita_id)
+            .count()
+        )
+        
+        if pedidos_que_usam > 0:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                f"Não é possível deletar a receita. Ela está sendo usada em {pedidos_que_usam} item(ns) de pedido(s). "
+                f"Não é possível deletar receitas que já foram utilizadas em pedidos."
+            )
+        
         self.db.delete(receita)
         self.db.commit()
 
