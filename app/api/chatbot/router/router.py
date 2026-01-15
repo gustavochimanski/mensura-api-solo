@@ -1005,11 +1005,15 @@ async def process_webhook_background(body: dict):
                     empresa_id = None
                     if phone_number_id:
                         empresa_id = get_empresa_id_by_phone_number_id(db, phone_number_id)
-                        print(f"   📱 phone_number_id: {phone_number_id} -> empresa_id: {empresa_id}")
-                    
-                    # Se não encontrou empresa_id, usa fallback (1) mas avisa
-                    if not empresa_id:
-                        print(f"   ⚠️ Empresa não encontrada para phone_number_id {phone_number_id}, usando fallback empresa_id=1")
+                        if empresa_id:
+                            print(f"   📱 phone_number_id: {phone_number_id} -> empresa_id: {empresa_id}")
+                        else:
+                            print(f"   ⚠️ Empresa não encontrada para phone_number_id {phone_number_id}")
+                            print(f"   💡 Dica: Cadastre a configuração do WhatsApp no banco com phone_number_id={phone_number_id}")
+                            print(f"   🔄 Usando fallback empresa_id=1 (configuração padrão)")
+                            empresa_id = "1"
+                    else:
+                        print(f"   ⚠️ phone_number_id não informado no webhook, usando fallback empresa_id=1")
                         empresa_id = "1"
 
                     # Processa MESSAGES (mensagens recebidas)

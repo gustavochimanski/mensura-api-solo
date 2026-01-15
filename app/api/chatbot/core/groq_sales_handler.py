@@ -2392,9 +2392,10 @@ REGRA PARA COMPLEMENTOS:
     ) -> Tuple[bool, str]:
         """
         Personaliza um item no carrinho (remove ingrediente ou adiciona extra)
+        Funciona tanto com carrinho quanto com pedido_contexto (modo conversacional)
 
         Args:
-            dados: Dados da conversa com carrinho
+            dados: Dados da conversa com carrinho ou pedido_contexto
             acao: 'remover_ingrediente' ou 'adicionar_extra'
             item_nome: Nome do ingrediente/adicional
             produto_busca: Nome do produto (opcional, usa último adicionado)
@@ -2403,25 +2404,82 @@ REGRA PARA COMPLEMENTOS:
             (sucesso, mensagem)
         """
         carrinho = dados.get('carrinho', [])
+        pedido_contexto = dados.get('pedido_contexto', [])
+        
+        # No modo conversacional, usa pedido_contexto se carrinho estiver vazio
+        lista_itens = carrinho if carrinho else pedido_contexto
+        usando_contexto = not carrinho and pedido_contexto
 
-        if not carrinho:
+        if not lista_itens:
             return (False, "Seu carrinho está vazio! Primeiro adicione um produto 😊")
 
-        # Encontra o produto no carrinho
+        # Encontra o produto na lista
         produto_alvo = None
         if produto_busca:
             # Busca pelo nome
-            for item in carrinho:
-                if produto_busca.lower() in item['nome'].lower():
+            for item in lista_itens:
+                item_nome_check = item.get('nome', '')
+                if produto_busca.lower() in item_nome_check.lower():
                     produto_alvo = item
                     break
         else:
             # Usa o último adicionado
-            produto_alvo = carrinho[-1]
+            produto_alvo = lista_itens[-1]
 
         if not produto_alvo:
             return (False, f"Não encontrei '{produto_busca}' no seu carrinho 🤔")
 
+        # No modo conversacional, trabalha com pedido_contexto que tem estrutura diferente
+        if usando_contexto:
+            # Inicializa estruturas se não existirem
+            if 'removidos' not in produto_alvo:
+                produto_alvo['removidos'] = []
+            if 'adicionais' not in produto_alvo:
+                produto_alvo['adicionais'] = []
+            if 'preco_adicionais' not in produto_alvo:
+                produto_alvo['preco_adicionais'] = 0.0
+
+            if acao == "remover_ingrediente":
+                # Verifica se o ingrediente existe na receita
+                ingrediente = self.ingredientes_service.verificar_ingrediente_na_receita_por_nome(
+                    produto_alvo['nome'], item_nome
+                )
+
+                if ingrediente:
+                    if ingrediente['nome'] not in produto_alvo['removidos']:
+                        produto_alvo['removidos'].append(ingrediente['nome'])
+                        dados['pedido_contexto'] = pedido_contexto
+                        return (True, f"✅ Ok! *{produto_alvo['nome']}* SEM {ingrediente['nome']} 👍")
+                    else:
+                        return (True, f"Esse já tá sem {ingrediente['nome']}! 😊")
+                else:
+                    return (False, f"Hmm, {produto_alvo['nome']} não leva {item_nome} 🤔")
+
+            elif acao == "adicionar_extra":
+                # Busca o adicional
+                adicional = self.ingredientes_service.buscar_adicional_por_nome(item_nome)
+
+                if adicional:
+                    # Verifica se já foi adicionado (compara nomes)
+                    adicionais_nomes = [add if isinstance(add, str) else add.get('nome', '') for add in produto_alvo['adicionais']]
+                    if adicional['nome'].lower() not in [a.lower() for a in adicionais_nomes]:
+                        produto_alvo['adicionais'].append(adicional['nome'])
+                        produto_alvo['preco_adicionais'] += adicional['preco']
+                        dados['pedido_contexto'] = pedido_contexto
+                        return (True, f"✅ Adicionei *{adicional['nome']}* (+R$ {adicional['preco']:.2f}) no seu *{produto_alvo['nome']}* 👍")
+                    else:
+                        return (True, f"Já adicionei {adicional['nome']}! 😊")
+                else:
+                    # Lista os adicionais disponíveis
+                    todos_adicionais = self.ingredientes_service.buscar_todos_adicionais()
+                    if todos_adicionais:
+                        nomes = [a['nome'] for a in todos_adicionais[:5]]
+                        return (False, f"Não encontrei esse adicional 🤔\n\nTemos disponível: {', '.join(nomes)}")
+                    return (False, f"Não encontrei esse adicional 🤔")
+            
+            return (False, "Não entendi a personalização 😅")
+        
+        # Modo normal com carrinho (estrutura com personalizacoes)
         # Inicializa personalizacoes se não existir
         if 'personalizacoes' not in produto_alvo:
             produto_alvo['personalizacoes'] = {
