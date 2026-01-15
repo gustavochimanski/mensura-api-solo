@@ -158,7 +158,7 @@ def empresa_esta_aberta_agora(
     for start, end in iter_intervals(iter_day_entries(entries, prev_dow)):
         if start > end:
             print(f"      [DEBUG] Intervalo overnight: {start.strftime('%H:%M')} - {end.strftime('%H:%M')}, Hora atual: {t.strftime('%H:%M')}")
-            contem = t < end
+            contem = _interval_contains(start, end, t)
             print(f"      [DEBUG] Intervalo overnight contém? {contem}")
             if contem:
                 print(f"      [DEBUG] ✅ LOJA ABERTA - encontrado intervalo overnight válido")
