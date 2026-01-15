@@ -965,7 +965,7 @@ def get_empresa_id_by_slug(db: Session, slug: Optional[str]) -> Optional[str]:
         if empresa:
             logger.info(f"✅ Empresa encontrada por slug: {slug} -> empresa_id={empresa.id}")
             return str(empresa.id)
-        logger.warning(f"❌ Nenhuma empresa encontrada para slug={slug}")
+        logger.warning(f"❌ Nenhuma EMPRESA encontrada para slug={slug} (verifique se a empresa existe no banco)")
         return None
     except Exception as e:
         logger.error(f"⚠️ Erro ao buscar empresa por slug={slug}: {e}", exc_info=True)
@@ -990,14 +990,18 @@ def get_empresa_id_from_webhook(db: Session, metadata: dict, slug_hint: Optional
         repo = WhatsAppConfigRepository(db)
 
         # Estratégia 0: slug da empresa vindo do header (x-cliente) ou host
+        # IMPORTANTE: Estamos identificando a EMPRESA (loja), não o CLIENTE (quem enviou a mensagem)
         if slug_hint:
-            print(f"   🔍 [Estratégia 0] Tentando identificar empresa por slug: {slug_hint}")
-            logger.info(f"🔍 Tentando identificar empresa por slug: {slug_hint}")
+            print(f"   🔍 [Estratégia 0] Tentando identificar EMPRESA por slug: {slug_hint}")
+            logger.info(f"🔍 Tentando identificar EMPRESA por slug: {slug_hint}")
             empresa_id = get_empresa_id_by_slug(db, slug_hint)
             if empresa_id:
-                print(f"   ✅ Empresa identificada por slug: {slug_hint} -> empresa_id: {empresa_id}")
-                logger.info(f"✅ Empresa identificada por slug: {slug_hint} -> empresa_id: {empresa_id}")
+                print(f"   ✅ EMPRESA identificada por slug: {slug_hint} -> empresa_id: {empresa_id}")
+                logger.info(f"✅ EMPRESA identificada por slug: {slug_hint} -> empresa_id: {empresa_id}")
                 return empresa_id
+            else:
+                print(f"   ⚠️ EMPRESA não encontrada para slug: {slug_hint}")
+                logger.warning(f"⚠️ EMPRESA não encontrada para slug: {slug_hint}")
         
         # Estratégia 1: Buscar por phone_number_id
         phone_number_id = metadata.get("phone_number_id")
@@ -1158,6 +1162,9 @@ async def process_webhook_background(body: dict, headers_info: Optional[dict] = 
                         phone_number_id = metadata.get("phone_number_id")
                         display_phone_number = metadata.get("display_phone_number")
                         
+                        if slug_hint:
+                            print(f"   ⚠️ Empresa não encontrada para slug: {slug_hint}")
+                            print(f"   💡 Dica: Verifique se existe uma empresa com slug='{slug_hint}' no banco de dados")
                         if phone_number_id:
                             print(f"   ⚠️ Empresa não encontrada para phone_number_id: {phone_number_id}")
                             print(f"   💡 Dica: Cadastre a configuração do WhatsApp no banco com phone_number_id={phone_number_id}")
