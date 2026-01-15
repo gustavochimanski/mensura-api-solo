@@ -789,6 +789,101 @@ class GroqSalesHandler:
         # Isso garante que perguntas sobre produtos específicos sejam detectadas
         todos_produtos = self._buscar_todos_produtos()
         carrinho = dados.get('carrinho', [])
+        pedido_contexto = dados.get('pedido_contexto', [])
+        
+        # Detecta múltiplas ações na mensagem (ex: "Quero 2 xbacon. Um é sem tomate")
+        acoes_detectadas = []
+        msg_para_personalizacao = mensagem  # Inicializa com a mensagem original
+        import re
+        
+        # 1. Tenta detectar adicionar produto
+        resultado_adicionar = self._interpretar_intencao_regras(mensagem, todos_produtos, carrinho)
+        if resultado_adicionar and resultado_adicionar.get("funcao") == "adicionar_produto":
+            acoes_detectadas.append(resultado_adicionar)
+            # Remove a parte do produto da mensagem para buscar outras ações
+            produto_busca = resultado_adicionar.get("params", {}).get("produto_busca", "")
+            if produto_busca:
+                # Tenta remover o nome do produto da mensagem
+                padrao_produto = re.escape(produto_busca)
+                msg_para_personalizacao = re.sub(padrao_produto, '', mensagem, flags=re.IGNORECASE)
+                # Remove também padrões de quantidade e palavras de pedido
+                msg_para_personalizacao = re.sub(r'\d+\s*x?\s*', '', msg_para_personalizacao, flags=re.IGNORECASE)
+                msg_para_personalizacao = msg_para_personalizacao.replace('quero', '').replace('dois', '').replace('duas', '').replace('uma', '').replace('um', '').strip()
+        
+        # 2. Detecta personalização na mensagem (original ou sem o produto)
+        if re.search(r'sem\s+(\w+)', msg_para_personalizacao, re.IGNORECASE):
+            match = re.search(r'sem\s+(\w+)', msg_para_personalizacao, re.IGNORECASE)
+            if match:
+                acoes_detectadas.append({
+                    "funcao": "personalizar_produto",
+                    "params": {"acao": "remover_ingrediente", "item": match.group(1)}
+                })
+        
+        if re.search(r'(mais|extra|adiciona)\s+(\w+)', msg_para_personalizacao, re.IGNORECASE):
+            match = re.search(r'(mais|extra|adiciona)\s+(\w+)', msg_para_personalizacao, re.IGNORECASE)
+            if match:
+                acoes_detectadas.append({
+                    "funcao": "personalizar_produto",
+                    "params": {"acao": "adicionar_extra", "item": match.group(2)}
+                })
+        
+        # Se detectou múltiplas ações, processa em sequência
+        if len(acoes_detectadas) > 1:
+            print(f"🎯 Detectadas {len(acoes_detectadas)} ações na mensagem: {[a.get('funcao') for a in acoes_detectadas]}")
+            
+            historico = dados.get('historico', [])
+            historico.append({"role": "user", "content": mensagem})
+            dados['historico'] = historico
+            
+            mensagens_resposta = []
+            
+            # Processa cada ação em sequência
+            for acao in acoes_detectadas:
+                funcao = acao.get("funcao")
+                params = acao.get("params", {})
+                
+                if funcao == "adicionar_produto":
+                    produto_busca = params.get("produto_busca", "")
+                    quantidade = params.get("quantidade", 1)
+                    produto = self._buscar_produto_por_termo(produto_busca, todos_produtos)
+                    
+                    if produto:
+                        # Adiciona ao pedido_contexto no modo conversacional
+                        pedido_contexto = dados.get('pedido_contexto', [])
+                        for _ in range(quantidade):
+                            novo_item = {
+                                'id': str(produto['id']),
+                                'nome': produto['nome'],
+                                'preco': produto['preco'],
+                                'quantidade': 1,
+                                'removidos': [],
+                                'adicionais': [],
+                                'preco_adicionais': 0.0
+                            }
+                            pedido_contexto.append(novo_item)
+                        
+                        dados['pedido_contexto'] = pedido_contexto
+                        mensagens_resposta.append(f"✅ Adicionei {quantidade}x *{produto['nome']}* ao pedido!")
+                
+                elif funcao == "personalizar_produto":
+                    acao_personalizar = params.get("acao", "")
+                    item_nome = params.get("item", "")
+                    produto_busca = params.get("produto_busca", "")
+                    
+                    sucesso, msg_personalizacao = self._personalizar_item_carrinho(
+                        dados, acao_personalizar, item_nome, produto_busca
+                    )
+                    if sucesso:
+                        mensagens_resposta.append(msg_personalizacao)
+            
+            self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
+            
+            if mensagens_resposta:
+                resposta_final = "\n\n".join(mensagens_resposta)
+                resposta_final += "\n\nMais alguma coisa? 😊"
+                return resposta_final
+        
+        # Processamento normal de uma única ação
         resultado_regras = self._interpretar_intencao_regras(mensagem, todos_produtos, carrinho)
         
         if resultado_regras:
