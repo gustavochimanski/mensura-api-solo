@@ -1,9 +1,35 @@
 """Configuração da extensão PostGIS do PostgreSQL."""
 import logging
-from sqlalchemy import text
+from sqlalchemy import text, quoted_name
 from ..db_connection import engine
 
 logger = logging.getLogger(__name__)
+
+
+def remover_esquemas_postgis_desnecessarios():
+    """Remove esquemas do PostGIS que não são necessários (topology, tiger, tiger_data)"""
+    esquemas_para_remover = ["topology", "tiger", "tiger_data"]
+    
+    try:
+        with engine.begin() as conn:
+            for schema in esquemas_para_remover:
+                try:
+                    # Verifica se o schema existe antes de tentar remover
+                    result = conn.execute(text("""
+                        SELECT 1 FROM information_schema.schemata 
+                        WHERE schema_name = :schema_name
+                    """), {"schema_name": schema})
+                    
+                    if result.scalar():
+                        conn.execute(text(f"DROP SCHEMA IF EXISTS {quoted_name(schema, quote=True)} CASCADE"))
+                        logger.info(f"✅ Schema {schema} removido com sucesso")
+                    else:
+                        logger.info(f"ℹ️ Schema {schema} não existe (pulando)")
+                except Exception as schema_error:
+                    # Não é crítico se falhar, apenas loga o aviso
+                    logger.warning(f"⚠️ Erro ao remover schema {schema}: {schema_error}")
+    except Exception as e:
+        logger.warning(f"⚠️ Erro ao remover esquemas PostGIS desnecessários: {e}")
 
 
 def habilitar_postgis():
