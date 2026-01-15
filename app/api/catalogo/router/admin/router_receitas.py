@@ -140,20 +140,20 @@ def add_ingrediente(
 
 @router.put("/ingredientes/{receita_ingrediente_id}", response_model=ReceitaIngredienteOut)
 def update_ingrediente(
-    receita_ingrediente_id: int = Path(..., description="ID do vínculo ingrediente-receita"),
-    quantidade: Optional[float] = Body(None, description="Quantidade do ingrediente"),
+    receita_ingrediente_id: int = Path(..., description="ID do vínculo item-receita (pode ser ingrediente, receita, produto ou combo)"),
+    quantidade: Optional[float] = Body(None, description="Quantidade do item"),
     db: Session = Depends(get_db),
 ):
-    """Atualiza a quantidade de um ingrediente em uma receita"""
+    """Atualiza a quantidade de um item (ingrediente, receita, produto ou combo) em uma receita"""
     return ReceitasService(db).update_ingrediente(receita_ingrediente_id, quantidade)
 
 
 @router.delete("/ingredientes/{receita_ingrediente_id}", status_code=status.HTTP_204_NO_CONTENT)
 def remove_ingrediente(
-    receita_ingrediente_id: int = Path(..., description="ID do vínculo ingrediente-receita"),
+    receita_ingrediente_id: int = Path(..., description="ID do vínculo item-receita (pode ser ingrediente, receita, produto ou combo)"),
     db: Session = Depends(get_db),
 ):
-    """Remove um ingrediente de uma receita (desvincula, mas não deleta o ingrediente)"""
+    """Remove um item (ingrediente, receita, produto ou combo) de uma receita (desvincula, mas não deleta o item original)"""
     ReceitasService(db).remove_ingrediente(receita_ingrediente_id)
     return None
 

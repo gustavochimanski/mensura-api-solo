@@ -332,9 +332,16 @@ class ReceitasRepository:
         )
 
     def update_ingrediente(self, receita_ingrediente_id: int, quantidade: float | None) -> ReceitaIngredienteModel:
+        """
+        Atualiza a quantidade de um item (ingrediente, receita, produto ou combo) em uma receita.
+        
+        Args:
+            receita_ingrediente_id: ID do vínculo na tabela receita_ingrediente
+            quantidade: Nova quantidade do item
+        """
         obj = self.db.query(ReceitaIngredienteModel).filter_by(id=receita_ingrediente_id).first()
         if not obj:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Ingrediente não encontrado na receita")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Item não encontrado na receita")
         if quantidade is not None:
             obj.quantidade = quantidade
         self.db.add(obj)
@@ -343,9 +350,15 @@ class ReceitasRepository:
         return obj
 
     def remove_ingrediente(self, ingrediente_id: int) -> None:
+        """
+        Remove um item (ingrediente, receita, produto ou combo) de uma receita.
+        
+        Args:
+            ingrediente_id: ID do vínculo na tabela receita_ingrediente (não é o ID do ingrediente em si)
+        """
         obj = self.db.query(ReceitaIngredienteModel).filter_by(id=ingrediente_id).first()
         if not obj:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Ingrediente não encontrado")
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Item não encontrado na receita")
         self.db.delete(obj)
         self.db.commit()
 
