@@ -751,8 +751,7 @@ class PedidoService:
                     )
                     # Ajusta o primeiro meio de pagamento para cobrir a diferença
                     if len(meios_pagamento_list) > 0:
-                        # Mantém como Decimal para consistência, mas converte para float no dict
-                        meios_pagamento_list[0]['valor'] = float(_dec(valor_total))
+                        meios_pagamento_list[0]['valor'] = float(valor_total)
                         logger.info(
                             f"[finalizar_pedido] Valor ajustado para {float(valor_total)} no primeiro meio de pagamento"
                         )
