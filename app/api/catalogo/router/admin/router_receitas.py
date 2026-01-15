@@ -85,40 +85,9 @@ def list_receitas_com_ingredientes(
     return ReceitasService(db).list_receitas_com_ingredientes(empresa_id=empresa_id, ativo=ativo, search=search)
 
 
-@router.get("/{receita_id}", response_model=ReceitaOut)
-def get_receita(
-    receita_id: int = Path(..., description="ID da receita"),
-    db: Session = Depends(get_db),
-):
-    """Busca uma receita por ID"""
-    receita = ReceitasService(db).get_receita(receita_id)
-    if not receita:
-        from fastapi import HTTPException
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Receita não encontrada")
-    return receita
-
-
-@router.put("/{receita_id}", response_model=ReceitaOut)
-def update_receita(
-    receita_id: int = Path(..., description="ID da receita"),
-    body: ReceitaUpdate = Body(...),
-    db: Session = Depends(get_db),
-):
-    """Atualiza uma receita"""
-    return ReceitasService(db).update_receita(receita_id, body)
-
-
-@router.delete("/{receita_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_receita(
-    receita_id: int = Path(..., description="ID da receita"),
-    db: Session = Depends(get_db),
-):
-    """Remove uma receita"""
-    ReceitasService(db).delete_receita(receita_id)
-    return None
-
-
 # Itens de receitas (sub-receitas, produtos e combos)
+# IMPORTANTE: Rotas sem parâmetros de path devem vir ANTES das rotas com parâmetros
+# para evitar conflitos de roteamento (ex: /itens vs /{receita_id})
 @router.get("/itens", response_model=list[ReceitaIngredienteOut])
 def list_itens(
     receita_id: int = Query(..., description="ID da receita"),
@@ -164,6 +133,39 @@ def remove_item(
 ):
     """Remove um item (sub-receita, produto ou combo) de uma receita (desvincula, mas não deleta o item original)"""
     ReceitasService(db).remove_ingrediente(receita_ingrediente_id)
+    return None
+
+
+@router.get("/{receita_id}", response_model=ReceitaOut)
+def get_receita(
+    receita_id: int = Path(..., description="ID da receita"),
+    db: Session = Depends(get_db),
+):
+    """Busca uma receita por ID"""
+    receita = ReceitasService(db).get_receita(receita_id)
+    if not receita:
+        from fastapi import HTTPException
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Receita não encontrada")
+    return receita
+
+
+@router.put("/{receita_id}", response_model=ReceitaOut)
+def update_receita(
+    receita_id: int = Path(..., description="ID da receita"),
+    body: ReceitaUpdate = Body(...),
+    db: Session = Depends(get_db),
+):
+    """Atualiza uma receita"""
+    return ReceitasService(db).update_receita(receita_id, body)
+
+
+@router.delete("/{receita_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_receita(
+    receita_id: int = Path(..., description="ID da receita"),
+    db: Session = Depends(get_db),
+):
+    """Remove uma receita"""
+    ReceitasService(db).delete_receita(receita_id)
     return None
 
 
