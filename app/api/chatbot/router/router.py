@@ -1236,7 +1236,6 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                     mensagem_horarios += "🕐 Horário de Funcionamento:\n"
                     mensagem_horarios += horarios_formatados
                     mensagem_horarios += "\n💬 Assim que estivermos abertos, retornaremos sua mensagem o mais rápido possível.\n\n"
-                    mensagem_horarios += "🍔✨ Agradecemos o contato e esperamos falar com você em breve!"
                     
                     # Salva resposta do bot
                     chatbot_db.create_message(
