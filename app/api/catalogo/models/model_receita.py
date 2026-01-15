@@ -24,7 +24,8 @@ class ReceitaModel(Base):
     # Relacionamentos
     ingredientes = relationship(
         "ReceitaIngredienteModel",
-        foreign_keys="ReceitaIngredienteModel.receita_id",
+        primaryjoin="ReceitaModel.id == ReceitaIngredienteModel.receita_id",
+        foreign_keys="[ReceitaIngredienteModel.receita_id]",
         back_populates="receita",
         cascade="all, delete-orphan"
     )
