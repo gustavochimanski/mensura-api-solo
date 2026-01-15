@@ -596,8 +596,13 @@ class GroqSalesHandler:
                     "max_tokens": 200,
                 }
 
+                # Verifica se a chave API está configurada
+                if not GROQ_API_KEY or not GROQ_API_KEY.strip():
+                    print("⚠️ GROQ_API_KEY não configurada - usando fallback inteligente")
+                    raise ValueError("GROQ_API_KEY não configurada")
+                
                 headers = {
-                    "Authorization": f"Bearer {GROQ_API_KEY.strip()}" if GROQ_API_KEY else "Bearer ",
+                    "Authorization": f"Bearer {GROQ_API_KEY.strip()}",
                     "Content-Type": "application/json"
                 }
 
@@ -801,6 +806,39 @@ class GroqSalesHandler:
         todos_produtos = self._buscar_todos_produtos()
         carrinho = dados.get('carrinho', [])
         pedido_contexto = dados.get('pedido_contexto', [])
+        
+        # ANTES DE TUDO: Detecta perguntas sobre ingredientes/composição de produtos
+        # Isso funciona mesmo sem IA e deve ter prioridade
+        msg_lower = mensagem.lower()
+        
+        # Detecta padrões como "O que vem nele", "Que tem nele" (sem mencionar produto)
+        padroes_nele = [
+            r'o\s+que\s+(?:vem|tem)\s+nele',
+            r'que\s+(?:vem|tem)\s+nele',
+            r'o\s+que\s+(?:vem|tem)\s+n[oa]\s+ele',
+            r'que\s+(?:vem|tem)\s+n[oa]\s+ele'
+        ]
+        for padrao in padroes_nele:
+            if re.search(padrao, msg_lower):
+                # Se tem pedido_contexto, usa o último produto
+                if pedido_contexto:
+                    ultimo_produto = pedido_contexto[-1]
+                    produto_encontrado = self._buscar_produto_por_termo(ultimo_produto.get('nome', ''), todos_produtos)
+                    if produto_encontrado:
+                        print(f"🔍 [IA] Detectada pergunta 'nele' sobre último produto: '{produto_encontrado['nome']}'")
+                        return await self._gerar_resposta_sobre_produto(user_id, produto_encontrado, mensagem, dados)
+                # Se não tem pedido_contexto, pergunta qual produto
+                return "Qual produto você quer saber? Me fala o nome! 😊"
+        
+        # Detecta perguntas com nome de produto explícito
+        quer_saber, nome_produto = detectar_pergunta_ingredientes(mensagem)
+        if quer_saber and nome_produto:
+            print(f"🔍 [IA] Detectada pergunta sobre produto: '{nome_produto}'")
+            produto_encontrado = self._buscar_produto_por_termo(nome_produto, todos_produtos)
+            if produto_encontrado:
+                return await self._gerar_resposta_sobre_produto(user_id, produto_encontrado, mensagem, dados)
+            else:
+                return f"Hmm, não encontrei o produto '{nome_produto}' no cardápio. Quer ver o cardápio completo? 😊"
         
         # Detecta múltiplas ações na mensagem (ex: "Quero 2 xbacon. Um é sem tomate")
         acoes_detectadas = []
@@ -1129,8 +1167,13 @@ REGRA PARA COMPLEMENTOS:
                     "response_format": {"type": "json_object"},  # Força resposta JSON
                 }
 
+                # Verifica se a chave API está configurada
+                if not GROQ_API_KEY or not GROQ_API_KEY.strip():
+                    print("⚠️ GROQ_API_KEY não configurada - usando fallback inteligente")
+                    raise ValueError("GROQ_API_KEY não configurada")
+                
                 headers = {
-                    "Authorization": f"Bearer {GROQ_API_KEY.strip()}" if GROQ_API_KEY else "Bearer ",
+                    "Authorization": f"Bearer {GROQ_API_KEY.strip()}",
                     "Content-Type": "application/json"
                 }
 
@@ -1862,7 +1905,52 @@ REGRA PARA COMPLEMENTOS:
         if any(s in msg_lower for s in saudacoes):
             return self._gerar_mensagem_boas_vindas_conversacional()
 
-        # 2. Pedido de cardápio
+        # 2. PERGUNTAS SOBRE PRODUTOS - Detecta perguntas sobre ingredientes/composição
+        # Exemplos: "O que vem nele", "O que tem no xburger", "Quais ingredientes do xburger"
+        quer_saber, nome_produto = detectar_pergunta_ingredientes(mensagem)
+        if quer_saber and nome_produto:
+            print(f"🔍 [Fallback] Detectada pergunta sobre produto: '{nome_produto}'")
+            # Busca o produto
+            produto_encontrado = self._buscar_produto_por_termo(nome_produto, todos_produtos)
+            if produto_encontrado:
+                # Usa o método que busca ingredientes reais do banco
+                return self._gerar_resposta_sobre_produto(user_id, produto_encontrado, mensagem, dados)
+            else:
+                # Produto não encontrado - tenta buscar por palavras-chave
+                # Se a mensagem contém "nele", "nele", pode ser sobre o último produto adicionado
+                if 'nele' in msg_lower or 'nele' in msg_lower or 'nele' in msg_lower:
+                    if pedido_contexto:
+                        ultimo_produto = pedido_contexto[-1]
+                        produto_encontrado = self._buscar_produto_por_termo(ultimo_produto.get('nome', ''), todos_produtos)
+                        if produto_encontrado:
+                            return self._gerar_resposta_sobre_produto(user_id, produto_encontrado, mensagem, dados)
+                return f"Hmm, não encontrei o produto '{nome_produto}' no cardápio. Quer ver o cardápio completo? 😊"
+        
+        # Também detecta padrões mais simples como "o que vem no X", "que tem no Y"
+        padroes_pergunta = [
+            r'o\s+que\s+(?:vem|tem)\s+(?:no|na|n[oa])\s+(.+?)(?:\?|$)',
+            r'que\s+(?:vem|tem)\s+(?:no|na|n[oa])\s+(.+?)(?:\?|$)',
+            r'o\s+que\s+(?:vem|tem)\s+nele(?:\?|$)',
+            r'que\s+(?:vem|tem)\s+nele(?:\?|$)',
+        ]
+        for padrao in padroes_pergunta:
+            match = re.search(padrao, msg_lower)
+            if match:
+                produto_busca = match.group(1).strip() if match.lastindex else None
+                # Se não tem grupo, pode ser "nele" - verifica último produto
+                if not produto_busca or produto_busca == 'nele' or produto_busca == 'nele':
+                    if pedido_contexto:
+                        ultimo_produto = pedido_contexto[-1]
+                        produto_encontrado = self._buscar_produto_por_termo(ultimo_produto.get('nome', ''), todos_produtos)
+                        if produto_encontrado:
+                            return self._gerar_resposta_sobre_produto(user_id, produto_encontrado, mensagem, dados)
+                elif produto_busca and len(produto_busca) > 2:
+                    produto_encontrado = self._buscar_produto_por_termo(produto_busca, todos_produtos)
+                    if produto_encontrado:
+                        return self._gerar_resposta_sobre_produto(user_id, produto_encontrado, mensagem, dados)
+                break
+
+        # 3. Pedido de cardápio
         if any(p in msg_lower for p in ['cardapio', 'cardápio', 'menu', 'o que tem', 'que tem', 'produtos']):
             return self._gerar_lista_produtos(todos_produtos, pedido_contexto)
 
@@ -3703,8 +3791,13 @@ Responda de forma natural e curta:"""
                     "max_tokens": 150,   # Respostas curtas
                 }
 
+                # Verifica se a chave API está configurada
+                if not GROQ_API_KEY or not GROQ_API_KEY.strip():
+                    print("⚠️ GROQ_API_KEY não configurada - usando fallback inteligente")
+                    raise ValueError("GROQ_API_KEY não configurada")
+                
                 headers = {
-                    "Authorization": f"Bearer {GROQ_API_KEY.strip()}" if GROQ_API_KEY else "Bearer ",
+                    "Authorization": f"Bearer {GROQ_API_KEY.strip()}",
                     "Content-Type": "application/json"
                 }
 
@@ -3752,66 +3845,41 @@ Responda de forma natural e curta:"""
         Gera resposta sobre um produto específico.
         Usa ingredientes REAIS do banco de dados!
         """
-        # Busca ingredientes reais do banco de dados
-        ingredientes = self.ingredientes_service.buscar_ingredientes_por_nome_receita(produto['nome'])
-        adicionais = self.ingredientes_service.buscar_adicionais_por_nome_receita(produto['nome'])
-
-        # Se encontrou ingredientes, usa dados reais
-        if ingredientes:
-            nomes_ingredientes = [ing['nome'] for ing in ingredientes]
-
-            # Monta resposta com ingredientes reais
-            msg = f"*{produto['nome']}* - R$ {produto['preco']:.2f}\n\n"
-            msg += "📋 *Ingredientes:*\n"
-            for ing in ingredientes:
-                msg += f"• {ing['nome']}\n"
-
-            if adicionais:
-                msg += "\n➕ *Adicionais disponíveis:*\n"
-                for add in adicionais[:4]:  # Mostra até 4 adicionais
-                    msg += f"• {add['nome']} (+R$ {add['preco']:.2f})\n"
-
-            msg += "\nQuer pedir? 😊"
-            return msg
-
-        # Se não encontrou ingredientes no banco, usa IA para resposta genérica
-        prompt = f"""Você é um atendente de delivery. O cliente quer saber sobre:
-
-PRODUTO: {produto['nome']} - R$ {produto['preco']:.2f}
-
-PERGUNTA DO CLIENTE: {pergunta if pergunta else 'quer saber mais sobre o produto'}
-
-Responda de forma CURTA e ÚTIL (2-3 frases máximo).
-Se não souber detalhes específicos, dê uma resposta genérica positiva.
-Termine perguntando se quer pedir.
-
-Responda:"""
-
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                payload = {
-                    "model": MODEL_NAME,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "temperature": 0.7,
-                    "max_tokens": 100,
-                }
+            # Busca ingredientes reais do banco de dados
+            ingredientes = self.ingredientes_service.buscar_ingredientes_por_nome_receita(produto['nome'])
+            adicionais = self.ingredientes_service.buscar_adicionais_por_nome_receita(produto['nome'])
 
-                headers = {
-                    "Authorization": f"Bearer {GROQ_API_KEY.strip()}" if GROQ_API_KEY else "Bearer ",
-                    "Content-Type": "application/json"
-                }
+            # Se encontrou ingredientes, usa dados reais
+            if ingredientes:
+                nomes_ingredientes = [ing['nome'] for ing in ingredientes]
 
-                response = await client.post(GROQ_API_URL, json=payload, headers=headers)
+                # Monta resposta com ingredientes reais
+                msg = f"*{produto['nome']}* - R$ {produto['preco']:.2f}\n\n"
+                msg += "📋 *Ingredientes:*\n"
+                for ing in ingredientes:
+                    msg += f"• {ing['nome']}\n"
 
-                if response.status_code == 200:
-                    result = response.json()
-                    return result["choices"][0]["message"]["content"].strip()
+                if adicionais:
+                    msg += "\n➕ *Adicionais disponíveis:*\n"
+                    for add in adicionais[:4]:  # Mostra até 4 adicionais
+                        msg += f"• {add['nome']} (+R$ {add['preco']:.2f})\n"
 
+                msg += "\nQuer pedir? 😊"
+                return msg
+            else:
+                # Se não encontrou ingredientes, retorna mensagem básica
+                msg = f"*{produto['nome']}* - R$ {produto['preco']:.2f}\n\n"
+                if produto.get('descricao'):
+                    msg += f"{produto['descricao']}\n\n"
+                msg += "Quer adicionar ao pedido? 😊"
+                return msg
         except Exception as e:
-            print(f"❌ Erro ao informar produto: {e}")
-
-        # Fallback
-        return f"{produto['nome']} é uma ótima escolha! Custa R$ {produto['preco']:.2f}. Quer adicionar ao pedido?"
+            print(f"❌ Erro ao buscar ingredientes de {produto.get('nome', 'produto')}: {e}")
+            # Fallback básico
+            msg = f"*{produto['nome']}* - R$ {produto['preco']:.2f}\n\n"
+            msg += "Quer adicionar ao pedido? 😊"
+            return msg
 
     # ========== PROCESSAMENTO PRINCIPAL ==========
 
