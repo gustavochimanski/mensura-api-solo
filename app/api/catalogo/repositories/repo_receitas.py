@@ -145,31 +145,74 @@ class ReceitasRepository:
 
     # Ingredientes - Usa ReceitaIngredienteModel (receita_ingrediente)
     # Relacionamento N:N (um ingrediente pode estar em várias receitas, uma receita pode ter vários ingredientes)
+    # Agora também suporta receitas como ingredientes (sub-receitas)
     def add_ingrediente(self, data: ReceitaIngredienteIn) -> ReceitaIngredienteModel:
         # Verifica se a receita existe
         receita = self.get_receita_by_id(data.receita_id)
         if not receita:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Receita não encontrada")
         
-        # Verifica se o ingrediente existe
-        ingrediente = self.db.query(IngredienteModel).filter_by(id=data.ingrediente_id).first()
-        if not ingrediente:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Ingrediente não encontrado")
-
-        # Verifica se já existe na mesma receita (evita duplicatas)
-        exists_mesma_receita = (
-            self.db.query(ReceitaIngredienteModel)
-            .filter_by(receita_id=data.receita_id, ingrediente_id=data.ingrediente_id)
-            .first()
-        )
-        if exists_mesma_receita:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ingrediente já cadastrado nesta receita")
-
-        obj = ReceitaIngredienteModel(
-            receita_id=data.receita_id,
-            ingrediente_id=data.ingrediente_id,
-            quantidade=data.quantidade,
-        )
+        # Valida que exatamente um dos campos foi fornecido (validação do schema já faz isso, mas garantimos aqui também)
+        has_ingrediente = data.ingrediente_id is not None
+        has_receita_ingrediente = data.receita_ingrediente_id is not None
+        
+        if not (has_ingrediente or has_receita_ingrediente):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Deve fornecer ingrediente_id ou receita_ingrediente_id")
+        if has_ingrediente and has_receita_ingrediente:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Deve fornecer apenas um: ingrediente_id ou receita_ingrediente_id")
+        
+        # Se for um ingrediente básico
+        if has_ingrediente:
+            # Verifica se o ingrediente existe
+            ingrediente = self.db.query(IngredienteModel).filter_by(id=data.ingrediente_id).first()
+            if not ingrediente:
+                raise HTTPException(status.HTTP_404_NOT_FOUND, "Ingrediente não encontrado")
+            
+            # Verifica se já existe na mesma receita (evita duplicatas)
+            exists_mesma_receita = (
+                self.db.query(ReceitaIngredienteModel)
+                .filter_by(receita_id=data.receita_id, ingrediente_id=data.ingrediente_id)
+                .filter(ReceitaIngredienteModel.receita_ingrediente_id.is_(None))
+                .first()
+            )
+            if exists_mesma_receita:
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, "Ingrediente já cadastrado nesta receita")
+            
+            obj = ReceitaIngredienteModel(
+                receita_id=data.receita_id,
+                ingrediente_id=data.ingrediente_id,
+                receita_ingrediente_id=None,
+                quantidade=data.quantidade,
+            )
+        
+        # Se for uma sub-receita
+        else:
+            # Verifica se a receita usada como ingrediente existe
+            receita_ingrediente = self.get_receita_by_id(data.receita_ingrediente_id)
+            if not receita_ingrediente:
+                raise HTTPException(status.HTTP_404_NOT_FOUND, "Receita ingrediente não encontrada")
+            
+            # Evita referência circular (uma receita não pode ser ingrediente de si mesma)
+            if data.receita_id == data.receita_ingrediente_id:
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, "Uma receita não pode ser ingrediente de si mesma")
+            
+            # Verifica se já existe na mesma receita (evita duplicatas)
+            exists_mesma_receita = (
+                self.db.query(ReceitaIngredienteModel)
+                .filter_by(receita_id=data.receita_id, receita_ingrediente_id=data.receita_ingrediente_id)
+                .filter(ReceitaIngredienteModel.ingrediente_id.is_(None))
+                .first()
+            )
+            if exists_mesma_receita:
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, "Sub-receita já cadastrada nesta receita")
+            
+            obj = ReceitaIngredienteModel(
+                receita_id=data.receita_id,
+                ingrediente_id=None,
+                receita_ingrediente_id=data.receita_ingrediente_id,
+                quantidade=data.quantidade,
+            )
+        
         self.db.add(obj)
         self.db.commit()
         self.db.refresh(obj)
@@ -183,7 +226,10 @@ class ReceitasRepository:
         
         return (
             self.db.query(ReceitaIngredienteModel)
-            .options(joinedload(ReceitaIngredienteModel.ingrediente))
+            .options(
+                joinedload(ReceitaIngredienteModel.ingrediente),
+                joinedload(ReceitaIngredienteModel.receita_ingrediente)
+            )
             .filter(ReceitaIngredienteModel.receita_id == receita_id)
             .all()
         )
@@ -308,29 +354,66 @@ class ReceitasRepository:
         # Mantido para compatibilidade, mas sempre retorna False para adicionais
         return False
 
-    def calcular_custo_receita(self, receita_id: int) -> Decimal:
+    def calcular_custo_receita(self, receita_id: int, receitas_visitadas: Optional[set] = None) -> Decimal:
         """
         Calcula o custo total de uma receita baseado nos custos dos ingredientes vinculados.
         O cálculo é: soma de (quantidade * custo) para cada ingrediente vinculado.
+        
+        Agora também suporta sub-receitas: quando uma receita é usada como ingrediente,
+        calcula o custo da sub-receita recursivamente.
+        
+        Args:
+            receita_id: ID da receita
+            receitas_visitadas: Set de IDs de receitas já visitadas (para evitar loops infinitos)
+        
+        Returns:
+            Custo total da receita
         """
         receita = self.get_receita_by_id(receita_id)
         if not receita:
             return Decimal('0.00')
         
+        # Inicializa o set de receitas visitadas se não foi fornecido
+        if receitas_visitadas is None:
+            receitas_visitadas = set()
+        
+        # Proteção contra loops infinitos (referências circulares)
+        if receita_id in receitas_visitadas:
+            # Se já visitamos esta receita, retorna 0 para evitar loop infinito
+            # Isso pode acontecer se houver referências circulares (ex: receita A usa receita B, receita B usa receita A)
+            return Decimal('0.00')
+        
+        # Marca esta receita como visitada
+        receitas_visitadas.add(receita_id)
+        
         # Busca todos os ingredientes vinculados à receita com seus dados
         ingredientes = (
             self.db.query(ReceitaIngredienteModel)
-            .options(joinedload(ReceitaIngredienteModel.ingrediente))
+            .options(
+                joinedload(ReceitaIngredienteModel.ingrediente),
+                joinedload(ReceitaIngredienteModel.receita_ingrediente)
+            )
             .filter(ReceitaIngredienteModel.receita_id == receita_id)
             .all()
         )
         
         custo_total = Decimal('0.00')
         for receita_ingrediente in ingredientes:
-            if receita_ingrediente.ingrediente:
-                quantidade = receita_ingrediente.quantidade if receita_ingrediente.quantidade else Decimal('0.00')
+            quantidade = receita_ingrediente.quantidade if receita_ingrediente.quantidade else Decimal('0.00')
+            
+            # Se for um ingrediente básico
+            if receita_ingrediente.ingrediente_id is not None and receita_ingrediente.ingrediente:
                 custo_ingrediente = receita_ingrediente.ingrediente.custo if receita_ingrediente.ingrediente.custo else Decimal('0.00')
                 custo_total += quantidade * custo_ingrediente
+            
+            # Se for uma sub-receita
+            elif receita_ingrediente.receita_ingrediente_id is not None:
+                # Calcula o custo da sub-receita recursivamente
+                custo_sub_receita = self.calcular_custo_receita(
+                    receita_ingrediente.receita_ingrediente_id,
+                    receitas_visitadas.copy()  # Passa uma cópia para evitar modificar o set original
+                )
+                custo_total += quantidade * custo_sub_receita
         
         return custo_total
 

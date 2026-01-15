@@ -35,7 +35,15 @@ class ReceitaModel(Base):
 
 
 class ReceitaIngredienteModel(Base):
-    """Modelo de Ingrediente de Receita - Relacionamento N:N (ingrediente pode estar em várias receitas)"""
+    """
+    Modelo de Ingrediente de Receita - Relacionamento N:N 
+    
+    Suporta dois tipos de ingredientes:
+    1. Ingredientes básicos (ingrediente_id preenchido)
+    2. Sub-receitas (receita_ingrediente_id preenchido)
+    
+    A constraint CHECK garante que exatamente um dos dois campos seja preenchido.
+    """
     __tablename__ = "receita_ingrediente"
     __table_args__ = (
         {"schema": "catalogo"},
@@ -43,11 +51,19 @@ class ReceitaIngredienteModel(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     receita_id = Column(Integer, ForeignKey("catalogo.receitas.id", ondelete="CASCADE"), nullable=False)
-    ingrediente_id = Column(Integer, ForeignKey("catalogo.ingredientes.id", ondelete="RESTRICT"), nullable=False)
+    
+    # Ingrediente básico (opcional se receita_ingrediente_id estiver preenchido)
+    ingrediente_id = Column(Integer, ForeignKey("catalogo.ingredientes.id", ondelete="RESTRICT"), nullable=True)
+    
+    # Sub-receita usada como ingrediente (opcional se ingrediente_id estiver preenchido)
+    receita_ingrediente_id = Column(Integer, ForeignKey("catalogo.receitas.id", ondelete="RESTRICT"), nullable=True)
+    
     quantidade = Column(Numeric(18, 4), nullable=True)
 
-    receita = relationship("ReceitaModel", back_populates="ingredientes")
+    # Relacionamentos
+    receita = relationship("ReceitaModel", foreign_keys=[receita_id], back_populates="ingredientes")
     ingrediente = relationship("IngredienteModel", back_populates="receitas_ingrediente")
+    receita_ingrediente = relationship("ReceitaModel", foreign_keys=[receita_ingrediente_id])
 
 
 class ReceitaAdicionalModel(Base):

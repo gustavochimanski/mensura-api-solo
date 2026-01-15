@@ -65,16 +65,39 @@ class ReceitasService:
             # Monta lista de ingredientes detalhados
             ingredientes_detalhados = []
             for ri in receita.ingredientes:
-                ingrediente_detalhado = ReceitaIngredienteDetalhadoOut(
-                    id=ri.id,
-                    receita_id=ri.receita_id,
-                    ingrediente_id=ri.ingrediente_id,
-                    quantidade=float(ri.quantidade) if ri.quantidade else None,
-                    ingrediente_nome=ri.ingrediente.nome if ri.ingrediente else None,
-                    ingrediente_descricao=ri.ingrediente.descricao if ri.ingrediente else None,
-                    ingrediente_unidade_medida=ri.ingrediente.unidade_medida if ri.ingrediente else None,
-                    ingrediente_custo=ri.ingrediente.custo if ri.ingrediente else None,
-                )
+                # Verifica se é um ingrediente básico ou uma sub-receita
+                if ri.ingrediente_id is not None:
+                    # Ingrediente básico
+                    ingrediente_detalhado = ReceitaIngredienteDetalhadoOut(
+                        id=ri.id,
+                        receita_id=ri.receita_id,
+                        ingrediente_id=ri.ingrediente_id,
+                        receita_ingrediente_id=None,
+                        quantidade=float(ri.quantidade) if ri.quantidade else None,
+                        ingrediente_nome=ri.ingrediente.nome if ri.ingrediente else None,
+                        ingrediente_descricao=ri.ingrediente.descricao if ri.ingrediente else None,
+                        ingrediente_unidade_medida=ri.ingrediente.unidade_medida if ri.ingrediente else None,
+                        ingrediente_custo=ri.ingrediente.custo if ri.ingrediente else None,
+                        receita_ingrediente_nome=None,
+                        receita_ingrediente_descricao=None,
+                        receita_ingrediente_preco_venda=None,
+                    )
+                else:
+                    # Sub-receita
+                    ingrediente_detalhado = ReceitaIngredienteDetalhadoOut(
+                        id=ri.id,
+                        receita_id=ri.receita_id,
+                        ingrediente_id=None,
+                        receita_ingrediente_id=ri.receita_ingrediente_id,
+                        quantidade=float(ri.quantidade) if ri.quantidade else None,
+                        ingrediente_nome=None,
+                        ingrediente_descricao=None,
+                        ingrediente_unidade_medida=None,
+                        ingrediente_custo=None,
+                        receita_ingrediente_nome=ri.receita_ingrediente.nome if ri.receita_ingrediente else None,
+                        receita_ingrediente_descricao=ri.receita_ingrediente.descricao if ri.receita_ingrediente else None,
+                        receita_ingrediente_preco_venda=ri.receita_ingrediente.preco_venda if ri.receita_ingrediente else None,
+                    )
                 ingredientes_detalhados.append(ingrediente_detalhado)
             
             # Calcula o custo_total da receita baseado no custo dos ingredientes

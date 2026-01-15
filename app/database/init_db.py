@@ -106,15 +106,31 @@ def habilitar_postgis():
         logger.warning(f"⚠️ Erro ao garantir schema public: {e}")
 
     # 2) Tenta criar a extensão explicitando o schema
+    # NOTA: Esta função apenas TENTA HABILITAR a extensão PostGIS.
+    # Se o PostGIS não estiver INSTALADO no sistema, essa tentativa falhará.
+    # A instalação do PostGIS deve ser feita no sistema operacional (não pode ser feita via SQL).
     try:
         with engine.begin() as conn:
             # Define search_path para evitar "no schema has been selected to create in"
             conn.execute(text("SET search_path TO public"))
             conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis WITH SCHEMA public"))
-            logger.info("ℹ️ Tentativa de criar extensão PostGIS executada")
+            logger.info("ℹ️ Tentativa de habilitar extensão PostGIS executada")
     except Exception as postgis_error:
-        logger.warning(f"⚠️ Não foi possível criar extensão PostGIS: {postgis_error}")
-        logger.warning("⚠️ Funcionalidades geográficas estarão desabilitadas")
+        error_msg = str(postgis_error)
+        # Verifica se é erro de extensão não instalada no sistema
+        if "is not available" in error_msg or "extension control file" in error_msg or "No such file" in error_msg:
+            logger.warning("⚠️ PostGIS não está INSTALADO no sistema PostgreSQL")
+            logger.warning("⚠️ O init_db não pode instalar PostGIS - apenas habilita se já estiver instalado")
+            logger.warning("⚠️ A instalação deve ser feita ANTES de criar o cliente (via scripts/api/criar_cliente.sh)")
+            logger.warning("⚠️ Para instalar PostGIS, execute no servidor PostgreSQL (exemplo Ubuntu/Debian):")
+            logger.warning("⚠️   sudo apt-get update")
+            logger.warning("⚠️   sudo apt-get install postgresql-15-postgis-3")
+            logger.warning("⚠️   (ajuste '15' para a versão do seu PostgreSQL: 14, 15, 16, etc.)")
+            logger.warning("⚠️ Depois, o init_db habilitará automaticamente na próxima inicialização")
+            logger.warning("⚠️ Funcionalidades geográficas estarão desabilitadas até PostGIS ser instalado")
+        else:
+            logger.warning(f"⚠️ Erro ao habilitar extensão PostGIS: {postgis_error}")
+            logger.warning("⚠️ Funcionalidades geográficas estarão desabilitadas")
 
     # 3) Valida em uma nova transação limpa
     try:
@@ -421,9 +437,80 @@ def criar_tabelas_cardapio_antes():
     except Exception as e:
         logger.error(f"❌ Erro ao criar tabelas do cardapio antes: {e}", exc_info=True)
 
+def criar_tabela_pedidos_sem_postgis():
+    """
+    Tenta criar a tabela pedidos.pedidos sem a coluna Geography quando PostGIS não está disponível.
+    Esta é uma solução de fallback para permitir que a aplicação funcione sem PostGIS.
+    """
+    try:
+        logger.info("⚠️ Tentando criar tabela pedidos.pedidos sem coluna Geography...")
+        with engine.begin() as conn:
+            # Verifica se a tabela já existe
+            result = conn.execute(text("""
+                SELECT 1 FROM information_schema.tables 
+                WHERE table_schema = 'pedidos' 
+                AND table_name = 'pedidos'
+            """))
+            if result.scalar():
+                logger.info("ℹ️ Tabela pedidos.pedidos já existe")
+                return True
+            
+            # Tenta criar a tabela sem a coluna Geography
+            # Nota: Esta é uma versão simplificada - pode precisar de ajustes baseado no modelo completo
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS pedidos.pedidos (
+                    id SERIAL PRIMARY KEY,
+                    tipo_entrega pedidos.tipo_entrega_enum NOT NULL,
+                    empresa_id INTEGER NOT NULL REFERENCES cadastros.empresas(id) ON DELETE RESTRICT,
+                    numero_pedido VARCHAR(20) NOT NULL,
+                    status pedidos.pedido_status_enum NOT NULL DEFAULT 'P',
+                    mesa_id INTEGER REFERENCES cadastros.mesas(id) ON DELETE SET NULL,
+                    cliente_id INTEGER REFERENCES cadastros.clientes(id) ON DELETE SET NULL,
+                    endereco_id INTEGER REFERENCES cadastros.enderecos(id) ON DELETE SET NULL,
+                    entregador_id INTEGER REFERENCES cadastros.entregadores_dv(id) ON DELETE SET NULL,
+                    meio_pagamento_id INTEGER REFERENCES cadastros.meios_pagamento(id) ON DELETE SET NULL,
+                    cupom_id INTEGER REFERENCES cadastros.cupons_dv(id) ON DELETE SET NULL,
+                    canal pedidos.canal_pedido_enum,
+                    observacoes VARCHAR(500),
+                    observacao_geral VARCHAR(255),
+                    num_pessoas INTEGER,
+                    subtotal NUMERIC(18, 2) NOT NULL DEFAULT 0,
+                    desconto NUMERIC(18, 2) NOT NULL DEFAULT 0,
+                    taxa_entrega NUMERIC(18, 2) NOT NULL DEFAULT 0,
+                    taxa_servico NUMERIC(18, 2) NOT NULL DEFAULT 0,
+                    valor_total NUMERIC(18, 2) NOT NULL DEFAULT 0,
+                    troco_para NUMERIC(18, 2),
+                    previsao_entrega TIMESTAMP WITH TIME ZONE,
+                    distancia_km NUMERIC(10, 3),
+                    endereco_snapshot JSONB,
+                    -- endereco_geo omitido (requer PostGIS)
+                    acertado_entregador BOOLEAN NOT NULL DEFAULT false,
+                    acertado_entregador_em TIMESTAMP WITH TIME ZONE,
+                    pago BOOLEAN NOT NULL DEFAULT false,
+                    created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+                    updated_at TIMESTAMP WITH TIME ZONE NOT NULL,
+                    CONSTRAINT uq_pedidos_empresa_numero UNIQUE (empresa_id, numero_pedido)
+                );
+                
+                CREATE INDEX IF NOT EXISTS idx_pedidos_empresa ON pedidos.pedidos(empresa_id);
+                CREATE INDEX IF NOT EXISTS idx_pedidos_empresa_tipo_status ON pedidos.pedidos(empresa_id, tipo_entrega, status);
+                CREATE INDEX IF NOT EXISTS idx_pedidos_tipo_status ON pedidos.pedidos(tipo_entrega, status);
+                CREATE INDEX IF NOT EXISTS idx_pedidos_numero ON pedidos.pedidos(empresa_id, numero_pedido);
+                CREATE INDEX IF NOT EXISTS idx_pedidos_endereco_snapshot_gin ON pedidos.pedidos USING gin(endereco_snapshot);
+                -- Índice endereco_geo omitido (requer PostGIS)
+            """))
+        logger.info("✅ Tabela pedidos.pedidos criada sem coluna Geography")
+        return True
+    except Exception as e:
+        logger.error(f"❌ Erro ao criar tabela pedidos.pedidos sem PostGIS: {e}", exc_info=True)
+        return False
+
 def criar_tabelas(postgis_disponivel: bool = True):
     try:
         importar_models()  # importa só os seus models de mensura e cardapio
+
+        # Nota: Se PostGIS não estiver disponível, tabelas com colunas Geography falharão na criação
+        # mas o erro será tratado especificamente abaixo
 
         # pega todas as Table objects que o Base conhece
         all_tables = list(Base.metadata.tables.values())
@@ -468,10 +555,23 @@ def criar_tabelas(postgis_disponivel: bool = True):
             except Exception as table_error:
                 error_msg = str(table_error)
                 # Verifica se o erro é relacionado ao tipo Geography e PostGIS não está disponível
-                if not postgis_disponivel and ("geography" in error_msg.lower() or "type" in error_msg.lower() and "does not exist" in error_msg.lower()):
+                is_geography_error = ("geography" in error_msg.lower() or 
+                                     ("type" in error_msg.lower() and "does not exist" in error_msg.lower()) or
+                                     "postgis" in error_msg.lower())
+                
+                if not postgis_disponivel and is_geography_error and table.name == "pedidos" and table.schema == "pedidos":
+                    logger.warning(f"⚠️ Tabela {table.schema}.{table.name} requer PostGIS mas PostGIS não está disponível.")
+                    logger.warning(f"⚠️ Tentando criar versão simplificada sem coluna Geography...")
+                    # Tenta criar a tabela sem a coluna Geography
+                    if criar_tabela_pedidos_sem_postgis():
+                        logger.info(f"✅ Tabela {table.schema}.{table.name} criada sem PostGIS (funcionalidades geográficas desabilitadas)")
+                    else:
+                        logger.error(f"❌ Não foi possível criar tabela {table.schema}.{table.name} mesmo sem PostGIS")
+                        tabelas_com_erro.append((table, table_error))
+                elif not postgis_disponivel and is_geography_error:
                     logger.warning(f"⚠️ Tabela {table.schema}.{table.name} requer PostGIS mas PostGIS não está disponível.")
                     logger.warning(f"⚠️ Pulando criação desta tabela. Funcionalidades geográficas estarão desabilitadas.")
-                    # Verifica se a tabela já existe sem a coluna Geography
+                    # Verifica se a tabela já existe
                     try:
                         with engine.connect() as conn:
                             result = conn.execute(text("""
@@ -481,7 +581,7 @@ def criar_tabelas(postgis_disponivel: bool = True):
                             """), {"schema": table.schema, "table_name": table.name})
                             existe = result.scalar()
                             if existe:
-                                logger.info(f"ℹ️ Tabela {table.schema}.{table.name} já existe (sem coluna Geography)")
+                                logger.info(f"ℹ️ Tabela {table.schema}.{table.name} já existe")
                             else:
                                 logger.warning(f"⚠️ Tabela {table.schema}.{table.name} não pode ser criada sem PostGIS")
                     except Exception as check_error:
