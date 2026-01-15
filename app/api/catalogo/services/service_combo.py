@@ -2,6 +2,7 @@ from decimal import Decimal
 from typing import List, Optional
 
 from fastapi import HTTPException, status, UploadFile
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.api.empresas.repositories.empresa_repo import EmpresaRepository
@@ -13,6 +14,7 @@ from app.api.catalogo.schemas.schema_combo import (
     ComboItemDTO,
     ListaCombosResponse,
 )
+from app.api.pedidos.models.model_pedido_item_unificado import PedidoItemUnificadoModel
 from app.utils.minio_client import upload_file_to_minio, update_file_to_minio
 
 
@@ -79,6 +81,18 @@ class CombosService:
         combo = self.repo.get_by_id(combo_id)
         if not combo:
             return
+        
+        # Verificar se há pedidos_itens referenciando o combo
+        pedidos_itens_count = self.db.query(func.count(PedidoItemUnificadoModel.id))\
+            .filter(PedidoItemUnificadoModel.combo_id == combo_id)\
+            .scalar() or 0
+        
+        if pedidos_itens_count > 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Não é possível deletar combo que está sendo referenciado por {pedidos_itens_count} item(ns) de pedido(s)"
+            )
+        
         self.repo.deletar_combo(combo)
         self.db.commit()
 

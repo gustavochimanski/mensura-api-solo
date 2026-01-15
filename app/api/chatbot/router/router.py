@@ -1053,8 +1053,8 @@ async def process_webhook_background(body: dict):
                                 except Exception as mark_error:
                                     print(f"   ⚠️ Erro ao marcar mensagem como lida: {mark_error}")
                                 
-                                # Processa a mensagem com a IA (passa o nome do contato e empresa_id)
-                                await process_whatsapp_message(db, from_number, message_text, contact_name, empresa_id)
+                                # Processa a mensagem com a IA (passa o nome do contato, empresa_id e message_id para evitar duplicação)
+                                await process_whatsapp_message(db, from_number, message_text, contact_name, empresa_id, message_id)
 
                     # Processa STATUSES (status de mensagens enviadas: sent, delivered, read)
                     statuses = value.get("statuses", [])
@@ -1109,7 +1109,7 @@ async def process_webhook_background(body: dict):
         db.close()
 
 
-async def process_whatsapp_message(db: Session, phone_number: str, message_text: str, contact_name: str = None, empresa_id: str = "1"):
+async def process_whatsapp_message(db: Session, phone_number: str, message_text: str, contact_name: str = None, empresa_id: str = "1", message_id: str = None):
     """
     Processa mensagem recebida via WhatsApp e responde com IA
     VERSÃO 2.0: Usa SalesHandler para fluxo completo de vendas
@@ -1120,17 +1120,48 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
         message_text: Texto da mensagem
         contact_name: Nome do contato (opcional)
         empresa_id: ID da empresa (obtido automaticamente do phone_number_id do webhook)
+        message_id: ID único da mensagem do WhatsApp (opcional, usado para evitar duplicação)
     """
     try:
         print(f"\n🤖 Processando mensagem de {phone_number} ({contact_name or 'sem nome'}): {message_text}")
         print(f"   🏢 empresa_id: {empresa_id}")
+        if message_id:
+            print(f"   📨 Message ID: {message_id}")
+
+        # VERIFICA DUPLICAÇÃO: Se a mensagem já foi processada recentemente (últimos 10 segundos)
+        # Isso evita processar a mesma mensagem duas vezes quando o webhook chega duplicado
+        empresa_id_int = int(empresa_id) if empresa_id else 1
+        user_id = phone_number
+        conversations = chatbot_db.get_conversations_by_user(db, user_id, empresa_id_int)
+        
+        if conversations:
+            from sqlalchemy import text
+            # Verifica se a última mensagem do usuário é idêntica e muito recente
+            check_duplicate = text("""
+                SELECT id, content, created_at
+                FROM chatbot.messages
+                WHERE conversation_id = :conversation_id
+                AND role = 'user'
+                AND content = :content
+                AND created_at > NOW() - INTERVAL '10 seconds'
+                ORDER BY created_at DESC
+                LIMIT 1
+            """)
+            result = db.execute(check_duplicate, {
+                "conversation_id": conversations[0]['id'],
+                "content": message_text
+            })
+            duplicate = result.fetchone()
+            
+            if duplicate:
+                print(f"   ⚠️ Mensagem duplicada detectada! A mesma mensagem foi recebida há menos de 10 segundos.")
+                print(f"   🔄 Ignorando processamento duplicado para evitar resposta repetida.")
+                return  # Ignora mensagem duplicada
 
         # VERIFICA SE O BOT ESTÁ ATIVO PARA ESTE NÚMERO
         if not chatbot_db.is_bot_active_for_phone(db, phone_number):
             print(f"   ⏸️ Bot PAUSADO para {phone_number} - mensagem ignorada")
             # Salva a mensagem no histórico mesmo pausado (para ver no preview)
-            user_id = phone_number
-            conversations = chatbot_db.get_conversations_by_user(db, user_id)
             if conversations:
                 chatbot_db.create_message(
                     db=db,
@@ -1141,6 +1172,23 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 # Atualiza o nome do contato se disponível
                 if contact_name and not conversations[0].get('contact_name'):
                     chatbot_db.update_conversation_contact_name(db, conversations[0]['id'], contact_name)
+            else:
+                # Cria conversa temporária para salvar a mensagem mesmo com bot pausado
+                conversation_id = chatbot_db.create_conversation(
+                    db=db,
+                    session_id=f"whatsapp_{user_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                    user_id=user_id,
+                    prompt_key="default",
+                    model="groq-sales",
+                    contact_name=contact_name,
+                    empresa_id=empresa_id_int
+                )
+                chatbot_db.create_message(
+                    db=db,
+                    conversation_id=conversation_id,
+                    role="user",
+                    content=message_text
+                )
             return  # Não responde, apenas registra
 
         # OPÇÃO: Usar SalesHandler para conversas de vendas
@@ -1187,33 +1235,9 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                     chatbot_db.update_conversation_contact_name(db, conversations[0]['id'], contact_name)
                     print(f"   📝 Nome do contato atualizado: {contact_name}")
 
-            # Salva mensagem do usuário
-            user_message_id = chatbot_db.create_message(
-                db=db,
-                conversation_id=conversation_id,
-                role="user",
-                content=message_text
-            )
-            
-            # Envia notificação WebSocket de nova mensagem do usuário
-            empresa_id_int = int(empresa_id) if empresa_id else 1
-            from ..core.notifications import send_chatbot_websocket_notification
-            await send_chatbot_websocket_notification(
-                empresa_id=empresa_id_int,
-                notification_type="nova_mensagem",
-                title="Nova Mensagem Recebida",
-                message=f"Nova mensagem de {contact_name or phone_number}",
-                data={
-                    "conversation_id": conversation_id,
-                    "message_id": user_message_id,
-                    "phone_number": phone_number,
-                    "contact_name": contact_name,
-                    "role": "user",
-                    "content_preview": message_text[:100] if len(message_text) > 100 else message_text
-                }
-            )
-
             # Importa o Groq Sales Handler (LLaMA 3.1 via API - rápido!)
+            # NOTA: O processar_mensagem_groq já salva a mensagem do usuário e a resposta,
+            # além de enviar as notificações WebSocket necessárias
             from ..core.groq_sales_handler import processar_mensagem_groq
 
             # Processa com o sistema de vendas usando Groq/LLaMA
@@ -1222,7 +1246,7 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 db=db,
                 user_id=phone_number,
                 mensagem=message_text,
-                empresa_id=empresa_id_int
+                empresa_id=int(empresa_id) if empresa_id else 1
             )
 
             print(f"   💬 Resposta do SalesHandler: {resposta[:100]}...")
