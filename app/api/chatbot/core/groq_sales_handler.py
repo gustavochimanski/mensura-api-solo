@@ -1023,18 +1023,48 @@ class GroqSalesHandler:
         quer_saber, nome_produto = detectar_pergunta_ingredientes(mensagem)
         if quer_saber and nome_produto:
             print(f"🔍 [IA] Detectada pergunta sobre produto: '{nome_produto}'")
+            
+            # Atualiza histórico
+            historico = dados.get('historico', [])
+            historico.append({"role": "user", "content": mensagem})
+            
             # Usa busca inteligente diretamente no banco
             produtos_encontrados = self._buscar_produtos_inteligente(nome_produto, limit=1)
             if produtos_encontrados:
                 produto_encontrado = produtos_encontrados[0]
-                return await self._gerar_resposta_sobre_produto(user_id, produto_encontrado, mensagem, dados)
+                print(f"   ✅ Produto encontrado: {produto_encontrado.get('nome')} (tipo: {produto_encontrado.get('tipo')}, id: {produto_encontrado.get('id')})")
+                
+                resposta = await self._gerar_resposta_sobre_produto(user_id, produto_encontrado, mensagem, dados)
+                
+                # Salva resposta no histórico
+                historico.append({"role": "assistant", "content": resposta})
+                dados['historico'] = historico
+                self._salvar_estado_conversa(user_id, estado, dados)
+                
+                return resposta
             else:
                 # Fallback para busca na lista
                 produto_encontrado = self._buscar_produto_por_termo(nome_produto, todos_produtos)
                 if produto_encontrado:
-                    return await self._gerar_resposta_sobre_produto(user_id, produto_encontrado, mensagem, dados)
+                    print(f"   ✅ Produto encontrado na lista: {produto_encontrado.get('nome')} (tipo: {produto_encontrado.get('tipo')}, id: {produto_encontrado.get('id')})")
+                    
+                    resposta = await self._gerar_resposta_sobre_produto(user_id, produto_encontrado, mensagem, dados)
+                    
+                    # Salva resposta no histórico
+                    historico.append({"role": "assistant", "content": resposta})
+                    dados['historico'] = historico
+                    self._salvar_estado_conversa(user_id, estado, dados)
+                    
+                    return resposta
                 else:
-                    return f"Hmm, não encontrei o produto '{nome_produto}' no cardápio. Quer ver o cardápio completo? 😊"
+                    resposta = f"Hmm, não encontrei o produto '{nome_produto}' no cardápio. Quer ver o cardápio completo? 😊"
+                    
+                    # Salva no histórico
+                    historico.append({"role": "assistant", "content": resposta})
+                    dados['historico'] = historico
+                    self._salvar_estado_conversa(user_id, estado, dados)
+                    
+                    return resposta
         
         # Detecta múltiplas ações na mensagem (ex: "Quero 2 xbacon. Um é sem tomate")
         acoes_detectadas = []
@@ -4351,16 +4381,66 @@ Responda de forma natural e curta:"""
         Usa ingredientes REAIS do banco de dados!
         """
         try:
-            # Busca ingredientes reais do banco de dados
-            ingredientes = self.ingredientes_service.buscar_ingredientes_por_nome_receita(produto['nome'])
-            adicionais = self.ingredientes_service.buscar_adicionais_por_nome_receita(produto['nome'])
+            nome_produto = produto.get('nome', '')
+            tipo_produto = produto.get('tipo', 'produto')
+            produto_id = produto.get('id', '')
+            
+            print(f"🔍 Buscando ingredientes para: '{nome_produto}' (tipo: {tipo_produto}, id: {produto_id})")
+            
+            # Se for uma receita (tem prefixo "receita_"), extrai o ID
+            receita_id = None
+            if tipo_produto == 'receita' or (isinstance(produto_id, str) and produto_id.startswith('receita_')):
+                try:
+                    receita_id = int(produto_id.replace('receita_', ''))
+                    print(f"   📝 É uma receita, ID: {receita_id}")
+                except:
+                    pass
+            
+            ingredientes = []
+            adicionais = []
+            
+            # Busca ingredientes
+            if receita_id:
+                # Busca direto pelo ID da receita (mais preciso)
+                ingredientes = self.ingredientes_service.buscar_ingredientes_receita(receita_id)
+                adicionais = self.ingredientes_service.buscar_adicionais_receita(receita_id)
+                print(f"   ✅ Encontrados {len(ingredientes)} ingredientes e {len(adicionais)} adicionais (busca por ID)")
+            else:
+                # Tenta buscar pelo nome (pode ser receita ou produto)
+                ingredientes = self.ingredientes_service.buscar_ingredientes_por_nome_receita(nome_produto)
+                adicionais = self.ingredientes_service.buscar_adicionais_por_nome_receita(nome_produto)
+                print(f"   ✅ Encontrados {len(ingredientes)} ingredientes e {len(adicionais)} adicionais (busca por nome)")
+                
+                # Se não encontrou e é um produto simples, tenta buscar complementos
+                if not ingredientes and tipo_produto == 'produto':
+                    # Para produtos simples, busca complementos se disponíveis
+                    try:
+                        from sqlalchemy import text
+                        # Verifica se o produto tem receita associada
+                        query = text("""
+                            SELECT r.id 
+                            FROM catalogo.receitas r
+                            WHERE r.nome ILIKE :nome 
+                            AND r.empresa_id = :empresa_id
+                            LIMIT 1
+                        """)
+                        result = self.db.execute(query, {
+                            "nome": f"%{nome_produto}%",
+                            "empresa_id": self.empresa_id
+                        }).fetchone()
+                        
+                        if result:
+                            receita_id_found = result[0]
+                            ingredientes = self.ingredientes_service.buscar_ingredientes_receita(receita_id_found)
+                            adicionais = self.ingredientes_service.buscar_adicionais_receita(receita_id_found)
+                            print(f"   ✅ Encontrada receita associada (ID: {receita_id_found}) com {len(ingredientes)} ingredientes")
+                    except Exception as e:
+                        print(f"   ⚠️ Erro ao buscar receita associada: {e}")
 
             # Se encontrou ingredientes, usa dados reais
             if ingredientes:
-                nomes_ingredientes = [ing['nome'] for ing in ingredientes]
-
                 # Monta resposta com ingredientes reais
-                msg = f"*{produto['nome']}* - R$ {produto['preco']:.2f}\n\n"
+                msg = f"*{nome_produto}* - R$ {produto['preco']:.2f}\n\n"
                 msg += "📋 *Ingredientes:*\n"
                 for ing in ingredientes:
                     msg += f"• {ing['nome']}\n"
@@ -4374,13 +4454,16 @@ Responda de forma natural e curta:"""
                 return msg
             else:
                 # Se não encontrou ingredientes, retorna mensagem básica
-                msg = f"*{produto['nome']}* - R$ {produto['preco']:.2f}\n\n"
+                print(f"   ⚠️ Nenhum ingrediente encontrado para '{nome_produto}'")
+                msg = f"*{nome_produto}* - R$ {produto['preco']:.2f}\n\n"
                 if produto.get('descricao'):
                     msg += f"{produto['descricao']}\n\n"
                 msg += "Quer adicionar ao pedido? 😊"
                 return msg
         except Exception as e:
             print(f"❌ Erro ao buscar ingredientes de {produto.get('nome', 'produto')}: {e}")
+            import traceback
+            traceback.print_exc()
             # Fallback básico
             msg = f"*{produto['nome']}* - R$ {produto['preco']:.2f}\n\n"
             msg += "Quer adicionar ao pedido? 😊"
