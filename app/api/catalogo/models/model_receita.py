@@ -22,7 +22,12 @@ class ReceitaModel(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     # Relacionamentos
-    ingredientes = relationship("ReceitaIngredienteModel", back_populates="receita", cascade="all, delete-orphan")
+    ingredientes = relationship(
+        "ReceitaIngredienteModel",
+        foreign_keys="ReceitaIngredienteModel.receita_id",
+        back_populates="receita",
+        cascade="all, delete-orphan"
+    )
     # DEPRECATED: Usar complementos ao invés de adicionais diretos
     adicionais = relationship("ReceitaAdicionalModel", back_populates="receita", cascade="all, delete-orphan")
     # NOVO: Complementos que contêm adicionais
