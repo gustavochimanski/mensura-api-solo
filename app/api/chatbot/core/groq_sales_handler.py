@@ -204,6 +204,18 @@ AI_FUNCTIONS = [
                 "required": []
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "cadastrar_cliente",
+            "description": "Cliente quer se CADASTRAR ou ATUALIZAR seus dados. Use quando: 'quero me cadastrar', 'cadastrar meu nome', 'atualizar meus dados', 'cadastro', 'registrar', 'quero cadastrar meu cpf', 'atualizar cadastro'",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        }
     }
 ]
 
@@ -272,6 +284,15 @@ REGRA DE OURO: Na dúvida, use "conversar". É melhor conversar do que fazer aç
    - "combo família" → ver_combos
    - "combos" → ver_combos
 
+✅ cadastrar_cliente - Quando quer se CADASTRAR ou ATUALIZAR dados:
+   - "quero me cadastrar" → cadastrar_cliente
+   - "cadastrar meu nome" → cadastrar_cliente
+   - "atualizar meus dados" → cadastrar_cliente
+   - "cadastro" → cadastrar_cliente
+   - "registrar" → cadastrar_cliente
+   - "quero cadastrar meu cpf" → cadastrar_cliente
+   - "atualizar cadastro" → cadastrar_cliente
+
 === PRODUTOS DISPONÍVEIS ===
 {produtos_lista}
 
@@ -294,6 +315,11 @@ STATE_SELECIONANDO_ENDERECO_GOOGLE = "selecionando_endereco_google"
 STATE_COLETANDO_COMPLEMENTO = "coletando_complemento"
 STATE_COLETANDO_PAGAMENTO = "coletando_pagamento"
 STATE_CONFIRMANDO_PEDIDO = "confirmando_pedido"
+# Estados para cadastro de cliente
+STATE_CADASTRO_NOME = "cadastro_nome"
+STATE_CADASTRO_CPF = "cadastro_cpf"
+STATE_CADASTRO_EMAIL = "cadastro_email"
+STATE_CADASTRO_DATA_NASCIMENTO = "cadastro_data_nascimento"
 
 
 class GroqSalesHandler:
@@ -444,7 +470,7 @@ class GroqSalesHandler:
         Retorna None se não conseguir interpretar, ou dict com funcao e params
         """
         import re
-        msg = mensagem.lower().strip()
+        msg = self._normalizar_mensagem(mensagem)
 
         # Saudações
         if re.match(r'^(oi|ola|olá|eae|e ai|eaí|bom dia|boa tarde|boa noite|hey|hi)[\s!?]*$', msg):
@@ -512,7 +538,7 @@ class GroqSalesHandler:
         # Adicionar produto (padrões: "quero X", "me ve X", "manda X", "X por favor")
         # IMPORTANTE: Verificar ANTES da personalização para capturar "quero X sem Y"
         patterns_pedido = [
-            r'(?:quero|qro)\s+(?:uma?|duas?|dois|\d+)?\s*(.+)',
+            r'(?:quero|qro)\s+(?:uma?|duas?|dois|\d+)?\s*(.+)',  # "quero um X" ou "quero X"
             r'(?:me\s+)?(?:ve|vê|manda|traz)\s+(?:uma?|duas?|dois|\d+)?\s*(.+)',
             r'(?:uma?|duas?|dois|\d+)\s+(.+?)(?:\s+por\s+favor)?$',
             r'(?:pode\s+ser|vou\s+querer)\s+(?:uma?|duas?|dois|\d+)?\s*(.+)',
@@ -553,13 +579,28 @@ class GroqSalesHandler:
                 
                 return {"funcao": "adicionar_produto", "params": params}
 
-        # Personalização (sem/tira ingrediente) - APENAS se não tiver produto na mensagem
+        # Personalização (sem/tira ingrediente) - APENAS se não tiver produto na mensagem E carrinho tem itens
         # Verifica se tem carrinho com itens antes de personalizar
         if carrinho and len(carrinho) > 0:
-            if re.search(r'sem\s+(\w+)', msg):
-                match = re.search(r'sem\s+(\w+)', msg)
-                if match:
-                    return {"funcao": "personalizar_produto", "params": {"acao": "remover_ingrediente", "item": match.group(1)}}
+            # Verifica se NÃO tem padrão de adicionar produto na mensagem
+            tem_produto_na_mensagem = any(re.search(pattern, msg) for pattern in [
+                r'(?:quero|qro)\s+',
+                r'(?:me\s+)?(?:ve|vê|manda|traz)\s+',
+                r'(?:uma?|duas?|dois|\d+)\s+',
+            ])
+            
+            # Só personaliza se NÃO tiver produto na mensagem
+            if not tem_produto_na_mensagem:
+                if re.search(r'sem\s+(\w+)', msg):
+                    match = re.search(r'sem\s+(\w+)', msg)
+                    if match:
+                        return {"funcao": "personalizar_produto", "params": {"acao": "remover_ingrediente", "item": match.group(1)}}
+
+                # Adicional extra
+                if re.search(r'(mais|extra|adiciona)\s+(\w+)', msg):
+                    match = re.search(r'(mais|extra|adiciona)\s+(\w+)', msg)
+                    if match:
+                        return {"funcao": "personalizar_produto", "params": {"acao": "adicionar_extra", "item": match.group(2)}}
 
             # Adicional extra
             if re.search(r'(mais|extra|adiciona)\s+(\w+)', msg):
@@ -3061,18 +3102,21 @@ REGRA PARA COMPLEMENTOS:
     def _formatar_carrinho(self, carrinho: List[Dict]) -> str:
         """Formata o carrinho para exibição, incluindo personalizações"""
         if not carrinho:
-            return "🛒 Seu carrinho está vazio!"
+            return "🛒 *Seu carrinho está vazio!*\n\nO que você gostaria de pedir hoje? 😊"
 
-        msg = "🛒 *Seu carrinho:*\n\n"
+        msg = "🛒 *SEU PEDIDO*\n"
+        msg += "━━━━━━━━━━━━━━━━━━━━\n\n"
+        
         total = 0
-        for item in carrinho:
+        for idx, item in enumerate(carrinho, 1):
             qtd = item.get('quantidade', 1)
             preco_base = item['preco']
             preco_adicionais = item.get('personalizacoes', {}).get('preco_adicionais', 0.0)
             subtotal = (preco_base + preco_adicionais) * qtd
             total += subtotal
 
-            msg += f"• {qtd}x {item['nome']} - R$ {subtotal:.2f}\n"
+            msg += f"*{idx}. {qtd}x {item['nome']}*\n"
+            msg += f"   R$ {subtotal:.2f}\n"
 
             # Mostra personalizações se houver
             personalizacoes = item.get('personalizacoes', {})
@@ -3080,13 +3124,19 @@ REGRA PARA COMPLEMENTOS:
             adicionais = personalizacoes.get('adicionais', [])
 
             if removidos:
-                msg += f"  └ _SEM: {', '.join(removidos)}_\n"
+                msg += f"   🚫 Sem: {', '.join(removidos)}\n"
 
             if adicionais:
                 for add in adicionais:
-                    msg += f"  └ _+ {add['nome']} (+R$ {add['preco']:.2f})_\n"
+                    if isinstance(add, dict):
+                        msg += f"   ➕ {add.get('nome', add)} (+R$ {add.get('preco', 0):.2f})\n"
+                    else:
+                        msg += f"   ➕ {add}\n"
+            
+            msg += "\n"
 
-        msg += f"\n💰 *Total: R$ {total:.2f}*"
+        msg += "━━━━━━━━━━━━━━━━━━━━\n"
+        msg += f"💰 *TOTAL: R$ {total:.2f}*\n"
         return msg
 
     def _extrair_quantidade(self, mensagem: str) -> int:
@@ -3133,6 +3183,205 @@ REGRA PARA COMPLEMENTOS:
             '2', 'dois', 'segunda'
         ]
         return any(p in msg_lower for p in palavras_retirada)
+
+    # ========== FLUXO DE CADASTRO DE CLIENTE ==========
+
+    def _iniciar_cadastro_cliente(self, user_id: str, dados: Dict) -> str:
+        """
+        Inicia o fluxo de cadastro de cliente
+        """
+        # Verifica se já existe cliente
+        cliente = self.address_service.get_cliente_by_telefone(user_id)
+        if cliente:
+            # Cliente já existe, pergunta se quer atualizar
+            dados['cadastro_cliente'] = {
+                'nome': cliente.get('nome'),
+                'cpf': cliente.get('cpf'),
+                'email': cliente.get('email'),
+                'data_nascimento': cliente.get('data_nascimento')
+            }
+            return "Você já está cadastrado! 😊\n\nQuer atualizar seus dados?\n\nDigite *SIM* para atualizar ou *NÃO* para cancelar."
+        
+        # Inicia cadastro novo
+        dados['cadastro_cliente'] = {}
+        self._salvar_estado_conversa(user_id, STATE_CADASTRO_NOME, dados)
+        return "Perfeito! Vamos cadastrar seus dados 📝\n\nPrimeiro, qual é seu *nome completo*?"
+
+    async def _processar_cadastro_nome(self, user_id: str, mensagem: str, dados: Dict) -> str:
+        """
+        Processa o nome do cliente
+        """
+        # Verifica se cancelou
+        if mensagem.lower().strip() in ['não', 'nao', 'cancelar', 'cancel']:
+            self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
+            return "Tudo bem! Cadastro cancelado 😊\n\nComo posso ajudar?"
+        
+        # Verifica se confirmou atualização
+        if mensagem.lower().strip() in ['sim', 's', 'quero', 'atualizar']:
+            # Se já tinha dados, inicia atualização
+            cadastro = dados.get('cadastro_cliente', {})
+            if cadastro.get('nome'):
+                self._salvar_estado_conversa(user_id, STATE_CADASTRO_NOME, dados)
+                return "Ok! Vamos atualizar seus dados 📝\n\nQual é seu *nome completo*?"
+            else:
+                self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
+                return "Tudo bem! Cadastro cancelado 😊\n\nComo posso ajudar?"
+        
+        nome = mensagem.strip()
+        if len(nome) < 2:
+            return "Nome muito curto! Por favor, digite seu nome completo 😊"
+        
+        # Salva o nome
+        if 'cadastro_cliente' not in dados:
+            dados['cadastro_cliente'] = {}
+        dados['cadastro_cliente']['nome'] = nome
+        
+        # Próximo passo: CPF (opcional)
+        self._salvar_estado_conversa(user_id, STATE_CADASTRO_CPF, dados)
+        return f"Ótimo, {nome}! 👋\n\nAgora, qual é seu *CPF*? (opcional - pode digitar *PULAR* se não quiser informar)"
+
+    async def _processar_cadastro_cpf(self, user_id: str, mensagem: str, dados: Dict) -> str:
+        """
+        Processa o CPF do cliente
+        """
+        if mensagem.lower().strip() in ['pular', 'pula', 'não', 'nao', 'não tenho', 'nao tenho']:
+            # Pula CPF e vai para email
+            self._salvar_estado_conversa(user_id, STATE_CADASTRO_EMAIL, dados)
+            return "Tudo bem! Vamos pular o CPF 😊\n\nQual é seu *email*? (opcional - pode digitar *PULAR* se não quiser informar)"
+        
+        # Remove caracteres não numéricos
+        cpf = re.sub(r'[^0-9]', '', mensagem.strip())
+        
+        if len(cpf) != 11:
+            return "CPF deve ter 11 dígitos! Por favor, digite novamente ou digite *PULAR* para não informar 😊"
+        
+        # Salva o CPF
+        dados['cadastro_cliente']['cpf'] = cpf
+        
+        # Próximo passo: Email (opcional)
+        self._salvar_estado_conversa(user_id, STATE_CADASTRO_EMAIL, dados)
+        return "CPF anotado! ✅\n\nQual é seu *email*? (opcional - pode digitar *PULAR* se não quiser informar)"
+
+    async def _processar_cadastro_email(self, user_id: str, mensagem: str, dados: Dict) -> str:
+        """
+        Processa o email do cliente
+        """
+        if mensagem.lower().strip() in ['pular', 'pula', 'não', 'nao', 'não tenho', 'nao tenho']:
+            # Pula email e vai para data de nascimento
+            self._salvar_estado_conversa(user_id, STATE_CADASTRO_DATA_NASCIMENTO, dados)
+            return "Tudo bem! Vamos pular o email 😊\n\nQual é sua *data de nascimento*? (opcional - formato: DD/MM/AAAA ou digite *PULAR* se não quiser informar)"
+        
+        # Validação básica de email
+        email = mensagem.strip()
+        if '@' not in email or '.' not in email.split('@')[1]:
+            return "Email inválido! Por favor, digite um email válido ou digite *PULAR* para não informar 😊"
+        
+        # Salva o email
+        dados['cadastro_cliente']['email'] = email
+        
+        # Próximo passo: Data de nascimento (opcional)
+        self._salvar_estado_conversa(user_id, STATE_CADASTRO_DATA_NASCIMENTO, dados)
+        return "Email anotado! ✅\n\nQual é sua *data de nascimento*? (opcional - formato: DD/MM/AAAA ou digite *PULAR* se não quiser informar)"
+
+    async def _processar_cadastro_data_nascimento(self, user_id: str, mensagem: str, dados: Dict) -> str:
+        """
+        Processa a data de nascimento do cliente e finaliza o cadastro
+        """
+        if mensagem.lower().strip() in ['pular', 'pula', 'não', 'nao', 'não tenho', 'nao tenho']:
+            # Finaliza cadastro sem data de nascimento
+            return await self._finalizar_cadastro_cliente(user_id, dados)
+        
+        # Tenta parsear a data
+        data_str = mensagem.strip()
+        data_nascimento = None
+        
+        # Tenta formatos: DD/MM/AAAA, DD-MM-AAAA, DDMMAAAA
+        formatos = ['%d/%m/%Y', '%d-%m-%Y', '%d%m%Y']
+        for fmt in formatos:
+            try:
+                if fmt == '%d%m%Y' and len(data_str) == 8:
+                    # Formato sem separadores
+                    data_nascimento = datetime.strptime(data_str, fmt).date()
+                elif fmt != '%d%m%Y':
+                    data_nascimento = datetime.strptime(data_str, fmt).date()
+                break
+            except ValueError:
+                continue
+        
+        if not data_nascimento:
+            return "Data inválida! Por favor, digite no formato DD/MM/AAAA (ex: 15/03/1990) ou digite *PULAR* para não informar 😊"
+        
+        # Verifica se a data não é futura
+        if data_nascimento > datetime.now().date():
+            return "Data de nascimento não pode ser no futuro! Por favor, digite novamente ou digite *PULAR* para não informar 😊"
+        
+        # Salva a data de nascimento
+        dados['cadastro_cliente']['data_nascimento'] = data_nascimento.strftime('%Y-%m-%d')
+        
+        # Finaliza cadastro
+        return await self._finalizar_cadastro_cliente(user_id, dados)
+
+    async def _finalizar_cadastro_cliente(self, user_id: str, dados: Dict) -> str:
+        """
+        Finaliza o cadastro do cliente salvando no banco
+        """
+        try:
+            cadastro = dados.get('cadastro_cliente', {})
+            if not cadastro.get('nome'):
+                self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
+                return "Ops! Não foi possível completar o cadastro. Tente novamente mais tarde 😊"
+            
+            # Busca ou cria cliente
+            cliente = self.address_service.get_cliente_by_telefone(user_id)
+            
+            # Prepara dados para atualização/criação
+            from app.api.cadastros.schemas.schema_cliente import ClienteCreate, ClienteUpdate
+            from app.api.cadastros.services.service_cliente import ClienteService
+            
+            cliente_service = ClienteService(self.db)
+            
+            if cliente:
+                # Atualiza cliente existente
+                from app.api.cadastros.repositories.repo_cliente import ClienteRepository
+                repo = ClienteRepository(self.db)
+                cliente_obj = repo.get_by_telefone(user_id)
+                
+                if cliente_obj:
+                    update_data = ClienteUpdate(
+                        nome=cadastro.get('nome'),
+                        cpf=cadastro.get('cpf') if cadastro.get('cpf') else None,
+                        email=cadastro.get('email') if cadastro.get('email') else None,
+                        data_nascimento=cadastro.get('data_nascimento') if cadastro.get('data_nascimento') else None
+                    )
+                    cliente_service.update(cliente_obj.super_token, update_data)
+                    mensagem = "✅ *Cadastro atualizado com sucesso!*\n\n"
+            else:
+                # Cria novo cliente
+                create_data = ClienteCreate(
+                    nome=cadastro.get('nome'),
+                    telefone=user_id,
+                    cpf=cadastro.get('cpf') if cadastro.get('cpf') else None,
+                    email=cadastro.get('email') if cadastro.get('email') else None,
+                    data_nascimento=cadastro.get('data_nascimento') if cadastro.get('data_nascimento') else None
+                )
+                cliente_service.create(create_data)
+                mensagem = "✅ *Cadastro realizado com sucesso!*\n\n"
+            
+            mensagem += "Seus dados foram salvos! 😊\n\n"
+            mensagem += "Como posso ajudar agora?"
+            
+            # Limpa dados de cadastro e volta para conversação
+            dados.pop('cadastro_cliente', None)
+            self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
+            
+            return mensagem
+            
+        except Exception as e:
+            print(f"❌ Erro ao finalizar cadastro: {e}")
+            import traceback
+            traceback.print_exc()
+            self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
+            return "Ops! Ocorreu um erro ao salvar seus dados. Tente novamente mais tarde 😊"
 
     def _buscar_produtos(self, termo_busca: str = "") -> List[Dict[str, Any]]:
         """Busca produtos no banco de dados usando SQL direto"""
@@ -4026,13 +4275,28 @@ Sua única função é ajudar a ESCOLHER PRODUTOS. Nada mais!
         Pergunta ao cliente se é para entrega ou retirada
         """
         self._salvar_estado_conversa(user_id, STATE_PERGUNTANDO_ENTREGA_RETIRADA, dados)
+        
+        # Mostra resumo rápido do pedido antes de perguntar
+        carrinho = dados.get('carrinho', [])
+        if carrinho:
+            total = sum((item['preco'] + item.get('personalizacoes', {}).get('preco_adicionais', 0.0)) * item.get('quantidade', 1) for item in carrinho)
+            msg = f"📦 *Resumo do pedido:*\n"
+            for item in carrinho:
+                qtd = item.get('quantidade', 1)
+                msg += f"• {qtd}x {item['nome']}\n"
+            msg += f"\n💰 *Total: R$ {total:.2f}*\n"
+            msg += "━━━━━━━━━━━━━━━━━━━━\n\n"
+        else:
+            msg = ""
 
-        return """Show! Agora me diz: é pra *entrega* ou você vai *retirar* na loja? 🏍️
-
-1️⃣ *Entrega* - levo até você
-2️⃣ *Retirada* - você busca aqui
-
-Qual vai ser?"""
+        msg += "🚚 *Como você prefere receber?*\n\n"
+        msg += "1️⃣ *Entrega* 🏍️\n"
+        msg += "   Levamos até você!\n\n"
+        msg += "2️⃣ *Retirada* 🏪\n"
+        msg += "   Você busca aqui na loja\n\n"
+        msg += "Digite *1* para entrega ou *2* para retirada 😊"
+        
+        return msg
 
     async def _processar_entrega_ou_retirada(self, user_id: str, mensagem: str, dados: Dict) -> str:
         """
@@ -4809,6 +5073,14 @@ Responda de forma natural e curta:"""
             # FINALIZAR PEDIDO
             elif funcao == "finalizar_pedido":
                 if carrinho:
+                    # Sempre pergunta entrega/retirada, mesmo se já tiver definido antes
+                    # Isso garante que o cliente escolha novamente para cada pedido
+                    tipo_entrega_anterior = dados.get('tipo_entrega')
+                    if tipo_entrega_anterior:
+                        # Limpa tipo_entrega anterior para garantir nova escolha
+                        dados['tipo_entrega'] = None
+                        dados['endereco_texto'] = None
+                        dados['endereco_id'] = None
                     print("🛒 Cliente quer finalizar, perguntando entrega ou retirada")
                     return self._perguntar_entrega_ou_retirada(user_id, dados)
                 else:
@@ -4904,6 +5176,11 @@ Responda de forma natural e curta:"""
             elif funcao == "ver_combos":
                 print("🎁 Cliente pediu para ver os combos")
                 return self.ingredientes_service.formatar_combos_para_chat()
+
+            # CADASTRAR CLIENTE
+            elif funcao == "cadastrar_cliente":
+                print("👤 Cliente quer se cadastrar")
+                return self._iniciar_cadastro_cliente(user_id, dados)
 
             # CONVERSAR (função principal para interação natural)
             elif funcao == "conversar":
