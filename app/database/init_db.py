@@ -91,8 +91,12 @@ def verificar_estrutura_tabelas():
         return False
 
 def habilitar_postgis():
-
-    """Habilita a extensão PostGIS necessária para Geography/Geometry e valida sua disponibilidade."""
+    """
+    Habilita a extensão PostGIS necessária para Geography/Geometry e valida sua disponibilidade.
+    
+    Returns:
+        bool: True se PostGIS está disponível, False caso contrário
+    """
     logger.info("🗺️ Verificando/Habilitando extensão PostGIS...")
     # 1) Garante schema public
     try:
@@ -107,8 +111,10 @@ def habilitar_postgis():
             # Define search_path para evitar "no schema has been selected to create in"
             conn.execute(text("SET search_path TO public"))
             conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis WITH SCHEMA public"))
+            logger.info("ℹ️ Tentativa de criar extensão PostGIS executada")
     except Exception as postgis_error:
-        logger.warning(f"⚠️ Erro ao criar extensão PostGIS (WITH SCHEMA public): {postgis_error}")
+        logger.warning(f"⚠️ Não foi possível criar extensão PostGIS: {postgis_error}")
+        logger.warning("⚠️ Funcionalidades geográficas estarão desabilitadas")
 
     # 3) Valida em uma nova transação limpa
     try:
@@ -124,12 +130,17 @@ def habilitar_postgis():
 
         if geography_exists:
             logger.info("✅ PostGIS disponível (tipo 'geography' encontrado)")
+            return True
         else:
-            logger.error("❌ PostGIS não disponível (tipo 'geography' ausente). Instale/habilite PostGIS no banco.")
-            raise RuntimeError("PostGIS ausente: não é possível criar tabelas com colunas Geography")
+            logger.warning("⚠️ PostGIS não disponível (tipo 'geography' ausente).")
+            logger.warning("⚠️ Funcionalidades geográficas estarão desabilitadas.")
+            logger.warning("⚠️ Para habilitar: instale PostGIS no PostgreSQL e execute:")
+            logger.warning("⚠️   CREATE EXTENSION postgis;")
+            return False
     except Exception as e:
-        # Propaga erro para interromper inicialização e evitar tabelas órfãs
-        raise
+        logger.warning(f"⚠️ Erro ao verificar PostGIS: {e}")
+        logger.warning("⚠️ Funcionalidades geográficas estarão desabilitadas.")
+        return False
 
 def configurar_timezone():
     """Configura o timezone do banco de dados para America/Sao_Paulo"""
@@ -410,7 +421,7 @@ def criar_tabelas_cardapio_antes():
     except Exception as e:
         logger.error(f"❌ Erro ao criar tabelas do cardapio antes: {e}", exc_info=True)
 
-def criar_tabelas():
+def criar_tabelas(postgis_disponivel: bool = True):
     try:
         importar_models()  # importa só os seus models de mensura e cardapio
 
@@ -455,10 +466,31 @@ def criar_tabelas():
                 table.create(engine, checkfirst=True)
                 logger.info(f"✅/ℹ️ Tabela {table.schema}.{table.name} criada/verificada")
             except Exception as table_error:
-                logger.error(f"❌ Erro ao criar tabela {table.schema}.{table.name}: {table_error}", exc_info=True)
-                tabelas_com_erro.append((table, table_error))
+                error_msg = str(table_error)
+                # Verifica se o erro é relacionado ao tipo Geography e PostGIS não está disponível
+                if not postgis_disponivel and ("geography" in error_msg.lower() or "type" in error_msg.lower() and "does not exist" in error_msg.lower()):
+                    logger.warning(f"⚠️ Tabela {table.schema}.{table.name} requer PostGIS mas PostGIS não está disponível.")
+                    logger.warning(f"⚠️ Pulando criação desta tabela. Funcionalidades geográficas estarão desabilitadas.")
+                    # Verifica se a tabela já existe sem a coluna Geography
+                    try:
+                        with engine.connect() as conn:
+                            result = conn.execute(text("""
+                                SELECT 1 FROM information_schema.tables 
+                                WHERE table_schema = :schema 
+                                AND table_name = :table_name
+                            """), {"schema": table.schema, "table_name": table.name})
+                            existe = result.scalar()
+                            if existe:
+                                logger.info(f"ℹ️ Tabela {table.schema}.{table.name} já existe (sem coluna Geography)")
+                            else:
+                                logger.warning(f"⚠️ Tabela {table.schema}.{table.name} não pode ser criada sem PostGIS")
+                    except Exception as check_error:
+                        logger.warning(f"⚠️ Erro ao verificar existência da tabela: {check_error}")
+                else:
+                    logger.error(f"❌ Erro ao criar tabela {table.schema}.{table.name}: {table_error}", exc_info=True)
+                    tabelas_com_erro.append((table, table_error))
 
-        # Segunda tentativa para tabelas que falharam
+        # Segunda tentativa para tabelas que falharam (apenas se não for erro de PostGIS)
         if tabelas_com_erro:
             logger.info(f"🔄 Segunda tentativa para {len(tabelas_com_erro)} tabelas com erro...")
             for table, error in tabelas_com_erro:
@@ -703,7 +735,7 @@ def inicializar_banco():
     
     # Habilita PostGIS primeiro (necessário para tipos geography)
     logger.info("📦 Passo 2/8: Habilitando extensão PostGIS...")
-    habilitar_postgis()
+    postgis_disponivel = habilitar_postgis()
     
     # SEMPRE cria/verifica os schemas primeiro
     logger.info("📦 Passo 3/8: Criando/verificando schemas...")
@@ -715,7 +747,7 @@ def inicializar_banco():
     
     # SEMPRE cria as tabelas (criar_tabelas usa checkfirst=True, então não sobrescreve)
     logger.info("📋 Passo 5/8: Criando/verificando todas as tabelas...")
-    criar_tabelas()
+    criar_tabelas(postgis_disponivel=postgis_disponivel)
     
     # Cria tabelas do chatbot (que não usam modelos SQLAlchemy)
     logger.info("🤖 Passo 6/8: Criando/verificando tabelas do chatbot...")
