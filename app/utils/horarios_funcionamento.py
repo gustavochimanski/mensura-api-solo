@@ -28,19 +28,27 @@ def _parse_hhmm(value: str) -> Optional[time]:
 
 
 def _to_local(now: datetime, tz_name: str | None) -> datetime:
+    """
+    Converte datetime para o timezone local da empresa.
+    Se o datetime for naive (sem timezone), assume que está em UTC e converte.
+    """
     if not tz_name:
         return now
     if ZoneInfo is None:
         return now
     try:
-        tz = ZoneInfo(tz_name)
+        tz_local = ZoneInfo(tz_name)
     except Exception:
         return now
     try:
-        # Se vier naive, assume já está no TZ do banco/servidor
+        # Se vier naive, assume que está em UTC e converte para o timezone local
         if now.tzinfo is None:
-            return now.replace(tzinfo=tz)
-        return now.astimezone(tz)
+            # Assumir UTC e converter para o timezone local
+            tz_utc = ZoneInfo("UTC")
+            now_utc = now.replace(tzinfo=tz_utc)
+            return now_utc.astimezone(tz_local)
+        # Se já tem timezone, apenas converte
+        return now.astimezone(tz_local)
     except Exception:
         return now
 
