@@ -1390,35 +1390,66 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
             traceback.print_exc()
             # Continua processando mesmo se falhar a criação do cliente
 
-        # VERIFICA DUPLICAÇÃO: Se a mensagem já foi processada recentemente (últimos 10 segundos)
-        # Isso evita processar a mesma mensagem duas vezes quando o webhook chega duplicado
+        # VERIFICA DUPLICAÇÃO: Usa message_id do WhatsApp (único por mensagem) para detectar duplicatas reais
+        # Se não tiver message_id, usa verificação por conteúdo apenas para mensagens longas (>3 chars)
+        # para evitar bloquear respostas curtas legítimas como "1", "sim", "ok"
         empresa_id_int = int(empresa_id) if empresa_id else 1
         user_id = phone_number
         conversations = chatbot_db.get_conversations_by_user(db, user_id, empresa_id_int)
         
         if conversations:
             from sqlalchemy import text
-            # Verifica se a última mensagem do usuário é idêntica e muito recente
-            check_duplicate = text("""
-                SELECT id, content, created_at
-                FROM chatbot.messages
-                WHERE conversation_id = :conversation_id
-                AND role = 'user'
-                AND content = :content
-                AND created_at > NOW() - INTERVAL '10 seconds'
-                ORDER BY created_at DESC
-                LIMIT 1
-            """)
-            result = db.execute(check_duplicate, {
-                "conversation_id": conversations[0]['id'],
-                "content": message_text
-            })
-            duplicate = result.fetchone()
+            duplicate = None
             
-            if duplicate:
-                print(f"   ⚠️ Mensagem duplicada detectada! A mesma mensagem foi recebida há menos de 10 segundos.")
-                print(f"   🔄 Ignorando processamento duplicado para evitar resposta repetida.")
-                return  # Ignora mensagem duplicada
+            # Se tiver message_id do WhatsApp, usa ele para detectar duplicatas reais
+            if message_id:
+                check_duplicate_by_id = text("""
+                    SELECT id, content, created_at
+                    FROM chatbot.messages
+                    WHERE conversation_id = :conversation_id
+                    AND role = 'user'
+                    AND metadata->>'whatsapp_message_id' = :message_id
+                    AND created_at > NOW() - INTERVAL '30 seconds'
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                """)
+                result = db.execute(check_duplicate_by_id, {
+                    "conversation_id": conversations[0]['id'],
+                    "message_id": message_id
+                })
+                duplicate = result.fetchone()
+                
+                if duplicate:
+                    print(f"   ⚠️ Mensagem duplicada detectada por message_id! Message ID {message_id} já foi processado.")
+                    print(f"   🔄 Ignorando processamento duplicado para evitar resposta repetida.")
+                    return  # Ignora mensagem duplicada
+            
+            # Se não tiver message_id E a mensagem for longa (>3 caracteres), verifica por conteúdo
+            # Mensagens curtas como "1", "sim", "ok" podem ser respostas legítimas repetidas
+            elif len(message_text.strip()) > 3:
+                check_duplicate_by_content = text("""
+                    SELECT id, content, created_at
+                    FROM chatbot.messages
+                    WHERE conversation_id = :conversation_id
+                    AND role = 'user'
+                    AND content = :content
+                    AND created_at > NOW() - INTERVAL '5 seconds'
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                """)
+                result = db.execute(check_duplicate_by_content, {
+                    "conversation_id": conversations[0]['id'],
+                    "content": message_text
+                })
+                duplicate = result.fetchone()
+                
+                if duplicate:
+                    print(f"   ⚠️ Mensagem duplicada detectada por conteúdo! A mesma mensagem foi recebida há menos de 5 segundos.")
+                    print(f"   🔄 Ignorando processamento duplicado para evitar resposta repetida.")
+                    return  # Ignora mensagem duplicada
+            else:
+                # Mensagem curta sem message_id - não verifica duplicata para permitir respostas legítimas
+                print(f"   ℹ️ Mensagem curta sem message_id - permitindo processamento (pode ser resposta legítima repetida)")
 
         # VERIFICA SE A LOJA ESTÁ ABERTA
         try:
@@ -1464,12 +1495,13 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                             empresa_id=empresa_id_int
                         )
                     
-                    # Salva mensagem do usuário
+                    # Salva mensagem do usuário (com whatsapp_message_id para detectar duplicatas)
                     chatbot_db.create_message(
                         db=db,
                         conversation_id=conversation_id,
                         role="user",
-                        content=message_text
+                        content=message_text,
+                        whatsapp_message_id=message_id  # Passa message_id do WhatsApp para detectar duplicatas
                     )
                     
                     # Formata mensagem bonita com horários
@@ -1712,7 +1744,7 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                             contact_name=contact_name,
                             empresa_id=empresa_id_int
                         )
-                    chatbot_db.create_message(db, conversation_id, "user", message_text)
+                    chatbot_db.create_message(db, conversation_id, "user", message_text, whatsapp_message_id=message_id)
                     chatbot_db.create_message(db, conversation_id, "assistant", resposta)
                 
                 # Se foi "pedir pelo whatsapp", continua o fluxo normalmente na próxima mensagem
@@ -1788,12 +1820,13 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
             )
             print(f"   ✅ Nova conversa criada: {conversation_id}")
 
-        # 2. Salva mensagem do usuário
+        # 2. Salva mensagem do usuário (com whatsapp_message_id para detectar duplicatas)
         chatbot_db.create_message(
             db=db,
             conversation_id=conversation_id,
             role="user",
-            content=message_text
+            content=message_text,
+            whatsapp_message_id=message_id  # Passa message_id do WhatsApp para detectar duplicatas
         )
         print(f"   💾 Mensagem do usuário salva")
 

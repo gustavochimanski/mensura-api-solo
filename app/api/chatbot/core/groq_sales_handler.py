@@ -1204,25 +1204,44 @@ class GroqSalesHandler:
                 if funcao == "adicionar_produto":
                     produto_busca = params.get("produto_busca", "")
                     quantidade = params.get("quantidade", 1)
+                    personalizacao = params.get("personalizacao")  # Pode ter personalizacao junto
                     produto = self._buscar_produto_por_termo(produto_busca, todos_produtos)
                     
                     if produto:
                         # Adiciona ao pedido_contexto no modo conversacional
                         pedido_contexto = dados.get('pedido_contexto', [])
+                        
+                        # Prepara removidos e adicionais baseado na personalização
+                        removidos = []
+                        adicionais = []
+                        if personalizacao:
+                            acao_personalizar = personalizacao.get("acao", "")
+                            item_personalizar = personalizacao.get("item", "")
+                            if acao_personalizar == "remover_ingrediente" and item_personalizar:
+                                removidos.append(item_personalizar)
+                            elif acao_personalizar == "adicionar_extra" and item_personalizar:
+                                adicionais.append(item_personalizar)
+                        
                         for _ in range(quantidade):
                             novo_item = {
                                 'id': str(produto['id']),
                                 'nome': produto['nome'],
                                 'preco': produto['preco'],
                                 'quantidade': 1,
-                                'removidos': [],
-                                'adicionais': [],
+                                'removidos': removidos.copy(),  # Usa cópia para não compartilhar referência
+                                'adicionais': adicionais.copy(),
                                 'preco_adicionais': 0.0
                             }
                             pedido_contexto.append(novo_item)
                         
                         dados['pedido_contexto'] = pedido_contexto
-                        mensagens_resposta.append(f"✅ Adicionei {quantidade}x *{produto['nome']}* ao pedido!")
+                        mensagem_item = f"✅ Adicionei {quantidade}x *{produto['nome']}*"
+                        if removidos:
+                            mensagem_item += f" SEM {', '.join(removidos)}"
+                        if adicionais:
+                            mensagem_item += f" COM {', '.join(adicionais)}"
+                        mensagem_item += " ao pedido!"
+                        mensagens_resposta.append(mensagem_item)
                 
                 elif funcao == "personalizar_produto":
                     acao_personalizar = params.get("acao", "")

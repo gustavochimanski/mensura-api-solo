@@ -741,10 +741,21 @@ class PedidoService:
             if meios_pagamento_list:
                 soma_pagamentos = sum(_dec(mp['valor']) for mp in meios_pagamento_list)
                 if soma_pagamentos < valor_total:
-                    raise HTTPException(
-                        status.HTTP_400_BAD_REQUEST,
-                        f"Soma dos pagamentos ({float(soma_pagamentos)}) é menor que o valor total do pedido ({float(valor_total)})."
+                    # Ajusta automaticamente o valor do pagamento para o valor total do pedido
+                    # Isso evita erros quando o frontend/chatbot calcula incorretamente
+                    diferenca = valor_total - soma_pagamentos
+                    logger.warning(
+                        f"[finalizar_pedido] Ajustando valor do pagamento: "
+                        f"soma_pagamentos={float(soma_pagamentos)}, valor_total={float(valor_total)}, "
+                        f"diferenca={float(diferenca)}"
                     )
+                    # Ajusta o primeiro meio de pagamento para cobrir a diferença
+                    if len(meios_pagamento_list) > 0:
+                        # Mantém como Decimal para consistência, mas converte para float no dict
+                        meios_pagamento_list[0]['valor'] = float(_dec(valor_total))
+                        logger.info(
+                            f"[finalizar_pedido] Valor ajustado para {float(valor_total)} no primeiro meio de pagamento"
+                        )
             
             if getattr(payload, "troco_para", None) is not None and meio_pagamento is not None:
                 mp_tipo = getattr(meio_pagamento, "tipo", None)

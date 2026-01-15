@@ -109,6 +109,21 @@ def init_database(db: Session):
                 FOREIGN KEY (conversation_id) REFERENCES {CHATBOT_SCHEMA}.conversations(id) ON DELETE CASCADE
             )
         """))
+        
+        # Adiciona coluna metadata se não existir (para armazenar whatsapp_message_id)
+        db.execute(text(f"""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_schema = '{CHATBOT_SCHEMA}'
+                    AND table_name = 'messages'
+                    AND column_name = 'metadata'
+                ) THEN
+                    ALTER TABLE {CHATBOT_SCHEMA}.messages ADD COLUMN metadata JSONB;
+                END IF;
+            END $$;
+        """))
 
         # Tabela de status do bot por número (ativo/pausado)
         db.execute(text(f"""
@@ -450,18 +465,46 @@ def delete_conversation(db: Session, conversation_id: int) -> bool:
 
 # ==================== MENSAGENS ====================
 
-def create_message(db: Session, conversation_id: int, role: str, content: str) -> Optional[int]:
-    """Adiciona uma mensagem à conversa"""
-    query = text(f"""
-        INSERT INTO {CHATBOT_SCHEMA}.messages (conversation_id, role, content)
-        VALUES (:conversation_id, :role, :content)
-        RETURNING id
-    """)
-    result = db.execute(query, {
-        "conversation_id": conversation_id,
-        "role": role,
-        "content": content
-    })
+def create_message(db: Session, conversation_id: int, role: str, content: str, whatsapp_message_id: Optional[str] = None) -> Optional[int]:
+    """Adiciona uma mensagem à conversa
+    
+    Args:
+        db: Sessão do banco de dados
+        conversation_id: ID da conversa
+        role: Papel da mensagem ('user' ou 'assistant')
+        content: Conteúdo da mensagem
+        whatsapp_message_id: ID único da mensagem do WhatsApp (opcional, usado para detectar duplicatas)
+    """
+    # Prepara metadata se tiver whatsapp_message_id
+    metadata_json = None
+    if whatsapp_message_id:
+        import json
+        metadata_json = json.dumps({"whatsapp_message_id": whatsapp_message_id})
+    
+    if metadata_json:
+        query = text(f"""
+            INSERT INTO {CHATBOT_SCHEMA}.messages (conversation_id, role, content, metadata)
+            VALUES (:conversation_id, :role, :content, CAST(:metadata AS jsonb))
+            RETURNING id
+        """)
+        result = db.execute(query, {
+            "conversation_id": conversation_id,
+            "role": role,
+            "content": content,
+            "metadata": metadata_json
+        })
+    else:
+        query = text(f"""
+            INSERT INTO {CHATBOT_SCHEMA}.messages (conversation_id, role, content)
+            VALUES (:conversation_id, :role, :content)
+            RETURNING id
+        """)
+        result = db.execute(query, {
+            "conversation_id": conversation_id,
+            "role": role,
+            "content": content
+        })
+    
     db.commit()
 
     # Atualiza timestamp da conversa
