@@ -898,6 +898,49 @@ async def webhook_verification(request: Request):
         raise HTTPException(status_code=500, detail=f"Erro interno: {str(e)}")
 
 
+def get_empresa_id_by_business_account_id(db: Session, business_account_id: str) -> Optional[str]:
+    """
+    Busca o empresa_id baseado no business_account_id da configuração do WhatsApp
+    
+    Tenta primeiro buscar configurações ativas, depois inativas se necessário.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    if not business_account_id:
+        logger.warning("⚠️ business_account_id vazio ou None")
+        return None
+    
+    try:
+        # Normaliza o business_account_id para string (caso venha como número)
+        business_account_id = str(business_account_id).strip()
+        logger.info(f"🔍 Buscando empresa_id para business_account_id: {business_account_id}")
+        
+        repo = WhatsAppConfigRepository(db)
+        
+        # Primeiro tenta buscar apenas ativas
+        config = repo.get_by_business_account_id(business_account_id, include_inactive=False)
+        
+        # Se não encontrou ativa, tenta buscar inativas também (mas loga aviso)
+        if not config:
+            logger.warning(f"⚠️ Nenhuma configuração ATIVA encontrada para business_account_id={business_account_id}, tentando buscar inativas...")
+            config = repo.get_by_business_account_id(business_account_id, include_inactive=True)
+            if config:
+                logger.warning(f"⚠️ ATENÇÃO: Configuração encontrada mas está INATIVA (is_active={config.is_active}). Considere ativar esta configuração.")
+        
+        if config:
+            empresa_id = str(config.empresa_id)
+            logger.info(f"✅ Empresa encontrada: business_account_id={business_account_id} -> empresa_id={empresa_id} (is_active={config.is_active})")
+            return empresa_id
+        else:
+            logger.error(f"❌ Nenhuma configuração encontrada para business_account_id={business_account_id}")
+            return None
+            
+    except Exception as e:
+        logger.error(f"⚠️ Erro ao buscar empresa_id por business_account_id={business_account_id}: {e}", exc_info=True)
+        return None
+
+
 def get_empresa_id_by_phone_number_id(db: Session, phone_number_id: str) -> Optional[str]:
     """
     Busca o empresa_id baseado no phone_number_id da configuração do WhatsApp
@@ -972,27 +1015,40 @@ def get_empresa_id_by_slug(db: Session, slug: Optional[str]) -> Optional[str]:
         return None
 
 
-def get_empresa_id_from_webhook(db: Session, metadata: dict, slug_hint: Optional[str] = None) -> Optional[str]:
+def get_empresa_id_from_webhook(db: Session, metadata: dict, business_account_id: Optional[str] = None, slug_hint: Optional[str] = None) -> Optional[str]:
     """
     Tenta identificar a empresa a partir dos dados do webhook.
-    Tenta múltiplas estratégias:
-    1. phone_number_id (padrão)
-    2. display_phone_number (alternativa para 360dialog)
+    Tenta múltiplas estratégias (em ordem de prioridade):
+    1. business_account_id (mais confiável - vem no entry.id do webhook)
+    2. slug da empresa (vindo do header x-cliente ou host)
+    3. phone_number_id (da configuração do WhatsApp)
+    4. display_phone_number (alternativa para 360dialog)
+    
+    IMPORTANTE: Estamos identificando a EMPRESA (loja), não o CLIENTE (quem enviou a mensagem)
     """
     import logging
     logger = logging.getLogger(__name__)
     
-    if not metadata:
-        logger.warning("⚠️ Metadata vazio ou None no webhook")
-        return None
-    
     try:
         repo = WhatsAppConfigRepository(db)
 
-        # Estratégia 0: slug da empresa vindo do header (x-cliente) ou host
-        # IMPORTANTE: Estamos identificando a EMPRESA (loja), não o CLIENTE (quem enviou a mensagem)
+        # Estratégia 1: business_account_id (MAIS CONFIÁVEL - vem no entry.id do webhook)
+        if business_account_id:
+            business_account_id = str(business_account_id).strip()
+            print(f"   🔍 [Estratégia 1] Tentando identificar EMPRESA por business_account_id: {business_account_id}")
+            logger.info(f"🔍 Tentando identificar EMPRESA por business_account_id: {business_account_id}")
+            empresa_id = get_empresa_id_by_business_account_id(db, business_account_id)
+            if empresa_id:
+                print(f"   ✅ EMPRESA identificada por business_account_id: {business_account_id} -> empresa_id: {empresa_id}")
+                logger.info(f"✅ EMPRESA identificada por business_account_id: {business_account_id} -> empresa_id: {empresa_id}")
+                return empresa_id
+            else:
+                print(f"   ⚠️ EMPRESA não encontrada para business_account_id: {business_account_id}")
+                logger.warning(f"⚠️ EMPRESA não encontrada para business_account_id: {business_account_id}")
+
+        # Estratégia 2: slug da empresa vindo do header (x-cliente) ou host
         if slug_hint:
-            print(f"   🔍 [Estratégia 0] Tentando identificar EMPRESA por slug: {slug_hint}")
+            print(f"   🔍 [Estratégia 2] Tentando identificar EMPRESA por slug: {slug_hint}")
             logger.info(f"🔍 Tentando identificar EMPRESA por slug: {slug_hint}")
             empresa_id = get_empresa_id_by_slug(db, slug_hint)
             if empresa_id:
@@ -1003,30 +1059,34 @@ def get_empresa_id_from_webhook(db: Session, metadata: dict, slug_hint: Optional
                 print(f"   ⚠️ EMPRESA não encontrada para slug: {slug_hint}")
                 logger.warning(f"⚠️ EMPRESA não encontrada para slug: {slug_hint}")
         
-        # Estratégia 1: Buscar por phone_number_id
+        if not metadata:
+            logger.warning("⚠️ Metadata vazio ou None no webhook")
+            return None
+        
+        # Estratégia 3: Buscar por phone_number_id
         phone_number_id = metadata.get("phone_number_id")
         if phone_number_id:
             # Normaliza para string
             phone_number_id = str(phone_number_id).strip()
-            print(f"   🔍 [Estratégia 1] Tentando identificar empresa por phone_number_id: {phone_number_id}")
-            logger.info(f"🔍 Tentando identificar empresa por phone_number_id: {phone_number_id}")
+            print(f"   🔍 [Estratégia 3] Tentando identificar EMPRESA por phone_number_id: {phone_number_id}")
+            logger.info(f"🔍 Tentando identificar EMPRESA por phone_number_id: {phone_number_id}")
             
             # Usa a função melhorada que já tenta buscar inativas se necessário
             empresa_id = get_empresa_id_by_phone_number_id(db, phone_number_id)
             if empresa_id:
-                print(f"   ✅ Empresa identificada por phone_number_id: {phone_number_id} -> empresa_id: {empresa_id}")
-                logger.info(f"✅ Empresa identificada por phone_number_id: {phone_number_id} -> empresa_id: {empresa_id}")
+                print(f"   ✅ EMPRESA identificada por phone_number_id: {phone_number_id} -> empresa_id: {empresa_id}")
+                logger.info(f"✅ EMPRESA identificada por phone_number_id: {phone_number_id} -> empresa_id: {empresa_id}")
                 return empresa_id
             else:
-                print(f"   ⚠️ Não foi possível identificar empresa por phone_number_id: {phone_number_id}")
-                logger.warning(f"⚠️ Não foi possível identificar empresa por phone_number_id: {phone_number_id}")
+                print(f"   ⚠️ Não foi possível identificar EMPRESA por phone_number_id: {phone_number_id}")
+                logger.warning(f"⚠️ Não foi possível identificar EMPRESA por phone_number_id: {phone_number_id}")
         
-        # Estratégia 2: Buscar por display_phone_number (útil para 360dialog)
+        # Estratégia 4: Buscar por display_phone_number (útil para 360dialog)
         display_phone_number = metadata.get("display_phone_number")
         if display_phone_number:
             display_phone_number = str(display_phone_number).strip()
-            print(f"   🔍 [Estratégia 2] Tentando identificar empresa por display_phone_number: {display_phone_number}")
-            logger.info(f"🔍 Tentando identificar empresa por display_phone_number: {display_phone_number}")
+            print(f"   🔍 [Estratégia 4] Tentando identificar EMPRESA por display_phone_number: {display_phone_number}")
+            logger.info(f"🔍 Tentando identificar EMPRESA por display_phone_number: {display_phone_number}")
             
             # Primeiro tenta buscar apenas ativas
             config = repo.get_by_display_phone_number(display_phone_number, include_inactive=False)
@@ -1042,15 +1102,15 @@ def get_empresa_id_from_webhook(db: Session, metadata: dict, slug_hint: Optional
             
             if config:
                 empresa_id = str(config.empresa_id)
-                print(f"   ✅ Empresa identificada por display_phone_number: {display_phone_number} -> empresa_id: {empresa_id}")
-                logger.info(f"✅ Empresa identificada por display_phone_number: {display_phone_number} -> empresa_id: {empresa_id}")
+                print(f"   ✅ EMPRESA identificada por display_phone_number: {display_phone_number} -> empresa_id: {empresa_id}")
+                logger.info(f"✅ EMPRESA identificada por display_phone_number: {display_phone_number} -> empresa_id: {empresa_id}")
                 return empresa_id
             else:
-                print(f"   ⚠️ Não foi possível identificar empresa por display_phone_number: {display_phone_number}")
-                logger.warning(f"⚠️ Não foi possível identificar empresa por display_phone_number: {display_phone_number}")
+                print(f"   ⚠️ Não foi possível identificar EMPRESA por display_phone_number: {display_phone_number}")
+                logger.warning(f"⚠️ Não foi possível identificar EMPRESA por display_phone_number: {display_phone_number}")
         
-        print("   ❌ Não foi possível identificar empresa usando nenhuma estratégia (phone_number_id nem display_phone_number)")
-        logger.warning("❌ Não foi possível identificar empresa usando nenhuma estratégia")
+        print("   ❌ Não foi possível identificar EMPRESA usando nenhuma estratégia")
+        logger.warning("❌ Não foi possível identificar EMPRESA usando nenhuma estratégia")
         return None
     except Exception as e:
         print(f"   ❌ Erro ao identificar empresa do webhook: {e}")
@@ -1139,6 +1199,9 @@ async def process_webhook_background(body: dict, headers_info: Optional[dict] = 
             entries = body.get("entry", [])
 
             for entry in entries:
+                # O entry.id é o WhatsApp Business Account ID (mais confiável para identificar empresa)
+                business_account_id = entry.get("id")
+                
                 changes = entry.get("changes", [])
 
                 for change in changes:
@@ -1155,24 +1218,28 @@ async def process_webhook_background(body: dict, headers_info: Optional[dict] = 
                             slug_hint = _extrair_slug_do_host(headers_info.get("host"))
 
                     # Tenta identificar empresa usando múltiplas estratégias
-                    empresa_id = get_empresa_id_from_webhook(db, metadata, slug_hint=slug_hint)
+                    # Prioriza business_account_id (entry.id) que é o mais confiável
+                    empresa_id = get_empresa_id_from_webhook(db, metadata, business_account_id=business_account_id, slug_hint=slug_hint)
                     
                     if not empresa_id:
-                        # Se não encontrou, tenta usar phone_number_id para mensagem de erro mais específica
+                        # Se não encontrou, mostra mensagens de erro mais específicas
                         phone_number_id = metadata.get("phone_number_id")
                         display_phone_number = metadata.get("display_phone_number")
                         
+                        if business_account_id:
+                            print(f"   ⚠️ EMPRESA não encontrada para business_account_id: {business_account_id}")
+                            print(f"   💡 Dica: Cadastre a configuração do WhatsApp no banco com business_account_id={business_account_id}")
                         if slug_hint:
-                            print(f"   ⚠️ Empresa não encontrada para slug: {slug_hint}")
+                            print(f"   ⚠️ EMPRESA não encontrada para slug: {slug_hint}")
                             print(f"   💡 Dica: Verifique se existe uma empresa com slug='{slug_hint}' no banco de dados")
                         if phone_number_id:
-                            print(f"   ⚠️ Empresa não encontrada para phone_number_id: {phone_number_id}")
+                            print(f"   ⚠️ EMPRESA não encontrada para phone_number_id: {phone_number_id}")
                             print(f"   💡 Dica: Cadastre a configuração do WhatsApp no banco com phone_number_id={phone_number_id}")
                         elif display_phone_number:
-                            print(f"   ⚠️ Empresa não encontrada para display_phone_number: {display_phone_number}")
+                            print(f"   ⚠️ EMPRESA não encontrada para display_phone_number: {display_phone_number}")
                             print(f"   💡 Dica: Cadastre a configuração do WhatsApp no banco com display_phone_number={display_phone_number}")
                         else:
-                            print(f"   ⚠️ Dados insuficientes no webhook para identificar empresa (phone_number_id ou display_phone_number)")
+                            print(f"   ⚠️ Dados insuficientes no webhook para identificar EMPRESA")
                         
                         print(f"   🔄 Usando fallback empresa_id=1 (configuração padrão)")
                         empresa_id = "1"

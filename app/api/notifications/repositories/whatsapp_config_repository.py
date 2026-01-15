@@ -211,6 +211,64 @@ class WhatsAppConfigRepository:
         
         return config
 
+    def get_by_business_account_id(self, business_account_id: str, include_inactive: bool = False) -> Optional[WhatsAppConfigModel]:
+        """
+        Busca configuração pelo business_account_id (WhatsApp Business Account ID)
+        
+        Args:
+            business_account_id: ID da conta business do WhatsApp (vem no entry.id do webhook)
+            include_inactive: Se True, busca mesmo configurações inativas (prioriza ativas)
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        if not business_account_id:
+            return None
+        
+        # Normaliza para string e remove espaços
+        business_account_id = str(business_account_id).strip()
+        
+        # Primeiro tenta buscar apenas ativas
+        query = (
+            self.db.query(WhatsAppConfigModel)
+            .filter(WhatsAppConfigModel.business_account_id == business_account_id)
+        )
+        
+        if not include_inactive:
+            query = query.filter(WhatsAppConfigModel.is_active.is_(True))
+        
+        config = query.order_by(desc(WhatsAppConfigModel.updated_at)).first()
+        
+        # Se não encontrou e include_inactive=False, tenta buscar inativas também
+        if not config and not include_inactive:
+            logger.warning(f"Configuração ativa não encontrada para business_account_id={business_account_id}, tentando buscar inativas...")
+            config = (
+                self.db.query(WhatsAppConfigModel)
+                .filter(WhatsAppConfigModel.business_account_id == business_account_id)
+                .order_by(desc(WhatsAppConfigModel.updated_at))
+                .first()
+            )
+            if config:
+                logger.warning(f"⚠️ Configuração encontrada mas está INATIVA (is_active={config.is_active}) para business_account_id={business_account_id}")
+        
+        if config:
+            logger.info(f"✅ Configuração encontrada: business_account_id={business_account_id}, empresa_id={config.empresa_id}, is_active={config.is_active}")
+        else:
+            logger.warning(f"❌ Nenhuma configuração encontrada para business_account_id={business_account_id}")
+            # Debug: lista todas as configurações disponíveis
+            all_configs = self.db.query(WhatsAppConfigModel).all()
+            if all_configs:
+                configs_info = [
+                    f"(business_account_id={c.business_account_id}, empresa_id={c.empresa_id}, is_active={c.is_active})"
+                    for c in all_configs if c.business_account_id
+                ]
+                if configs_info:
+                    logger.warning(f"📋 Configurações disponíveis no banco: {', '.join(configs_info)}")
+            else:
+                logger.warning("📋 Nenhuma configuração cadastrada no banco de dados")
+        
+        return config
+
     def deactivate_all(self, empresa_id: str) -> None:
         import logging
         logger = logging.getLogger(__name__)
