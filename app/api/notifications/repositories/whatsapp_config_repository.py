@@ -70,11 +70,60 @@ class WhatsAppConfigRepository:
             .first()
         )
 
-    def get_by_phone_number_id(self, phone_number_id: str) -> Optional[WhatsAppConfigModel]:
-        """Busca configuração pelo phone_number_id"""
-        return (
+    def get_by_phone_number_id(self, phone_number_id: str, include_inactive: bool = False) -> Optional[WhatsAppConfigModel]:
+        """
+        Busca configuração pelo phone_number_id
+        
+        Args:
+            phone_number_id: ID do número de telefone do WhatsApp
+            include_inactive: Se True, busca mesmo configurações inativas (prioriza ativas)
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        if not phone_number_id:
+            return None
+        
+        # Primeiro tenta buscar apenas ativas
+        query = (
             self.db.query(WhatsAppConfigModel)
             .filter(WhatsAppConfigModel.phone_number_id == phone_number_id)
+        )
+        
+        if not include_inactive:
+            query = query.filter(WhatsAppConfigModel.is_active.is_(True))
+        
+        config = query.order_by(desc(WhatsAppConfigModel.updated_at)).first()
+        
+        # Se não encontrou e include_inactive=False, tenta buscar inativas também
+        if not config and not include_inactive:
+            logger.warning(f"Configuração ativa não encontrada para phone_number_id={phone_number_id}, tentando buscar inativas...")
+            config = (
+                self.db.query(WhatsAppConfigModel)
+                .filter(WhatsAppConfigModel.phone_number_id == phone_number_id)
+                .order_by(desc(WhatsAppConfigModel.updated_at))
+                .first()
+            )
+            if config:
+                logger.warning(f"⚠️ Configuração encontrada mas está INATIVA (is_active={config.is_active}) para phone_number_id={phone_number_id}")
+        
+        if config:
+            logger.info(f"✅ Configuração encontrada: phone_number_id={phone_number_id}, empresa_id={config.empresa_id}, is_active={config.is_active}")
+        else:
+            logger.warning(f"❌ Nenhuma configuração encontrada para phone_number_id={phone_number_id}")
+            # Debug: lista todas as configurações disponíveis
+            all_configs = self.db.query(WhatsAppConfigModel).all()
+            logger.debug(f"📋 Configurações disponíveis no banco: {[(c.phone_number_id, c.empresa_id, c.is_active) for c in all_configs]}")
+        
+        return config
+
+    def get_by_display_phone_number(self, display_phone_number: str) -> Optional[WhatsAppConfigModel]:
+        """Busca configuração pelo display_phone_number (alternativa para 360dialog)"""
+        if not display_phone_number:
+            return None
+        return (
+            self.db.query(WhatsAppConfigModel)
+            .filter(WhatsAppConfigModel.display_phone_number == display_phone_number)
             .filter(WhatsAppConfigModel.is_active.is_(True))
             .order_by(desc(WhatsAppConfigModel.updated_at))
             .first()

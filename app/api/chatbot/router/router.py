@@ -900,18 +900,78 @@ async def webhook_verification(request: Request):
 def get_empresa_id_by_phone_number_id(db: Session, phone_number_id: str) -> Optional[str]:
     """
     Busca o empresa_id baseado no phone_number_id da configuração do WhatsApp
+    
+    Tenta primeiro buscar configurações ativas, depois inativas se necessário.
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    
     if not phone_number_id:
+        logger.warning("⚠️ phone_number_id vazio ou None")
+        return None
+    
+    try:
+        # Normaliza o phone_number_id para string (caso venha como número)
+        phone_number_id = str(phone_number_id).strip()
+        logger.info(f"🔍 Buscando empresa_id para phone_number_id: {phone_number_id}")
+        
+        repo = WhatsAppConfigRepository(db)
+        
+        # Primeiro tenta buscar apenas ativas
+        config = repo.get_by_phone_number_id(phone_number_id, include_inactive=False)
+        
+        # Se não encontrou ativa, tenta buscar inativas também (mas loga aviso)
+        if not config:
+            logger.warning(f"⚠️ Nenhuma configuração ATIVA encontrada para phone_number_id={phone_number_id}, tentando buscar inativas...")
+            config = repo.get_by_phone_number_id(phone_number_id, include_inactive=True)
+            if config:
+                logger.warning(f"⚠️ ATENÇÃO: Configuração encontrada mas está INATIVA (is_active={config.is_active}). Considere ativar esta configuração.")
+        
+        if config:
+            empresa_id = str(config.empresa_id)
+            logger.info(f"✅ Empresa encontrada: phone_number_id={phone_number_id} -> empresa_id={empresa_id} (is_active={config.is_active})")
+            return empresa_id
+        else:
+            logger.error(f"❌ Nenhuma configuração encontrada para phone_number_id={phone_number_id}")
+            return None
+            
+    except Exception as e:
+        logger.error(f"⚠️ Erro ao buscar empresa_id por phone_number_id={phone_number_id}: {e}", exc_info=True)
+        return None
+
+
+def get_empresa_id_from_webhook(db: Session, metadata: dict) -> Optional[str]:
+    """
+    Tenta identificar a empresa a partir dos dados do webhook.
+    Tenta múltiplas estratégias:
+    1. phone_number_id (padrão)
+    2. display_phone_number (alternativa para 360dialog)
+    """
+    if not metadata:
         return None
     
     try:
         repo = WhatsAppConfigRepository(db)
-        config = repo.get_by_phone_number_id(phone_number_id)
-        if config:
-            return str(config.empresa_id)
+        
+        # Estratégia 1: Buscar por phone_number_id
+        phone_number_id = metadata.get("phone_number_id")
+        if phone_number_id:
+            config = repo.get_by_phone_number_id(phone_number_id)
+            if config:
+                print(f"   ✅ Empresa identificada por phone_number_id: {phone_number_id} -> empresa_id: {config.empresa_id}")
+                return str(config.empresa_id)
+        
+        # Estratégia 2: Buscar por display_phone_number (útil para 360dialog)
+        display_phone_number = metadata.get("display_phone_number")
+        if display_phone_number:
+            config = repo.get_by_display_phone_number(display_phone_number)
+            if config:
+                print(f"   ✅ Empresa identificada por display_phone_number: {display_phone_number} -> empresa_id: {config.empresa_id}")
+                return str(config.empresa_id)
+        
         return None
     except Exception as e:
-        print(f"⚠️ Erro ao buscar empresa_id por phone_number_id: {e}")
+        print(f"⚠️ Erro ao identificar empresa do webhook: {e}")
         return None
 
 
@@ -998,23 +1058,27 @@ async def process_webhook_background(body: dict):
                     value = change.get("value", {})
                     field = change.get("field", "")
 
-                    # Extrai phone_number_id do metadata para identificar a empresa
+                    # Extrai dados do metadata para identificar a empresa
                     metadata = value.get("metadata", {})
-                    phone_number_id = metadata.get("phone_number_id")
                     
-                    # Busca empresa_id baseado no phone_number_id
-                    empresa_id = None
-                    if phone_number_id:
-                        empresa_id = get_empresa_id_by_phone_number_id(db, phone_number_id)
-                        if empresa_id:
-                            print(f"   📱 phone_number_id: {phone_number_id} -> empresa_id: {empresa_id}")
-                        else:
-                            print(f"   ⚠️ Empresa não encontrada para phone_number_id {phone_number_id}")
+                    # Tenta identificar empresa usando múltiplas estratégias
+                    empresa_id = get_empresa_id_from_webhook(db, metadata)
+                    
+                    if not empresa_id:
+                        # Se não encontrou, tenta usar phone_number_id para mensagem de erro mais específica
+                        phone_number_id = metadata.get("phone_number_id")
+                        display_phone_number = metadata.get("display_phone_number")
+                        
+                        if phone_number_id:
+                            print(f"   ⚠️ Empresa não encontrada para phone_number_id: {phone_number_id}")
                             print(f"   💡 Dica: Cadastre a configuração do WhatsApp no banco com phone_number_id={phone_number_id}")
-                            print(f"   🔄 Usando fallback empresa_id=1 (configuração padrão)")
-                            empresa_id = "1"
-                    else:
-                        print(f"   ⚠️ phone_number_id não informado no webhook, usando fallback empresa_id=1")
+                        elif display_phone_number:
+                            print(f"   ⚠️ Empresa não encontrada para display_phone_number: {display_phone_number}")
+                            print(f"   💡 Dica: Cadastre a configuração do WhatsApp no banco com display_phone_number={display_phone_number}")
+                        else:
+                            print(f"   ⚠️ Dados insuficientes no webhook para identificar empresa (phone_number_id ou display_phone_number)")
+                        
+                        print(f"   🔄 Usando fallback empresa_id=1 (configuração padrão)")
                         empresa_id = "1"
 
                     # Processa MESSAGES (mensagens recebidas)
