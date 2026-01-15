@@ -1371,6 +1371,25 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
         if message_id:
             print(f"   📨 Message ID: {message_id}")
 
+        # IDENTIFICA/CRIA CLIENTE pelo número de telefone (quem enviou a mensagem)
+        empresa_id_int = int(empresa_id) if empresa_id else 1
+        try:
+            from ..core.address_service import ChatbotAddressService
+            address_service = ChatbotAddressService(db, empresa_id_int)
+            cliente = address_service.criar_cliente_se_nao_existe(
+                telefone=phone_number,
+                nome=contact_name or "Cliente WhatsApp"
+            )
+            if cliente:
+                print(f"   👤 CLIENTE identificado: ID={cliente['id']}, Nome={cliente['nome']}, Telefone={cliente['telefone']}")
+            else:
+                print(f"   ⚠️ Não foi possível criar/identificar cliente para telefone: {phone_number}")
+        except Exception as e:
+            print(f"   ⚠️ Erro ao identificar/criar cliente: {e}")
+            import traceback
+            traceback.print_exc()
+            # Continua processando mesmo se falhar a criação do cliente
+
         # VERIFICA DUPLICAÇÃO: Se a mensagem já foi processada recentemente (últimos 10 segundos)
         # Isso evita processar a mesma mensagem duas vezes quando o webhook chega duplicado
         empresa_id_int = int(empresa_id) if empresa_id else 1

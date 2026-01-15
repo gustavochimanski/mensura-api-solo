@@ -36,7 +36,7 @@ AI_FUNCTIONS = [
         "type": "function",
         "function": {
             "name": "adicionar_produto",
-            "description": "Adiciona um produto ao carrinho. Use APENAS quando o cliente especifica um PRODUTO do cardápio. Exemplos: 'me ve uma coca', 'quero 2 pizzas', 'manda um x-bacon'. NÃO use para frases genéricas como 'quero fazer pedido', 'quero pedir' - nesses casos use 'conversar' para perguntar o que ele quer.",
+            "description": "Adiciona um produto ao carrinho. Use APENAS quando o cliente especifica um PRODUTO do cardápio. Exemplos: 'me ve uma coca', 'quero 2 pizzas', 'manda um x-bacon', 'quero um x bacon sem tomate' (use adicionar_produto mesmo com personalização - o sistema aplica automaticamente). NÃO use para frases genéricas como 'quero fazer pedido', 'quero pedir' - nesses casos use 'conversar' para perguntar o que ele quer.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -132,7 +132,7 @@ AI_FUNCTIONS = [
         "type": "function",
         "function": {
             "name": "personalizar_produto",
-            "description": "Cliente quer PERSONALIZAR um produto removendo ingrediente ou adicionando extra. Exemplos: 'sem cebola', 'tira o tomate', 'com queijo extra', 'adiciona bacon', 'pizza sem azeitona'",
+            "description": "Cliente quer PERSONALIZAR um produto JÁ ADICIONADO removendo ingrediente ou adicionando extra. Use APENAS quando NÃO há produto novo na mensagem. Exemplos: 'sem cebola' (personaliza último produto), 'tira o tomate' (personaliza último produto), 'com queijo extra' (personaliza último produto). IMPORTANTE: Se a mensagem tem produto + personalização (ex: 'quero x bacon sem tomate'), use 'adicionar_produto' em vez de 'personalizar_produto'.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -218,6 +218,8 @@ REGRA DE OURO: Na dúvida, use "conversar". É melhor conversar do que fazer aç
    - "me ve uma coca" → adicionar_produto(produto_busca="coca")
    - "quero pizza calabresa" → adicionar_produto(produto_busca="pizza calabresa")
    - "2 x-bacon" → adicionar_produto(produto_busca="x-bacon", quantidade=2)
+   - "quero um x bacon sem tomate" → adicionar_produto(produto_busca="x bacon") (o sistema aplica "sem tomate" automaticamente)
+   - "me ve uma pizza sem cebola" → adicionar_produto(produto_busca="pizza") (o sistema aplica "sem cebola" automaticamente)
 
 ❌ NÃO use adicionar_produto para:
    - "o que tem?" → use conversar
@@ -250,13 +252,12 @@ REGRA DE OURO: Na dúvida, use "conversar". É melhor conversar do que fazer aç
 ✅ remover_produto - Quando quer TIRAR algo do carrinho:
    - "tira a coca", "remove a pizza", "não quero mais o hamburguer"
 
-✅ personalizar_produto - Quando quer CUSTOMIZAR um produto (tirar ingrediente ou adicionar extra):
-   - "sem cebola" → personalizar_produto(acao="remover_ingrediente", item="cebola")
-   - "tira o tomate" → personalizar_produto(acao="remover_ingrediente", item="tomate")
-   - "com queijo extra" → personalizar_produto(acao="adicionar_extra", item="queijo extra")
-   - "adiciona bacon" → personalizar_produto(acao="adicionar_extra", item="bacon")
-   - "pizza sem azeitona" → personalizar_produto(produto_busca="pizza", acao="remover_ingrediente", item="azeitona")
-   - "borda recheada" → personalizar_produto(acao="adicionar_extra", item="borda recheada")
+✅ personalizar_produto - Quando quer CUSTOMIZAR um produto JÁ ADICIONADO (tirar ingrediente ou adicionar extra):
+   - "sem cebola" → personalizar_produto(acao="remover_ingrediente", item="cebola") (personaliza último produto)
+   - "tira o tomate" → personalizar_produto(acao="remover_ingrediente", item="tomate") (personaliza último produto)
+   - "com queijo extra" → personalizar_produto(acao="adicionar_extra", item="queijo extra") (personaliza último produto)
+   - "adiciona bacon" → personalizar_produto(acao="adicionar_extra", item="bacon") (personaliza último produto)
+   ⚠️ IMPORTANTE: Se a mensagem tem PRODUTO + personalização (ex: "quero x bacon sem tomate"), use "adicionar_produto" em vez de "personalizar_produto"!
 
 ✅ ver_adicionais - Quando quer ver os EXTRAS disponíveis:
    - "quais adicionais tem?" → ver_adicionais
@@ -504,23 +505,12 @@ class GroqSalesHandler:
             if match:
                 return {"funcao": "remover_produto", "params": {"produto_busca": match.group(2).strip()}}
 
-        # Personalização (sem/tira ingrediente)
-        if re.search(r'sem\s+(\w+)', msg):
-            match = re.search(r'sem\s+(\w+)', msg)
-            if match:
-                return {"funcao": "personalizar_produto", "params": {"acao": "remover_ingrediente", "item": match.group(1)}}
-
-        # Adicional extra
-        if re.search(r'(mais|extra|adiciona)\s+(\w+)', msg):
-            match = re.search(r'(mais|extra|adiciona)\s+(\w+)', msg)
-            if match:
-                return {"funcao": "personalizar_produto", "params": {"acao": "adicionar_extra", "item": match.group(2)}}
-
         # Ver adicionais
         if re.search(r'(adicionais|extras|o\s*que\s*posso\s*adicionar)', msg):
             return {"funcao": "ver_adicionais", "params": {}}
 
         # Adicionar produto (padrões: "quero X", "me ve X", "manda X", "X por favor")
+        # IMPORTANTE: Verificar ANTES da personalização para capturar "quero X sem Y"
         patterns_pedido = [
             r'(?:quero|qro)\s+(?:uma?|duas?|dois|\d+)?\s*(.+)',
             r'(?:me\s+)?(?:ve|vê|manda|traz)\s+(?:uma?|duas?|dois|\d+)?\s*(.+)',
@@ -531,13 +521,51 @@ class GroqSalesHandler:
         for pattern in patterns_pedido:
             match = re.search(pattern, msg)
             if match:
-                produto = match.group(1).strip()
+                produto_completo = match.group(1).strip()
                 # Extrai quantidade se houver
-                qtd_match = re.search(r'^(\d+)\s*x?\s*', produto)
+                qtd_match = re.search(r'^(\d+)\s*x?\s*', produto_completo)
                 quantidade = int(qtd_match.group(1)) if qtd_match else 1
                 if qtd_match:
-                    produto = produto[qtd_match.end():].strip()
-                return {"funcao": "adicionar_produto", "params": {"produto_busca": produto, "quantidade": quantidade}}
+                    produto_completo = produto_completo[qtd_match.end():].strip()
+                
+                # Verifica se tem personalização junto (sem X, com X, mais X)
+                personalizacao = None
+                # Remove personalização do nome do produto
+                produto_limpo = produto_completo
+                
+                # Detecta "sem X" e remove do nome do produto
+                match_sem = re.search(r'\s+sem\s+(\w+)', produto_completo, re.IGNORECASE)
+                if match_sem:
+                    personalizacao = {"acao": "remover_ingrediente", "item": match_sem.group(1)}
+                    produto_limpo = re.sub(r'\s+sem\s+\w+', '', produto_completo, flags=re.IGNORECASE).strip()
+                
+                # Detecta "com X extra" ou "mais X" e remove do nome do produto
+                match_extra = re.search(r'\s+(?:com|mais|extra)\s+(\w+)', produto_completo, re.IGNORECASE)
+                if match_extra and not personalizacao:
+                    personalizacao = {"acao": "adicionar_extra", "item": match_extra.group(1)}
+                    produto_limpo = re.sub(r'\s+(?:com|mais|extra)\s+\w+', '', produto_completo, flags=re.IGNORECASE).strip()
+                
+                # Retorna adicionar produto com personalização se houver
+                params = {"produto_busca": produto_limpo, "quantidade": quantidade}
+                if personalizacao:
+                    params["personalizacao"] = personalizacao
+                    print(f"   🎯 Detectado produto + personalização: {produto_limpo} {personalizacao}")
+                
+                return {"funcao": "adicionar_produto", "params": params}
+
+        # Personalização (sem/tira ingrediente) - APENAS se não tiver produto na mensagem
+        # Verifica se tem carrinho com itens antes de personalizar
+        if carrinho and len(carrinho) > 0:
+            if re.search(r'sem\s+(\w+)', msg):
+                match = re.search(r'sem\s+(\w+)', msg)
+                if match:
+                    return {"funcao": "personalizar_produto", "params": {"acao": "remover_ingrediente", "item": match.group(1)}}
+
+            # Adicional extra
+            if re.search(r'(mais|extra|adiciona)\s+(\w+)', msg):
+                match = re.search(r'(mais|extra|adiciona)\s+(\w+)', msg)
+                if match:
+                    return {"funcao": "personalizar_produto", "params": {"acao": "adicionar_extra", "item": match.group(2)}}
 
         # ÚLTIMO RECURSO: Verifica se a mensagem é um nome de produto direto
         # Isso captura casos como "coca", "pizza calabresa"
@@ -4681,6 +4709,7 @@ Responda de forma natural e curta:"""
             if funcao == "adicionar_produto":
                 produto_busca = params.get("produto_busca", "")
                 quantidade = params.get("quantidade", 1)
+                personalizacao = params.get("personalizacao")  # Personalização que vem junto
 
                 # Busca o produto pelo termo que a IA extraiu
                 produto = self._buscar_produto_por_termo(produto_busca, todos_produtos)
@@ -4690,12 +4719,35 @@ Responda de forma natural e curta:"""
                     self._salvar_estado_conversa(user_id, STATE_AGUARDANDO_PEDIDO, dados)
                     print(f"🛒 Carrinho atual: {dados.get('carrinho', [])}")
 
+                    # Se veio personalização junto, aplica automaticamente
+                    if personalizacao:
+                        acao = personalizacao.get("acao")
+                        item_nome = personalizacao.get("item")
+                        produto_busca_pers = produto['nome']  # Usa o produto recém-adicionado
+                        
+                        print(f"   🔧 Aplicando personalização automática: {acao} - {item_nome}")
+                        sucesso, msg_personalizacao = self._personalizar_item_carrinho(
+                            dados, acao, item_nome, produto_busca_pers
+                        )
+                        if sucesso:
+                            self._salvar_estado_conversa(user_id, STATE_AGUARDANDO_PEDIDO, dados)
+                            print(f"   ✅ Personalização aplicada: {msg_personalizacao}")
+
                     carrinho = dados.get('carrinho', [])
                     total = sum(item['preco'] * item.get('quantidade', 1) for item in carrinho)
 
                     # Monta mensagem de confirmação
                     import random
                     msg_resposta = f"✅ *{quantidade}x {produto['nome']}* adicionado!\n"
+                    
+                    # Adiciona mensagem de personalização se foi aplicada
+                    if personalizacao:
+                        acao = personalizacao.get("acao")
+                        item_nome = personalizacao.get("item")
+                        if acao == "remover_ingrediente":
+                            msg_resposta += f"   🚫 Sem {item_nome}\n"
+                        elif acao == "adicionar_extra":
+                            msg_resposta += f"   ➕ Com {item_nome} extra\n"
 
                     # Busca ingredientes para mostrar descrição do produto
                     ingredientes = self.ingredientes_service.buscar_ingredientes_por_nome_receita(produto['nome'])
