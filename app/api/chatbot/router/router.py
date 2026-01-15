@@ -17,6 +17,7 @@ from ..core import database as chatbot_db
 from ..core.notifications import OrderNotification
 from ..core.groq_sales_handler import GroqSalesHandler
 from app.api.notifications.repositories.whatsapp_config_repository import WhatsAppConfigRepository
+from app.api.empresas.repositories.empresa_repo import EmpresaRepository
 
 # Import ngrok functions optionally (pyngrok may not be installed)
 try:
@@ -940,7 +941,38 @@ def get_empresa_id_by_phone_number_id(db: Session, phone_number_id: str) -> Opti
         return None
 
 
-def get_empresa_id_from_webhook(db: Session, metadata: dict) -> Optional[str]:
+def _extrair_slug_do_host(host: Optional[str]) -> Optional[str]:
+    if not host:
+        return None
+    host = host.split(":")[0].strip().lower()
+    partes = host.split(".")
+    if len(partes) >= 3:
+        return partes[0]
+    return None
+
+
+def get_empresa_id_by_slug(db: Session, slug: Optional[str]) -> Optional[str]:
+    import logging
+    logger = logging.getLogger(__name__)
+
+    if not slug:
+        return None
+
+    try:
+        slug = str(slug).strip().lower()
+        repo = EmpresaRepository(db)
+        empresa = repo.get_emp_by_slug(slug)
+        if empresa:
+            logger.info(f"✅ Empresa encontrada por slug: {slug} -> empresa_id={empresa.id}")
+            return str(empresa.id)
+        logger.warning(f"❌ Nenhuma empresa encontrada para slug={slug}")
+        return None
+    except Exception as e:
+        logger.error(f"⚠️ Erro ao buscar empresa por slug={slug}: {e}", exc_info=True)
+        return None
+
+
+def get_empresa_id_from_webhook(db: Session, metadata: dict, slug_hint: Optional[str] = None) -> Optional[str]:
     """
     Tenta identificar a empresa a partir dos dados do webhook.
     Tenta múltiplas estratégias:
@@ -956,6 +988,16 @@ def get_empresa_id_from_webhook(db: Session, metadata: dict) -> Optional[str]:
     
     try:
         repo = WhatsAppConfigRepository(db)
+
+        # Estratégia 0: slug da empresa vindo do header (x-cliente) ou host
+        if slug_hint:
+            print(f"   🔍 [Estratégia 0] Tentando identificar empresa por slug: {slug_hint}")
+            logger.info(f"🔍 Tentando identificar empresa por slug: {slug_hint}")
+            empresa_id = get_empresa_id_by_slug(db, slug_hint)
+            if empresa_id:
+                print(f"   ✅ Empresa identificada por slug: {slug_hint} -> empresa_id: {empresa_id}")
+                logger.info(f"✅ Empresa identificada por slug: {slug_hint} -> empresa_id: {empresa_id}")
+                return empresa_id
         
         # Estratégia 1: Buscar por phone_number_id
         phone_number_id = metadata.get("phone_number_id")
@@ -1060,7 +1102,11 @@ async def webhook_handler(request: Request, background_tasks: BackgroundTasks, d
         
         # Adiciona processamento em background
         # IMPORTANTE: Não passa a sessão do banco diretamente, cria nova sessão na função
-        background_tasks.add_task(process_webhook_background, body)
+        headers_info = {
+            "x_cliente": request.headers.get("x-cliente"),
+            "host": request.headers.get("host"),
+        }
+        background_tasks.add_task(process_webhook_background, body, headers_info)
 
         # Retorna 200 OK imediatamente (requisito crítico da 360Dialog)
         return {"status": "ok"}
@@ -1071,7 +1117,7 @@ async def webhook_handler(request: Request, background_tasks: BackgroundTasks, d
         return {"status": "ok", "message": f"Webhook recebido (erro: {str(e)})"}
 
 
-async def process_webhook_background(body: dict):
+async def process_webhook_background(body: dict, headers_info: Optional[dict] = None):
     """
     Processa webhook em background (após retornar 200 OK)
     Processa messages, statuses e errors conforme documentação 360Dialog
@@ -1097,9 +1143,15 @@ async def process_webhook_background(body: dict):
 
                     # Extrai dados do metadata para identificar a empresa
                     metadata = value.get("metadata", {})
-                    
+
+                    slug_hint = None
+                    if headers_info:
+                        slug_hint = headers_info.get("x_cliente")
+                        if not slug_hint:
+                            slug_hint = _extrair_slug_do_host(headers_info.get("host"))
+
                     # Tenta identificar empresa usando múltiplas estratégias
-                    empresa_id = get_empresa_id_from_webhook(db, metadata)
+                    empresa_id = get_empresa_id_from_webhook(db, metadata, slug_hint=slug_hint)
                     
                     if not empresa_id:
                         # Se não encontrou, tenta usar phone_number_id para mensagem de erro mais específica
