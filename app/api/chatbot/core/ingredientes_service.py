@@ -46,6 +46,8 @@ class IngredientesService:
             """)
 
             result = self.db.execute(query, {"receita_id": receita_id})
+            
+            print(f"   🔍 [IngredientesService] Buscando ingredientes para receita_id={receita_id}")
 
             ingredientes = []
             for row in result.fetchall():
@@ -57,6 +59,11 @@ class IngredientesService:
                     "unidade": row[4],
                     "tipo": row[5],
                 })
+            
+            if not ingredientes:
+                print(f"   ⚠️ [IngredientesService] Nenhum ingrediente encontrado na tabela receita_ingrediente para receita_id={receita_id}")
+            else:
+                print(f"   ✅ [IngredientesService] Encontrados {len(ingredientes)} ingredientes para receita_id={receita_id}")
 
             return ingredientes
 

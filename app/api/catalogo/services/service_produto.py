@@ -51,14 +51,18 @@ class ProdutosMensuraService:
             unidade_medida=req.unidade_medida,
         )
 
+        # Se preço for zero, marca como indisponível automaticamente
+        preco_venda_decimal = Decimal(str(req.preco_venda))
+        disponivel = req.disponivel if preco_venda_decimal > 0 else False
+        
         # vínculo com empresa (sem vitrine)
         pe = self.repo.upsert_produto_emp(
             empresa_id=empresa_id,
             cod_barras=prod.cod_barras,
-            preco_venda=Decimal(str(req.preco_venda)),
+            preco_venda=preco_venda_decimal,
             custo=(Decimal(str(req.custo)) if req.custo is not None else None),
             sku_empresa=req.sku_empresa,
-            disponivel=req.disponivel,
+            disponivel=disponivel,
             exibir_delivery=req.exibir_delivery,
         )
 
@@ -190,13 +194,21 @@ class ProdutosMensuraService:
 
         # atualiza produto da empresa in-place
         if req.preco_venda is not None:
-            produto_emp.preco_venda = Decimal(str(req.preco_venda))
+            preco_venda_decimal = Decimal(str(req.preco_venda))
+            produto_emp.preco_venda = preco_venda_decimal
+            # Se preço for zero, marca como indisponível automaticamente
+            if preco_venda_decimal == 0:
+                produto_emp.disponivel = False
         if req.custo is not None:
             produto_emp.custo = Decimal(str(req.custo))
         if req.sku_empresa is not None:
             produto_emp.sku_empresa = req.sku_empresa
         if req.disponivel is not None:
-            produto_emp.disponivel = req.disponivel
+            # Só permite marcar como disponível se o preço for maior que zero
+            if req.disponivel and produto_emp.preco_venda == 0:
+                produto_emp.disponivel = False
+            else:
+                produto_emp.disponivel = req.disponivel
         if req.exibir_delivery is not None:
             produto_emp.exibir_delivery = req.exibir_delivery
 

@@ -1027,7 +1027,7 @@ class GroqSalesHandler:
         # Detecta perguntas com nome de produto explícito
         quer_saber, nome_produto = detectar_pergunta_ingredientes(mensagem)
         if quer_saber and nome_produto:
-            print(f"🔍 [IA] Detectada pergunta sobre produto: '{nome_produto}'")
+            print(f"🔍 [IA] Detectada pergunta sobre ingredientes: '{nome_produto}' (mensagem original: '{mensagem}')")
             
             # Atualiza histórico
             historico = dados.get('historico', [])
@@ -1039,6 +1039,7 @@ class GroqSalesHandler:
                 produto_encontrado = produtos_encontrados[0]
                 print(f"   ✅ Produto encontrado: {produto_encontrado.get('nome')} (tipo: {produto_encontrado.get('tipo')}, id: {produto_encontrado.get('id')})")
                 
+                # Passa a mensagem original para detectar que é pergunta sobre ingredientes
                 resposta = await self._gerar_resposta_sobre_produto(user_id, produto_encontrado, mensagem, dados)
                 
                 # Salva resposta no histórico
@@ -1053,6 +1054,7 @@ class GroqSalesHandler:
                 if produto_encontrado:
                     print(f"   ✅ Produto encontrado na lista: {produto_encontrado.get('nome')} (tipo: {produto_encontrado.get('tipo')}, id: {produto_encontrado.get('id')})")
                     
+                    # Passa a mensagem original para detectar que é pergunta sobre ingredientes
                     resposta = await self._gerar_resposta_sobre_produto(user_id, produto_encontrado, mensagem, dados)
                     
                     # Salva resposta no histórico
@@ -4455,13 +4457,26 @@ Responda de forma natural e curta:"""
                     except Exception as e:
                         print(f"   ⚠️ Erro ao buscar receita associada: {e}")
 
+            # Detecta se a pergunta original era sobre ingredientes
+            pergunta_lower = pergunta.lower() if pergunta else ""
+            eh_pergunta_ingredientes = any(palavra in pergunta_lower for palavra in [
+                'que vem', 'que tem', 'ingredientes', 'composição', 'feito', 'feita'
+            ])
+            
             # Se encontrou ingredientes, usa dados reais
             if ingredientes:
                 # Monta resposta com ingredientes reais
                 msg = f"*{nome_produto}* - R$ {produto['preco']:.2f}\n\n"
                 msg += "📋 *Ingredientes:*\n"
                 for ing in ingredientes:
-                    msg += f"• {ing['nome']}\n"
+                    quantidade_str = ""
+                    if ing.get('quantidade') and ing.get('quantidade') > 0:
+                        unidade = ing.get('unidade', '')
+                        if unidade:
+                            quantidade_str = f" ({ing['quantidade']} {unidade})"
+                        else:
+                            quantidade_str = f" ({ing['quantidade']})"
+                    msg += f"• {ing['nome']}{quantidade_str}\n"
 
                 if adicionais:
                     msg += "\n➕ *Adicionais disponíveis:*\n"
@@ -4471,12 +4486,57 @@ Responda de forma natural e curta:"""
                 msg += "\nQuer pedir? 😊"
                 return msg
             else:
-                # Se não encontrou ingredientes, retorna mensagem básica
+                # Se não encontrou ingredientes, tenta buscar descrição da receita no banco
                 print(f"   ⚠️ Nenhum ingrediente encontrado para '{nome_produto}'")
+                
+                descricao_receita = None
+                if receita_id or (tipo_produto == 'receita'):
+                    try:
+                        from sqlalchemy import text
+                        query = text("""
+                            SELECT descricao 
+                            FROM catalogo.receitas
+                            WHERE id = :receita_id AND empresa_id = :empresa_id
+                            LIMIT 1
+                        """)
+                        receita_id_para_busca = receita_id if receita_id else (
+                            int(produto_id.replace('receita_', '')) if isinstance(produto_id, str) and 'receita_' in produto_id else None
+                        )
+                        
+                        if receita_id_para_busca:
+                            result = self.db.execute(query, {
+                                "receita_id": receita_id_para_busca,
+                                "empresa_id": self.empresa_id
+                            }).fetchone()
+                            if result and result[0]:
+                                descricao_receita = result[0]
+                                print(f"   📝 Descrição encontrada no banco: {descricao_receita[:50]}...")
+                    except Exception as e:
+                        print(f"   ⚠️ Erro ao buscar descrição da receita: {e}")
+                
+                # Monta resposta apropriada
                 msg = f"*{nome_produto}* - R$ {produto['preco']:.2f}\n\n"
-                if produto.get('descricao'):
-                    msg += f"{produto['descricao']}\n\n"
-                msg += "Quer adicionar ao pedido? 😊"
+                
+                # Se foi pergunta sobre ingredientes e não encontrou, informa claramente
+                if eh_pergunta_ingredientes:
+                    if descricao_receita:
+                        msg += f"{descricao_receita}\n\n"
+                    else:
+                        msg += "😅 No momento não tenho os ingredientes cadastrados no sistema para este produto.\n\n"
+                    
+                    # Tenta usar descrição do produto se disponível
+                    if not descricao_receita and produto.get('descricao'):
+                        msg += f"{produto['descricao']}\n\n"
+                    
+                    msg += "Quer adicionar ao pedido mesmo assim? 😊"
+                else:
+                    # Se não foi pergunta específica sobre ingredientes, usa descrição se disponível
+                    if descricao_receita:
+                        msg += f"{descricao_receita}\n\n"
+                    elif produto.get('descricao'):
+                        msg += f"{produto['descricao']}\n\n"
+                    msg += "Quer adicionar ao pedido? 😊"
+                
                 return msg
         except Exception as e:
             print(f"❌ Erro ao buscar ingredientes de {produto.get('nome', 'produto')}: {e}")

@@ -20,7 +20,7 @@ class CriarNovoProdutoRequest(BaseModel):
 
     # ProdutoEmpDeliveryModel (já cria o vínculo com a empresa)
     empresa_id: int
-    preco_venda: condecimal(max_digits=18, decimal_places=2) = Field(..., gt=0)
+    preco_venda: condecimal(max_digits=18, decimal_places=2) = Field(..., ge=0)
     custo: Optional[condecimal(max_digits=18, decimal_places=5)] = None
     sku_empresa: Optional[constr(max_length=60)] = None
     disponivel: bool = True
