@@ -61,7 +61,7 @@ class BuscaGlobalService:
             produtos_query = produtos_query.filter(ProdutoModel.ativo.is_(True))
 
         if apenas_disponiveis:
-            produtos_query = produtos_query.filter(ProdutoEmpModel.disponivel.is_(True))
+            produtos_query = produtos_query.filter(ProdutoEmpModel.disponivel.is_(True), ProdutoEmpModel.preco_venda > 0)
 
         if termo_vazio:
             # Quando termo vazio, retorna primeiros itens ordenados por created_at
@@ -73,6 +73,7 @@ class BuscaGlobalService:
                 subquery_filters.append(ProdutoModel.ativo.is_(True))
             if apenas_disponiveis:
                 subquery_filters.append(ProdutoEmpModel.disponivel.is_(True))
+                subquery_filters.append(ProdutoEmpModel.preco_venda > 0)
             
             subquery = (
                 select(

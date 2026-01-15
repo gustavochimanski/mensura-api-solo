@@ -38,7 +38,7 @@ class ProdutoMensuraRepository:
             .order_by(ProdutoModel.created_at.desc())
         )
         if apenas_disponiveis:
-            q = q.filter(ProdutoModel.ativo.is_(True), ProdutoEmpModel.disponivel.is_(True))
+            q = q.filter(ProdutoModel.ativo.is_(True), ProdutoEmpModel.disponivel.is_(True), ProdutoEmpModel.preco_venda > 0)
         if apenas_delivery:
             q = q.filter(ProdutoEmpModel.exibir_delivery.is_(True))
         return q.offset(offset).limit(limit).all()
@@ -50,7 +50,7 @@ class ProdutoMensuraRepository:
             .filter(ProdutoEmpModel.empresa_id == empresa_id)
         )
         if apenas_disponiveis:
-            q = q.filter(ProdutoModel.ativo.is_(True), ProdutoEmpModel.disponivel.is_(True))
+            q = q.filter(ProdutoModel.ativo.is_(True), ProdutoEmpModel.disponivel.is_(True), ProdutoEmpModel.preco_venda > 0)
         if apenas_delivery:
             q = q.filter(ProdutoEmpModel.exibir_delivery.is_(True))
         return int(q.scalar() or 0)
@@ -146,7 +146,7 @@ class ProdutoMensuraRepository:
             .order_by(ProdutoModel.created_at.desc())
         )
         if apenas_disponiveis:
-            q = q.filter(ProdutoModel.ativo.is_(True), ProdutoEmpModel.disponivel.is_(True))
+            q = q.filter(ProdutoModel.ativo.is_(True), ProdutoEmpModel.disponivel.is_(True), ProdutoEmpModel.preco_venda > 0)
         if apenas_delivery:
             q = q.filter(ProdutoEmpModel.exibir_delivery.is_(True))
         return q.offset(offset).limit(limit).all()
@@ -164,7 +164,7 @@ class ProdutoMensuraRepository:
             )
         )
         if apenas_disponiveis:
-            q = q.filter(ProdutoModel.ativo.is_(True), ProdutoEmpModel.disponivel.is_(True))
+            q = q.filter(ProdutoModel.ativo.is_(True), ProdutoEmpModel.disponivel.is_(True), ProdutoEmpModel.preco_venda > 0)
         if apenas_delivery:
             q = q.filter(ProdutoEmpModel.exibir_delivery.is_(True))
         return int(q.scalar() or 0)

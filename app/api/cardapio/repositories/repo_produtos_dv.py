@@ -52,7 +52,7 @@ class ProdutoDeliveryRepository:
         )
 
         if apenas_disponiveis:
-            qry = qry.filter(ProdutoModel.ativo.is_(True), ProdutoEmpModel.disponivel.is_(True))
+            qry = qry.filter(ProdutoModel.ativo.is_(True), ProdutoEmpModel.disponivel.is_(True), ProdutoEmpModel.preco_venda > 0)
 
         if apenas_delivery:
             qry = qry.filter(ProdutoEmpModel.exibir_delivery.is_(True))
@@ -91,7 +91,7 @@ class ProdutoDeliveryRepository:
         )
 
         if apenas_disponiveis:
-            qry = qry.filter(ProdutoModel.ativo.is_(True), ProdutoEmpModel.disponivel.is_(True))
+            qry = qry.filter(ProdutoModel.ativo.is_(True), ProdutoEmpModel.disponivel.is_(True), ProdutoEmpModel.preco_venda > 0)
 
         if apenas_delivery:
             qry = qry.filter(ProdutoEmpModel.exibir_delivery.is_(True))

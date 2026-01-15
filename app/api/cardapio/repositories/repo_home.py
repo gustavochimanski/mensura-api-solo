@@ -95,6 +95,7 @@ class HomeRepository:
             .filter(
                 VitrineProdutoLink.vitrine_id.in_(vitrine_ids),
                 ProdutoEmpModel.disponivel.is_(True),
+                ProdutoEmpModel.preco_venda > 0,
             )
             .options(
                 joinedload(ProdutoEmpModel.produto).selectinload(ProdutoModel.complementos)
@@ -136,6 +137,7 @@ class HomeRepository:
             )
             .filter(
                 ProdutoEmpModel.disponivel.is_(True),
+                ProdutoEmpModel.preco_venda > 0,
                 VitrineCategoriaLink.categoria_id == categoria_id,
             )
             .options(
