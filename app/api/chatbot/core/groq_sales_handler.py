@@ -6,6 +6,7 @@ import os
 import httpx
 import json
 import re
+import unicodedata
 from typing import Dict, Any, List, Tuple, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, text, or_, func
@@ -352,6 +353,21 @@ class GroqSalesHandler:
                 {'id': 3, 'nome': 'Cartão', 'tipo': 'CARTAO_ENTREGA'}
             ]
 
+    def _normalizar_mensagem(self, mensagem: str) -> str:
+        """
+        Normaliza a mensagem para regras simples:
+        - remove acentos
+        - troca pontuação por espaço
+        - colapsa espaços
+        """
+        msg = (mensagem or "").lower().strip()
+        msg = msg.replace("´", "'").replace("`", "'").replace("’", "'").replace("‘", "'")
+        msg = unicodedata.normalize("NFKD", msg)
+        msg = "".join(ch for ch in msg if not unicodedata.combining(ch))
+        msg = re.sub(r"[^a-z0-9\s]", " ", msg)
+        msg = re.sub(r"\s+", " ", msg).strip()
+        return msg
+
     def _detectar_forma_pagamento_em_mensagem(self, mensagem: str) -> Optional[Dict]:
         """
         Detecta se a mensagem contém uma forma de pagamento.
@@ -361,7 +377,7 @@ class GroqSalesHandler:
         IMPORTANTE: Ignora mensagens que são PERGUNTAS sobre pagamento
         (ex: "aceitam pix?", "pode ser no cartão?")
         """
-        msg = mensagem.lower().strip()
+        msg = self._normalizar_mensagem(mensagem)
 
         # IGNORA se for uma PERGUNTA sobre pagamento (não uma seleção)
         palavras_pergunta = ['aceita', 'aceitam', 'pode ser', 'posso pagar', 'da pra', 'dá pra',
@@ -439,7 +455,7 @@ class GroqSalesHandler:
 
         # Informação sobre produto ESPECÍFICO (DEVE vir ANTES da detecção genérica de "o que tem")
         # Detecta: "o que tem no X", "o que vem no X", "o que tem na X", "ingredientes do X", etc.
-        if re.search(r'(o\s*q(ue)?\s*(vem|tem|ve|é)\s*(n[oa]|d[oa])|qu?al.*(ingrediente|composi[çc][aã]o)|ingredientes?\s*(d[oa])|composi[çc][aã]o)', msg):
+        if re.search(r'(o\s*q(ue)?\s*(vem|tem|ve|e)\s*(n[oa]|d[oa])|qu?al.*(ingrediente|composi[çc][aã]o)|ingredientes?\s*(d[oa])|composi[çc][aã]o)', msg):
             # Tenta extrair o produto mencionado após "no/na/do/da"
             match = re.search(r'(n[oa]|d[oa]|da|do)\s+([a-záàâãéêíóôõúç\-\s]+?)(\?|$|,|\.)', msg, re.IGNORECASE)
             if match:
@@ -456,19 +472,19 @@ class GroqSalesHandler:
                 return {"funcao": "informar_sobre_produto", "params": {"produto_busca": produto_match}}
 
         # Perguntas sobre o que tem disponível (genérico - DEVE vir DEPOIS da detecção de produto específico)
-        if re.search(r'(o\s*que\s*(mais\s*)?(tem|vende|vocês? tem|vcs tem)|quais?\s*(que\s*)?(tem|produto|opç[oõ]es)|mostra\s*(ai|aí|os\s*produto)|que\s*produto|tem\s*o\s*que)', msg):
+        if re.search(r'(o\s*que\s*(mais\s*)?(tem|vende|voces? tem|vcs tem)|quais?\s*(que\s*)?(tem|produto|op[cç]oes)|mostra\s*(ai|aí|os\s*produto)|que\s*produto|tem\s*o\s*que)', msg):
             return {"funcao": "ver_cardapio", "params": {}}
 
         # Ver combos
-        if re.search(r'(combo|combos|promoção|promocao|promoções|promocoes)', msg):
+        if re.search(r'(combo|combos|promocao|promocoes)', msg):
             return {"funcao": "ver_combos", "params": {}}
 
         # Ver carrinho
-        if re.search(r'(quanto\s*(ta|tá|está)|meu\s*pedido|carrinho|o\s*que\s*(eu\s*)?pedi)', msg):
+        if re.search(r'(quanto\s*(ta|tá|esta)|meu\s*pedido|carrinho|o\s*que\s*(eu\s*)?pedi)', msg):
             return {"funcao": "ver_carrinho", "params": {}}
 
         # Finalizar pedido (explícito)
-        if re.search(r'(finalizar|fechar|so\s*isso|só\s*isso|pronto|é\s*isso|acabou|era\s*isso|só$|so$)', msg):
+        if re.search(r'(finalizar|fechar|so\s+isso|so\s+apenas|somente\s+isso|so\s+isso\s+mesmo|pronto|e\s+isso|acabou|era\s+isso|so$)', msg):
             return {"funcao": "finalizar_pedido", "params": {}}
 
         # "nao", "não", "nao quero", "não quero" = CONTEXTUAL
@@ -529,13 +545,14 @@ class GroqSalesHandler:
             # Verifica se não é uma pergunta ou frase comum
             palavras_ignorar = [
                 'sim', 'ok', 'obrigado', 'obrigada', 'valeu', 'blz', 'beleza', 'certo', 'ta', 'tá',
-                'nao', 'não', 'qual', 'quais', 'que', 'como', 'onde', 'quando', 'porque', 'por que'
+                'nao', 'não', 'qual', 'quais', 'que', 'como', 'onde', 'quando', 'porque', 'por que',
+                'so', 'so isso', 'só', 'só isso', 'isso', 'somente', 'apenas', 'nada', 'nada mais'
             ]
             # Verifica se não é uma pergunta (termina com ?)
             if msg.endswith('?'):
                 return None
             # Verifica se não contém palavras interrogativas
-            if any(p in msg for p in palavras_ignorar):
+            if msg in palavras_ignorar or any(p in msg for p in palavras_ignorar):
                 return None
             # Tenta como pedido de produto
             return {"funcao": "adicionar_produto", "params": {"produto_busca": msg, "quantidade": 1}}
