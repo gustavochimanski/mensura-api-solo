@@ -94,15 +94,17 @@ class ProdutosMensuraService:
 
     def listar_paginado(self, empresa_id: int, page: int, limit: int, apenas_disponiveis: bool = False):
         offset = (page - 1) * limit
+        # Se apenas_disponiveis=False, também não filtra por delivery para mostrar todos os produtos
+        apenas_delivery = apenas_disponiveis
         produtos = self.repo.buscar_produtos_da_empresa(
             empresa_id, offset, limit,
             apenas_disponiveis=apenas_disponiveis,
-            apenas_delivery=True,
+            apenas_delivery=apenas_delivery,
         )
         total = self.repo.contar_total(
             empresa_id,
             apenas_disponiveis=apenas_disponiveis,
-            apenas_delivery=True,
+            apenas_delivery=apenas_delivery,
         )
 
         data = []
@@ -245,15 +247,17 @@ class ProdutosMensuraService:
         self._empresa_or_404(empresa_id)
 
         offset = (page - 1) * limit
+        # Se apenas_disponiveis=False, também não filtra por delivery para mostrar todos os produtos
+        apenas_delivery = apenas_disponiveis
         produtos = self.repo.buscar_produtos_por_termo(
             empresa_id, termo, offset, limit,
             apenas_disponiveis=apenas_disponiveis,
-            apenas_delivery=True,
+            apenas_delivery=apenas_delivery,
         )
         total = self.repo.contar_busca_total(
             empresa_id, termo,
             apenas_disponiveis=apenas_disponiveis,
-            apenas_delivery=True,
+            apenas_delivery=apenas_delivery,
         )
 
         data = []
