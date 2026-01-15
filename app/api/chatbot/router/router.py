@@ -15,6 +15,7 @@ from datetime import datetime
 from app.database.db_connection import get_db
 from ..core import database as chatbot_db
 from ..core.notifications import OrderNotification
+from ..core.groq_sales_handler import GroqSalesHandler
 from app.api.notifications.repositories.whatsapp_config_repository import WhatsAppConfigRepository
 
 # Import ngrok functions optionally (pyngrok may not be installed)
@@ -1035,14 +1036,25 @@ async def process_webhook_background(body: dict):
 
                             # Extrai o texto da mensagem
                             message_text = None
+                            button_id = None
+                            
                             if message_type == "text":
                                 message_text = message.get("text", {}).get("body")
+                            elif message_type == "interactive":
+                                # Mensagem de botão interativo
+                                interactive = message.get("interactive", {})
+                                button_response = interactive.get("button_reply", {})
+                                button_id = button_response.get("id")
+                                message_text = button_response.get("title")  # Texto do botão
+                                print(f"   🔘 Botão clicado - ID: {button_id}, Título: {message_text}")
 
                             print(f"\n📨 Mensagem recebida:")
                             print(f"   De: {from_number}")
                             print(f"   Nome: {contact_name}")
                             print(f"   Tipo: {message_type}")
                             print(f"   Texto: {message_text}")
+                            if button_id:
+                                print(f"   Button ID: {button_id}")
 
                             if message_text:
                                 # Marca mensagem como lida (conforme documentação 360Dialog)
@@ -1057,8 +1069,8 @@ async def process_webhook_background(body: dict):
                                 except Exception as mark_error:
                                     print(f"   ⚠️ Erro ao marcar mensagem como lida: {mark_error}")
                                 
-                                # Processa a mensagem com a IA (passa o nome do contato, empresa_id e message_id para evitar duplicação)
-                                await process_whatsapp_message(db, from_number, message_text, contact_name, empresa_id, message_id)
+                                # Processa a mensagem com a IA (passa o nome do contato, empresa_id, message_id e button_id)
+                                await process_whatsapp_message(db, from_number, message_text, contact_name, empresa_id, message_id, button_id)
 
                     # Processa STATUSES (status de mensagens enviadas: sent, delivered, read)
                     statuses = value.get("statuses", [])
@@ -1113,7 +1125,7 @@ async def process_webhook_background(body: dict):
         db.close()
 
 
-async def process_whatsapp_message(db: Session, phone_number: str, message_text: str, contact_name: str = None, empresa_id: str = "1", message_id: str = None):
+async def process_whatsapp_message(db: Session, phone_number: str, message_text: str, contact_name: str = None, empresa_id: str = "1", message_id: str = None, button_id: str = None):
     """
     Processa mensagem recebida via WhatsApp e responde com IA
     VERSÃO 2.0: Usa SalesHandler para fluxo completo de vendas
@@ -1215,9 +1227,16 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                     )
                     
                     # Formata mensagem bonita com horários
-                    mensagem_horarios = "😊 Olá! Obrigado por entrar em contato!\n\n"
-                    mensagem_horarios += "⏰ *No momento, estamos fechados.*\n\n"
-                    mensagem_horarios += formatar_horarios_funcionamento_mensagem(empresa.horarios_funcionamento)
+                    nome_empresa = empresa.nome if empresa and empresa.nome else "[Nome da Empresa]"
+                    horarios_formatados = formatar_horarios_funcionamento_mensagem(empresa.horarios_funcionamento, apenas_horarios=True)
+                    
+                    mensagem_horarios = f"😊 Olá! Seja bem-vindo(a) à {nome_empresa}!\n"
+                    mensagem_horarios += "Obrigado por entrar em contato 💙\n\n"
+                    mensagem_horarios += "⏰ No momento, estamos fechados, mas já já estaremos prontos para te atender!\n\n"
+                    mensagem_horarios += "🕐 Horário de Funcionamento:\n"
+                    mensagem_horarios += horarios_formatados
+                    mensagem_horarios += "\n💬 Assim que estivermos abertos, retornaremos sua mensagem o mais rápido possível.\n\n"
+                    mensagem_horarios += "🍔✨ Agradecemos o contato e esperamos falar com você em breve!"
                     
                     # Salva resposta do bot
                     chatbot_db.create_message(
@@ -1330,6 +1349,129 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
             # NOTA: O processar_mensagem_groq já salva a mensagem do usuário e a resposta,
             # além de enviar as notificações WebSocket necessárias
             from ..core.groq_sales_handler import processar_mensagem_groq
+
+            # Verifica se é a primeira mensagem (conversa nova ou sem mensagens anteriores)
+            empresa_id_int = int(empresa_id) if empresa_id else 1
+            is_first_message = False
+            if not conversations:
+                is_first_message = True
+            else:
+                # Verifica se há mensagens anteriores na conversa
+                conversation_id = conversations[0]['id']
+                messages = chatbot_db.get_messages(db, conversation_id)
+                # Se só tem a mensagem atual (ou nenhuma), é primeira mensagem
+                is_first_message = len(messages) <= 1
+
+            # Se for primeira mensagem, envia mensagem com botões
+            if is_first_message:
+                print(f"   🎯 Primeira mensagem detectada - enviando mensagem com botões")
+                handler = GroqSalesHandler(db, empresa_id_int)
+                mensagem_boas_vindas = handler._gerar_mensagem_boas_vindas_conversacional()
+                
+                # Define os botões
+                buttons = [
+                    {"id": "pedir_whatsapp", "title": "Pedir pelo WhatsApp"},
+                    {"id": "pedir_link", "title": "Pedir pelo link"},
+                    {"id": "preciso_ajuda", "title": "Preciso de ajuda"}
+                ]
+                
+                # Envia mensagem com botões
+                notifier = OrderNotification()
+                result = await notifier.send_whatsapp_message_with_buttons(
+                    phone_number, 
+                    mensagem_boas_vindas, 
+                    buttons, 
+                    empresa_id=empresa_id
+                )
+                
+                if isinstance(result, dict) and result.get("success"):
+                    print(f"   ✅ Mensagem com botões enviada com sucesso!")
+                    # Salva a mensagem no histórico
+                    if conversations:
+                        conversation_id = conversations[0]['id']
+                    else:
+                        conversation_id = chatbot_db.create_conversation(
+                            db=db,
+                            session_id=f"whatsapp_{phone_number}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                            user_id=phone_number,
+                            prompt_key="default",
+                            model="llm-sales",
+                            contact_name=contact_name,
+                            empresa_id=empresa_id_int
+                        )
+                    chatbot_db.create_message(db, conversation_id, "assistant", mensagem_boas_vindas)
+                else:
+                    print(f"   ⚠️ Erro ao enviar mensagem com botões: {result.get('error')}")
+                    # Fallback: envia mensagem normal
+                    result = await notifier.send_whatsapp_message(phone_number, mensagem_boas_vindas, empresa_id=empresa_id)
+                
+                return  # Não processa a mensagem do usuário ainda, aguarda clique no botão
+
+            # Detecta se a mensagem é uma resposta de botão
+            # O WhatsApp pode enviar o ID do botão diretamente ou o texto do botão
+            mensagem_lower = message_text.lower().strip()
+            botao_clicado = None
+            
+            # Primeiro verifica se veio o button_id diretamente do webhook
+            if button_id:
+                botao_clicado = button_id
+            # Se não, verifica pelo texto da mensagem
+            elif "pedir pelo whatsapp" in mensagem_lower or mensagem_lower == "pedir pelo whatsapp":
+                botao_clicado = "pedir_whatsapp"
+            elif "pedir pelo link" in mensagem_lower or mensagem_lower == "pedir pelo link":
+                botao_clicado = "pedir_link"
+            elif "preciso de ajuda" in mensagem_lower or mensagem_lower == "preciso de ajuda":
+                botao_clicado = "preciso_ajuda"
+            
+            # Se for clique em botão, processa a resposta
+            if botao_clicado:
+                print(f"   🔘 Botão clicado: {botao_clicado}")
+                if botao_clicado == "pedir_whatsapp":
+                    # Cliente quer pedir pelo WhatsApp - continua o fluxo normal
+                    resposta = "Perfeito! Vou te ajudar a montar seu pedido passo a passo 😊\n\nO que você gostaria de pedir?"
+                elif botao_clicado == "pedir_link":
+                    # Cliente quer pedir pelo link - envia o link do cardápio
+                    try:
+                        empresa_query = text("""
+                            SELECT nome, cardapio_link
+                            FROM cadastros.empresas
+                            WHERE id = :empresa_id
+                        """)
+                        result_empresa = db.execute(empresa_query, {"empresa_id": empresa_id_int})
+                        empresa = result_empresa.fetchone()
+                        link_cardapio = empresa[1] if empresa and empresa[1] else "https://chatbot.mensuraapi.com.br"
+                    except:
+                        link_cardapio = "https://chatbot.mensuraapi.com.br"
+                    
+                    resposta = f"📲 Perfeito! Acesse nosso cardápio completo pelo link:\n\n👉 {link_cardapio}\n\nDepois é só fazer seu pedido pelo site! 😊"
+                elif botao_clicado == "preciso_ajuda":
+                    # Cliente precisa de ajuda
+                    resposta = "Claro! Estou aqui para te ajudar! 😊\n\nComo posso te auxiliar hoje?\n• Dúvidas sobre produtos\n• Informações sobre entrega\n• Outras questões\n\nÉ só me dizer o que você precisa!"
+                
+                # Envia a resposta
+                notifier = OrderNotification()
+                result = await notifier.send_whatsapp_message(phone_number, resposta, empresa_id=empresa_id)
+                
+                if isinstance(result, dict) and result.get("success"):
+                    print(f"   ✅ Resposta ao botão enviada com sucesso!")
+                    # Salva no histórico
+                    if conversations:
+                        conversation_id = conversations[0]['id']
+                    else:
+                        conversation_id = chatbot_db.create_conversation(
+                            db=db,
+                            session_id=f"whatsapp_{phone_number}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                            user_id=phone_number,
+                            prompt_key="default",
+                            model="llm-sales",
+                            contact_name=contact_name,
+                            empresa_id=empresa_id_int
+                        )
+                    chatbot_db.create_message(db, conversation_id, "user", message_text)
+                    chatbot_db.create_message(db, conversation_id, "assistant", resposta)
+                
+                # Se foi "pedir pelo whatsapp", continua o fluxo normalmente na próxima mensagem
+                return
 
             # Processa com o sistema de vendas usando Groq/LLaMA
             print(f"   🤖 Usando Groq Sales Handler (LLaMA 3.1 + dados do banco)")

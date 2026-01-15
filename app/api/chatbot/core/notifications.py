@@ -356,6 +356,151 @@ class OrderNotification:
         except Exception as e:
             error_msg = str(e)
             logger.error(f"[WhatsApp] Exceção ao enviar mensagem: {error_msg}", exc_info=True)
+                return {
+                    "success": False,
+                    "provider": "360dialog" if 'is_360' in locals() and is_360 else "WhatsApp Business API (Meta)",
+                    "error": error_msg,
+                    "phone": phone
+                }
+
+    @staticmethod
+    async def send_whatsapp_message_with_buttons(
+        phone: str, 
+        message: str, 
+        buttons: List[Dict[str, str]], 
+        empresa_id: Optional[str] = None
+    ) -> Dict:
+        """
+        Envia mensagem via WhatsApp Business API com botões interativos
+        
+        Args:
+            phone: Número de telefone (formato: 5511999999999)
+            message: Texto da mensagem
+            buttons: Lista de botões. Cada botão deve ter 'id' e 'title'
+                    Ex: [{"id": "pedir_whatsapp", "title": "Pedir pelo WhatsApp"}, ...]
+            empresa_id: ID da empresa (opcional)
+        
+        Returns:
+            Dict com resultado do envio
+        """
+        try:
+            from .config_whatsapp import (
+                load_whatsapp_config,
+                get_whatsapp_url,
+                get_headers,
+                format_phone_number,
+            )
+
+            config = load_whatsapp_config(empresa_id)
+            provider = (config.get("provider") or "").lower()
+            base_url = str(config.get("base_url", "") or "").lower()
+            is_360 = (provider == "360dialog") or (not provider and "360dialog" in base_url)
+            access_token = config.get("access_token") or ""
+
+            if not access_token or access_token.strip() == "":
+                error_msg = f"Configuração do WhatsApp ausente ou incompleta: access_token não configurado (empresa_id={empresa_id})"
+                logger.error(f"[WhatsApp] {error_msg}")
+                return {
+                    "success": False,
+                    "provider": "360dialog" if is_360 else "WhatsApp Business API (Meta)",
+                    "error": error_msg,
+                    "phone": phone,
+                }
+
+            if not is_360 and not config.get("phone_number_id"):
+                return {
+                    "success": False,
+                    "provider": "WhatsApp Business API (Meta)",
+                    "error": "Configuração do WhatsApp ausente ou incompleta: phone_number_id não configurado",
+                    "phone": phone,
+                }
+
+            phone_formatted = format_phone_number(phone)
+            url = get_whatsapp_url(empresa_id, config)
+            headers = get_headers(empresa_id, config)
+
+            # Limita a 3 botões (limite do WhatsApp)
+            buttons_to_send = buttons[:3]
+            
+            # Monta os botões no formato do WhatsApp
+            button_list = []
+            for btn in buttons_to_send:
+                button_list.append({
+                    "type": "reply",
+                    "reply": {
+                        "id": btn.get("id", ""),
+                        "title": btn.get("title", "")
+                    }
+                })
+
+            # Payload para mensagem interativa com botões
+            if is_360:
+                # 360Dialog usa formato similar ao Meta
+                phone_clean = ''.join(filter(str.isdigit, phone_formatted))
+                if not phone_clean.startswith('55'):
+                    phone_clean = '55' + phone_clean
+
+                payload = {
+                    "messaging_product": "whatsapp",
+                    "recipient_type": "individual",
+                    "to": phone_clean,
+                    "type": "interactive",
+                    "interactive": {
+                        "type": "button",
+                        "body": {
+                            "text": message
+                        },
+                        "action": {
+                            "buttons": button_list
+                        }
+                    }
+                }
+            else:
+                # Meta Cloud API
+                payload = {
+                    "messaging_product": "whatsapp",
+                    "to": phone_formatted,
+                    "type": "interactive",
+                    "interactive": {
+                        "type": "button",
+                        "body": {
+                            "text": message
+                        },
+                        "action": {
+                            "buttons": button_list
+                        }
+                    }
+                }
+
+            # Envia a mensagem
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(url, json=payload, headers=headers)
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    message_id = result.get("messages", [{}])[0].get("id") if result.get("messages") else None
+                    logger.info(f"[WhatsApp] Mensagem com botões enviada com sucesso. Message ID: {message_id}")
+                    return {
+                        "success": True,
+                        "provider": "360dialog" if is_360 else "WhatsApp Business API (Meta)",
+                        "message_id": message_id,
+                        "phone": phone_formatted
+                    }
+                else:
+                    error_data = response.json() if response.text else {}
+                    error_message = error_data.get("error", {}).get("message", response.text) if isinstance(error_data, dict) else response.text
+                    
+                    return {
+                        "success": False,
+                        "provider": "360dialog" if is_360 else "WhatsApp Business API (Meta)",
+                        "error": error_message,
+                        "status_code": response.status_code,
+                        "phone": phone_formatted
+                    }
+
+        except Exception as e:
+            error_msg = str(e)
+            logger.error(f"[WhatsApp] Exceção ao enviar mensagem com botões: {error_msg}", exc_info=True)
             return {
                 "success": False,
                 "provider": "360dialog" if 'is_360' in locals() and is_360 else "WhatsApp Business API (Meta)",

@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, Body, Path, Query, status
 from sqlalchemy.orm import Session
 from typing import Optional
+from enum import Enum
 
 from app.api.catalogo.services.service_receitas import ReceitasService
 from app.api.catalogo.services.service_complemento import ComplementoService
@@ -29,6 +30,14 @@ router = APIRouter(
     tags=["Admin - Catalogo - Receitas"],
     dependencies=[Depends(get_current_user)]
 )
+
+
+class TipoItemReceita(str, Enum):
+    """Tipos de itens que podem ser vinculados a uma receita"""
+    INGREDIENTE = "ingrediente"
+    SUB_RECEITA = "sub-receita"
+    PRODUTO = "produto"
+    COMBO = "combo"
 
 # Inclui router de ingredientes dentro de receitas
 router.include_router(router_ingredientes)
@@ -114,14 +123,23 @@ def delete_receita(
     return None
 
 
-# Ingredientes (vinculação a receitas)
-@router.get("/{receita_id}/ingredientes", response_model=list[ReceitaIngredienteOut])
+# Itens de receitas (ingredientes, sub-receitas, produtos e combos)
+@router.get("/itens", response_model=list[ReceitaIngredienteOut])
 def list_ingredientes(
-    receita_id: int = Path(..., description="ID da receita"),
+    receita_id: int = Query(..., description="ID da receita"),
+    tipo: Optional[TipoItemReceita] = Query(None, description="Filtrar por tipo de item: ingrediente, sub-receita, produto ou combo"),
     db: Session = Depends(get_db),
 ):
-    """Lista todos os ingredientes de uma receita"""
-    return ReceitasService(db).list_ingredientes(receita_id)
+    """
+    Lista todos os itens de uma receita.
+    
+    Pode filtrar por tipo usando o parâmetro `tipo`:
+    - ingrediente: Ingredientes básicos
+    - sub-receita: Outras receitas usadas como ingrediente
+    - produto: Produtos normais
+    - combo: Combos
+    """
+    return ReceitasService(db).list_ingredientes(receita_id, tipo=tipo.value if tipo else None)
 
 
 @router.post("/ingredientes", response_model=ReceitaIngredienteOut, status_code=status.HTTP_201_CREATED)

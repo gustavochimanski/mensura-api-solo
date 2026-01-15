@@ -141,7 +141,40 @@ Você deve fornecer **exatamente um** dos seguintes campos:
 
 **GET** `/api/catalogo/admin/receitas/{receita_id}/ingredientes`
 
-Retorna todos os itens (ingredientes, receitas, produtos e combos) de uma receita.
+Retorna todos os itens (ingredientes, receitas, produtos e combos) de uma receita, opcionalmente filtrados por tipo.
+
+### Query Parameters
+
+| Parâmetro | Tipo | Obrigatório | Descrição |
+|-----------|------|-------------|-----------|
+| `tipo` | string | Não | Filtrar por tipo de item. Valores válidos: `ingrediente`, `sub-receita`, `produto`, `combo` |
+
+### Exemplos de Uso
+
+**Listar todos os itens:**
+```
+GET /api/catalogo/admin/receitas/1/ingredientes
+```
+
+**Listar apenas ingredientes básicos:**
+```
+GET /api/catalogo/admin/receitas/1/ingredientes?tipo=ingrediente
+```
+
+**Listar apenas sub-receitas:**
+```
+GET /api/catalogo/admin/receitas/1/ingredientes?tipo=sub-receita
+```
+
+**Listar apenas produtos:**
+```
+GET /api/catalogo/admin/receitas/1/ingredientes?tipo=produto
+```
+
+**Listar apenas combos:**
+```
+GET /api/catalogo/admin/receitas/1/ingredientes?tipo=combo
+```
 
 ### Resposta de Sucesso (200)
 

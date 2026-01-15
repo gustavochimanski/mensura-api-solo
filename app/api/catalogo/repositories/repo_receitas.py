@@ -313,13 +313,20 @@ class ReceitasRepository:
         self.db.refresh(obj)
         return obj
 
-    def list_ingredientes(self, receita_id: int) -> List[ReceitaIngredienteModel]:
+    def list_ingredientes(self, receita_id: int, tipo: Optional[str] = None) -> List[ReceitaIngredienteModel]:
+        """
+        Lista todos os itens de uma receita, opcionalmente filtrados por tipo.
+        
+        Args:
+            receita_id: ID da receita
+            tipo: Tipo de item a filtrar ('ingrediente', 'sub-receita', 'produto' ou 'combo')
+        """
         # Verifica se a receita existe
         receita = self.get_receita_by_id(receita_id)
         if not receita:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Receita não encontrada")
         
-        return (
+        query = (
             self.db.query(ReceitaIngredienteModel)
             .options(
                 joinedload(ReceitaIngredienteModel.ingrediente),
@@ -328,8 +335,25 @@ class ReceitasRepository:
                 joinedload(ReceitaIngredienteModel.combo)
             )
             .filter(ReceitaIngredienteModel.receita_id == receita_id)
-            .all()
         )
+        
+        # Aplica filtro por tipo se fornecido
+        if tipo:
+            if tipo == "ingrediente":
+                query = query.filter(ReceitaIngredienteModel.ingrediente_id.isnot(None))
+            elif tipo == "sub-receita":
+                query = query.filter(ReceitaIngredienteModel.receita_ingrediente_id.isnot(None))
+            elif tipo == "produto":
+                query = query.filter(ReceitaIngredienteModel.produto_cod_barras.isnot(None))
+            elif tipo == "combo":
+                query = query.filter(ReceitaIngredienteModel.combo_id.isnot(None))
+            else:
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    f"Tipo inválido: {tipo}. Tipos válidos: ingrediente, sub-receita, produto, combo"
+                )
+        
+        return query.all()
 
     def update_ingrediente(self, receita_ingrediente_id: int, quantidade: float | None) -> ReceitaIngredienteModel:
         """

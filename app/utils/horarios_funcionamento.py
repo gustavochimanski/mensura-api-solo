@@ -176,12 +176,13 @@ def empresa_esta_aberta_agora(
     return False
 
 
-def formatar_horarios_funcionamento_mensagem(horarios_funcionamento: Any) -> str:
+def formatar_horarios_funcionamento_mensagem(horarios_funcionamento: Any, apenas_horarios: bool = False) -> str:
     """
     Formata os horários de funcionamento em uma mensagem bonita para WhatsApp.
     
     Args:
         horarios_funcionamento: Lista de horários no formato esperado
+        apenas_horarios: Se True, retorna apenas os horários formatados (sem cabeçalho e rodapé)
         
     Returns:
         Mensagem formatada com os horários
@@ -217,7 +218,10 @@ def formatar_horarios_funcionamento_mensagem(horarios_funcionamento: Any) -> str
         return "Horários de funcionamento não configurados."
     
     # Monta a mensagem
-    mensagem = "🕐 *HORÁRIOS DE FUNCIONAMENTO*\n\n"
+    if apenas_horarios:
+        mensagem = ""
+    else:
+        mensagem = "🕐 *HORÁRIOS DE FUNCIONAMENTO*\n\n"
     
     # Ordena os dias (0=domingo até 6=sábado)
     for dia in sorted(horarios_por_dia.keys()):
@@ -237,7 +241,8 @@ def formatar_horarios_funcionamento_mensagem(horarios_funcionamento: Any) -> str
             horarios_str = " e ".join(intervalos_formatados)
             mensagem += f"• *{nome_dia}:* {horarios_str}\n"
     
-    mensagem += "\n💬 Retornaremos em breve quando estivermos abertos!"
+    if not apenas_horarios:
+        mensagem += "\n💬 Retornaremos em breve quando estivermos abertos!"
     
     return mensagem
 

@@ -200,8 +200,15 @@ class ReceitasService:
     def add_ingrediente(self, data: ReceitaIngredienteIn):
         return self.repo.add_ingrediente(data)
 
-    def list_ingredientes(self, receita_id: int):
-        return self.repo.list_ingredientes(receita_id)
+    def list_ingredientes(self, receita_id: int, tipo: Optional[str] = None):
+        """
+        Lista itens de uma receita, opcionalmente filtrados por tipo.
+        
+        Args:
+            receita_id: ID da receita
+            tipo: Tipo de item ('ingrediente', 'sub-receita', 'produto' ou 'combo')
+        """
+        return self.repo.list_ingredientes(receita_id, tipo=tipo)
 
     def update_ingrediente(self, receita_ingrediente_id: int, quantidade: Optional[float]):
         return self.repo.update_ingrediente(receita_ingrediente_id, quantidade)

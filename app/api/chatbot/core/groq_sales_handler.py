@@ -760,20 +760,31 @@ class GroqSalesHandler:
         return mensagem
 
     def _gerar_mensagem_boas_vindas_conversacional(self) -> str:
-        """Gera mensagem de boas-vindas para modo conversacional"""
-        produtos = self._buscar_promocoes()
+        """Gera mensagem de boas-vindas para modo conversacional com botões"""
+        # Busca nome da empresa e link do cardápio do banco
+        try:
+            empresa_query = text("""
+                SELECT nome, cardapio_link
+                FROM cadastros.empresas
+                WHERE id = :empresa_id
+            """)
+            result = self.db.execute(empresa_query, {"empresa_id": self.empresa_id})
+            empresa = result.fetchone()
+            
+            nome_empresa = empresa[0] if empresa and empresa[0] else "[Nome da Empresa]"
+            link_cardapio = empresa[1] if empresa and empresa[1] else LINK_CARDAPIO
+        except Exception as e:
+            print(f"⚠️ Erro ao buscar dados da empresa: {e}")
+            nome_empresa = "[Nome da Empresa]"
+            link_cardapio = LINK_CARDAPIO
 
-        mensagem = "Olá! 😊 Bem-vindo ao nosso delivery!\n\n"
-        mensagem += "Estou aqui para te ajudar a fazer seu pedido.\n\n"
-
-        if produtos:
-            destaques = produtos[:3]
-            mensagem += "🔥 *Destaques de hoje:*\n"
-            for p in destaques:
-                mensagem += f"• {p['nome']} - R$ {p['preco']:.2f}\n"
-            mensagem += "\n"
-
-        mensagem += "Me conta o que você gostaria! Pode perguntar sobre qualquer produto, ver o cardápio, tirar dúvidas... Estou à disposição! 😊"
+        mensagem = f"👋 Olá! Seja bem-vindo(a) à {nome_empresa}!\n"
+        mensagem += "É um prazer te atender 😊\n\n"
+        mensagem += f"📲 Para conferir nosso cardápio completo, é só acessar o link abaixo:\n"
+        mensagem += f"👉 {link_cardapio}\n\n"
+        mensagem += "🛒 Prefere pedir por aqui mesmo?\n"
+        mensagem += "Sem problemas! É só me dizer o que você gostaria que eu te ajudo a montar seu pedido passo a passo 😉\n\n"
+        mensagem += "💬 Fico à disposição!"
 
         return mensagem
 
