@@ -356,12 +356,12 @@ class OrderNotification:
         except Exception as e:
             error_msg = str(e)
             logger.error(f"[WhatsApp] Exceção ao enviar mensagem: {error_msg}", exc_info=True)
-                return {
-                    "success": False,
-                    "provider": "360dialog" if 'is_360' in locals() and is_360 else "WhatsApp Business API (Meta)",
-                    "error": error_msg,
-                    "phone": phone
-                }
+            return {
+                "success": False,
+                "provider": "360dialog" if 'is_360' in locals() and is_360 else "WhatsApp Business API (Meta)",
+                "error": error_msg,
+                "phone": phone
+            }
 
     @staticmethod
     async def send_whatsapp_message_with_buttons(
