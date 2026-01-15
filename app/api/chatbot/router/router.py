@@ -947,7 +947,11 @@ def get_empresa_id_from_webhook(db: Session, metadata: dict) -> Optional[str]:
     1. phone_number_id (padrão)
     2. display_phone_number (alternativa para 360dialog)
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    
     if not metadata:
+        logger.warning("⚠️ Metadata vazio ou None no webhook")
         return None
     
     try:
@@ -956,22 +960,55 @@ def get_empresa_id_from_webhook(db: Session, metadata: dict) -> Optional[str]:
         # Estratégia 1: Buscar por phone_number_id
         phone_number_id = metadata.get("phone_number_id")
         if phone_number_id:
-            config = repo.get_by_phone_number_id(phone_number_id)
-            if config:
-                print(f"   ✅ Empresa identificada por phone_number_id: {phone_number_id} -> empresa_id: {config.empresa_id}")
-                return str(config.empresa_id)
+            # Normaliza para string
+            phone_number_id = str(phone_number_id).strip()
+            print(f"   🔍 [Estratégia 1] Tentando identificar empresa por phone_number_id: {phone_number_id}")
+            logger.info(f"🔍 Tentando identificar empresa por phone_number_id: {phone_number_id}")
+            
+            # Usa a função melhorada que já tenta buscar inativas se necessário
+            empresa_id = get_empresa_id_by_phone_number_id(db, phone_number_id)
+            if empresa_id:
+                print(f"   ✅ Empresa identificada por phone_number_id: {phone_number_id} -> empresa_id: {empresa_id}")
+                logger.info(f"✅ Empresa identificada por phone_number_id: {phone_number_id} -> empresa_id: {empresa_id}")
+                return empresa_id
+            else:
+                print(f"   ⚠️ Não foi possível identificar empresa por phone_number_id: {phone_number_id}")
+                logger.warning(f"⚠️ Não foi possível identificar empresa por phone_number_id: {phone_number_id}")
         
         # Estratégia 2: Buscar por display_phone_number (útil para 360dialog)
         display_phone_number = metadata.get("display_phone_number")
         if display_phone_number:
-            config = repo.get_by_display_phone_number(display_phone_number)
+            display_phone_number = str(display_phone_number).strip()
+            print(f"   🔍 [Estratégia 2] Tentando identificar empresa por display_phone_number: {display_phone_number}")
+            logger.info(f"🔍 Tentando identificar empresa por display_phone_number: {display_phone_number}")
+            
+            # Primeiro tenta buscar apenas ativas
+            config = repo.get_by_display_phone_number(display_phone_number, include_inactive=False)
+            
+            # Se não encontrou ativa, tenta buscar inativas também
+            if not config:
+                print(f"   ⚠️ Nenhuma configuração ATIVA encontrada para display_phone_number={display_phone_number}, tentando buscar inativas...")
+                logger.warning(f"⚠️ Nenhuma configuração ATIVA encontrada para display_phone_number={display_phone_number}, tentando buscar inativas...")
+                config = repo.get_by_display_phone_number(display_phone_number, include_inactive=True)
+                if config:
+                    print(f"   ⚠️ ATENÇÃO: Configuração encontrada mas está INATIVA (is_active={config.is_active}). Considere ativar esta configuração.")
+                    logger.warning(f"⚠️ ATENÇÃO: Configuração encontrada mas está INATIVA (is_active={config.is_active}). Considere ativar esta configuração.")
+            
             if config:
-                print(f"   ✅ Empresa identificada por display_phone_number: {display_phone_number} -> empresa_id: {config.empresa_id}")
-                return str(config.empresa_id)
+                empresa_id = str(config.empresa_id)
+                print(f"   ✅ Empresa identificada por display_phone_number: {display_phone_number} -> empresa_id: {empresa_id}")
+                logger.info(f"✅ Empresa identificada por display_phone_number: {display_phone_number} -> empresa_id: {empresa_id}")
+                return empresa_id
+            else:
+                print(f"   ⚠️ Não foi possível identificar empresa por display_phone_number: {display_phone_number}")
+                logger.warning(f"⚠️ Não foi possível identificar empresa por display_phone_number: {display_phone_number}")
         
+        print("   ❌ Não foi possível identificar empresa usando nenhuma estratégia (phone_number_id nem display_phone_number)")
+        logger.warning("❌ Não foi possível identificar empresa usando nenhuma estratégia")
         return None
     except Exception as e:
-        print(f"⚠️ Erro ao identificar empresa do webhook: {e}")
+        print(f"   ❌ Erro ao identificar empresa do webhook: {e}")
+        logger.error(f"⚠️ Erro ao identificar empresa do webhook: {e}", exc_info=True)
         return None
 
 

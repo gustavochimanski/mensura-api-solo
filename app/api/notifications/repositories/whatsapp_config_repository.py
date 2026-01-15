@@ -84,6 +84,9 @@ class WhatsAppConfigRepository:
         if not phone_number_id:
             return None
         
+        # Normaliza para string e remove espaços
+        phone_number_id = str(phone_number_id).strip()
+        
         # Primeiro tenta buscar apenas ativas
         query = (
             self.db.query(WhatsAppConfigModel)
@@ -113,21 +116,63 @@ class WhatsAppConfigRepository:
             logger.warning(f"❌ Nenhuma configuração encontrada para phone_number_id={phone_number_id}")
             # Debug: lista todas as configurações disponíveis
             all_configs = self.db.query(WhatsAppConfigModel).all()
-            logger.debug(f"📋 Configurações disponíveis no banco: {[(c.phone_number_id, c.empresa_id, c.is_active) for c in all_configs]}")
+            if all_configs:
+                configs_info = [
+                    f"(phone_number_id={c.phone_number_id}, empresa_id={c.empresa_id}, is_active={c.is_active})"
+                    for c in all_configs
+                ]
+                logger.warning(f"📋 Configurações disponíveis no banco: {', '.join(configs_info)}")
+            else:
+                logger.warning("📋 Nenhuma configuração cadastrada no banco de dados")
         
         return config
 
-    def get_by_display_phone_number(self, display_phone_number: str) -> Optional[WhatsAppConfigModel]:
-        """Busca configuração pelo display_phone_number (alternativa para 360dialog)"""
+    def get_by_display_phone_number(self, display_phone_number: str, include_inactive: bool = False) -> Optional[WhatsAppConfigModel]:
+        """
+        Busca configuração pelo display_phone_number (alternativa para 360dialog)
+        
+        Args:
+            display_phone_number: Número de telefone exibido
+            include_inactive: Se True, busca mesmo configurações inativas (prioriza ativas)
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+        
         if not display_phone_number:
             return None
-        return (
+        
+        # Normaliza para string e remove espaços
+        display_phone_number = str(display_phone_number).strip()
+        
+        # Primeiro tenta buscar apenas ativas
+        query = (
             self.db.query(WhatsAppConfigModel)
             .filter(WhatsAppConfigModel.display_phone_number == display_phone_number)
-            .filter(WhatsAppConfigModel.is_active.is_(True))
-            .order_by(desc(WhatsAppConfigModel.updated_at))
-            .first()
         )
+        
+        if not include_inactive:
+            query = query.filter(WhatsAppConfigModel.is_active.is_(True))
+        
+        config = query.order_by(desc(WhatsAppConfigModel.updated_at)).first()
+        
+        # Se não encontrou e include_inactive=False, tenta buscar inativas também
+        if not config and not include_inactive:
+            logger.warning(f"Configuração ativa não encontrada para display_phone_number={display_phone_number}, tentando buscar inativas...")
+            config = (
+                self.db.query(WhatsAppConfigModel)
+                .filter(WhatsAppConfigModel.display_phone_number == display_phone_number)
+                .order_by(desc(WhatsAppConfigModel.updated_at))
+                .first()
+            )
+            if config:
+                logger.warning(f"⚠️ Configuração encontrada mas está INATIVA (is_active={config.is_active}) para display_phone_number={display_phone_number}")
+        
+        if config:
+            logger.info(f"✅ Configuração encontrada: display_phone_number={display_phone_number}, empresa_id={config.empresa_id}, is_active={config.is_active}")
+        else:
+            logger.warning(f"❌ Nenhuma configuração encontrada para display_phone_number={display_phone_number}")
+        
+        return config
 
     def deactivate_all(self, empresa_id: str) -> None:
         import logging
