@@ -276,7 +276,7 @@ def atualizar_item(
     svc: PedidoAdminService = Depends(get_pedido_admin_service),
 ):
     mutation = PedidoItemMutationRequest(
-        **payload.model_dump(),
+        **payload.model_dump(exclude={'acao', 'item_id'}),
         acao=PedidoItemMutationAction.UPDATE,
         item_id=item_id,
     )
