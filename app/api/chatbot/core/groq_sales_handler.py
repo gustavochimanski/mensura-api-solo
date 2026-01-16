@@ -111,7 +111,7 @@ AI_FUNCTIONS = [
         "type": "function",
         "function": {
             "name": "informar_sobre_produto",
-            "description": "Cliente quer SABER MAIS sobre um PRODUTO ESPECÍFICO mencionado na mensagem. Use quando a pergunta menciona um produto concreto. Exemplos: 'o que vem no x-bacon?', 'o que tem no x-bacon?', 'ingredientes da pizza', 'qual o tamanho da pizza?', 'tem lactose no hamburguer?', 'o que tem na calabresa?'. NÃO use para perguntas genéricas como 'o que tem?' sem mencionar produto específico.",
+            "description": "Cliente quer SABER MAIS sobre um PRODUTO ESPECÍFICO mencionado na mensagem. Use quando a pergunta menciona um produto concreto. Exemplos: 'o que vem no x-bacon?', 'o que tem no x-bacon?', 'ingredientes da pizza', 'qual o tamanho da pizza?', 'tem lactose no hamburguer?', 'o que tem na calabresa?', 'quanto fica a coca cola?', 'quanto custa a pizza?', 'qual o preço do hamburguer?', 'quanto fica a coca cola 350ml?'. IMPORTANTE: Perguntas sobre PREÇO sempre usam esta função, NÃO use 'adicionar_produto'. NÃO use para perguntas genéricas como 'o que tem?' sem mencionar produto específico.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -223,7 +223,9 @@ REGRA DE OURO: Na dúvida, use "conversar". É melhor conversar do que fazer aç
 
 ❌ NÃO use adicionar_produto para:
    - "o que tem?" → use conversar
-   - "tem coca?" → use conversar (é pergunta, não pedido)
+   - "tem coca?" → use informar_sobre_produto (é pergunta, não pedido)
+   - "quanto fica a coca?" → use informar_sobre_produto (é pergunta de PREÇO, não pedido)
+   - "quanto custa a pizza?" → use informar_sobre_produto (é pergunta de PREÇO, não pedido)
    - "que que é isso?" → use conversar
 
 ✅ conversar - Para TUDO que não for ação clara:
@@ -237,6 +239,10 @@ REGRA DE OURO: Na dúvida, use "conversar". É melhor conversar do que fazer aç
    - "o que vem no x-bacon?" → informar_sobre_produto(produto_busca="x-bacon")
    - "a pizza é grande?" → informar_sobre_produto(produto_busca="pizza")
    - "tem lactose?" → informar_sobre_produto
+   - "quanto fica a coca cola?" → informar_sobre_produto(produto_busca="coca cola") ⚠️ PERGUNTA DE PREÇO!
+   - "quanto custa a pizza?" → informar_sobre_produto(produto_busca="pizza") ⚠️ PERGUNTA DE PREÇO!
+   - "qual o preço do hamburguer?" → informar_sobre_produto(produto_busca="hamburguer") ⚠️ PERGUNTA DE PREÇO!
+   - "quanto fica a coca cola 350ml?" → informar_sobre_produto(produto_busca="coca cola 350ml") ⚠️ PERGUNTA DE PREÇO!
 
 ✅ ver_cardapio - APENAS quando pede EXPLICITAMENTE o cardápio:
    - "mostra o cardápio" → ver_cardapio
@@ -473,6 +479,26 @@ class GroqSalesHandler:
             if match2:
                 produto_match = match2.group(0).strip()
                 return {"funcao": "informar_sobre_produto", "params": {"produto_busca": produto_match}}
+
+        # PERGUNTAS DE PREÇO - DEVE vir ANTES da detecção genérica (muito importante!)
+        # Detecta: "quanto fica", "quanto custa", "qual o preço", "qual preço", "quanto é"
+        if re.search(r'(quanto\s+(fica|custa|é|e)|qual\s+(o\s+)?(pre[cç]o|valor)|pre[cç]o\s+(d[aeo]|de|do)|valor\s+(d[aeo]|de|do))', msg, re.IGNORECASE):
+            # Tenta extrair o produto mencionado após as palavras-chave de preço
+            # Padrões: "quanto fica a X", "quanto custa a X", "qual o preço do X", "preço da X"
+            match_preco = re.search(r'(?:quanto\s+(?:fica|custa|é|e)|qual\s+(?:o\s+)?(?:pre[cç]o|valor)|pre[cç]o|valor)\s+(?:a|o|d[aeo]|de|do)?\s*([a-záàâãéêíóôõúç\-\s\d]+?)(\?|$|,|\.)', msg, re.IGNORECASE)
+            if match_preco:
+                produto_extraido = match_preco.group(1).strip()
+                # Remove palavras genéricas que podem ter sido capturadas
+                produto_extraido = re.sub(r'^(a|o|da|do|de)\s+', '', produto_extraido, flags=re.IGNORECASE).strip()
+                palavras_genericas = ['cardapio', 'menu', 'lista', 'catalogo', 'catálogo', 'ai', 'aí', 'vocês', 'vcs', 'produto']
+                if produto_extraido and produto_extraido.lower() not in palavras_genericas and len(produto_extraido) > 2:
+                    return {"funcao": "informar_sobre_produto", "params": {"produto_busca": produto_extraido, "pergunta": msg}}
+            
+            # Se não extraiu por regex, tenta buscar produtos conhecidos na mensagem
+            match_produto_preco = re.search(r'(pizza|x-?\w+|coca|guarana|água|agua|cerveja|batata|onion|hamburguer|hambúrguer|refrigerante|suco|bebida|[\d]+ml|[\d]+\s*ml)[\w\s\-]*', msg, re.IGNORECASE)
+            if match_produto_preco:
+                produto_preco = match_produto_preco.group(0).strip()
+                return {"funcao": "informar_sobre_produto", "params": {"produto_busca": produto_preco, "pergunta": msg}}
 
         # Perguntas sobre o que tem disponível (genérico - DEVE vir DEPOIS da detecção de produto específico)
         if re.search(r'(o\s*que\s*(mais\s*)?(tem|vende|voces? tem|vcs tem)|quais?\s*(que\s*)?(tem|produto|op[cç]oes)|mostra\s*(ai|aí|os\s*produto)|que\s*produto|tem\s*o\s*que)', msg):
@@ -4698,14 +4724,23 @@ Responda de forma natural e curta:"""
                     except Exception as e:
                         print(f"   ⚠️ Erro ao buscar receita associada: {e}")
 
-            # Detecta se a pergunta original era sobre ingredientes
+            # Detecta se a pergunta original era sobre ingredientes ou preço
             pergunta_lower = pergunta.lower() if pergunta else ""
             eh_pergunta_ingredientes = any(palavra in pergunta_lower for palavra in [
                 'que vem', 'que tem', 'ingredientes', 'composição', 'feito', 'feita'
             ])
+            eh_pergunta_preco = any(palavra in pergunta_lower for palavra in [
+                'quanto fica', 'quanto custa', 'qual o preço', 'qual preço', 'quanto é', 'preço', 'valor'
+            ])
             
             # Se encontrou ingredientes, usa dados reais
             if ingredientes:
+                # Se foi pergunta sobre PREÇO, responde diretamente sem mostrar ingredientes
+                if eh_pergunta_preco:
+                    msg = f"💰 *{nome_produto}* - R$ {produto['preco']:.2f}\n\n"
+                    msg += "Quer adicionar ao pedido? 😊"
+                    return msg
+                
                 # Monta resposta com ingredientes reais
                 msg = f"*{nome_produto}* - R$ {produto['preco']:.2f}\n\n"
                 msg += "📋 *Ingredientes:*\n"
@@ -4756,6 +4791,12 @@ Responda de forma natural e curta:"""
                         print(f"   ⚠️ Erro ao buscar descrição da receita: {e}")
                 
                 # Monta resposta apropriada
+                # Se foi pergunta sobre PREÇO, responde diretamente
+                if eh_pergunta_preco:
+                    msg = f"💰 *{nome_produto}* - R$ {produto['preco']:.2f}\n\n"
+                    msg += "Quer adicionar ao pedido? 😊"
+                    return msg
+                
                 msg = f"*{nome_produto}* - R$ {produto['preco']:.2f}\n\n"
                 
                 # Se foi pergunta sobre ingredientes e não encontrou, informa claramente
@@ -4783,9 +4824,18 @@ Responda de forma natural e curta:"""
             print(f"❌ Erro ao buscar ingredientes de {produto.get('nome', 'produto')}: {e}")
             import traceback
             traceback.print_exc()
-            # Fallback básico
-            msg = f"*{produto['nome']}* - R$ {produto['preco']:.2f}\n\n"
-            msg += "Quer adicionar ao pedido? 😊"
+            # Fallback básico - detecta se era pergunta de preço
+            pergunta_lower = pergunta.lower() if pergunta else ""
+            eh_pergunta_preco = any(palavra in pergunta_lower for palavra in [
+                'quanto fica', 'quanto custa', 'qual o preço', 'qual preço', 'quanto é', 'preço', 'valor'
+            ])
+            
+            if eh_pergunta_preco:
+                msg = f"💰 *{produto['nome']}* - R$ {produto['preco']:.2f}\n\n"
+                msg += "Quer adicionar ao pedido? 😊"
+            else:
+                msg = f"*{produto['nome']}* - R$ {produto['preco']:.2f}\n\n"
+                msg += "Quer adicionar ao pedido? 😊"
             return msg
 
     # ========== PROCESSAMENTO PRINCIPAL ==========
