@@ -693,7 +693,7 @@ class PedidoAdminService:
                         item_db.produto_cod_barras = None
                         item_db.receita_id = None
                     # Não faz commit aqui - será feito no final do atualizar_item_pedido
-                    self.repo.flush()
+                    self.db.flush()
                 
                 acao_map = {
                     PedidoItemMutationAction.UPDATE: "atualizar",
