@@ -200,18 +200,19 @@ class PedidoRepository:
             PedidoUnificadoModel.tipo_entrega == TipoEntrega.DELIVERY.value
         )
         
-        # Busca pedidos criados naquele dia (qualquer status) OU pedidos com status E atualizados naquele dia
-        # (mesmo que tenham sido criados em outro dia)
+        # Busca pedidos criados naquele dia (qualquer status, exceto cancelados) 
+        # OU pedidos atualizados naquele dia (mesmo que criados em outro dia, exceto cancelados)
         query = query.filter(
+            PedidoUnificadoModel.status != PedidoStatusEnum.C.value  # Exclui cancelados
+        ).filter(
             or_(
-                # Pedidos criados naquele dia (qualquer status, incluindo E)
+                # Pedidos criados naquele dia (qualquer status não cancelado)
                 and_(
                     PedidoUnificadoModel.created_at >= start_dt,
                     PedidoUnificadoModel.created_at < end_dt
                 ),
-                # Pedidos com status E atualizados naquele dia (mesmo que criados em outro dia)
+                # Pedidos atualizados naquele dia (mesmo que criados em outro dia)
                 and_(
-                    PedidoUnificadoModel.status == PedidoStatusEnum.E.value,
                     PedidoUnificadoModel.updated_at >= start_dt,
                     PedidoUnificadoModel.updated_at < end_dt
                 )
