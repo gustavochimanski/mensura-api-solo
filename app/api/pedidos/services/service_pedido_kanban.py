@@ -113,7 +113,6 @@ class KanbanService:
             .options(
                 joinedload(PedidoUnificadoModel.cliente),
                 joinedload(PedidoUnificadoModel.mesa),
-                joinedload(PedidoUnificadoModel.empresa),
                 joinedload(PedidoUnificadoModel.meio_pagamento),
                 joinedload(PedidoUnificadoModel.entregador),
             )
