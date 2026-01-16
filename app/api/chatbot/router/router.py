@@ -1205,6 +1205,11 @@ async def process_webhook_background(body: dict, headers_info: Optional[dict] = 
     db = next(get_db())
     
     try:
+        # PRIMEIRA VERIFICAÇÃO: Status global do bot (antes de qualquer processamento)
+        global_status = chatbot_db.get_global_bot_status(db)
+        if not global_status.get("is_active", True):
+            # Bot desligado: ignora tudo sem logar nada
+            return
         # Verifica se é uma mensagem do WhatsApp Business Account
         if body.get("object") == "whatsapp_business_account":
             entries = body.get("entry", [])

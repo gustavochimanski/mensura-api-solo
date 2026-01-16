@@ -120,6 +120,10 @@ class ItemPedidoEditar(BaseModel):
     quantidade: Optional[int] = None
     observacao: Optional[str] = None
     acao: str  # "novo-item", "atualizar", "remover"
+    complementos: Optional[List["ItemComplementoRequest"]] = Field(
+        default=None,
+        description="Lista de complementos do item, cada um com seus adicionais selecionados",
+    )
 
 class ModoEdicaoRequest(BaseModel):
     modo_edicao: bool  # True = modo edição (X), False = editado (D)

@@ -139,11 +139,11 @@ Content-Type: application/json
   "empresa_id": 1,
   "tipo_entrega": "DELIVERY",
   "origem": "WEB",
-  "subtotal": 95.50,
+  "subtotal": 195.50,
   "desconto": 5.00,
   "taxa_entrega": 8.00,
   "taxa_servico": 2.50,
-  "valor_total": 101.00,
+  "valor_total": 201.00,
   "observacao_geral": "Observação geral do pedido",
   "data_criacao": "2024-01-15T14:30:00Z",
   "data_atualizacao": "2024-01-15T14:30:00Z",
@@ -156,11 +156,64 @@ Content-Type: application/json
         "quantidade": 2,
         "preco_unitario": 25.00,
         "observacao": "Sem cebola",
-        "complementos": [...]
+        "complementos": [
+          {
+            "complemento_id": 3,
+            "complemento_nome": "Acompanhamentos",
+            "obrigatorio": false,
+            "quantitativo": true,
+            "total": 5.00,
+            "adicionais": [
+              {
+                "adicional_id": 5,
+                "nome": "Bacon Extra",
+                "quantidade": 1,
+                "preco_unitario": 5.00,
+                "total": 5.00
+              }
+            ]
+          }
+        ]
       }
     ],
-    "receitas": [...],
-    "combos": [...]
+    "receitas": [
+      {
+        "item_id": 1002,
+        "receita_id": 7,
+        "nome": "Pizza Margherita",
+        "quantidade": 1,
+        "preco_unitario": 45.00,
+        "observacao": "Bem passado",
+        "complementos": []
+      }
+    ],
+    "combos": [
+      {
+        "combo_id": 12,
+        "nome": "Combo Executivo",
+        "quantidade": 1,
+        "preco_unitario": 50.00,
+        "observacao": null,
+        "complementos": [
+          {
+            "complemento_id": 4,
+            "complemento_nome": "Bebidas",
+            "obrigatorio": true,
+            "quantitativo": false,
+            "total": 0.00,
+            "adicionais": [
+              {
+                "adicional_id": 8,
+                "nome": "Refrigerante",
+                "quantidade": 1,
+                "preco_unitario": 0.00,
+                "total": 0.00
+              }
+            ]
+          }
+        ]
+      }
+    ]
   }
 }
 ```
@@ -198,9 +251,49 @@ Content-Type: application/json
     }
   ],
   "produtos": {
-    "itens": [...],
-    "receitas": [...],
-    "combos": [...]
+    "itens": [
+      {
+        "produto_cod_barras": "7891234567890",
+        "quantidade": 2,
+        "observacao": "Sem cebola",
+        "complementos": [
+          {
+            "complemento_id": 3,
+            "adicionais": [
+              {
+                "adicional_id": 5,
+                "quantidade": 1
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "receitas": [
+      {
+        "receita_id": 7,
+        "quantidade": 1,
+        "observacao": "Bem passado",
+        "complementos": []
+      }
+    ],
+    "combos": [
+      {
+        "combo_id": 12,
+        "quantidade": 1,
+        "complementos": [
+          {
+            "complemento_id": 4,
+            "adicionais": [
+              {
+                "adicional_id": 8,
+                "quantidade": 1
+              }
+            ]
+          }
+        ]
+      }
+    ]
   }
 }
 ```
@@ -218,13 +311,68 @@ Calcula os valores do pedido sem criar no banco de dados.
 POST /api/pedidos/client/checkout/preview
 ```
 
+**Body Request:**
+```json
+{
+  "empresa_id": 1,
+  "tipo_pedido": "DELIVERY",
+  "endereco_id": 456,
+  "cupom_id": 10,
+  "produtos": {
+    "itens": [
+      {
+        "produto_cod_barras": "7891234567890",
+        "quantidade": 2,
+        "observacao": "Sem cebola",
+        "complementos": [
+          {
+            "complemento_id": 3,
+            "adicionais": [
+              {
+                "adicional_id": 5,
+                "quantidade": 1
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "receitas": [
+      {
+        "receita_id": 7,
+        "quantidade": 1,
+        "observacao": "Bem passado",
+        "complementos": []
+      }
+    ],
+    "combos": [
+      {
+        "combo_id": 12,
+        "quantidade": 1,
+        "complementos": [
+          {
+            "complemento_id": 4,
+            "adicionais": [
+              {
+                "adicional_id": 8,
+                "quantidade": 1
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
 **Response:**
 ```json
 {
-  "subtotal": 95.50,
+  "subtotal": 195.50,
   "taxa_entrega": 8.00,
   "taxa_servico": 2.50,
-  "valor_total": 101.00,
+  "valor_total": 201.00,
   "desconto": 5.00,
   "distancia_km": 2.5,
   "empresa_id": 1,
@@ -271,11 +419,52 @@ GET /api/pedidos/admin?empresa_id=1&tipo=DELIVERY&status_filter=P&data_inicio=20
     "telefone_cliente": "11987654321",
     "empresa_id": 1,
     "tipo_entrega": "DELIVERY",
-    "subtotal": 95.50,
-    "valor_total": 101.00,
+    "subtotal": 195.50,
+    "valor_total": 201.00,
     "data_criacao": "2024-01-15T14:30:00Z",
-    "itens": [...],
-    "produtos": {...}
+    "itens": [
+      {
+        "id": 1001,
+        "produto_cod_barras": "7891234567890",
+        "quantidade": 2,
+        "preco_unitario": 25.00,
+        "observacao": "Sem cebola"
+      }
+    ],
+    "produtos": {
+      "itens": [
+        {
+          "item_id": 1001,
+          "produto_cod_barras": "7891234567890",
+          "descricao": "Hambúrguer Artesanal",
+          "quantidade": 2,
+          "preco_unitario": 25.00,
+          "observacao": "Sem cebola",
+          "complementos": []
+        }
+      ],
+      "receitas": [
+        {
+          "item_id": 1002,
+          "receita_id": 7,
+          "nome": "Pizza Margherita",
+          "quantidade": 1,
+          "preco_unitario": 45.00,
+          "observacao": "Bem passado",
+          "complementos": []
+        }
+      ],
+      "combos": [
+        {
+          "combo_id": 12,
+          "nome": "Combo Executivo",
+          "quantidade": 1,
+          "preco_unitario": 50.00,
+          "observacao": null,
+          "complementos": []
+        }
+      ]
+    }
   }
 ]
 ```
@@ -357,7 +546,40 @@ GET /api/pedidos/client/
       "status": "P",
       "subtotal": 95.50,
       "valor_total": 101.00,
-      "produtos": {...}
+      "produtos": {
+        "itens": [
+          {
+            "item_id": 1001,
+            "produto_cod_barras": "7891234567890",
+            "descricao": "Hambúrguer Artesanal",
+            "quantidade": 2,
+            "preco_unitario": 25.00,
+            "observacao": "Sem cebola",
+            "complementos": []
+          }
+        ],
+        "receitas": [
+          {
+            "item_id": 1002,
+            "receita_id": 7,
+            "nome": "Pizza Margherita",
+            "quantidade": 1,
+            "preco_unitario": 45.00,
+            "observacao": "Bem passado",
+            "complementos": []
+          }
+        ],
+        "combos": [
+          {
+            "combo_id": 12,
+            "nome": "Combo Executivo",
+            "quantidade": 1,
+            "preco_unitario": 50.00,
+            "observacao": null,
+            "complementos": []
+          }
+        ]
+      }
     },
     "mesa": null,
     "balcao": null
@@ -411,12 +633,11 @@ GET /api/pedidos/admin/{pedido_id}
       "cidade": "São Paulo",
       "cep": "01234-567"
     },
-    "outros_enderecos": [...]
+    "outros_enderecos": []
   },
   "empresa": {
     "id": 1,
-    "nome": "Restaurante Exemplo",
-    ...
+    "nome": "Restaurante Exemplo"
   },
   "entregador": {
     "id": 50,
@@ -427,29 +648,63 @@ GET /api/pedidos/admin/{pedido_id}
     "nome": "Dinheiro",
     "tipo": "DINHEIRO"
   },
-  "cupom": {...},
-  "transacao": {...},
+  "cupom": null,
+  "transacao": null,
   "tipo_entrega": "DELIVERY",
   "origem": "WEB",
-  "subtotal": 95.50,
+  "subtotal": 195.50,
   "desconto": 5.00,
   "taxa_entrega": 8.00,
   "taxa_servico": 2.50,
-  "valor_total": 101.00,
+  "valor_total": 201.00,
   "previsao_entrega": "2024-01-15T15:00:00Z",
   "distancia_km": 2.5,
   "observacao_geral": "Observação geral",
   "troco_para": 50.00,
-  "endereco_snapshot": {...},
+  "endereco_snapshot": {},
   "data_criacao": "2024-01-15T14:30:00Z",
   "data_atualizacao": "2024-01-15T14:35:00Z",
   "pagamento": {
     "status": "PENDENTE",
     "esta_pago": false,
-    "valor": 101.00,
+    "valor": 201.00,
     "meio_pagamento_nome": "Dinheiro"
   },
-  "pago": false
+  "pago": false,
+  "produtos": {
+    "itens": [
+      {
+        "item_id": 1001,
+        "produto_cod_barras": "7891234567890",
+        "descricao": "Hambúrguer Artesanal",
+        "quantidade": 2,
+        "preco_unitario": 25.00,
+        "observacao": "Sem cebola",
+        "complementos": []
+      }
+    ],
+    "receitas": [
+      {
+        "item_id": 1002,
+        "receita_id": 7,
+        "nome": "Pizza Margherita",
+        "quantidade": 1,
+        "preco_unitario": 45.00,
+        "observacao": "Bem passado",
+        "complementos": []
+      }
+    ],
+    "combos": [
+      {
+        "combo_id": 12,
+        "nome": "Combo Executivo",
+        "quantidade": 1,
+        "preco_unitario": 50.00,
+        "observacao": null,
+        "complementos": []
+      }
+    ]
+  }
 }
 ```
 
@@ -785,20 +1040,82 @@ POST /api/pedidos/admin/{pedido_id}/itens
 {
   "id": 789,
   "status": "P",
-  "valor_total": 125.50,
-  "itens": [...],
+  "valor_total": 225.50,
+  "itens": [
+    {
+      "id": 1001,
+      "produto_cod_barras": "7891234567890",
+      "quantidade": 2,
+      "preco_unitario": 25.00,
+      "observacao": "Sem cebola"
+    },
+    {
+      "id": 1003,
+      "produto_cod_barras": "7891234567890",
+      "quantidade": 2,
+      "preco_unitario": 25.00,
+      "observacao": "Sem cebola"
+    }
+  ],
   "produtos": {
     "itens": [
       {
-        "item_id": 1002,
+        "item_id": 1001,
         "produto_cod_barras": "7891234567890",
+        "descricao": "Hambúrguer Artesanal",
         "quantidade": 2,
         "preco_unitario": 25.00,
         "observacao": "Sem cebola",
-        "complementos": [...]
+        "complementos": []
+      },
+      {
+        "item_id": 1003,
+        "produto_cod_barras": "7891234567890",
+        "descricao": "Hambúrguer Artesanal",
+        "quantidade": 2,
+        "preco_unitario": 25.00,
+        "observacao": "Sem cebola",
+        "complementos": [
+          {
+            "complemento_id": 3,
+            "complemento_nome": "Acompanhamentos",
+            "obrigatorio": false,
+            "quantitativo": true,
+            "total": 5.00,
+            "adicionais": [
+              {
+                "adicional_id": 5,
+                "nome": "Bacon Extra",
+                "quantidade": 1,
+                "preco_unitario": 5.00,
+                "total": 5.00
+              }
+            ]
+          }
+        ]
       }
     ],
-    ...
+    "receitas": [
+      {
+        "item_id": 1002,
+        "receita_id": 7,
+        "nome": "Pizza Margherita",
+        "quantidade": 1,
+        "preco_unitario": 45.00,
+        "observacao": "Bem passado",
+        "complementos": []
+      }
+    ],
+    "combos": [
+      {
+        "combo_id": 12,
+        "nome": "Combo Executivo",
+        "quantidade": 1,
+        "preco_unitario": 50.00,
+        "observacao": null,
+        "complementos": []
+      }
+    ]
   }
 }
 ```
@@ -807,7 +1124,7 @@ POST /api/pedidos/admin/{pedido_id}/itens
 
 ### 7.2. Atualizar Item do Pedido - Admin
 
-Atualiza quantidade ou observação de um item existente.
+Atualiza quantidade, observação, receita ou complementos de um item existente.
 
 **Endpoint:**
 ```
@@ -819,6 +1136,33 @@ PATCH /api/pedidos/admin/{pedido_id}/itens/{item_id}
 - `item_id` (integer, obrigatório): ID do item
 
 **Body Request:**
+
+⚠️ **O campo `acao` é OBRIGATÓRIO** e deve ser sempre `"UPDATE"` para este endpoint.
+
+**Schema:**
+```json
+{
+  "acao": "UPDATE",  // ⚠️ OBRIGATÓRIO
+  "quantidade": 3,  // Opcional: nova quantidade
+  "observacao": "string",  // Opcional: nova observação
+  "receita_id": 1,  // Opcional: ID da receita (se for receita)
+  "complementos": [  // Opcional: lista de complementos atualizados
+    {
+      "complemento_id": 1,
+      "adicionais": [
+        {
+          "adicional_id": 2,
+          "quantidade": 3
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Exemplos:**
+
+#### Atualizar Quantidade e Observação
 ```json
 {
   "acao": "UPDATE",
@@ -827,8 +1171,36 @@ PATCH /api/pedidos/admin/{pedido_id}/itens/{item_id}
 }
 ```
 
+#### Atualizar Receita com Complementos
+```json
+{
+  "acao": "UPDATE",
+  "quantidade": 1,
+  "receita_id": 1,
+  "complementos": [
+    {
+      "complemento_id": 1,
+      "adicionais": [
+        {
+          "adicional_id": 2,
+          "quantidade": 3
+        }
+      ]
+    }
+  ]
+}
+```
+
+#### Atualizar Apenas Quantidade
+```json
+{
+  "acao": "UPDATE",
+  "quantidade": 5
+}
+```
+
 **⚠️ Limitações por Tipo:**
-- **Delivery**: ✅ Suporta atualização completa (quantidade e observação)
+- **Delivery**: ✅ Suporta atualização completa (quantidade, observação, receita e complementos)
 - **Mesa**: ❌ **NÃO suporta** atualização parcial. Use remover e adicionar novamente.
 - **Balcão**: ❌ **NÃO suporta** atualização parcial. Use remover e adicionar novamente.
 
@@ -836,14 +1208,38 @@ PATCH /api/pedidos/admin/{pedido_id}/itens/{item_id}
 ```json
 {
   "id": 789,
-  "valor_total": 130.00,
+  "valor_total": 205.00,
   "produtos": {
     "itens": [
       {
         "item_id": 1002,
+        "produto_cod_barras": "7891234567890",
+        "descricao": "Hambúrguer Artesanal",
         "quantidade": 3,
+        "preco_unitario": 25.00,
         "observacao": "Nova observação",
-        ...
+        "complementos": []
+      }
+    ],
+    "receitas": [
+      {
+        "item_id": 1003,
+        "receita_id": 7,
+        "nome": "Pizza Margherita",
+        "quantidade": 1,
+        "preco_unitario": 45.00,
+        "observacao": "Bem passado",
+        "complementos": []
+      }
+    ],
+    "combos": [
+      {
+        "combo_id": 12,
+        "nome": "Combo Executivo",
+        "quantidade": 1,
+        "preco_unitario": 50.00,
+        "observacao": null,
+        "complementos": []
       }
     ]
   }
@@ -869,9 +1265,40 @@ DELETE /api/pedidos/admin/{pedido_id}/itens/{item_id}
 ```json
 {
   "id": 789,
-  "valor_total": 75.50,
+  "valor_total": 145.50,
   "produtos": {
-    "itens": [...]
+    "itens": [
+      {
+        "item_id": 1001,
+        "produto_cod_barras": "7891234567890",
+        "descricao": "Hambúrguer Artesanal",
+        "quantidade": 2,
+        "preco_unitario": 25.00,
+        "observacao": "Sem cebola",
+        "complementos": []
+      }
+    ],
+    "receitas": [
+      {
+        "item_id": 1002,
+        "receita_id": 7,
+        "nome": "Pizza Margherita",
+        "quantidade": 1,
+        "preco_unitario": 45.00,
+        "observacao": "Bem passado",
+        "complementos": []
+      }
+    ],
+    "combos": [
+      {
+        "combo_id": 12,
+        "nome": "Combo Executivo",
+        "quantidade": 1,
+        "preco_unitario": 50.00,
+        "observacao": null,
+        "complementos": []
+      }
+    ]
   }
 }
 ```
@@ -1053,14 +1480,50 @@ curl -X POST "https://api.exemplo.com/api/pedidos/admin" \
         {
           "produto_cod_barras": "7891234567890",
           "quantidade": 2,
-          "observacao": "Sem cebola"
+          "observacao": "Sem cebola",
+          "complementos": [
+            {
+              "complemento_id": 3,
+              "adicionais": [
+                {
+                  "adicional_id": 5,
+                  "quantidade": 1
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "receitas": [
+        {
+          "receita_id": 7,
+          "quantidade": 1,
+          "observacao": "Bem passado",
+          "complementos": []
+        }
+      ],
+      "combos": [
+        {
+          "combo_id": 12,
+          "quantidade": 1,
+          "complementos": [
+            {
+              "complemento_id": 4,
+              "adicionais": [
+                {
+                  "adicional_id": 8,
+                  "quantidade": 1
+                }
+              ]
+            }
+          ]
         }
       ]
     },
     "meios_pagamento": [
       {
         "id": 1,
-        "valor": 100.00
+        "valor": 201.00
       }
     ]
   }'

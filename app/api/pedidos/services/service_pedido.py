@@ -1321,10 +1321,63 @@ class PedidoService:
             if not it_db:
                 raise HTTPException(status.HTTP_404_NOT_FOUND, f"Item {item.id} não encontrado")
 
+            # Atualiza quantidade e observação
+            quantidade_alterada = False
             if item.quantidade is not None and item.quantidade != it_db.quantidade:
                 it_db.quantidade = item.quantidade
+                quantidade_alterada = True
             if item.observacao is not None:
                 it_db.observacao = item.observacao
+
+            # Processa complementos se fornecidos
+            if item.complementos is not None:
+                # Remove complementos antigos do item
+                from app.api.pedidos.models.model_pedido_item_complemento import PedidoItemComplementoModel
+                complementos_antigos = self.db.query(PedidoItemComplementoModel).filter(
+                    PedidoItemComplementoModel.pedido_item_id == it_db.id
+                ).all()
+                for comp_antigo in complementos_antigos:
+                    self.db.delete(comp_antigo)
+                self.db.flush()
+
+                # Busca o produto/receita/combo para calcular preço com complementos
+                product = None
+                if it_db.produto_cod_barras:
+                    product = self.product_core.buscar_produto(
+                        empresa_id=pedido.empresa_id,
+                        cod_barras=str(it_db.produto_cod_barras)
+                    )
+                elif it_db.receita_id:
+                    receita_model = self.db.query(ReceitaModel).filter(ReceitaModel.id == it_db.receita_id).first()
+                    product = self.product_core.buscar_receita(receita_id=it_db.receita_id, receita_model=receita_model)
+                elif it_db.combo_id:
+                    product = self.product_core.buscar_combo(combo_id=it_db.combo_id)
+
+                if product:
+                    # Calcula novo preço com complementos
+                    quantidade_item = item.quantidade if item.quantidade is not None else it_db.quantidade
+                    preco_total_com_complementos, _ = self.product_core.calcular_preco_com_complementos(
+                        product=product,
+                        quantidade=quantidade_item,
+                        complementos_request=item.complementos,
+                    )
+                    # Atualiza preço unitário (preço total dividido pela quantidade)
+                    it_db.preco_unitario = preco_total_com_complementos / Decimal(str(quantidade_item))
+                    it_db.preco_total = preco_total_com_complementos
+                else:
+                    # Se não encontrou o produto, ainda persiste os complementos
+                    # (o preço será recalculado depois)
+                    pass
+
+                # Persiste novos complementos
+                self.repo._persistir_complementos_do_request(
+                    item=it_db,
+                    pedido_id=pedido_id,
+                    complementos_request=item.complementos,
+                )
+            elif quantidade_alterada:
+                # Se quantidade mudou mas não há complementos, recalcula apenas o preço total
+                it_db.preco_total = it_db.preco_unitario * Decimal(str(it_db.quantidade))
 
         elif acao == "remover":
             if not item.id:

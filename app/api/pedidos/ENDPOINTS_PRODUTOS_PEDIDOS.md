@@ -194,7 +194,7 @@ POST /api/pedidos/admin/{pedido_id}/itens?tipo=MESA (opcional)
 
 ## 2. Atualizar Item do Pedido
 
-Atualiza a quantidade ou observação de um item existente no pedido.
+Atualiza a quantidade, observação, receita ou complementos de um item existente no pedido.
 
 ### Endpoint
 ```
@@ -206,19 +206,43 @@ PATCH /api/pedidos/admin/{pedido_id}/itens/{item_id}
 - `item_id` (integer, obrigatório): ID do item a ser atualizado
 
 ### Body Request
+
+⚠️ **O campo `acao` é OBRIGATÓRIO** e deve ser sempre `"UPDATE"` para este endpoint.
+
+**Campos disponíveis:**
+- `acao` (string, **OBRIGATÓRIO**): Sempre `"UPDATE"` para este endpoint
+- `tipo` (string, opcional): `"DELIVERY" | "BALCAO" | "MESA"` - será detectado automaticamente se não informado
+- `quantidade` (integer, opcional, mínimo: 1): Nova quantidade do item
+- `observacao` (string, opcional): Nova observação do item
+- `receita_id` (integer, opcional): ID da receita (se for item de receita)
+- `complementos` (array, opcional): Lista de complementos atualizados
+
+**Schema completo:**
 ```json
 {
-  "acao": "UPDATE",
-  "tipo": "DELIVERY | BALCAO | MESA (opcional)",
-  "quantidade": "integer (opcional, mínimo: 1)",
-  "observacao": "string (opcional)"
+  "acao": "UPDATE",  // ⚠️ OBRIGATÓRIO
+  "tipo": "DELIVERY",  // Opcional
+  "quantidade": 1,  // Opcional
+  "observacao": "string",  // Opcional
+  "receita_id": 1,  // Opcional
+  "complementos": [  // Opcional
+    {
+      "complemento_id": 1,
+      "adicionais": [
+        {
+          "adicional_id": 2,
+          "quantidade": 3
+        }
+      ]
+    }
+  ]
 }
 ```
 
 ### Observações Importantes
 
 ⚠️ **Limitações por Tipo de Pedido:**
-- **Delivery**: ✅ Suporta atualização completa (quantidade e observação)
+- **Delivery**: ✅ Suporta atualização completa (quantidade, observação, receita e complementos)
 - **Mesa**: ❌ **NÃO suporta** atualização parcial de itens. Use remover e adicionar novamente.
 - **Balcão**: ❌ **NÃO suporta** atualização parcial de itens. Use remover e adicionar novamente.
 
@@ -246,6 +270,26 @@ PATCH /api/pedidos/admin/{pedido_id}/itens/{item_id}
   "acao": "UPDATE",
   "quantidade": 2,
   "observacao": "Bem passado"
+}
+```
+
+#### Atualizar Receita com Complementos (Delivery)
+```json
+{
+  "acao": "UPDATE",
+  "quantidade": 1,
+  "receita_id": 1,
+  "complementos": [
+    {
+      "complemento_id": 1,
+      "adicionais": [
+        {
+          "adicional_id": 2,
+          "quantidade": 3
+        }
+      ]
+    }
+  ]
 }
 ```
 
