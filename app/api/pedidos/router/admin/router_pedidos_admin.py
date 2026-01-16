@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import date
 from typing import List, Optional
 
@@ -26,6 +27,7 @@ from app.api.shared.schemas.schema_shared_enums import PedidoStatusEnum, TipoEnt
 from app.api.cadastros.models.user_model import UserModel
 from app.core.admin_dependencies import get_current_user
 
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/api/pedidos/admin",
@@ -275,6 +277,7 @@ def atualizar_item(
     payload: PedidoItemMutationRequest = Body(...),
     svc: PedidoAdminService = Depends(get_pedido_admin_service),
 ):
+    logger.info(f"PATCH /api/pedidos/admin/{pedido_id}/itens/{item_id} - Body: {payload.model_dump()}")
     mutation = PedidoItemMutationRequest(
         **payload.model_dump(exclude={'acao', 'item_id'}),
         acao=PedidoItemMutationAction.UPDATE,
