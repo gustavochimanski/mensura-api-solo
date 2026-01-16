@@ -73,19 +73,6 @@ def fechar_caixa(
     return svc.fechar_caixa(caixa_abertura_id, data, current_user.id)
 
 # ======================================================================
-# ======================= BUSCAR ABERTURA POR ID =======================
-@router.get("/{caixa_abertura_id}", response_model=CaixaAberturaResponse, status_code=status.HTTP_200_OK)
-def get_abertura(
-    caixa_abertura_id: int = Path(..., description="ID da abertura", gt=0),
-    db: Session = Depends(get_db),
-):
-    """
-    Busca uma abertura de caixa específica por ID com todas as informações.
-    """
-    svc = CaixaAberturaService(db)
-    return svc.get_by_id(caixa_abertura_id)
-
-# ======================================================================
 # ===================== BUSCAR ABERTURA ABERTA ========================
 @router.get("/aberto/{empresa_id}", response_model=CaixaAberturaResponse, status_code=status.HTTP_200_OK)
 def get_abertura_aberta(
@@ -109,6 +96,19 @@ def get_abertura_aberta(
         )
     logger.info(f"[CaixaAbertura] Abertura aberta encontrada - abertura_id={abertura.id} empresa_id={empresa_id}")
     return abertura
+
+# ======================================================================
+# ======================= BUSCAR ABERTURA POR ID =======================
+@router.get("/{caixa_abertura_id}", response_model=CaixaAberturaResponse, status_code=status.HTTP_200_OK)
+def get_abertura(
+    caixa_abertura_id: int = Path(..., description="ID da abertura", gt=0),
+    db: Session = Depends(get_db),
+):
+    """
+    Busca uma abertura de caixa específica por ID com todas as informações.
+    """
+    svc = CaixaAberturaService(db)
+    return svc.get_by_id(caixa_abertura_id)
 
 # ======================================================================
 # ========================= LISTAR ABERTURAS ===========================
