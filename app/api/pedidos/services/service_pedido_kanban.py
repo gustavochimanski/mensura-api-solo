@@ -104,7 +104,16 @@ class KanbanService:
         empresa_id: int, 
         limit: int
     ) -> list[PedidoUnificadoModel]:
-        """Busca pedidos de um tipo específico para a data filtrada."""
+        """Busca pedidos de um tipo específico para a data filtrada.
+        
+        Usa a mesma lógica do list_all_kanban do repositório:
+        - Pedidos criados naquele dia (qualquer status)
+        - Pedidos com status E (Entregue/Concluído) atualizados naquele dia
+          (mesmo que tenham sido criados em outro dia)
+        """
+        from sqlalchemy import or_
+        from app.api.shared.schemas.schema_shared_enums import PedidoStatusEnum
+        
         start_dt = dt.combine(date_filter, dt.min.time())
         end_dt = start_dt + timedelta(days=1)
         
@@ -120,13 +129,29 @@ class KanbanService:
                 and_(
                     PedidoUnificadoModel.empresa_id == empresa_id,
                     PedidoUnificadoModel.tipo_entrega == tipo_pedido,
-                    PedidoUnificadoModel.created_at >= start_dt,
-                    PedidoUnificadoModel.created_at < end_dt,
                 )
             )
-            .order_by(PedidoUnificadoModel.created_at.desc())
-            .limit(limit * 2)
         )
+        
+        # Busca pedidos criados naquele dia (qualquer status) OU pedidos com status E atualizados naquele dia
+        # (mesmo que tenham sido criados em outro dia)
+        query = query.filter(
+            or_(
+                # Pedidos criados naquele dia (qualquer status, incluindo E)
+                and_(
+                    PedidoUnificadoModel.created_at >= start_dt,
+                    PedidoUnificadoModel.created_at < end_dt
+                ),
+                # Pedidos com status E atualizados naquele dia (mesmo que criados em outro dia)
+                and_(
+                    PedidoUnificadoModel.status == PedidoStatusEnum.E.value,
+                    PedidoUnificadoModel.updated_at >= start_dt,
+                    PedidoUnificadoModel.updated_at < end_dt
+                )
+            )
+        )
+        
+        query = query.order_by(PedidoUnificadoModel.created_at.desc()).limit(limit * 2)
         
         return query.all()
     
