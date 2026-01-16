@@ -678,6 +678,23 @@ class PedidoAdminService:
                 if not payload.item_id:
                     raise HTTPException(status.HTTP_400_BAD_REQUEST, "item_id é obrigatório para atualizar item.")
                 
+                # Se receita_id ou combo_id vierem no payload, atualiza o item no banco antes de processar
+                # Isso garante que os complementos sejam calculados com base no receita_id/combo_id correto
+                if payload.receita_id is not None or payload.combo_id is not None:
+                    item_db = self.repo.get_item_by_id(payload.item_id)
+                    if not item_db:
+                        raise HTTPException(status.HTTP_404_NOT_FOUND, f"Item {payload.item_id} não encontrado")
+                    if payload.receita_id is not None:
+                        item_db.receita_id = payload.receita_id
+                        item_db.produto_cod_barras = None
+                        item_db.combo_id = None
+                    if payload.combo_id is not None:
+                        item_db.combo_id = payload.combo_id
+                        item_db.produto_cod_barras = None
+                        item_db.receita_id = None
+                    # Não faz commit aqui - será feito no final do atualizar_item_pedido
+                    self.repo.flush()
+                
                 acao_map = {
                     PedidoItemMutationAction.UPDATE: "atualizar",
                 }
@@ -686,6 +703,7 @@ class PedidoAdminService:
                     produto_cod_barras=payload.produto_cod_barras,
                     quantidade=payload.quantidade,
                     observacao=payload.observacao,
+                    complementos=payload.complementos,
                     acao=acao_map[payload.acao],
                 )
                 return self.pedido_service.atualizar_item_pedido(pedido_id, item)
