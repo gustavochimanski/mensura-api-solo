@@ -25,7 +25,6 @@ from app.api.shared.schemas.schema_shared_enums import (
 from app.api.cardapio.schemas.schema_transacao_pagamento import TransacaoResponse
 from app.api.pedidos.services.service_pedido_helpers import build_pagamento_resumo
 from app.api.pedidos.utils.produtos_builder import build_produtos_out_from_items
-from app.api.empresas.schemas.schema_empresa import EmpresaResponse
 
 
 class PedidoResponseBuilder:
@@ -281,7 +280,6 @@ class PedidoResponseBuilder:
                 endereco_selecionado=PedidoResponseBuilder.build_endereco_selecionado(pedido),
                 outros_enderecos=PedidoResponseBuilder.build_outros_enderecos(pedido),
             ),
-            empresa=EmpresaResponse.model_validate(pedido.empresa) if pedido.empresa else None,
             entregador=EntregadorOut.model_validate(pedido.entregador) if pedido.entregador else None,
             meio_pagamento=MeioPagamentoResponse.model_validate(pedido.meio_pagamento) if pedido.meio_pagamento else None,
             cupom=CupomOutComProdutos(

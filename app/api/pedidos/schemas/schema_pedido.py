@@ -28,7 +28,6 @@ class EnderecoPedidoDetalhe(BaseModel):
 from app.api.cadastros.schemas.schema_cupom import CupomOut
 from app.api.cardapio.schemas.schema_transacao_pagamento import TransacaoResponse
 from app.api.pedidos.schemas.schema_pedido_status_historico import PedidoStatusHistoricoOut
-from app.api.empresas.schemas.schema_empresa import EmpresaResponse
 
 
 class CupomOutComProdutos(CupomOut):
@@ -489,7 +488,6 @@ class PedidoResponseCompletoTotal(BaseModel):
     status: PedidoStatusEnum
     cliente: Optional[ClienteOut] = None
     endereco: Optional[EnderecoPedidoDetalhe] = None
-    empresa: Optional[EmpresaResponse] = None
     entregador: Optional[EntregadorOut] = None
     meio_pagamento: Optional[MeioPagamentoResponse] = None
     cupom: Optional["CupomOutComProdutos"] = None
