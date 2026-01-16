@@ -1,7 +1,7 @@
 from typing import List
 from enum import Enum
 
-from fastapi import APIRouter, Depends, Query, HTTPException, status
+from fastapi import APIRouter, Depends, Query, HTTPException, status, Path
 from sqlalchemy.orm import Session
 
 from app.api.catalogo.schemas.schema_complemento import ComplementoResponse

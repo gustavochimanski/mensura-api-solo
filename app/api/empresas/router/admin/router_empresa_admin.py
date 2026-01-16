@@ -80,6 +80,7 @@ async def create_empresa(
     cardapio_tema: str | None = Form("padrao"),
     aceita_pedido_automatico: str | None = Form("false"),
     tempo_entrega_maximo: int = Form(...),
+    pagina_unica: str | None = Form("false"),
     db: Session = Depends(get_db),
 ):
     try:
@@ -105,6 +106,7 @@ async def create_empresa(
         cardapio_tema=cardapio_tema,
         aceita_pedido_automatico = aceita_pedido_automatico.lower() == "true",
         tempo_entrega_maximo=tempo_entrega_maximo,
+        pagina_unica = pagina_unica.lower() == "true" if pagina_unica else False,
         **endereco_data,
     )
     return EmpresaService(db).create_empresa(empresa_data, logo=logo)
@@ -123,6 +125,7 @@ async def update_empresa(
     cardapio_tema: str | None = Form(None),
     aceita_pedido_automatico: str | None = Form(None),
     tempo_entrega_maximo: int | None = Form(None),
+    pagina_unica: str | None = Form(None),
     db: Session = Depends(get_db),
 ):
     slug = make_slug(nome) if nome else None
@@ -151,6 +154,7 @@ async def update_empresa(
         cardapio_tema=cardapio_tema,
         aceita_pedido_automatico = aceita_pedido_automatico.lower() == "true" if aceita_pedido_automatico else None,
         tempo_entrega_maximo=tempo_entrega_maximo,
+        pagina_unica = pagina_unica.lower() == "true" if pagina_unica else None,
         **endereco_payload,
     )
     return EmpresaService(db).update_empresa(id=id, data=empresa_data, logo=logo)

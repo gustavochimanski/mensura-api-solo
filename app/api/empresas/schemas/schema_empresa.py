@@ -38,6 +38,7 @@ class EmpresaBase(BaseModel):
     cardapio_tema: Optional[str] = "padrao"
     aceita_pedido_automatico: bool = False
     tempo_entrega_maximo: int = Field(..., gt=0)
+    pagina_unica: bool = False
 
     cep: Optional[str] = None
     logradouro: Optional[str] = None
@@ -63,6 +64,7 @@ class EmpresaUpdate(BaseModel):
     cardapio_link: Optional[str] = None
     cardapio_tema: Optional[str] = None
     tempo_entrega_maximo: Optional[int] = Field(None, gt=0)
+    pagina_unica: Optional[bool] = None
 
     cep: Optional[str] = None
     logradouro: Optional[str] = None

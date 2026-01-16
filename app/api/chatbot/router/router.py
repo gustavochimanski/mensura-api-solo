@@ -1128,6 +1128,17 @@ async def webhook_handler(request: Request, background_tasks: BackgroundTasks, d
     - Processa mensagens de forma assíncrona em background
     - Processa messages, statuses e errors conforme documentação
     """
+    # PRIMEIRA VERIFICAÇÃO: Status global do bot (antes de qualquer log ou processamento)
+    try:
+        global_status = chatbot_db.get_global_bot_status(db)
+        if not global_status.get("is_active", True):
+            # Bot desligado: retorna OK sem processar nada, apenas um aviso no log
+            print("⚠️ Chatbot desligado - webhook ignorado")
+            return {"status": "ok", "message": "Chatbot desligado"}
+    except Exception as e:
+        # Se falhar ao verificar status, assume que está ligado para não bloquear webhooks
+        pass
+    
     try:
         # Lê o body de forma segura
         try:

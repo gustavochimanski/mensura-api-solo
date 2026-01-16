@@ -34,6 +34,7 @@ class EmpresaModel(Base):
     cardapio_link = Column(String(255), nullable=True, unique=True)
     cardapio_tema = Column(String(50), nullable=True, default="padrao")
     tempo_entrega_maximo = Column(Integer, nullable=False, default=60)  # minutos
+    pagina_unica = Column(Boolean, nullable=False, default=False)
 
     cep = Column(String(10), nullable=True)
     logradouro = Column(String(120), nullable=True)
