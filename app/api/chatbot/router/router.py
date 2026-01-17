@@ -1874,94 +1874,28 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
         else:
             prompt_content = SYSTEM_PROMPT  # fallback para o padrão
 
-        # 5. Prepara mensagens para o Ollama
-        ollama_messages = [
-            {"role": "system", "content": prompt_content}
-        ]
+        # 5. Chama a IA (Groq)
+        from ..core.groq_sales_handler import processar_mensagem_groq
+        empresa_id_int = int(empresa_id) if empresa_id else 1
+        ai_response = await processar_mensagem_groq(
+            db=db,
+            user_id=phone_number,
+            mensagem=message_text,
+            empresa_id=empresa_id_int,
+            emit_welcome_message=False,
+            prompt_key=prompt_key
+        )
 
-        for msg in messages_history:
-            ollama_messages.append({
-                "role": msg['role'],
-                "content": msg['content']
-            })
+        # 6. Envia resposta via WhatsApp
+        notifier = OrderNotification()
+        result = await notifier.send_whatsapp_message(phone_number, ai_response, empresa_id=empresa_id)
 
-        # 6. Chama a IA (Ollama)
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            payload = {
-                "model": model,
-                "messages": ollama_messages,
-                "stream": False,
-                "options": {
-                    "temperature": 0.7,
-                    "top_p": 0.9,
-                    "top_k": 40,
-                }
-            }
-
-            try:
-                response = await client.post(OLLAMA_URL, json=payload)
-            except httpx.RequestError as e:
-                import logging
-                logger = logging.getLogger(__name__)
-                logger.error(f"Erro ao conectar no Ollama: {e}", exc_info=True)
-                fallback_msg = (
-                    "Desculpe, estou com instabilidade no atendimento agora. "
-                    "Pode tentar novamente em instantes? 🙏"
-                )
-                chatbot_db.create_message(
-                    db=db,
-                    conversation_id=conversation_id,
-                    role="assistant",
-                    content=fallback_msg
-                )
-                notifier = OrderNotification()
-                await notifier.send_whatsapp_message(phone_number, fallback_msg, empresa_id=empresa_id)
-                return
-
-            if response.status_code == 200:
-                result = response.json()
-                ai_response = result["message"]["content"]
-
-                # 7. Salva resposta da IA no banco
-                message_id = chatbot_db.create_message(
-                    db=db,
-                    conversation_id=conversation_id,
-                    role="assistant",
-                    content=ai_response
-                )
-
-                # 7.1. Envia notificação WebSocket para atualizar o frontend
-                empresa_id_int = int(empresa_id) if empresa_id else 1
-                from ..core.notifications import send_chatbot_websocket_notification
-                await send_chatbot_websocket_notification(
-                    empresa_id=empresa_id_int,
-                    notification_type="whatsapp_message",
-                    title="Nova Mensagem WhatsApp",
-                    message=f"Nova mensagem recebida de {contact_name or phone_number}",
-                    data={
-                        "conversation_id": conversation_id,
-                        "message_id": message_id,
-                        "phone_number": phone_number,
-                        "contact_name": contact_name,
-                        "role": "assistant",
-                        "content_preview": ai_response[:100] if len(ai_response) > 100 else ai_response
-                    }
-                )
-
-                # 8. Envia resposta via WhatsApp
-                notifier = OrderNotification()
-                result = await notifier.send_whatsapp_message(phone_number, ai_response, empresa_id=empresa_id)
-
-                if not isinstance(result, dict) or not result.get("success"):
-                    import logging
-                    logger = logging.getLogger(__name__)
-                    error_msg = result.get("error") if isinstance(result, dict) else str(result)
-                    status_code = result.get("status_code") if isinstance(result, dict) else None
-                    logger.error(f"Erro ao enviar resposta via WhatsApp: {error_msg} (status_code: {status_code})")
-            else:
-                import logging
-                logger = logging.getLogger(__name__)
-                logger.error(f"Erro na IA: {response.text}")
+        if not isinstance(result, dict) or not result.get("success"):
+            import logging
+            logger = logging.getLogger(__name__)
+            error_msg = result.get("error") if isinstance(result, dict) else str(result)
+            status_code = result.get("status_code") if isinstance(result, dict) else None
+            logger.error(f"Erro ao enviar resposta via WhatsApp: {error_msg} (status_code: {status_code})")
 
     except Exception as e:
         import logging
