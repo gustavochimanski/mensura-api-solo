@@ -1490,8 +1490,8 @@ class PedidoService:
             self.db.commit()
             self.db.refresh(pedido)
             logger.info(f"[vincular_entregador] Entregador {entregador_id} vinculado ao pedido {pedido_id}")
-            if self._status_value(pedido.status) == PedidoStatusEnum.S.value:
-                self._notificar_entregador_rotas(pedido)
+            # Sempre notifica o entregador quando é vinculado, independente do status
+            self._notificar_entregador_rotas(pedido)
             return self._pedido_to_response(pedido)
         except Exception as exc:
             self.db.rollback()
@@ -1701,6 +1701,11 @@ class PedidoService:
                 return
 
             pedidos_em_rota = self.repo.list_pedidos_em_rota_por_entregador(entregador.id)
+            # Garante que o pedido atual está incluído na notificação, mesmo que ainda não esteja com status "S"
+            pedido_ids_em_rota = {p.id for p in pedidos_em_rota}
+            if pedido.id not in pedido_ids_em_rota and pedido.tipo_entrega == TipoEntrega.DELIVERY.value:
+                pedidos_em_rota = list(pedidos_em_rota) + [pedido]
+            
             if not pedidos_em_rota:
                 logger.info(
                     "[Pedidos] Nenhum pedido em rota para o entregador %s no momento",
