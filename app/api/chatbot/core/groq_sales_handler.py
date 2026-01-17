@@ -628,7 +628,13 @@ class GroqSalesHandler:
         # PERGUNTAS DE PREÇO - DEVE vir ANTES da detecção genérica (muito importante!)
         # Detecta: "quanto fica", "quanto custa", "qual o preço", "qual preço", "quanto é"
         if re.search(r'(quanto\s+(fica|custa|é|e)|qual\s+(o\s+)?(pre[cç]o|valor)|pre[cç]o\s+(d[aeo]|de|do)|valor\s+(d[aeo]|de|do))', msg, re.IGNORECASE):
+            print(f"💰 [Regras] Detecção de preço na mensagem: '{msg}'")
             itens_preco = self._extrair_itens_pergunta_preco(mensagem)
+            if itens_preco:
+                resumo_itens = ", ".join(
+                    [f"{i.get('quantidade', 1)}x {i.get('produto_busca', '')}" for i in itens_preco]
+                )
+                print(f"💰 [Regras] Itens extraídos: {resumo_itens}")
             if len(itens_preco) > 1:
                 return {"funcao": "informar_sobre_produtos", "params": {"itens": itens_preco, "pergunta": msg}}
             if len(itens_preco) == 1:
@@ -1091,7 +1097,13 @@ class GroqSalesHandler:
 
         # PERGUNTAS DE PREÇO (inclui múltiplos itens) - prioridade alta
         if re.search(r'(quanto\s+(fica|custa|é|e)|qual\s+(o\s+)?(pre[cç]o|valor)|pre[cç]o\s+(d[aeo]|de|do)|valor\s+(d[aeo]|de|do))', msg_lower, re.IGNORECASE):
+            print(f"💰 [Conversacional] Detecção de preço na mensagem: '{mensagem}'")
             itens_preco = self._extrair_itens_pergunta_preco(mensagem)
+            if itens_preco:
+                resumo_itens = ", ".join(
+                    [f"{i.get('quantidade', 1)}x {i.get('produto_busca', '')}" for i in itens_preco]
+                )
+                print(f"💰 [Conversacional] Itens extraídos: {resumo_itens}")
             if len(itens_preco) > 1:
                 return self._gerar_resposta_preco_itens(itens_preco, todos_produtos)
             if len(itens_preco) == 1:
