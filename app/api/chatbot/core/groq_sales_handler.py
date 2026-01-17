@@ -21,11 +21,25 @@ from .ingredientes_service import (
     detectar_adicao_extra,
     detectar_pergunta_ingredientes
 )
+from app.api.chatbot.services.service_carrinho import CarrinhoService
+from app.api.chatbot.schemas.schema_carrinho import (
+    AdicionarItemCarrinhoRequest,
+    AtualizarItemCarrinhoRequest,
+    RemoverItemCarrinhoRequest,
+    ItemCarrinhoRequest,
+    ReceitaCarrinhoRequest,
+    ComboCarrinhoRequest,
+)
+from app.api.catalogo.adapters.produto_adapter import ProdutoAdapter
+from app.api.catalogo.adapters.complemento_adapter import ComplementoAdapter
+from app.api.catalogo.adapters.receitas_adapter import ReceitasAdapter
+from app.api.catalogo.adapters.combo_adapter import ComboAdapter
 
 # Configuração do Groq - API Key deve ser configurada via variável de ambiente
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 MODEL_NAME = "llama-3.1-8b-instant"  # Modelo menor = mais limite no free tier
+DEFAULT_PROMPT_KEY = "atendimento-pedido-whatsapp"
 
 # Link do cardápio (configurável)
 LINK_CARDAPIO = "https://chatbot.mensuraapi.com.br"
@@ -311,9 +325,10 @@ class GroqSalesHandler:
     Integra fluxo de endereços com Google Maps
     """
 
-    def __init__(self, db: Session, empresa_id: int = 1, emit_welcome_message: bool = True):
+    def __init__(self, db: Session, empresa_id: int = 1, emit_welcome_message: bool = True, prompt_key: str = DEFAULT_PROMPT_KEY):
         self.db = db
         self.empresa_id = empresa_id
+        self.prompt_key = prompt_key
         # Quando True, o handler pode responder com a mensagem longa de boas-vindas.
         # No WhatsApp, preferimos enviar a boas-vindas com botões no router.py (mensagem interativa).
         self.emit_welcome_message = emit_welcome_message
@@ -323,6 +338,7 @@ class GroqSalesHandler:
         self._meios_pagamento_cache = None
         # Carrega configurações do chatbot
         self._config_cache = None
+        self._carrinho_service = None
         self._load_chatbot_config()
 
     def _buscar_meios_pagamento(self) -> List[Dict]:
@@ -556,10 +572,11 @@ class GroqSalesHandler:
             return self._buscar_produto_por_termo(produto_busca_alt, produtos)
         return None
 
-    def _gerar_resposta_preco_itens(self, itens: List[Dict[str, Any]], produtos: List[Dict]) -> str:
+    def _gerar_resposta_preco_itens(self, user_id: str, dados: Dict, itens: List[Dict[str, Any]], produtos: List[Dict]) -> str:
         encontrados = []
         faltando = []
         total = 0.0
+        pendentes = []
 
         for item in itens:
             produto_busca = item.get("produto_busca", "")
@@ -577,8 +594,16 @@ class GroqSalesHandler:
             subtotal = produto["preco"] * quantidade
             total += subtotal
             encontrados.append((quantidade, produto, subtotal))
+            pendentes.append({
+                "id": produto.get("id"),
+                "tipo": produto.get("tipo"),
+                "nome": produto.get("nome"),
+                "preco": produto.get("preco"),
+                "quantidade": quantidade
+            })
 
         if not encontrados:
+            dados.pop("pendente_adicao_itens", None)
             return "❌ Não encontrei esses itens no cardápio 😔\n\nQuer que eu mostre o que temos disponível? 😊"
 
         msg = "💰 *Valores:*\n"
@@ -588,10 +613,17 @@ class GroqSalesHandler:
             else:
                 msg += f"• {produto['nome']} - R$ {produto['preco']:.2f}\n"
 
-        msg += f"\nTotal: R$ {total:.2f}\n\n"
+        carrinho_resp = self._obter_carrinho_db(user_id)
+        total_atual = float(carrinho_resp.valor_total) if carrinho_resp and carrinho_resp.valor_total is not None else 0.0
+        if total_atual > 0:
+            msg += f"\nTotal atual do carrinho: R$ {total_atual:.2f}\n"
+            msg += f"Total com esses itens: R$ {total_atual + total:.2f}\n\n"
+        else:
+            msg += f"\nTotal: R$ {total:.2f}\n\n"
         if faltando:
             msg += f"Obs: não encontrei {', '.join(faltando)} no cardápio.\n\n"
 
+        dados["pendente_adicao_itens"] = pendentes
         msg += "Quer adicionar ao pedido? 😊"
         return msg
 
@@ -1185,6 +1217,7 @@ class GroqSalesHandler:
         estado, dados_atualizados = self._obter_estado_conversa(user_id)
         # Atualiza dados com os mais recentes
         dados.update(dados_atualizados)
+        self._sincronizar_carrinho_dados(user_id, dados)
 
         print(f"💬 [Conversacional] Mensagem recebida (user_id={user_id}): {mensagem}")
         
@@ -1251,7 +1284,9 @@ class GroqSalesHandler:
             else:
                 print("💰 [Conversacional] Nenhum item extraído para preço")
             if len(itens_preco) > 1:
-                return self._gerar_resposta_preco_itens(itens_preco, todos_produtos)
+                resposta_preco = self._gerar_resposta_preco_itens(user_id, dados, itens_preco, todos_produtos)
+                self._salvar_estado_conversa(user_id, estado, dados)
+                return resposta_preco
             if len(itens_preco) == 1:
                 item = itens_preco[0]
                 produto = self._resolver_produto_para_preco(
@@ -1597,6 +1632,7 @@ class GroqSalesHandler:
                             elif acao_personalizar == "adicionar_extra" and item_personalizar:
                                 adicionais.append(item_personalizar)
                         
+                        self._adicionar_ao_carrinho(user_id, dados, produto, quantidade)
                         for _ in range(quantidade):
                             novo_item = {
                                 'id': str(produto['id']),
@@ -1663,7 +1699,9 @@ class GroqSalesHandler:
                 elif funcao == "informar_sobre_produtos":
                     itens = params.get("itens", [])
                     if itens:
-                        return self._gerar_resposta_preco_itens(itens, todos_produtos)
+                        resposta_preco = self._gerar_resposta_preco_itens(user_id, dados, itens, todos_produtos)
+                        self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
+                        return resposta_preco
                     return "Qual produto você quer saber o preço?"
                 elif funcao == "adicionar_produto":
                     produto_busca = params.get("produto_busca", "")
@@ -1677,6 +1715,7 @@ class GroqSalesHandler:
                         return f"❌ Não encontrei *{produto_busca}* no cardápio 😔\n\nQuer que eu mostre o que temos disponível? 😊"
 
                     pedido_contexto = dados.get('pedido_contexto', [])
+                    self._adicionar_ao_carrinho(user_id, dados, produto, quantidade)
                     for _ in range(quantidade):
                         pedido_contexto.append({
                             'id': str(produto['id']),
@@ -1710,6 +1749,7 @@ class GroqSalesHandler:
                             mensagens_resposta.append(f"❌ Não encontrei *{produto_busca}* no cardápio 😔")
                             continue
 
+                        self._adicionar_ao_carrinho(user_id, dados, produto, quantidade)
                         for _ in range(quantidade):
                             pedido_contexto.append({
                                 'id': str(produto['id']),
@@ -3383,38 +3423,106 @@ REGRA PARA COMPLEMENTOS:
 
         return None
 
-    def _adicionar_ao_carrinho(self, dados: Dict, produto: Dict, quantidade: int = 1) -> bool:
-        """
-        Adiciona um produto ao carrinho com suporte a personalizações
-        """
-        carrinho = dados.get('carrinho', [])
+    def _get_carrinho_service(self) -> CarrinhoService:
+        if not self._carrinho_service:
+            self._carrinho_service = CarrinhoService(
+                db=self.db,
+                produto_contract=ProdutoAdapter(self.db),
+                complemento_contract=ComplementoAdapter(self.db),
+                receitas_contract=ReceitasAdapter(self.db),
+                combo_contract=ComboAdapter(self.db),
+            )
+        return self._carrinho_service
 
-        # Verifica se produto já está no carrinho (sem personalizações)
-        for item in carrinho:
-            if item['id'] == produto['id'] and not item.get('personalizacoes'):
-                item['quantidade'] = item.get('quantidade', 1) + quantidade
-                dados['carrinho'] = carrinho
-                print(f"🛒 Quantidade atualizada: {item['nome']} x{item['quantidade']}")
-                return True
+    def _obter_carrinho_db(self, user_id: str):
+        service = self._get_carrinho_service()
+        return service.obter_carrinho(user_id=user_id, empresa_id=self.empresa_id)
 
-        # Adiciona novo item com estrutura para personalizações
-        novo_item = {
-            'id': produto['id'],
-            'nome': produto['nome'],
-            'descricao': produto.get('descricao', ''),
-            'preco': produto['preco'],
-            'quantidade': quantidade,
-            'personalizacoes': {
-                'removidos': [],      # Ingredientes removidos
-                'adicionais': [],     # Adicionais incluídos [{'nome': x, 'preco': y}]
-                'preco_adicionais': 0.0  # Soma dos adicionais
-            }
-        }
-        carrinho.append(novo_item)
-        dados['carrinho'] = carrinho
-        dados['ultimo_produto_adicionado'] = produto['nome']  # Para referência
-        print(f"🛒 Produto adicionado: {produto['nome']} - R$ {produto['preco']:.2f}")
-        return True
+    def _carrinho_response_para_lista(self, carrinho_resp) -> List[Dict]:
+        if not carrinho_resp or not carrinho_resp.itens:
+            return []
+
+        lista = []
+        for item in carrinho_resp.itens:
+            qtd = int(item.quantidade or 1)
+            preco_total = float(item.preco_total or 0)
+            preco_unit = preco_total / qtd if qtd else float(item.preco_unitario or 0)
+            item_id = item.produto_cod_barras
+            if not item_id and item.receita_id:
+                item_id = f"receita_{item.receita_id}"
+            if not item_id and item.combo_id:
+                item_id = f"combo_{item.combo_id}"
+
+            lista.append({
+                "id": item_id or item.id,
+                "nome": item.produto_descricao_snapshot or "Item",
+                "descricao": "",
+                "preco": preco_unit,
+                "quantidade": qtd,
+                "personalizacoes": {
+                    "removidos": [],
+                    "adicionais": [],
+                    "preco_adicionais": 0.0
+                }
+            })
+
+        return lista
+
+    def _sincronizar_carrinho_dados(self, user_id: str, dados: Dict) -> Tuple[Optional[Any], List[Dict]]:
+        carrinho_resp = self._obter_carrinho_db(user_id)
+        carrinho_lista = self._carrinho_response_para_lista(carrinho_resp)
+        dados['carrinho'] = carrinho_lista
+        return carrinho_resp, carrinho_lista
+
+    def _montar_item_carrinho_request(self, produto: Dict, quantidade: int):
+        produto_id = str(produto.get("id", ""))
+        tipo = produto.get("tipo")
+        if tipo == "receita" or produto_id.startswith("receita_"):
+            receita_id = int(produto_id.replace("receita_", ""))
+            return {"receita": ReceitaCarrinhoRequest(receita_id=receita_id, quantidade=quantidade)}
+        if tipo == "combo" or produto_id.startswith("combo_"):
+            combo_id = int(produto_id.replace("combo_", ""))
+            return {"combo": ComboCarrinhoRequest(combo_id=combo_id, quantidade=quantidade)}
+        return {"item": ItemCarrinhoRequest(produto_cod_barras=produto_id, quantidade=quantidade)}
+
+    def _detectar_confirmacao_adicao(self, mensagem: str) -> Optional[bool]:
+        msg = self._normalizar_mensagem(mensagem)
+        if not msg:
+            return None
+        positivos = [
+            "sim", "ok", "pode", "pode adicionar", "adiciona", "adicionar",
+            "claro", "isso", "isso mesmo", "pode sim", "bora", "vamos"
+        ]
+        negativos = [
+            "nao", "não", "cancelar", "cancela", "deixa", "deixa pra la",
+            "deixa pra lá", "não quero", "nao quero"
+        ]
+        if any(p in msg for p in positivos):
+            return True
+        if any(n in msg for n in negativos):
+            return False
+        return None
+
+    def _adicionar_ao_carrinho(self, user_id: str, dados: Dict, produto: Dict, quantidade: int = 1):
+        """
+        Adiciona um produto ao carrinho usando o banco de dados
+        """
+        service = self._get_carrinho_service()
+        tipo_entrega = dados.get("tipo_entrega") or "DELIVERY"
+        service.obter_ou_criar_carrinho(
+            user_id=user_id,
+            empresa_id=self.empresa_id,
+            tipo_entrega=tipo_entrega
+        )
+
+        payload = self._montar_item_carrinho_request(produto, quantidade)
+        request = AdicionarItemCarrinhoRequest(user_id=user_id, **payload)
+        carrinho_resp = service.adicionar_item(request)
+
+        dados['ultimo_produto_adicionado'] = produto.get('nome') or dados.get('ultimo_produto_adicionado')
+        carrinho_resp, carrinho_lista = self._sincronizar_carrinho_dados(user_id, dados)
+        print(f"🛒 Produto adicionado no banco: {produto.get('nome', 'item')}")
+        return carrinho_resp, carrinho_lista
 
     def _personalizar_item_carrinho(
         self,
@@ -3594,30 +3702,46 @@ REGRA PARA COMPLEMENTOS:
 
         return any(frase in msg_lower for frase in frases_carrinho)
 
-    def _remover_do_carrinho(self, dados: Dict, produto: Dict, quantidade: int = None) -> Tuple[bool, str]:
+    def _remover_do_carrinho(self, user_id: str, dados: Dict, produto: Dict, quantidade: int = None) -> Tuple[bool, str, Optional[Any], List[Dict]]:
         """
         Remove um produto do carrinho
         Returns: (sucesso, mensagem)
         """
-        carrinho = dados.get('carrinho', [])
+        service = self._get_carrinho_service()
+        carrinho_resp = self._obter_carrinho_db(user_id)
+        if not carrinho_resp or not carrinho_resp.itens:
+            return False, "Seu carrinho está vazio.", None, []
 
-        for i, item in enumerate(carrinho):
-            if item['id'] == produto['id']:
-                if quantidade is None or quantidade >= item.get('quantidade', 1):
-                    # Remove completamente
-                    nome_removido = item['nome']
-                    carrinho.pop(i)
-                    dados['carrinho'] = carrinho
-                    print(f"🗑️ Produto removido: {nome_removido}")
-                    return True, f"✅ *{nome_removido}* removido do carrinho!"
-                else:
-                    # Reduz quantidade
-                    item['quantidade'] = item.get('quantidade', 1) - quantidade
-                    dados['carrinho'] = carrinho
-                    print(f"🛒 Quantidade reduzida: {item['nome']} x{item['quantidade']}")
-                    return True, f"✅ Reduzi para {item['quantidade']}x *{item['nome']}*"
+        produto_id = str(produto.get("id", ""))
+        tipo = produto.get("tipo")
+        item_alvo = None
 
-        return False, f"Hmm, não encontrei *{produto['nome']}* no seu carrinho 🤔"
+        if tipo == "receita" or produto_id.startswith("receita_"):
+            receita_id = int(produto_id.replace("receita_", ""))
+            item_alvo = next((i for i in carrinho_resp.itens if i.receita_id == receita_id), None)
+        elif tipo == "combo" or produto_id.startswith("combo_"):
+            combo_id = int(produto_id.replace("combo_", ""))
+            item_alvo = next((i for i in carrinho_resp.itens if i.combo_id == combo_id), None)
+        else:
+            item_alvo = next((i for i in carrinho_resp.itens if i.produto_cod_barras == produto_id), None)
+
+        if not item_alvo:
+            carrinho_lista = self._carrinho_response_para_lista(carrinho_resp)
+            return False, f"Hmm, não encontrei *{produto.get('nome', produto_id)}* no seu carrinho 🤔", carrinho_resp, carrinho_lista
+
+        if quantidade is None or quantidade >= item_alvo.quantidade:
+            service.remover_item(user_id, RemoverItemCarrinhoRequest(item_id=item_alvo.id))
+            nome_removido = item_alvo.produto_descricao_snapshot or produto.get('nome', 'item')
+            carrinho_resp, carrinho_lista = self._sincronizar_carrinho_dados(user_id, dados)
+            print(f"🗑️ Produto removido no banco: {nome_removido}")
+            return True, f"✅ *{nome_removido}* removido do carrinho!", carrinho_resp, carrinho_lista
+
+        nova_qtd = max(int(item_alvo.quantidade or 1) - quantidade, 1)
+        service.atualizar_item(user_id, AtualizarItemCarrinhoRequest(item_id=item_alvo.id, quantidade=nova_qtd))
+        nome_item = item_alvo.produto_descricao_snapshot or produto.get('nome', 'item')
+        carrinho_resp, carrinho_lista = self._sincronizar_carrinho_dados(user_id, dados)
+        print(f"🛒 Quantidade reduzida no banco: {nome_item} x{nova_qtd}")
+        return True, f"✅ Reduzi para {nova_qtd}x *{nome_item}*", carrinho_resp, carrinho_lista
 
     def _formatar_carrinho(self, carrinho: List[Dict]) -> str:
         """Formata o carrinho para exibição, incluindo personalizações"""
@@ -3919,7 +4043,7 @@ REGRA PARA COMPLEMENTOS:
                     INSERT INTO chatbot.conversations
                     (session_id, user_id, empresa_id, model, prompt_key, metadata, created_at, updated_at)
                     VALUES
-                    (:session_id, :user_id, :empresa_id, 'llama-3.1-8b-instant', 'default',
+                    (:session_id, :user_id, :empresa_id, 'llama-3.1-8b-instant', :prompt_key,
                      jsonb_build_object('sales_state', CAST(:estado AS text), 'sales_data', CAST(:dados AS jsonb)),
                      CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 """)
@@ -3929,7 +4053,8 @@ REGRA PARA COMPLEMENTOS:
                     "user_id": user_id,
                     "empresa_id": self.empresa_id,
                     "estado": estado,
-                    "dados": dados_json
+                    "dados": dados_json,
+                    "prompt_key": self.prompt_key
                 })
                 print(f"📝 Nova conversa criada para {user_id}")
 
@@ -5300,6 +5425,35 @@ Responda de forma natural e curta:"""
             print(f"💬 Mensagem recebida (user_id={user_id}): {mensagem}")
             msg_lower = (mensagem or "").lower()
 
+            pendentes_adicao = dados.get("pendente_adicao_itens") or []
+            if pendentes_adicao:
+                decisao_adicao = self._detectar_confirmacao_adicao(mensagem)
+                if decisao_adicao is True:
+                    itens_adicionados = []
+                    carrinho_resp = None
+                    for item in pendentes_adicao:
+                        produto = {
+                            "id": item.get("id"),
+                            "tipo": item.get("tipo"),
+                            "nome": item.get("nome"),
+                            "preco": item.get("preco")
+                        }
+                        quantidade = int(item.get("quantidade", 1) or 1)
+                        carrinho_resp, _ = self._adicionar_ao_carrinho(user_id, dados, produto, quantidade)
+                        itens_adicionados.append(f"{quantidade}x {produto.get('nome', 'item')}")
+
+                    dados.pop("pendente_adicao_itens", None)
+                    self._salvar_estado_conversa(user_id, STATE_AGUARDANDO_PEDIDO, dados)
+                    total_final = float(carrinho_resp.valor_total) if carrinho_resp and carrinho_resp.valor_total is not None else 0.0
+                    itens_txt = ", ".join(itens_adicionados)
+                    return f"✅ Adicionei {itens_txt} ao carrinho!\n\n💰 *Total agora: R$ {total_final:.2f}*\n\nMais alguma coisa? 😊"
+                if decisao_adicao is False:
+                    dados.pop("pendente_adicao_itens", None)
+                    self._salvar_estado_conversa(user_id, estado, dados)
+                    return "Sem problemas! Quer mais alguma coisa? 😊"
+
+            self._sincronizar_carrinho_dados(user_id, dados)
+
             # ========== PERGUNTAS DE PREÇO (EVITA ADICIONAR PRODUTO) ==========
             if re.search(r'(quanto\s+(que\s+)?(fica|custa|é|e)|qual\s+(o\s+)?(pre[cç]o|valor)|pre[cç]o\s+(d[aeo]|de|do)|valor\s+(d[aeo]|de|do))', msg_lower, re.IGNORECASE):
                 if estado in [
@@ -5312,7 +5466,9 @@ Responda de forma natural e curta:"""
                     todos_produtos = self._buscar_todos_produtos()
                     itens_preco = self._extrair_itens_pergunta_preco(mensagem)
                     if len(itens_preco) > 1:
-                        return self._gerar_resposta_preco_itens(itens_preco, todos_produtos)
+                        resposta_preco = self._gerar_resposta_preco_itens(user_id, dados, itens_preco, todos_produtos)
+                        self._salvar_estado_conversa(user_id, estado, dados)
+                        return resposta_preco
                     if len(itens_preco) == 1:
                         item = itens_preco[0]
                         produto = self._resolver_produto_para_preco(
@@ -5519,7 +5675,7 @@ Responda de forma natural e curta:"""
                 )
 
                 if produto:
-                    self._adicionar_ao_carrinho(dados, produto, quantidade)
+                    carrinho_resp, carrinho = self._adicionar_ao_carrinho(user_id, dados, produto, quantidade)
                     self._salvar_estado_conversa(user_id, STATE_AGUARDANDO_PEDIDO, dados)
                     print(f"🛒 Carrinho atual: {dados.get('carrinho', [])}")
 
@@ -5537,8 +5693,10 @@ Responda de forma natural e curta:"""
                             self._salvar_estado_conversa(user_id, STATE_AGUARDANDO_PEDIDO, dados)
                             print(f"   ✅ Personalização aplicada: {msg_personalizacao}")
 
-                    carrinho = dados.get('carrinho', [])
-                    total = sum(item['preco'] * item.get('quantidade', 1) for item in carrinho)
+                    carrinho = carrinho or dados.get('carrinho', [])
+                    total = float(carrinho_resp.valor_total) if carrinho_resp and carrinho_resp.valor_total is not None else sum(
+                        item['preco'] * item.get('quantidade', 1) for item in carrinho
+                    )
 
                     # Monta mensagem de confirmação bonita e dinâmica
                     import random
@@ -5624,6 +5782,7 @@ Responda de forma natural e curta:"""
                     return "O que você gostaria de pedir?"
 
                 mensagens_resposta = []
+                carrinho_resp = None
                 for item in itens:
                     produto_busca = item.get("produto_busca", "")
                     produto_busca_alt = item.get("produto_busca_alt", "")
@@ -5636,7 +5795,7 @@ Responda de forma natural e curta:"""
                         mensagens_resposta.append(f"❌ Não encontrei *{produto_busca}* no cardápio 😔")
                         continue
 
-                    self._adicionar_ao_carrinho(dados, produto, quantidade)
+                    carrinho_resp, _ = self._adicionar_ao_carrinho(user_id, dados, produto, quantidade)
                     mensagens_resposta.append(f"✅ Adicionei {quantidade}x *{produto['nome']}* ao pedido!")
 
                 self._salvar_estado_conversa(user_id, STATE_AGUARDANDO_PEDIDO, dados)
@@ -5650,19 +5809,22 @@ Responda de forma natural e curta:"""
                 produto = self._buscar_produto_por_termo(produto_busca, todos_produtos)
 
                 if produto:
-                    sucesso, msg_remocao = self._remover_do_carrinho(dados, produto)
+                    sucesso, msg_remocao, carrinho_resp, carrinho_lista = self._remover_do_carrinho(user_id, dados, produto)
                     self._salvar_estado_conversa(user_id, STATE_AGUARDANDO_PEDIDO, dados)
 
-                    carrinho = dados.get('carrinho', [])
-                    if carrinho:
-                        total = sum(item['preco'] * item.get('quantidade', 1) for item in carrinho)
+                    carrinho = carrinho_lista or dados.get('carrinho', [])
+                    if sucesso and carrinho:
+                        total = float(carrinho_resp.valor_total) if carrinho_resp and carrinho_resp.valor_total is not None else sum(
+                            item['preco'] * item.get('quantidade', 1) for item in carrinho
+                        )
                         msg_remocao = "✅ *Produto removido!*\n"
                         msg_remocao += "━━━━━━━━━━━━━━━━━━━━\n\n"
                         msg_remocao += f"💰 *Total agora: R$ {total:.2f}*\n\n"
                         msg_remocao += "💬 Quer adicionar mais alguma coisa? 😊"
                         return msg_remocao
-                    else:
+                    if sucesso:
                         return "✅ *Produto removido!*\n\n🛒 Seu carrinho está vazio agora.\n\nO que você gostaria de pedir? 😊"
+                    return msg_remocao
                 else:
                     return f"❌ Não encontrei *{produto_busca}* no seu pedido 🤔\n\nQuer ver o que tem no carrinho?"
 
@@ -5711,7 +5873,9 @@ Responda de forma natural e curta:"""
             elif funcao == "informar_sobre_produtos":
                 itens = params.get("itens", [])
                 if itens:
-                    return self._gerar_resposta_preco_itens(itens, todos_produtos)
+                    resposta_preco = self._gerar_resposta_preco_itens(user_id, dados, itens, todos_produtos)
+                    self._salvar_estado_conversa(user_id, estado, dados)
+                    return resposta_preco
                 return "Qual produto você quer saber o preço?"
 
             # PERSONALIZAR PRODUTO (remover ingrediente ou adicionar extra)
@@ -5814,7 +5978,8 @@ async def processar_mensagem_groq(
     user_id: str,
     mensagem: str,
     empresa_id: int = 1,
-    emit_welcome_message: bool = True
+    emit_welcome_message: bool = True,
+    prompt_key: str = DEFAULT_PROMPT_KEY
 ) -> str:
     """
     Processa mensagem usando Groq API com LLaMA 3.1
@@ -5834,7 +5999,7 @@ async def processar_mensagem_groq(
             db=db,
             session_id=f"whatsapp_{user_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
             user_id=user_id,
-            prompt_key="default",
+            prompt_key=prompt_key,
             model="groq-sales",
             empresa_id=empresa_id
         )
@@ -5864,7 +6029,7 @@ async def processar_mensagem_groq(
         print(f"   ⚠️ Erro ao enviar notificação WebSocket (user): {e}")
 
     # 3. Processa mensagem com o handler
-    handler = GroqSalesHandler(db, empresa_id, emit_welcome_message=emit_welcome_message)
+    handler = GroqSalesHandler(db, empresa_id, emit_welcome_message=emit_welcome_message, prompt_key=prompt_key)
     resposta = await handler.processar_mensagem(user_id, mensagem)
 
     # 4. Salva resposta do bot no banco

@@ -11,6 +11,7 @@ import httpx
 import json
 import uuid
 from datetime import datetime, timedelta
+import re
 
 from app.database.db_connection import get_db
 from ..core import database as chatbot_db
@@ -18,6 +19,7 @@ from ..core.notifications import OrderNotification
 from ..core.groq_sales_handler import GroqSalesHandler
 from app.api.notifications.repositories.whatsapp_config_repository import WhatsAppConfigRepository
 from app.api.empresas.repositories.empresa_repo import EmpresaRepository
+from app.api.chatbot.repositories.repo_chatbot_config import ChatbotConfigRepository
 
 # Import ngrok functions optionally (pyngrok may not be installed)
 try:
@@ -64,6 +66,99 @@ Tom de conversa:
 - Usa emojis ocasionalmente (mas com moderação)
 
 Lembre-se: você é Alex, um humano real ajudando outro humano. Seja genuíno!"""
+
+# Chaves de prompts para separar agentes
+PROMPT_ATENDIMENTO = "atendimento"
+PROMPT_ATENDIMENTO_PEDIDO_WHATSAPP = "atendimento-pedido-whatsapp"
+
+# Termos simples para detectar tentativa de pedido
+PEDIDO_INTENT_TERMS = [
+    "quero",
+    "pedir",
+    "pedido",
+    "fazer pedido",
+    "adicionar",
+    "me ve",
+    "me vê",
+    "me da",
+    "me dá",
+    "manda",
+    "vou querer",
+    "vou pedir",
+    "finalizar",
+    "fechar",
+    "só isso",
+    "pode fechar",
+]
+
+
+def _is_pedido_intent(message_text: Optional[str]) -> bool:
+    if not message_text:
+        return False
+    msg = message_text.lower().strip()
+    if not msg:
+        return False
+    if any(term in msg for term in PEDIDO_INTENT_TERMS):
+        return True
+    # Padrões como "1 x-bacon", "2 pizzas", "3 coca"
+    return bool(re.match(r"^\d+\s*(x\s*)?\w+", msg))
+
+
+def _montar_mensagem_redirecionamento(db: Session, empresa_id: int, config) -> str:
+    link_cardapio = "https://chatbot.mensuraapi.com.br"
+    try:
+        empresa_query = text("""
+            SELECT nome, cardapio_link
+            FROM cadastros.empresas
+            WHERE id = :empresa_id
+        """)
+        result_empresa = db.execute(empresa_query, {"empresa_id": empresa_id})
+        empresa = result_empresa.fetchone()
+        link_cardapio = empresa[1] if empresa and empresa[1] else link_cardapio
+    except Exception:
+        pass
+
+    if config and config.mensagem_redirecionamento:
+        return config.mensagem_redirecionamento.replace("{link_cardapio}", link_cardapio)
+    return (
+        "📲 Para fazer seu pedido, acesse nosso cardápio completo pelo link:\n\n"
+        f"👉 {link_cardapio}\n\nDepois é só fazer seu pedido pelo site! 😊"
+    )
+
+
+async def _send_whatsapp_and_log(
+    db: Session,
+    phone_number: str,
+    contact_name: Optional[str],
+    empresa_id: str,
+    empresa_id_int: int,
+    user_message: str,
+    response_message: str,
+    prompt_key: str,
+    model: str,
+    message_id: Optional[str] = None,
+):
+    notifier = OrderNotification()
+    result = await notifier.send_whatsapp_message(phone_number, response_message, empresa_id=empresa_id)
+
+    if isinstance(result, dict) and result.get("success"):
+        conversations = chatbot_db.get_conversations_by_user(db, phone_number, empresa_id_int)
+        if conversations:
+            conversation_id = conversations[0]["id"]
+        else:
+            conversation_id = chatbot_db.create_conversation(
+                db=db,
+                session_id=f"whatsapp_{phone_number}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                user_id=phone_number,
+                prompt_key=prompt_key,
+                model=model,
+                contact_name=contact_name,
+                empresa_id=empresa_id_int
+            )
+        chatbot_db.create_message(db, conversation_id, "user", user_message, whatsapp_message_id=message_id)
+        chatbot_db.create_message(db, conversation_id, "assistant", response_message)
+
+    return result
 
 # Router
 router = APIRouter(
@@ -1367,6 +1462,13 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 if duplicate:
                     return  # Ignora mensagem duplicada
 
+        # CARREGA CONFIGURAÇÃO DO CHATBOT (para separar agentes)
+        repo_config = ChatbotConfigRepository(db)
+        config = repo_config.get_by_empresa_id(empresa_id_int)
+        aceita_pedidos_whatsapp = not (config and config.aceita_pedidos_whatsapp is False)
+        prompt_key_sales = PROMPT_ATENDIMENTO_PEDIDO_WHATSAPP
+        prompt_key_support = PROMPT_ATENDIMENTO
+
         # VERIFICA SE A LOJA ESTÁ ABERTA
         esta_aberta = None  # Variável para verificar depois se precisa enviar boas-vindas
         try:
@@ -1389,6 +1491,8 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 
                 # Se a loja estiver fechada (False), envia mensagem com horários
                 if esta_aberta is False:
+                    prompt_key_em_uso = prompt_key_sales if aceita_pedidos_whatsapp else prompt_key_support
+                    model_em_uso = "groq-sales" if aceita_pedidos_whatsapp else DEFAULT_MODEL
                     
                     # Salva a mensagem do usuário no histórico
                     if conversations:
@@ -1399,8 +1503,8 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                             db=db,
                             session_id=f"whatsapp_{user_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
                             user_id=user_id,
-                            prompt_key="default",
-                            model="groq-sales",
+                            prompt_key=prompt_key_em_uso,
+                            model=model_em_uso,
                             contact_name=contact_name,
                             empresa_id=empresa_id_int
                         )
@@ -1465,12 +1569,14 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                     chatbot_db.update_conversation_contact_name(db, conversations[0]['id'], contact_name)
             else:
                 # Cria conversa temporária para salvar a mensagem mesmo com bot pausado
+                prompt_key_em_uso = prompt_key_sales if aceita_pedidos_whatsapp else prompt_key_support
+                model_em_uso = "groq-sales" if aceita_pedidos_whatsapp else DEFAULT_MODEL
                 conversation_id = chatbot_db.create_conversation(
                     db=db,
                     session_id=f"whatsapp_{user_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
                     user_id=user_id,
-                    prompt_key="default",
-                    model="groq-sales",
+                    prompt_key=prompt_key_em_uso,
+                    model=model_em_uso,
                     contact_name=contact_name,
                     empresa_id=empresa_id_int
                 )
@@ -1484,7 +1590,24 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
 
         # OPÇÃO: Usar SalesHandler para conversas de vendas
         # Você pode adicionar lógica para detectar se é venda ou suporte
-        USE_SALES_HANDLER = True  # Usar SalesHandler com produtos reais
+        USE_SALES_HANDLER = aceita_pedidos_whatsapp  # Só usa vendas se permitido
+
+        # Se não aceita pedidos pelo WhatsApp, intercepta tentativas de pedido
+        if not aceita_pedidos_whatsapp and (button_id == "pedir_whatsapp" or _is_pedido_intent(message_text)):
+            resposta = _montar_mensagem_redirecionamento(db, empresa_id_int, config)
+            await _send_whatsapp_and_log(
+                db=db,
+                phone_number=phone_number,
+                contact_name=contact_name,
+                empresa_id=empresa_id,
+                empresa_id_int=empresa_id_int,
+                user_message=message_text,
+                response_message=resposta,
+                prompt_key=prompt_key_support,
+                model=DEFAULT_MODEL,
+                message_id=message_id
+            )
+            return
 
         if USE_SALES_HANDLER:
             # IMPORTANTE: "nova conversa" = sem histórico OU inatividade > 16 horas.
@@ -1506,7 +1629,7 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                     db=db,
                     session_id=f"whatsapp_{phone_number}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
                     user_id=user_id,
-                    prompt_key="default",
+                    prompt_key=prompt_key_sales,
                     model="llm-sales",
                     contact_name=contact_name,
                     empresa_id=empresa_id_int
@@ -1541,15 +1664,15 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
             # Se esta_aberta for False, não envia boas-vindas (já foi enviada mensagem de horários)
             if is_new_session and esta_aberta is not False:
                 # Mensagem "antiga" de boas-vindas (com nome/link) + botões
-                handler = GroqSalesHandler(db, empresa_id_int)
+                handler = GroqSalesHandler(db, empresa_id_int, prompt_key=prompt_key_sales)
                 mensagem_boas_vindas = handler._gerar_mensagem_boas_vindas_conversacional()
                 
                 # Define os botões
-                buttons = [
-                    {"id": "pedir_whatsapp", "title": "Pedir pelo WhatsApp"},
-                    {"id": "pedir_link", "title": "Pedir pelo link"},
-                    {"id": "preciso_ajuda", "title": "Preciso de ajuda"}
-                ]
+                buttons = []
+                if aceita_pedidos_whatsapp:
+                    buttons.append({"id": "pedir_whatsapp", "title": "Pedir pelo WhatsApp"})
+                buttons.append({"id": "pedir_link", "title": "Pedir pelo link"})
+                buttons.append({"id": "preciso_ajuda", "title": "Atendimento"})
                 
                 # Envia mensagem com botões (WhatsApp exige um corpo de texto)
                 notifier = OrderNotification()
@@ -1581,7 +1704,7 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 botao_clicado = "pedir_whatsapp"
             elif "pedir pelo link" in mensagem_lower or mensagem_lower == "pedir pelo link":
                 botao_clicado = "pedir_link"
-            elif "preciso de ajuda" in mensagem_lower or mensagem_lower == "preciso de ajuda":
+            elif "preciso de ajuda" in mensagem_lower or mensagem_lower == "preciso de ajuda" or "atendimento" in mensagem_lower:
                 botao_clicado = "preciso_ajuda"
             
             # Se for clique em botão, processa a resposta
@@ -1589,10 +1712,6 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 print(f"   🔘 Botão clicado: {botao_clicado}")
                 if botao_clicado == "pedir_whatsapp":
                     # VERIFICA SE ACEITA PEDIDOS PELO WHATSAPP
-                    from app.api.chatbot.repositories.repo_chatbot_config import ChatbotConfigRepository
-                    repo_config = ChatbotConfigRepository(db)
-                    config = repo_config.get_by_empresa_id(empresa_id_int)
-                    
                     if config and not config.aceita_pedidos_whatsapp:
                         # Não aceita pedidos - redireciona para cardápio
                         try:
@@ -1646,7 +1765,7 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                             db=db,
                             session_id=f"whatsapp_{phone_number}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
                             user_id=phone_number,
-                            prompt_key="default",
+                            prompt_key=prompt_key_sales,
                             model="llm-sales",
                             contact_name=contact_name,
                             empresa_id=empresa_id_int
@@ -1668,7 +1787,8 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 user_id=phone_number,
                 mensagem=message_text,
                 empresa_id=int(empresa_id) if empresa_id else 1,
-                emit_welcome_message=False
+                emit_welcome_message=False,
+                prompt_key=prompt_key_sales
             )
             
             # Verifica se a resposta não está vazia
@@ -1706,6 +1826,18 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
             # Se a conversa for de notificação, atualiza para modelo normal
             if conversation['model'] == 'notification-system':
                 chatbot_db.update_conversation_model(db, conversation_id, DEFAULT_MODEL)
+            # Garante prompt de atendimento quando pedidos no WhatsApp estão desativados
+            if conversation.get('prompt_key') != prompt_key_support:
+                update_prompt_query = text("""
+                    UPDATE chatbot.conversations
+                    SET prompt_key = :prompt_key, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = :conversation_id
+                """)
+                db.execute(update_prompt_query, {
+                    "prompt_key": prompt_key_support,
+                    "conversation_id": conversation_id
+                })
+                db.commit()
         else:
             # Cria nova conversa
             empresa_id_int = int(empresa_id) if empresa_id else 1
@@ -1713,7 +1845,7 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 db=db,
                 session_id=f"whatsapp_{phone_number}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
                 user_id=user_id,
-                prompt_key="default",
+                prompt_key=prompt_key_support,
                 model=DEFAULT_MODEL,
                 empresa_id=empresa_id_int
             )
@@ -2207,7 +2339,7 @@ async def simulate_chatbot_message(
                 db=db,
                 session_id=f"simulate_{phone_number}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
                 user_id=user_id,
-                prompt_key="default",
+                prompt_key=PROMPT_ATENDIMENTO_PEDIDO_WHATSAPP,
                 model="llm-sales"
             )
             print(f"   ✅ Nova conversa criada: {conversation_id}")
@@ -2220,7 +2352,8 @@ async def simulate_chatbot_message(
             db=db,
             user_id=phone_number,
             mensagem=message_text,
-            empresa_id=1
+            empresa_id=1,
+            prompt_key=PROMPT_ATENDIMENTO_PEDIDO_WHATSAPP
         )
 
         print(f"   💬 Resposta: {resposta[:100]}...")
