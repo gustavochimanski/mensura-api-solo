@@ -746,6 +746,17 @@ class PedidoAdminService:
                 self.mesa_service.adicionar_produto_generico(pedido_id, body)
                 pedido_atualizado = self.repo.get_pedido(pedido_id)
                 return self._build_pedido_response(pedido_atualizado)
+            elif payload.acao == PedidoItemMutationAction.UPDATE:
+                # Agora suporta atualização de itens em pedidos de mesa
+                if not payload.item_id:
+                    raise HTTPException(status.HTTP_400_BAD_REQUEST, "item_id é obrigatório para atualizar item.")
+                return self.mesa_service.atualizar_item(
+                    pedido_id=pedido_id,
+                    item_id=payload.item_id,
+                    quantidade=payload.quantidade,
+                    observacao=payload.observacao,
+                    complementos=payload.complementos,
+                )
             elif payload.acao == PedidoItemMutationAction.REMOVE:
                 if not payload.item_id:
                     raise HTTPException(status.HTTP_400_BAD_REQUEST, "item_id é obrigatório para remover item.")
@@ -753,7 +764,7 @@ class PedidoAdminService:
                 pedido_atualizado = self.repo.get_pedido(pedido_id)
                 return self._build_pedido_response(pedido_atualizado)
             else:
-                raise HTTPException(status.HTTP_400_BAD_REQUEST, "Atualização parcial de itens não suportada para mesa.")
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Ação '{payload.acao}' não suportada para mesa.")
 
         if tipo == TipoEntregaEnum.BALCAO:
             if payload.acao == PedidoItemMutationAction.ADD:
