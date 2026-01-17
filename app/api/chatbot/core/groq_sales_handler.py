@@ -1746,6 +1746,31 @@ class GroqSalesHandler:
                     resposta_final += "\n\nMais alguma coisa? 😊"
                     return resposta_final
                 elif funcao == "ver_cardapio":
+                    # VERIFICA SE ACEITA PEDIDOS PELO WHATSAPP
+                    config = self._get_chatbot_config()
+                    if config and not config.aceita_pedidos_whatsapp:
+                        # Não aceita pedidos - retorna link do cardápio em vez de listar produtos
+                        try:
+                            empresa_query = text("""
+                                SELECT nome, cardapio_link
+                                FROM cadastros.empresas
+                                WHERE id = :empresa_id
+                            """)
+                            result = self.db.execute(empresa_query, {"empresa_id": self.empresa_id})
+                            empresa = result.fetchone()
+                            link_cardapio = empresa[1] if empresa and empresa[1] else LINK_CARDAPIO
+                        except Exception as e:
+                            print(f"⚠️ Erro ao buscar link do cardápio: {e}")
+                            link_cardapio = LINK_CARDAPIO
+                        
+                        # Retorna mensagem com link do cardápio
+                        if config.mensagem_redirecionamento:
+                            resposta = config.mensagem_redirecionamento.replace("{link_cardapio}", link_cardapio)
+                        else:
+                            resposta = f"📲 Para ver nosso cardápio completo e fazer seu pedido, acesse pelo link:\n\n👉 {link_cardapio}\n\nDepois é só fazer seu pedido pelo site! 😊"
+                        return resposta
+                    
+                    # Se aceita pedidos, mostra a lista normalmente
                     pedido_contexto = dados.get('pedido_contexto', [])
                     return self._gerar_lista_produtos(todos_produtos, pedido_contexto)
                 elif funcao == "ver_carrinho":
@@ -5895,6 +5920,31 @@ Responda de forma natural e curta:"""
             # VER CARDÁPIO
             elif funcao == "ver_cardapio":
                 print("📋 Cliente pediu para ver o cardápio")
+                # VERIFICA SE ACEITA PEDIDOS PELO WHATSAPP
+                config = self._get_chatbot_config()
+                if config and not config.aceita_pedidos_whatsapp:
+                    # Não aceita pedidos - retorna link do cardápio em vez de listar produtos
+                    try:
+                        empresa_query = text("""
+                            SELECT nome, cardapio_link
+                            FROM cadastros.empresas
+                            WHERE id = :empresa_id
+                        """)
+                        result = self.db.execute(empresa_query, {"empresa_id": self.empresa_id})
+                        empresa = result.fetchone()
+                        link_cardapio = empresa[1] if empresa and empresa[1] else LINK_CARDAPIO
+                    except Exception as e:
+                        print(f"⚠️ Erro ao buscar link do cardápio: {e}")
+                        link_cardapio = LINK_CARDAPIO
+                    
+                    # Retorna mensagem com link do cardápio
+                    if config.mensagem_redirecionamento:
+                        resposta = config.mensagem_redirecionamento.replace("{link_cardapio}", link_cardapio)
+                    else:
+                        resposta = f"📲 Para ver nosso cardápio completo e fazer seu pedido, acesse pelo link:\n\n👉 {link_cardapio}\n\nDepois é só fazer seu pedido pelo site! 😊"
+                    return resposta
+                
+                # Se aceita pedidos, mostra a lista normalmente
                 return self._gerar_lista_produtos(todos_produtos, carrinho)
 
             # VER CARRINHO
