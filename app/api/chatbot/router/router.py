@@ -1468,6 +1468,7 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 print(f"   ℹ️ Mensagem curta sem message_id - permitindo processamento (pode ser resposta legítima repetida)")
 
         # VERIFICA SE A LOJA ESTÁ ABERTA
+        esta_aberta = None  # Variável para verificar depois se precisa enviar boas-vindas
         try:
             from app.api.empresas.models.empresa_model import EmpresaModel
             from app.utils.horarios_funcionamento import empresa_esta_aberta_agora, formatar_horarios_funcionamento_mensagem
@@ -1644,6 +1645,7 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
             from ..core.groq_sales_handler import processar_mensagem_groq
 
             # Verifica se é a primeira mensagem (conversa nova ou sem mensagens anteriores)
+            # IMPORTANTE: Não envia boas-vindas se a loja estiver fechada
             empresa_id_int = int(empresa_id) if empresa_id else 1
             is_first_message = False
             if not conversations:
@@ -1655,8 +1657,9 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 # Se só tem a mensagem atual (ou nenhuma), é primeira mensagem
                 is_first_message = len(messages) <= 1
 
-            # Se for primeira mensagem, envia mensagem com botões
-            if is_first_message:
+            # Se for primeira mensagem E a loja estiver aberta (ou horários não configurados), envia mensagem com botões
+            # Se esta_aberta for False, não envia boas-vindas (já foi enviada mensagem de horários)
+            if is_first_message and esta_aberta is not False:
                 print(f"   🎯 Primeira mensagem detectada - enviando mensagem com botões")
                 handler = GroqSalesHandler(db, empresa_id_int)
                 mensagem_boas_vindas = handler._gerar_mensagem_boas_vindas_conversacional()
