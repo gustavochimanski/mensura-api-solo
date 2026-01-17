@@ -718,6 +718,52 @@ class GroqSalesHandler:
 
         return itens
 
+    async def _extrair_endereco_com_ia(self, mensagem: str) -> str:
+        """
+        Extrai endereço de uma mensagem de forma heurística.
+        Mantém o nome original por compatibilidade com chamadas existentes.
+        """
+        if not mensagem:
+            return ""
+
+        texto = re.sub(r"\s+", " ", mensagem).strip()
+        if not texto:
+            return ""
+
+        texto_limpo = re.sub(
+            r"^(voc[eê]s?\s+)?(entregam|entrega|fazem\s+entrega|faz\s+entrega|tem\s+entrega)\s*(na|no|em|para|pra)?\s*",
+            "",
+            texto,
+            flags=re.IGNORECASE
+        ).strip()
+
+        def _limpar_fim(valor: str) -> str:
+            return re.sub(r"[?!.,;:\s]+$", "", valor).strip()
+
+        padrao_rua = r"(?:rua|r\.|avenida|av\.|travessa|tv\.|alameda|rodovia|estrada|pra[cç]a|loteamento|quadra|qd\.|q\.)"
+
+        match_preposicao = re.search(
+            rf"\b(?:na|no|em|para|pra)\s+({padrao_rua}\s+[^,;!?]+)",
+            texto,
+            flags=re.IGNORECASE
+        )
+        if match_preposicao:
+            return _limpar_fim(match_preposicao.group(1))
+
+        match_rua = re.search(
+            rf"\b({padrao_rua}\s+[^,;!?]+)",
+            texto_limpo,
+            flags=re.IGNORECASE
+        )
+        if match_rua:
+            return _limpar_fim(match_rua.group(1))
+
+        # Fallback: usa o texto restante se parecer endereço (tem número ou CEP)
+        if re.search(r"\d{3,}", texto_limpo):
+            return _limpar_fim(texto_limpo)
+
+        return ""
+
     def _extrair_itens_pedido(self, mensagem: str) -> List[Dict[str, Any]]:
         """
         Extrai itens e quantidades de pedidos com múltiplos produtos.
