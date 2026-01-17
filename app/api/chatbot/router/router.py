@@ -1661,8 +1661,6 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
             # Se esta_aberta for False, não envia boas-vindas (já foi enviada mensagem de horários)
             if is_first_message and esta_aberta is not False:
                 print(f"   🎯 Primeira mensagem detectada - enviando mensagem com botões")
-                handler = GroqSalesHandler(db, empresa_id_int)
-                mensagem_boas_vindas = handler._gerar_mensagem_boas_vindas_conversacional()
                 
                 # Define os botões
                 buttons = [
@@ -1671,11 +1669,11 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                     {"id": "preciso_ajuda", "title": "Preciso de ajuda"}
                 ]
                 
-                # Envia mensagem com botões
+                # Envia mensagem com botões (sem texto, apenas botões)
                 notifier = OrderNotification()
                 result = await notifier.send_whatsapp_message_with_buttons(
                     phone_number, 
-                    mensagem_boas_vindas, 
+                    "", 
                     buttons, 
                     empresa_id=empresa_id
                 )
