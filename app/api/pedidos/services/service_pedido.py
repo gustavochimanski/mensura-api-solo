@@ -1692,8 +1692,8 @@ class PedidoService:
                 return
 
             telefone_raw = getattr(entregador, "telefone", None)
-            telefone = str(telefone_raw).strip() if telefone_raw is not None else ""
-            if not telefone:
+            telefone_original = str(telefone_raw).strip() if telefone_raw is not None else ""
+            if not telefone_original:
                 logger.warning(
                     "[Pedidos] Entregador %s sem telefone válido para WhatsApp",
                     entregador.id,
@@ -1701,7 +1701,15 @@ class PedidoService:
                 return
             
             # Formata o telefone: remove caracteres não numéricos e garante código do país +55
-            telefone = format_phone_number(telefone)
+            telefone = format_phone_number(telefone_original)
+            
+            logger.info(
+                "[Pedidos] Telefone do entregador %s - Original: '%s' - Formatado: '%s' (DDD: %s)",
+                entregador.id,
+                telefone_original,
+                telefone,
+                telefone[2:4] if len(telefone) >= 4 else "N/A"
+            )
 
             pedidos_em_rota = self.repo.list_pedidos_em_rota_por_entregador(entregador.id)
             # Garante que o pedido atual está incluído na notificação, mesmo que ainda não esteja com status "S"
