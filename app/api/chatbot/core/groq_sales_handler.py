@@ -2256,10 +2256,11 @@ REGRA PARA COMPLEMENTOS:
                 resp += "\n\nQuer mais alguma coisa? 😊"
                 return resp
 
-        # 1. Saudações - responde de forma amigável
-        saudacoes = ['oi', 'olá', 'ola', 'hey', 'eae', 'e ai', 'opa', 'bom dia', 'boa tarde', 'boa noite', 'tudo bem', 'tudo bom']
-        if any(s in msg_lower for s in saudacoes):
-            return self._gerar_mensagem_boas_vindas_conversacional()
+        # REMOVIDO: Detecção de saudação que retornava mensagem longa - agora gerenciada pelo router.py que envia botões
+        # As saudações serão tratadas normalmente pelo fluxo conversacional
+        # saudacoes = ['oi', 'olá', 'ola', 'hey', 'eae', 'e ai', 'opa', 'bom dia', 'boa tarde', 'boa noite', 'tudo bem', 'tudo bom']
+        # if any(s in msg_lower for s in saudacoes):
+        #     return self._gerar_mensagem_boas_vindas_conversacional()
 
         # 2. PERGUNTAS SOBRE PRODUTOS - Detecta perguntas sobre ingredientes/composição
         # Exemplos: "O que vem nele", "O que tem no xburger", "Quais ingredientes do xburger"
@@ -4865,17 +4866,10 @@ Responda de forma natural e curta:"""
                     # Salva o estado atualizado com a forma de pagamento
                     self._salvar_estado_conversa(user_id, estado, dados)
 
-            # Se for primeira mensagem (saudação), entra no modo conversacional
-            if self._eh_primeira_mensagem(mensagem):
-                dados['historico'] = [{"role": "user", "content": mensagem}]
-                dados['carrinho'] = []
-                dados['pedido_contexto'] = []  # Lista de itens mencionados na conversa
-                dados['produtos_encontrados'] = self._buscar_promocoes()
-                # LIMPA pagamento de conversa anterior
-                dados['forma_pagamento'] = None
-                dados['meio_pagamento_id'] = None
-                self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
-                return self._gerar_mensagem_boas_vindas_conversacional()
+            # REMOVIDO: Detecção de primeira mensagem - agora gerenciada pelo router.py que envia botões
+            # A mensagem de boas-vindas longa foi substituída por botões no router.py
+            # if self._eh_primeira_mensagem(mensagem):
+            #     return self._gerar_mensagem_boas_vindas_conversacional()
 
             # ========== FLUXO DE CADASTRO RÁPIDO DE CLIENTE ==========
             

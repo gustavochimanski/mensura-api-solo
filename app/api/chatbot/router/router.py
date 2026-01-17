@@ -1299,14 +1299,10 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 telefone=phone_number,
                 nome=contact_name or "Cliente WhatsApp"
             )
-            if cliente:
-                print(f"   👤 CLIENTE identificado: ID={cliente['id']}, Nome={cliente['nome']}, Telefone={cliente['telefone']}")
-            else:
-                print(f"   ⚠️ Não foi possível criar/identificar cliente para telefone: {phone_number}")
         except Exception as e:
-            print(f"   ⚠️ Erro ao identificar/criar cliente: {e}")
-            import traceback
-            traceback.print_exc()
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Erro ao identificar/criar cliente: {e}", exc_info=True)
             # Continua processando mesmo se falhar a criação do cliente
 
         # VERIFICA DUPLICAÇÃO: Usa message_id do WhatsApp (único por mensagem) para detectar duplicatas reais
@@ -1339,8 +1335,6 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 duplicate = result.fetchone()
                 
                 if duplicate:
-                    print(f"   ⚠️ Mensagem duplicada detectada por message_id! Message ID {message_id} já foi processado.")
-                    print(f"   🔄 Ignorando processamento duplicado para evitar resposta repetida.")
                     return  # Ignora mensagem duplicada
             
             # Se não tiver message_id E a mensagem for longa (>3 caracteres), verifica por conteúdo
@@ -1379,21 +1373,14 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 # Logs para debug
                 agora = datetime.now()
                 timezone_empresa = empresa.timezone or "America/Sao_Paulo"
-                print(f"   🕐 Verificando horário de funcionamento:")
-                print(f"      Hora atual (servidor): {agora.strftime('%Y-%m-%d %H:%M:%S')}")
-                print(f"      Timezone empresa: {timezone_empresa}")
-                print(f"      Horários configurados: {empresa.horarios_funcionamento}")
                 
                 esta_aberta = empresa_esta_aberta_agora(
                     horarios_funcionamento=empresa.horarios_funcionamento,
                     timezone=timezone_empresa
                 )
                 
-                print(f"   🕐 Resultado da verificação: {esta_aberta} (True=Aberta, False=Fechada, None=Não configurado)")
-                
                 # Se a loja estiver fechada (False), envia mensagem com horários
                 if esta_aberta is False:
-                    print(f"   🕐 Loja está FECHADA no momento - enviando mensagem com horários")
                     
                     # Salva a mensagem do usuário no histórico
                     if conversations:
@@ -1457,7 +1444,6 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
 
         # VERIFICA SE O BOT ESTÁ ATIVO PARA ESTE NÚMERO
         if not chatbot_db.is_bot_active_for_phone(db, phone_number):
-            print(f"   ⏸️ Bot PAUSADO para {phone_number} - mensagem ignorada")
             # Salva a mensagem no histórico mesmo pausado (para ver no preview)
             if conversations:
                 chatbot_db.create_message(
@@ -1529,7 +1515,6 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 # Atualiza o nome do contato se disponível e ainda não tiver
                 if contact_name and not conversations[0].get('contact_name'):
                     chatbot_db.update_conversation_contact_name(db, conversations[0]['id'], contact_name)
-                    print(f"   📝 Nome do contato atualizado: {contact_name}")
 
             # Importa o Groq Sales Handler (LLaMA 3.1 via API - rápido!)
             # NOTA: O processar_mensagem_groq já salva a mensagem do usuário e a resposta,
@@ -1570,7 +1555,6 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 )
                 
                 if isinstance(result, dict) and result.get("success"):
-                    print(f"   ✅ Mensagem com botões enviada com sucesso!")
                     # Salva a mensagem no histórico
                     if conversations:
                         conversation_id = conversations[0]['id']
@@ -1586,7 +1570,9 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                         )
                     chatbot_db.create_message(db, conversation_id, "assistant", "Como posso ajudar?")
                 else:
-                    print(f"   ⚠️ Erro ao enviar mensagem com botões: {result.get('error')}")
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.error(f"Erro ao enviar mensagem com botões: {result.get('error')}")
                 
                 return  # Não processa a mensagem do usuário ainda, aguarda clique no botão
 
@@ -1636,7 +1622,6 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 result = await notifier.send_whatsapp_message(phone_number, resposta, empresa_id=empresa_id)
                 
                 if isinstance(result, dict) and result.get("success"):
-                    print(f"   ✅ Resposta ao botão enviada com sucesso!")
                     # Salva no histórico
                     if conversations:
                         conversation_id = conversations[0]['id']
@@ -1668,39 +1653,27 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 mensagem=message_text,
                 empresa_id=int(empresa_id) if empresa_id else 1
             )
-
-            print(f"   💬 Resposta do SalesHandler: {resposta[:100]}...")
             
             # Verifica se a resposta não está vazia
             if not resposta or not resposta.strip():
-                print(f"   ⚠️ Resposta vazia, não será enviada")
                 return
 
             # Envia resposta via WhatsApp
-            print(f"   📤 Tentando enviar resposta via WhatsApp...")
-            print(f"   📱 Telefone: {phone_number}, empresa_id: {empresa_id}")
-            print(f"   📝 Tamanho da resposta: {len(resposta)} caracteres")
             notifier = OrderNotification()
             result = await notifier.send_whatsapp_message(phone_number, resposta, empresa_id=empresa_id)
-            
-            print(f"   📊 Resultado do envio: {result}")
 
-            if isinstance(result, dict) and result.get("success"):
-                print(f"   ✅ Resposta enviada via WhatsApp com sucesso!")
-                print(f"   📨 Message ID: {result.get('message_id', 'N/A')}")
-            else:
+            if not isinstance(result, dict) or not result.get("success"):
+                import logging
+                logger = logging.getLogger(__name__)
                 error_msg = result.get("error") if isinstance(result, dict) else str(result)
                 status_code = result.get("status_code") if isinstance(result, dict) else None
-                print(f"   ❌ Erro ao enviar resposta: {error_msg}")
-                if status_code:
-                    print(f"   📊 Status Code: {status_code}")
+                logger.error(f"Erro ao enviar resposta via WhatsApp: {error_msg} (status_code: {status_code})")
+                
+                # Se for erro de pagamento, destaca mais
                 if isinstance(result, dict) and result.get("coexistence_hint"):
                     hint = result.get('coexistence_hint')
-                    print(f"   💡 {hint}")
-                    # Se for erro de pagamento, destaca mais
                     if "payment" in error_msg.lower() or "blocked" in error_msg.lower():
-                        print(f"   ⚠️ ATENÇÃO: A mensagem foi salva no banco, mas NÃO foi enviada ao cliente!")
-                        print(f"   💳 Ação necessária: Adicionar créditos/pagamento na conta do 360dialog")
+                        logger.warning(f"ATENÇÃO: A mensagem foi salva no banco, mas NÃO foi enviada ao cliente! Ação necessária: Adicionar créditos/pagamento na conta do 360dialog. {hint}")
 
             return
 
@@ -1716,7 +1689,6 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
             # Se a conversa for de notificação, atualiza para modelo normal
             if conversation['model'] == 'notification-system':
                 chatbot_db.update_conversation_model(db, conversation_id, DEFAULT_MODEL)
-                print(f"   ↪️ Conversa {conversation_id} atualizada para chat normal")
         else:
             # Cria nova conversa
             empresa_id_int = int(empresa_id) if empresa_id else 1
@@ -1728,7 +1700,6 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 model=DEFAULT_MODEL,
                 empresa_id=empresa_id_int
             )
-            print(f"   ✅ Nova conversa criada: {conversation_id}")
 
         # 2. Salva mensagem do usuário (com whatsapp_message_id para detectar duplicatas)
         chatbot_db.create_message(
@@ -1738,7 +1709,6 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
             content=message_text,
             whatsapp_message_id=message_id  # Passa message_id do WhatsApp para detectar duplicatas
         )
-        print(f"   💾 Mensagem do usuário salva")
 
         # 3. Busca histórico de mensagens
         messages_history = chatbot_db.get_messages(db, conversation_id)
@@ -1755,9 +1725,6 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
         else:
             prompt_content = SYSTEM_PROMPT  # fallback para o padrão
 
-        print(f"   📝 Usando prompt: {prompt_key}")
-        print(f"   🤖 Usando modelo: {model}")
-
         # 5. Prepara mensagens para o Ollama
         ollama_messages = [
             {"role": "system", "content": prompt_content}
@@ -1770,7 +1737,6 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
             })
 
         # 6. Chama a IA (Ollama)
-        print(f"   🧠 Consultando IA...")
         async with httpx.AsyncClient(timeout=60.0) as client:
             payload = {
                 "model": model,
@@ -1788,8 +1754,6 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
             if response.status_code == 200:
                 result = response.json()
                 ai_response = result["message"]["content"]
-
-                print(f"   💬 Resposta da IA: {ai_response[:100]}...")
 
                 # 7. Salva resposta da IA no banco
                 message_id = chatbot_db.create_message(
@@ -1818,31 +1782,24 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 )
 
                 # 8. Envia resposta via WhatsApp
-                print(f"   📤 Tentando enviar resposta via WhatsApp...")
-                print(f"   📱 Telefone: {phone_number}, empresa_id: {empresa_id}")
                 notifier = OrderNotification()
                 result = await notifier.send_whatsapp_message(phone_number, ai_response, empresa_id=empresa_id)
-                
-                print(f"   📊 Resultado do envio: {result}")
 
-                if isinstance(result, dict) and result.get("success"):
-                    print(f"   ✅ Resposta enviada via WhatsApp com sucesso!")
-                    print(f"   📨 Message ID: {result.get('message_id', 'N/A')}")
-                else:
+                if not isinstance(result, dict) or not result.get("success"):
+                    import logging
+                    logger = logging.getLogger(__name__)
                     error_msg = result.get("error") if isinstance(result, dict) else str(result)
                     status_code = result.get("status_code") if isinstance(result, dict) else None
-                    print(f"   ❌ Erro ao enviar resposta: {error_msg}")
-                    if status_code:
-                        print(f"   📊 Status Code: {status_code}")
-                    if isinstance(result, dict) and result.get("coexistence_hint"):
-                        print(f"   💡 Dica: {result.get('coexistence_hint')}")
+                    logger.error(f"Erro ao enviar resposta via WhatsApp: {error_msg} (status_code: {status_code})")
             else:
-                print(f"   ❌ Erro na IA: {response.text}")
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Erro na IA: {response.text}")
 
     except Exception as e:
-        print(f"❌ Erro ao processar mensagem: {e}")
-        import traceback
-        traceback.print_exc()
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Erro ao processar mensagem: {e}", exc_info=True)
 
 
 # ==================== CONFIGURAÇÕES WHATSAPP ====================
