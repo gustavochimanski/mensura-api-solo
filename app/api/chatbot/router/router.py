@@ -216,10 +216,10 @@ async def _enviar_notificacao_empresa(
     empresa_id_int: int,
     cliente_phone: str,
     cliente_nome: Optional[str],
-    tipo_solicitacao: str,  # "preciso_ajuda" ou "chamar_atendente"
+    tipo_solicitacao: str,  # "chamar_atendente"
 ):
     """
-    Envia notificação para o WhatsApp da empresa quando cliente pede ajuda ou chama atendente.
+    Envia notificação para o WhatsApp da empresa quando cliente chama atendente.
     """
     try:
         # Busca nome da empresa
@@ -233,12 +233,8 @@ async def _enviar_notificacao_empresa(
         nome_empresa = empresa[0] if empresa and empresa[0] else "Empresa"
         
         # Monta mensagem de notificação
-        if tipo_solicitacao == "preciso_ajuda":
-            mensagem = f"🔔 *Notificação de Atendimento*\n\n"
-            mensagem += f"Cliente *{cliente_nome or cliente_phone}* está precisando de ajuda.\n\n"
-        else:  # chamar_atendente
-            mensagem = f"🔔 *Solicitação de Atendimento Humano*\n\n"
-            mensagem += f"Cliente *{cliente_nome or cliente_phone}* está solicitando atendimento de um humano.\n\n"
+        mensagem = f"🔔 *Solicitação de Atendimento Humano*\n\n"
+        mensagem += f"Cliente *{cliente_nome or cliente_phone}* está solicitando atendimento de um humano.\n\n"
         
         mensagem += f"📱 Telefone: {cliente_phone}\n"
         if cliente_nome:
@@ -1738,8 +1734,7 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
             resposta = _montar_mensagem_redirecionamento(db, empresa_id_int, config)
             # Adiciona botões quando não aceita pedidos
             buttons = [
-                {"id": "preciso_ajuda", "title": "Preciso de ajuda"},
-                {"id": "chamar_atendente", "title": "Chamar atendente"}
+                {"id": "chamar_atendente", "title": "Chamar um atendente"}
             ]
             await _send_whatsapp_and_log(
                 db=db,
@@ -1819,7 +1814,7 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 if aceita_pedidos_whatsapp:
                     buttons.append({"id": "pedir_whatsapp", "title": "Pedir pelo WhatsApp"})
                 buttons.append({"id": "pedir_link", "title": "Pedir pelo link"})
-                buttons.append({"id": "preciso_ajuda", "title": "Atendimento"})
+                buttons.append({"id": "chamar_atendente", "title": "Chamar um atendente"})
                 
                 # Envia mensagem com botões (WhatsApp exige um corpo de texto)
                 notifier = OrderNotification()
@@ -1851,9 +1846,7 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 botao_clicado = "pedir_whatsapp"
             elif "pedir pelo link" in mensagem_lower or mensagem_lower == "pedir pelo link":
                 botao_clicado = "pedir_link"
-            elif "preciso de ajuda" in mensagem_lower or mensagem_lower == "preciso de ajuda" or "atendimento" in mensagem_lower:
-                botao_clicado = "preciso_ajuda"
-            elif "chamar atendente" in mensagem_lower or mensagem_lower == "chamar atendente":
+            elif "chamar atendente" in mensagem_lower or mensagem_lower == "chamar atendente" or "chamar um atendente" in mensagem_lower:
                 botao_clicado = "chamar_atendente"
             
             # Se for clique em botão, processa a resposta
@@ -1897,18 +1890,6 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                         link_cardapio = "https://chatbot.mensuraapi.com.br"
                     
                     resposta = f"📲 Perfeito! Acesse nosso cardápio completo pelo link:\n\n👉 {link_cardapio}\n\nDepois é só fazer seu pedido pelo site! 😊"
-                elif botao_clicado == "preciso_ajuda":
-                    # Cliente precisa de ajuda
-                    # Envia notificação para a empresa
-                    await _enviar_notificacao_empresa(
-                        db=db,
-                        empresa_id=empresa_id,
-                        empresa_id_int=empresa_id_int,
-                        cliente_phone=phone_number,
-                        cliente_nome=contact_name,
-                        tipo_solicitacao="preciso_ajuda"
-                    )
-                    resposta = "Claro! Estou aqui para te ajudar! 😊\n\nComo posso te auxiliar hoje?\n• Dúvidas sobre produtos\n• Informações sobre entrega\n• Outras questões\n\nÉ só me dizer o que você precisa!"
                 elif botao_clicado == "chamar_atendente":
                     # Cliente quer chamar atendente humano
                     # Envia notificação para a empresa
@@ -1973,8 +1954,7 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 palavras_redirecionamento = ["link", "cardápio", "cardapio", "acesse", "site", "online"]
                 if any(palavra in resposta_lower for palavra in palavras_redirecionamento):
                     buttons = [
-                        {"id": "preciso_ajuda", "title": "Preciso de ajuda"},
-                        {"id": "chamar_atendente", "title": "Chamar atendente"}
+                        {"id": "chamar_atendente", "title": "Chamar um atendente"}
                     ]
 
             # Envia resposta via WhatsApp
@@ -2060,8 +2040,7 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
             resposta = _montar_mensagem_redirecionamento(db, empresa_id_int, config)
             # Adiciona botões quando não aceita pedidos
             buttons = [
-                {"id": "preciso_ajuda", "title": "Preciso de ajuda"},
-                {"id": "chamar_atendente", "title": "Chamar atendente"}
+                {"id": "chamar_atendente", "title": "Chamar um atendente"}
             ]
             await _send_whatsapp_and_log(
                 db=db,
