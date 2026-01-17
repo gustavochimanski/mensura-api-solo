@@ -1087,9 +1087,27 @@ class GroqSalesHandler:
             else:
                 return "Opa, seu carrinho tá vazio ainda! O que vai querer?"
         
+        msg_lower = mensagem.lower()
+
+        # PERGUNTAS DE PREÇO (inclui múltiplos itens) - prioridade alta
+        if re.search(r'(quanto\s+(fica|custa|é|e)|qual\s+(o\s+)?(pre[cç]o|valor)|pre[cç]o\s+(d[aeo]|de|do)|valor\s+(d[aeo]|de|do))', msg_lower, re.IGNORECASE):
+            itens_preco = self._extrair_itens_pergunta_preco(mensagem)
+            if len(itens_preco) > 1:
+                return self._gerar_resposta_preco_itens(itens_preco, todos_produtos)
+            if len(itens_preco) == 1:
+                item = itens_preco[0]
+                produto = self._resolver_produto_para_preco(
+                    item.get("produto_busca", ""),
+                    item.get("produto_busca_alt", ""),
+                    bool(item.get("prefer_alt", False)),
+                    todos_produtos
+                )
+                if produto:
+                    return await self._gerar_resposta_sobre_produto(user_id, produto, mensagem, dados)
+                return "Qual produto você quer saber o preço? Me fala o nome!"
+
         # ANTES DE TUDO: Detecta perguntas sobre ingredientes/composição de produtos
         # Isso funciona mesmo sem IA e deve ter prioridade
-        msg_lower = mensagem.lower()
         
         # Detecta padrões como "O que vem nele", "Que tem nele" (sem mencionar produto)
         padroes_nele = [
