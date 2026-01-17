@@ -426,7 +426,7 @@ class GroqSalesHandler:
             return []
 
         match = re.search(
-            r'(quanto\s+(?:fica|custa|e|é)|qual\s+(?:o\s+)?(?:pre[cç]o|valor)|pre[cç]o|valor)',
+            r'(quanto\s+(?:que\s+)?(?:fica|custa|e|é)|qual\s+(?:o\s+)?(?:pre[cç]o|valor)|pre[cç]o|valor)',
             msg,
             re.IGNORECASE
         )
@@ -630,7 +630,7 @@ class GroqSalesHandler:
 
         # PERGUNTAS DE PREÇO - DEVE vir ANTES da detecção genérica (muito importante!)
         # Detecta: "quanto fica", "quanto custa", "qual o preço", "qual preço", "quanto é"
-        if re.search(r'(quanto\s+(fica|custa|é|e)|qual\s+(o\s+)?(pre[cç]o|valor)|pre[cç]o\s+(d[aeo]|de|do)|valor\s+(d[aeo]|de|do))', msg, re.IGNORECASE):
+        if re.search(r'(quanto\s+(que\s+)?(fica|custa|é|e)|qual\s+(o\s+)?(pre[cç]o|valor)|pre[cç]o\s+(d[aeo]|de|do)|valor\s+(d[aeo]|de|do))', msg, re.IGNORECASE):
             print(f"💰 [Regras] Detecção de preço na mensagem: '{msg}'")
             itens_preco = self._extrair_itens_pergunta_preco(mensagem)
             if itens_preco:
@@ -646,7 +646,7 @@ class GroqSalesHandler:
 
             # Tenta extrair o produto mencionado após as palavras-chave de preço
             # Padrões: "quanto fica a X", "quanto custa a X", "qual o preço do X", "preço da X"
-            match_preco = re.search(r'(?:quanto\s+(?:fica|custa|é|e)|qual\s+(?:o\s+)?(?:pre[cç]o|valor)|pre[cç]o|valor)\s+(?:a|o|d[aeo]|de|do)?\s*([a-záàâãéêíóôõúç\-\s\d]+?)(\?|$|,|\.)', msg, re.IGNORECASE)
+            match_preco = re.search(r'(?:quanto\s+(?:que\s+)?(?:fica|custa|é|e)|qual\s+(?:o\s+)?(?:pre[cç]o|valor)|pre[cç]o|valor)\s+(?:a|o|d[aeo]|de|do)?\s*([a-záàâãéêíóôõúç\-\s\d]+?)(\?|$|,|\.)', msg, re.IGNORECASE)
             if match_preco:
                 produto_extraido = match_preco.group(1).strip()
                 # Remove palavras genéricas que podem ter sido capturadas
@@ -1112,6 +1112,35 @@ class GroqSalesHandler:
         dados.update(dados_atualizados)
 
         print(f"💬 [Conversacional] Mensagem recebida (user_id={user_id}): {mensagem}")
+        
+        # VERIFICA SE ACEITA PEDIDOS PELO WHATSAPP (ANTES DE PROCESSAR)
+        config = self._get_chatbot_config()
+        if config and not config.aceita_pedidos_whatsapp:
+            # Detecta se a mensagem é uma tentativa de fazer pedido
+            msg_lower = mensagem.lower().strip()
+            termos_pedido = ['quero', 'pedir', 'pedido', 'fazer pedido', 'adicionar', 'me ve', 'manda', 'vou querer', 'vou pedir', 'finalizar', 'fechar']
+            if any(termo in msg_lower for termo in termos_pedido):
+                # Busca link do cardápio da empresa
+                try:
+                    empresa_query = text("""
+                        SELECT nome, cardapio_link
+                        FROM cadastros.empresas
+                        WHERE id = :empresa_id
+                    """)
+                    result = self.db.execute(empresa_query, {"empresa_id": self.empresa_id})
+                    empresa = result.fetchone()
+                    link_cardapio = empresa[1] if empresa and empresa[1] else LINK_CARDAPIO
+                except Exception as e:
+                    print(f"⚠️ Erro ao buscar link do cardápio: {e}")
+                    link_cardapio = LINK_CARDAPIO
+                
+                # Retorna mensagem de redirecionamento
+                if config.mensagem_redirecionamento:
+                    resposta = config.mensagem_redirecionamento.replace("{link_cardapio}", link_cardapio)
+                else:
+                    resposta = f"📲 Para fazer seu pedido, acesse nosso cardápio completo pelo link:\n\n👉 {link_cardapio}\n\nDepois é só fazer seu pedido pelo site! 😊"
+                return resposta
+        
         # PRIMEIRO: Tenta interpretar com regras (funciona mesmo sem IA)
         # Isso garante que perguntas sobre produtos específicos sejam detectadas
         todos_produtos = self._buscar_todos_produtos()
@@ -1136,7 +1165,7 @@ class GroqSalesHandler:
         msg_lower = mensagem.lower()
 
         # PERGUNTAS DE PREÇO (inclui múltiplos itens) - prioridade alta
-        if re.search(r'(quanto\s+(fica|custa|é|e)|qual\s+(o\s+)?(pre[cç]o|valor)|pre[cç]o\s+(d[aeo]|de|do)|valor\s+(d[aeo]|de|do))', msg_lower, re.IGNORECASE):
+        if re.search(r'(quanto\s+(que\s+)?(fica|custa|é|e)|qual\s+(o\s+)?(pre[cç]o|valor)|pre[cç]o\s+(d[aeo]|de|do)|valor\s+(d[aeo]|de|do))', msg_lower, re.IGNORECASE):
             print(f"💰 [Conversacional] Detecção de preço na mensagem: '{mensagem}'")
             itens_preco = self._extrair_itens_pergunta_preco(mensagem)
             if itens_preco:
@@ -1801,6 +1830,35 @@ REGRA PARA COMPLEMENTOS:
                             itens = [item_singular]
                         print(f"📦 Itens recebidos: {itens}")
 
+                        # VERIFICA SE ACEITA PEDIDOS ANTES DE PROCESSAR AÇÃO DE ADICIONAR
+                        config = self._get_chatbot_config()
+                        if config and not config.aceita_pedidos_whatsapp and acao == "adicionar":
+                            # Busca link do cardápio da empresa
+                            try:
+                                empresa_query = text("""
+                                    SELECT nome, cardapio_link
+                                    FROM cadastros.empresas
+                                    WHERE id = :empresa_id
+                                """)
+                                result = self.db.execute(empresa_query, {"empresa_id": self.empresa_id})
+                                empresa = result.fetchone()
+                                link_cardapio = empresa[1] if empresa and empresa[1] else LINK_CARDAPIO
+                            except Exception as e:
+                                print(f"⚠️ Erro ao buscar link do cardápio: {e}")
+                                link_cardapio = LINK_CARDAPIO
+                            
+                            # Retorna mensagem de redirecionamento
+                            if config.mensagem_redirecionamento:
+                                resposta_redir = config.mensagem_redirecionamento.replace("{link_cardapio}", link_cardapio)
+                            else:
+                                resposta_redir = f"📲 Para fazer seu pedido, acesse nosso cardápio completo pelo link:\n\n👉 {link_cardapio}\n\nDepois é só fazer seu pedido pelo site! 😊"
+                            
+                            # Salva no histórico e retorna
+                            historico.append({"role": "assistant", "content": resposta_redir})
+                            dados['historico'] = historico
+                            self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
+                            return resposta_redir
+
                         # Processa ação
                         mostrar_resumo = False
                         if acao == "adicionar" and itens:
@@ -2233,6 +2291,35 @@ REGRA PARA COMPLEMENTOS:
                                                 print(f"Erro ao processar adicionais em ação nenhuma: {e}")
 
                         elif acao == "prosseguir_entrega":
+                            # VERIFICA SE ACEITA PEDIDOS ANTES DE FINALIZAR
+                            config = self._get_chatbot_config()
+                            if config and not config.aceita_pedidos_whatsapp:
+                                # Busca link do cardápio da empresa
+                                try:
+                                    empresa_query = text("""
+                                        SELECT nome, cardapio_link
+                                        FROM cadastros.empresas
+                                        WHERE id = :empresa_id
+                                    """)
+                                    result = self.db.execute(empresa_query, {"empresa_id": self.empresa_id})
+                                    empresa = result.fetchone()
+                                    link_cardapio = empresa[1] if empresa and empresa[1] else LINK_CARDAPIO
+                                except Exception as e:
+                                    print(f"⚠️ Erro ao buscar link do cardápio: {e}")
+                                    link_cardapio = LINK_CARDAPIO
+                                
+                                # Retorna mensagem de redirecionamento
+                                if config.mensagem_redirecionamento:
+                                    resposta_redir = config.mensagem_redirecionamento.replace("{link_cardapio}", link_cardapio)
+                                else:
+                                    resposta_redir = f"📲 Para fazer seu pedido, acesse nosso cardápio completo pelo link:\n\n👉 {link_cardapio}\n\nDepois é só fazer seu pedido pelo site! 😊"
+                                
+                                # Salva no histórico e retorna
+                                historico.append({"role": "assistant", "content": resposta_redir})
+                                dados['historico'] = historico
+                                self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
+                                return resposta_redir
+                            
                             # Cliente quer finalizar - converter contexto em carrinho
                             if pedido_contexto:
                                 print(f"🚗 Prosseguindo para entrega com {len(pedido_contexto)} itens")
@@ -4962,7 +5049,8 @@ Responda de forma natural e curta:"""
                 'que vem', 'que tem', 'ingredientes', 'composição', 'feito', 'feita'
             ])
             eh_pergunta_preco = any(palavra in pergunta_lower for palavra in [
-                'quanto fica', 'quanto custa', 'qual o preço', 'qual preço', 'quanto é', 'preço', 'valor'
+                'quanto fica', 'quanto que fica', 'quanto custa', 'quanto que custa',
+                'qual o preço', 'qual preço', 'quanto é', 'preço', 'valor'
             ])
             
             # Se encontrou ingredientes, usa dados reais
@@ -5069,7 +5157,8 @@ Responda de forma natural e curta:"""
             # Fallback básico - detecta se era pergunta de preço
             pergunta_lower = pergunta.lower() if pergunta else ""
             eh_pergunta_preco = any(palavra in pergunta_lower for palavra in [
-                'quanto fica', 'quanto custa', 'qual o preço', 'qual preço', 'quanto é', 'preço', 'valor'
+                'quanto fica', 'quanto que fica', 'quanto custa', 'quanto que custa',
+                'qual o preço', 'qual preço', 'quanto é', 'preço', 'valor'
             ])
             
             if eh_pergunta_preco:
@@ -5091,6 +5180,32 @@ Responda de forma natural e curta:"""
             estado, dados = self._obter_estado_conversa(user_id)
             print(f"📊 Estado atual: {estado}")
             print(f"💬 Mensagem recebida (user_id={user_id}): {mensagem}")
+            msg_lower = (mensagem or "").lower()
+
+            # ========== PERGUNTAS DE PREÇO (EVITA ADICIONAR PRODUTO) ==========
+            if re.search(r'(quanto\s+(que\s+)?(fica|custa|é|e)|qual\s+(o\s+)?(pre[cç]o|valor)|pre[cç]o\s+(d[aeo]|de|do)|valor\s+(d[aeo]|de|do))', msg_lower, re.IGNORECASE):
+                if estado in [
+                    STATE_WELCOME,
+                    STATE_CONVERSANDO,
+                    STATE_AGUARDANDO_PEDIDO,
+                    STATE_AGUARDANDO_QUANTIDADE,
+                    STATE_AGUARDANDO_MAIS_ITENS
+                ]:
+                    todos_produtos = self._buscar_todos_produtos()
+                    itens_preco = self._extrair_itens_pergunta_preco(mensagem)
+                    if len(itens_preco) > 1:
+                        return self._gerar_resposta_preco_itens(itens_preco, todos_produtos)
+                    if len(itens_preco) == 1:
+                        item = itens_preco[0]
+                        produto = self._resolver_produto_para_preco(
+                            item.get("produto_busca", ""),
+                            item.get("produto_busca_alt", ""),
+                            bool(item.get("prefer_alt", False)),
+                            todos_produtos
+                        )
+                        if produto:
+                            return await self._gerar_resposta_sobre_produto(user_id, produto, mensagem, dados)
+                    return "Qual produto você quer saber o preço? Me fala o nome!"
 
             # ========== DETECÇÃO ANTECIPADA DE PAGAMENTO ==========
             # Detecta forma de pagamento APENAS se já tiver itens no pedido

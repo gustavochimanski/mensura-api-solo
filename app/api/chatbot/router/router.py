@@ -1584,8 +1584,32 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
             if botao_clicado:
                 print(f"   🔘 Botão clicado: {botao_clicado}")
                 if botao_clicado == "pedir_whatsapp":
-                    # Cliente quer pedir pelo WhatsApp - continua o fluxo normal
-                    resposta = "Perfeito! Vou te ajudar a montar seu pedido passo a passo 😊\n\nO que você gostaria de pedir?"
+                    # VERIFICA SE ACEITA PEDIDOS PELO WHATSAPP
+                    from app.api.chatbot.repositories.repo_chatbot_config import ChatbotConfigRepository
+                    repo_config = ChatbotConfigRepository(db)
+                    config = repo_config.get_by_empresa_id(empresa_id_int)
+                    
+                    if config and not config.aceita_pedidos_whatsapp:
+                        # Não aceita pedidos - redireciona para cardápio
+                        try:
+                            empresa_query = text("""
+                                SELECT nome, cardapio_link
+                                FROM cadastros.empresas
+                                WHERE id = :empresa_id
+                            """)
+                            result_empresa = db.execute(empresa_query, {"empresa_id": empresa_id_int})
+                            empresa = result_empresa.fetchone()
+                            link_cardapio = empresa[1] if empresa and empresa[1] else "https://chatbot.mensuraapi.com.br"
+                        except:
+                            link_cardapio = "https://chatbot.mensuraapi.com.br"
+                        
+                        if config.mensagem_redirecionamento:
+                            resposta = config.mensagem_redirecionamento.replace("{link_cardapio}", link_cardapio)
+                        else:
+                            resposta = f"📲 Para fazer seu pedido, acesse nosso cardápio completo pelo link:\n\n👉 {link_cardapio}\n\nDepois é só fazer seu pedido pelo site! 😊"
+                    else:
+                        # Cliente quer pedir pelo WhatsApp - continua o fluxo normal
+                        resposta = "Perfeito! Vou te ajudar a montar seu pedido passo a passo 😊\n\nO que você gostaria de pedir?"
                 elif botao_clicado == "pedir_link":
                     # Cliente quer pedir pelo link - envia o link do cardápio
                     try:
