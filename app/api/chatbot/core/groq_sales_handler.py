@@ -5574,6 +5574,30 @@ Responda de forma natural e curta:"""
 
             # Se for primeira mensagem (saudação), pode retornar boas-vindas (dependendo do modo)
             if self._eh_primeira_mensagem(mensagem):
+                # VERIFICA SE ACEITA PEDIDOS PELO WHATSAPP ANTES DE RESPONDER
+                config = self._get_chatbot_config()
+                if config and not config.aceita_pedidos_whatsapp:
+                    # Não aceita pedidos - retorna mensagem de redirecionamento
+                    try:
+                        empresa_query = text("""
+                            SELECT nome, cardapio_link
+                            FROM cadastros.empresas
+                            WHERE id = :empresa_id
+                        """)
+                        result = self.db.execute(empresa_query, {"empresa_id": self.empresa_id})
+                        empresa = result.fetchone()
+                        link_cardapio = empresa[1] if empresa and empresa[1] else LINK_CARDAPIO
+                    except Exception as e:
+                        print(f"⚠️ Erro ao buscar link do cardápio: {e}")
+                        link_cardapio = LINK_CARDAPIO
+                    
+                    # Retorna mensagem de redirecionamento
+                    if config.mensagem_redirecionamento:
+                        resposta = config.mensagem_redirecionamento.replace("{link_cardapio}", link_cardapio)
+                    else:
+                        resposta = f"📲 Para fazer seu pedido, acesse nosso cardápio completo pelo link:\n\n👉 {link_cardapio}\n\nDepois é só fazer seu pedido pelo site! 😊"
+                    return resposta
+                
                 dados['historico'] = [{"role": "user", "content": mensagem}]
                 dados['carrinho'] = []
                 dados['pedido_contexto'] = []  # Lista de itens mencionados na conversa

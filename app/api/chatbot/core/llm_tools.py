@@ -52,6 +52,23 @@ TOOLS_DEFINITION = [
     {
         "type": "function",
         "function": {
+            "name": "calcular_taxa_entrega",
+            "description": "Calcula a taxa de entrega com base na distância do cliente",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "distancia_km": {
+                        "type": "number",
+                        "description": "Distância em quilômetros até o endereço de entrega"
+                    }
+                },
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "criar_pedido",
             "description": "Cria um pedido no sistema após coletar todos os dados (produtos, endereço, pagamento)",
             "parameters": {
@@ -167,6 +184,46 @@ def calcular_total(db: Session, produtos: List[Dict]) -> Dict[str, Any]:
         return {"success": False, "error": str(e)}
 
 
+def calcular_taxa_entrega(db: Session, distancia_km: float | None = None) -> Dict[str, Any]:
+    """Calcula taxa de entrega com base na distância"""
+    try:
+        from sqlalchemy import or_
+        from app.api.cadastros.models.model_regiao_entrega import RegiaoEntregaModel
+
+        query = db.query(RegiaoEntregaModel).filter(
+            and_(
+                RegiaoEntregaModel.empresa_id == 1,
+                RegiaoEntregaModel.ativo == True
+            )
+        )
+
+        if distancia_km is not None:
+            query = query.filter(
+                RegiaoEntregaModel.distancia_min_km <= distancia_km,
+                or_(
+                    RegiaoEntregaModel.distancia_max_km.is_(None),
+                    RegiaoEntregaModel.distancia_max_km >= distancia_km
+                )
+            )
+
+        regiao = query.order_by(RegiaoEntregaModel.distancia_max_km.asc()).first()
+
+        if not regiao:
+            return {
+                "success": True,
+                "taxa_entrega": 5.0,
+                "tempo_estimado_min": 30
+            }
+
+        return {
+            "success": True,
+            "taxa_entrega": float(regiao.taxa_entrega),
+            "tempo_estimado_min": regiao.tempo_estimado_min
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 def criar_pedido(
     db: Session,
     telefone: str,
@@ -234,6 +291,9 @@ def executar_funcao(db: Session, nome_funcao: str, argumentos: Dict) -> Dict:
 
     elif nome_funcao == "calcular_total":
         return calcular_total(db, argumentos.get("produtos", []))
+
+    elif nome_funcao == "calcular_taxa_entrega":
+        return calcular_taxa_entrega(db, argumentos.get("distancia_km"))
 
     elif nome_funcao == "criar_pedido":
         return criar_pedido(
