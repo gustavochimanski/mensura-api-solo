@@ -804,9 +804,40 @@ class GroqSalesHandler:
         # Detecta: "qual a taxa de entrega", "quanto é o frete", "qual o valor da entrega", etc.
         if re.search(r'(taxa\s*(de\s*)?(entrega|delivery)|frete|valor\s*(da\s*)?(entrega|delivery)|quanto\s*(é|e|fica|custa)\s*(o\s*)?(frete|entrega|delivery)|pre[cç]o\s*(do\s*)?(frete|entrega|delivery))', msg, re.IGNORECASE):
             print(f"🚚 [Regras] Detecção de taxa de entrega na mensagem: '{msg}'")
-            # Tenta extrair endereço se mencionado
-            endereco_match = re.search(r'(?:para|pra|em|na|no|rua|avenida|av\.|av|travessa|trav\.|trav|alameda|al\.|al)\s+([a-záàâãéêíóôõúç0-9\s,\.\-]+?)(?:\?|$|,|\.)', msg, re.IGNORECASE)
-            endereco = endereco_match.group(1).strip() if endereco_match else ""
+            # Tenta extrair endereço se mencionado - remove palavras-chave de pergunta
+            # Padrão: "taxa de entrega para [endereço]" ou "frete para [endereço]"
+            endereco = ""
+            
+            # Remove a parte da pergunta para pegar só o endereço
+            msg_sem_pergunta = re.sub(
+                r'(?:qual\s+(a\s+)?(taxa|valor|pre[cç]o)\s+(de\s+)?(entrega|delivery|frete)|quanto\s+(é|e|fica|custa)\s+(o\s+)?(frete|entrega|delivery)|taxa\s+(de\s+)?(entrega|delivery)|valor\s+(da\s+)?(entrega|delivery)|pre[cç]o\s+(do\s+)?(frete|entrega|delivery))\s*(?:para|pra)?\s*',
+                '',
+                msg,
+                flags=re.IGNORECASE
+            ).strip()
+            
+            # Se sobrou algo na mensagem após remover a pergunta, é o endereço
+            if msg_sem_pergunta and len(msg_sem_pergunta) > 3:
+                # Remove pontuação final
+                endereco = re.sub(r'[?.,;!]+$', '', msg_sem_pergunta).strip()
+            
+            # Se não extraiu, tenta padrão mais específico
+            if not endereco or len(endereco) < 5:
+                endereco_match = re.search(r'(?:para|pra|em|na|no)\s+([a-záàâãéêíóôõúç0-9\s,\.\-]+?)(?:\?|$|,|\.)', msg, re.IGNORECASE)
+                if endereco_match:
+                    endereco = endereco_match.group(1).strip()
+                    # Remove palavras comuns que podem ter sido capturadas
+                    endereco = re.sub(r'^(a|o|da|do|de|para|pra)\s+', '', endereco, flags=re.IGNORECASE).strip()
+            
+            # Se ainda não tem endereço, tenta detectar padrão de endereço direto (rua, avenida, etc)
+            if not endereco or len(endereco) < 5:
+                endereco_match = re.search(r'(rua|avenida|av\.|av|travessa|trav\.|trav|alameda|al\.|al|r\.|r\s)\s+([a-záàâãéêíóôõúç0-9\s,\.\-]+?)(?:\?|$|,|\.)', msg, re.IGNORECASE)
+                if endereco_match:
+                    # Pega a palavra-chave + o resto
+                    endereco = endereco_match.group(0).strip()
+                    endereco = re.sub(r'[?.,;!]+$', '', endereco).strip()
+            
+            print(f"🚚 [Regras] Endereço extraído: '{endereco}'")
             return {"funcao": "calcular_taxa_entrega", "params": {"endereco": endereco}}
 
         # Ver carrinho
@@ -5507,13 +5538,28 @@ Responda de forma natural e curta:"""
     ) -> str:
         """
         Calcula e retorna a taxa de entrega para o cliente.
-        Se tiver endereço, pode tentar calcular com base na distância.
+        Se tiver endereço, busca no Google Maps e mostra o endereço formatado.
         """
         try:
             from app.api.cadastros.models.model_regiao_entrega import RegiaoEntregaModel
             from sqlalchemy import or_
 
+            # Se tiver endereço, busca no Google Maps
+            endereco_formatado = None
+            if endereco and len(endereco.strip()) > 5:
+                print(f"🔍 Buscando endereço no Google Maps: {endereco}")
+                enderecos_google = self.address_service.buscar_enderecos_google(endereco, max_results=1)
+                
+                if enderecos_google and len(enderecos_google) > 0:
+                    endereco_encontrado = enderecos_google[0]
+                    endereco_formatado = endereco_encontrado.get('endereco_completo', endereco)
+                    print(f"✅ Endereço encontrado: {endereco_formatado}")
+                else:
+                    print(f"⚠️ Endereço não encontrado no Google Maps, usando endereço original")
+                    endereco_formatado = endereco
+
             # Busca a primeira região de entrega ativa (taxa padrão)
+            # TODO: Se tiver coordenadas do endereço, calcular distância e usar região específica
             regiao = self.db.query(RegiaoEntregaModel).filter(
                 and_(
                     RegiaoEntregaModel.empresa_id == self.empresa_id,
@@ -5531,11 +5577,12 @@ Responda de forma natural e curta:"""
 
             # Monta resposta
             msg = "🚚 *Taxa de Entrega*\n\n"
-            msg += f"💰 Valor: R$ {taxa:.2f}\n"
-            msg += f"⏱️ Tempo estimado: {tempo_estimado} minutos\n\n"
             
-            if endereco:
-                msg += f"📍 Para o endereço: {endereco}\n\n"
+            if endereco_formatado:
+                msg += f"📍 *Endereço encontrado:*\n{endereco_formatado}\n\n"
+            
+            msg += f"💰 *Valor:* R$ {taxa:.2f}\n"
+            msg += f"⏱️ *Tempo estimado:* {tempo_estimado} minutos\n\n"
             
             msg += "Quer fazer um pedido? 😊"
             
