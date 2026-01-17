@@ -587,8 +587,15 @@ class PedidoBalcaoService:
             # Se quantidade mudou mas não há complementos, recalcula apenas o preço total
             item_db.preco_total = item_db.preco_unitario * Decimal(str(item_db.quantidade))
         
-        # Recalcula valor total do pedido
-        self.repo.recalcular_valor_total(pedido_id)
+        # Recalcula valor total do pedido (soma todos os itens)
+        from sqlalchemy import func
+        from app.api.pedidos.models.model_pedido_item_unificado import PedidoItemUnificadoModel
+        subtotal = self.db.query(
+            func.sum(PedidoItemUnificadoModel.quantidade * PedidoItemUnificadoModel.preco_unitario)
+        ).filter(PedidoItemUnificadoModel.pedido_id == pedido_id).scalar() or Decimal("0")
+        
+        pedido.valor_total = Decimal(subtotal)
+        self.db.flush()
         
         # Registra histórico
         descricao_parts = []
@@ -605,7 +612,7 @@ class PedidoBalcaoService:
         
         self.repo.add_historico(
             pedido_id=pedido_id,
-            tipo_operacao=TipoOperacaoPedido.ITEM_ATUALIZADO,
+            tipo_operacao=TipoOperacaoPedido.STATUS_ALTERADO,  # Usa STATUS_ALTERADO como fallback
             descricao=descricao,
             usuario_id=usuario_id,
         )
