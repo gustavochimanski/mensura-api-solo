@@ -65,20 +65,6 @@ class PedidoResponseBuilder:
             endereco_geography=str(getattr(pedido, "endereco_geo", None)) if getattr(pedido, "endereco_geo", None) is not None else None,
             data_criacao=getattr(pedido, "data_criacao", getattr(pedido, "created_at", None)),
             data_atualizacao=getattr(pedido, "data_atualizacao", getattr(pedido, "updated_at", None)),
-            itens=[
-                ItemPedidoResponse(
-                    id=it.id,
-                    produto_cod_barras=getattr(it, "produto_cod_barras", None),
-                    combo_id=getattr(it, "combo_id", None),
-                    receita_id=getattr(it, "receita_id", None),
-                    quantidade=it.quantidade,
-                    preco_unitario=float(it.preco_unitario),
-                    observacao=it.observacao,
-                    produto_descricao_snapshot=getattr(it, "produto_descricao_snapshot", None),
-                    produto_imagem_snapshot=getattr(it, "produto_imagem_snapshot", None),
-                )
-                for it in pedido.itens
-            ],
             transacao=TransacaoResponse.model_validate(pedido.transacao) if pedido.transacao else None,
             pagamento=pagamento,
             acertado_entregador=getattr(pedido, "acertado_entregador", None),
@@ -115,20 +101,6 @@ class PedidoResponseBuilder:
             endereco_geography=str(getattr(pedido, "endereco_geo", None)) if getattr(pedido, "endereco_geo", None) is not None else None,
             data_criacao=getattr(pedido, "data_criacao", getattr(pedido, "created_at", None)),
             data_atualizacao=getattr(pedido, "data_atualizacao", getattr(pedido, "updated_at", None)),
-            itens=[
-                ItemPedidoResponse(
-                    id=it.id,
-                    produto_cod_barras=getattr(it, "produto_cod_barras", None),
-                    combo_id=getattr(it, "combo_id", None),
-                    receita_id=getattr(it, "receita_id", None),
-                    quantidade=it.quantidade,
-                    preco_unitario=float(it.preco_unitario or 0),
-                    observacao=it.observacao,
-                    produto_descricao_snapshot=getattr(it, "produto_descricao_snapshot", None),
-                    produto_imagem_snapshot=getattr(it, "produto_imagem_snapshot", None),
-                )
-                for it in pedido.itens
-            ],
             pagamento=pagamento,
             pago=getattr(pedido, "pago", False),
             produtos=PedidoResponseBuilder._build_produtos(pedido),
@@ -163,20 +135,6 @@ class PedidoResponseBuilder:
             endereco_geography=str(getattr(pedido, "endereco_geo", None)) if getattr(pedido, "endereco_geo", None) is not None else None,
             data_criacao=getattr(pedido, "data_criacao", getattr(pedido, "created_at", None)),
             data_atualizacao=getattr(pedido, "data_atualizacao", getattr(pedido, "updated_at", None)),
-            itens=[
-                ItemPedidoResponse(
-                    id=it.id,
-                    produto_cod_barras=getattr(it, "produto_cod_barras", None),
-                    combo_id=getattr(it, "combo_id", None),
-                    receita_id=getattr(it, "receita_id", None),
-                    quantidade=it.quantidade,
-                    preco_unitario=float(it.preco_unitario or 0),
-                    observacao=it.observacao,
-                    produto_descricao_snapshot=getattr(it, "produto_descricao_snapshot", None),
-                    produto_imagem_snapshot=getattr(it, "produto_imagem_snapshot", None),
-                )
-                for it in pedido.itens
-            ],
             pagamento=pagamento,
             pago=getattr(pedido, "pago", False),
             produtos=PedidoResponseBuilder._build_produtos(pedido),
@@ -348,17 +306,6 @@ class PedidoResponseBuilder:
             endereco_snapshot=getattr(pedido, "endereco_snapshot", None),
             data_criacao=getattr(pedido, "data_criacao", getattr(pedido, "created_at", None)),
             data_atualizacao=getattr(pedido, "data_atualizacao", getattr(pedido, "updated_at", None)),
-            itens=[
-                ItemPedidoResponse(
-                    id=it.id,
-                    produto_cod_barras=it.produto_cod_barras,
-                    quantidade=it.quantidade,
-                    preco_unitario=float(it.preco_unitario or 0),
-                    observacao=it.observacao,
-                    produto_descricao_snapshot=it.produto_descricao_snapshot,
-                    produto_imagem_snapshot=it.produto_imagem_snapshot
-                ) for it in pedido.itens
-            ],
             meio_pagamento_nome=meio_pagamento_nome,
             pagamento=pagamento,
             produtos=PedidoResponseBuilder._build_produtos(pedido),

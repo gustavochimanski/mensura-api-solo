@@ -414,7 +414,6 @@ class PedidoResponse(BaseModel):
     endereco_geography: Optional[str] = None  # Ponto geográfico para consultas avançadas
     data_criacao: datetime
     data_atualizacao: datetime
-    itens: List[ItemPedidoResponse]
     transacao: Optional[TransacaoResponse] = None
     pagamento: PedidoPagamentoResumo | None = None
     acertado_entregador: bool | None = None
@@ -446,7 +445,6 @@ class PedidoResponseCompleto(BaseModel):
     endereco_geography: Optional[str] = None  # Ponto geográfico para consultas avançadas
     data_criacao: datetime
     data_atualizacao: datetime
-    itens: List[ItemPedidoResponse]
     pagamento: PedidoPagamentoResumo | None = None
     pago: bool = False
     produtos: ProdutosPedidoOut = Field(default_factory=ProdutosPedidoOut)
@@ -476,7 +474,6 @@ class PedidoResponseCompletoComEndereco(BaseModel):
     endereco_geography: Optional[str] = None  # Ponto geográfico para consultas avançadas
     data_criacao: datetime
     data_atualizacao: datetime
-    itens: List[ItemPedidoResponse]
     pagamento: PedidoPagamentoResumo | None = None
     pago: bool = False
     produtos: ProdutosPedidoOut = Field(default_factory=ProdutosPedidoOut)
@@ -529,7 +526,6 @@ class PedidoResponseSimplificado(BaseModel):
     endereco_snapshot: Optional[dict] = None
     data_criacao: datetime
     data_atualizacao: datetime
-    itens: List[ItemPedidoResponse]
     meio_pagamento_nome: Optional[str] = None
     pagamento: PedidoPagamentoResumo | None = None
     produtos: ProdutosPedidoOut = Field(default_factory=ProdutosPedidoOut)
