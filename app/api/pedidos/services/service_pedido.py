@@ -1609,20 +1609,22 @@ class PedidoService:
         addresses: list[str] = []
         for pedido in pedidos:
             snapshot = self._extract_endereco_snapshot(pedido)
-            lat = snapshot.get("latitude")
-            lon = snapshot.get("longitude")
-            coordinate = None
-            if lat is not None and lon is not None:
-                try:
-                    coordinate = f"{float(lat):.6f},{float(lon):.6f}"
-                except (TypeError, ValueError):
-                    coordinate = None
-            if coordinate:
-                addresses.append(coordinate)
+            # Prioriza o endereço formatado ao invés de coordenadas
+            formatted = self._format_endereco_snapshot(snapshot)
+            if formatted:
+                addresses.append(formatted)
             else:
-                formatted = self._format_endereco_snapshot(snapshot)
-                if formatted:
-                    addresses.append(formatted)
+                # Se não houver endereço formatado, usa coordenadas como fallback
+                lat = snapshot.get("latitude")
+                lon = snapshot.get("longitude")
+                coordinate = None
+                if lat is not None and lon is not None:
+                    try:
+                        coordinate = f"{float(lat):.6f},{float(lon):.6f}"
+                    except (TypeError, ValueError):
+                        coordinate = None
+                if coordinate:
+                    addresses.append(coordinate)
 
         if not addresses:
             return None
