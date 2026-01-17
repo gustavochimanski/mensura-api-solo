@@ -413,6 +413,115 @@ class GroqSalesHandler:
 
         return 1
 
+    def _extrair_itens_pergunta_preco(self, mensagem: str) -> List[Dict[str, Any]]:
+        """
+        Extrai itens e quantidades em perguntas de preço com múltiplos produtos.
+        Ex: "quanto fica 2 x bacon e 1 coca lata" -> [{"produto_busca": "x bacon", "quantidade": 2}, ...]
+        """
+        msg = self._normalizar_mensagem(mensagem)
+        if not msg:
+            return []
+
+        match = re.search(
+            r'(quanto\s+(?:fica|custa|e|é)|qual\s+(?:o\s+)?(?:pre[cç]o|valor)|pre[cç]o|valor)',
+            msg,
+            re.IGNORECASE
+        )
+        if match:
+            msg = msg[match.end():].strip()
+
+        partes = re.split(r'\s+e\s+|,|;', msg)
+        itens = []
+
+        for parte in partes:
+            trecho = parte.strip()
+            if not trecho:
+                continue
+
+            qtd = 1
+            produto = trecho
+            prefer_alt = False
+            produto_alt = ""
+
+            m_qtd = re.match(r'^(\d+)\s*(x)?\s*(.+)$', trecho)
+            if m_qtd:
+                qtd = int(m_qtd.group(1))
+                tem_x = bool(m_qtd.group(2))
+                produto = m_qtd.group(3).strip()
+                if tem_x and produto and not produto.startswith("x "):
+                    produto_alt = f"x {produto}"
+                    prefer_alt = True
+
+            produto = re.sub(r'^(a|o|da|do|de)\s+', '', produto, flags=re.IGNORECASE).strip()
+            if not produto:
+                continue
+
+            itens.append({
+                "produto_busca": produto,
+                "quantidade": max(qtd, 1),
+                "produto_busca_alt": produto_alt,
+                "prefer_alt": prefer_alt
+            })
+
+        return itens
+
+    def _resolver_produto_para_preco(
+        self,
+        produto_busca: str,
+        produto_busca_alt: str,
+        prefer_alt: bool,
+        produtos: List[Dict]
+    ) -> Optional[Dict]:
+        if prefer_alt and produto_busca_alt:
+            produto = self._buscar_produto_por_termo(produto_busca_alt, produtos)
+            if produto:
+                return produto
+        produto = self._buscar_produto_por_termo(produto_busca, produtos)
+        if produto:
+            return produto
+        if produto_busca_alt:
+            return self._buscar_produto_por_termo(produto_busca_alt, produtos)
+        return None
+
+    def _gerar_resposta_preco_itens(self, itens: List[Dict[str, Any]], produtos: List[Dict]) -> str:
+        encontrados = []
+        faltando = []
+        total = 0.0
+
+        for item in itens:
+            produto_busca = item.get("produto_busca", "")
+            produto_busca_alt = item.get("produto_busca_alt", "")
+            prefer_alt = bool(item.get("prefer_alt", False))
+            quantidade = int(item.get("quantidade", 1) or 1)
+
+            produto = self._resolver_produto_para_preco(
+                produto_busca, produto_busca_alt, prefer_alt, produtos
+            )
+            if not produto:
+                faltando.append(produto_busca or produto_busca_alt)
+                continue
+
+            subtotal = produto["preco"] * quantidade
+            total += subtotal
+            encontrados.append((quantidade, produto, subtotal))
+
+        if not encontrados:
+            return "❌ Não encontrei esses itens no cardápio 😔\n\nQuer que eu mostre o que temos disponível? 😊"
+
+        msg = "💰 *Valores:*\n"
+        for quantidade, produto, subtotal in encontrados:
+            if quantidade > 1:
+                msg += f"• {quantidade}x {produto['nome']} - R$ {subtotal:.2f}\n"
+            else:
+                msg += f"• {produto['nome']} - R$ {produto['preco']:.2f}\n"
+
+        msg += f"\nTotal: R$ {total:.2f}\n\n"
+        if faltando:
+            msg += f"Obs: não encontrei {', '.join(faltando)} no cardápio.\n\n"
+
+        msg += "Quer adicionar ao pedido? 😊"
+        return msg
+
     def _detectar_forma_pagamento_em_mensagem(self, mensagem: str) -> Optional[Dict]:
         """
         Detecta se a mensagem contém uma forma de pagamento.
@@ -519,6 +628,13 @@ class GroqSalesHandler:
         # PERGUNTAS DE PREÇO - DEVE vir ANTES da detecção genérica (muito importante!)
         # Detecta: "quanto fica", "quanto custa", "qual o preço", "qual preço", "quanto é"
         if re.search(r'(quanto\s+(fica|custa|é|e)|qual\s+(o\s+)?(pre[cç]o|valor)|pre[cç]o\s+(d[aeo]|de|do)|valor\s+(d[aeo]|de|do))', msg, re.IGNORECASE):
+            itens_preco = self._extrair_itens_pergunta_preco(mensagem)
+            if len(itens_preco) > 1:
+                return {"funcao": "informar_sobre_produtos", "params": {"itens": itens_preco, "pergunta": msg}}
+            if len(itens_preco) == 1:
+                item = itens_preco[0]
+                return {"funcao": "informar_sobre_produto", "params": {"produto_busca": item.get("produto_busca", ""), "pergunta": msg}}
+
             # Tenta extrair o produto mencionado após as palavras-chave de preço
             # Padrões: "quanto fica a X", "quanto custa a X", "qual o preço do X", "preço da X"
             match_preco = re.search(r'(?:quanto\s+(?:fica|custa|é|e)|qual\s+(?:o\s+)?(?:pre[cç]o|valor)|pre[cç]o|valor)\s+(?:a|o|d[aeo]|de|do)?\s*([a-záàâãéêíóôõúç\-\s\d]+?)(\?|$|,|\.)', msg, re.IGNORECASE)
@@ -1350,6 +1466,11 @@ class GroqSalesHandler:
                         return await self._gerar_resposta_sobre_produto(user_id, produto, pergunta, dados)
                     else:
                         return f"❌ Não encontrei *{produto_busca}* no cardápio 😔\n\nQuer que eu mostre o que temos disponível? 😊"
+                elif funcao == "informar_sobre_produtos":
+                    itens = params.get("itens", [])
+                    if itens:
+                        return self._gerar_resposta_preco_itens(itens, todos_produtos)
+                    return "Qual produto você quer saber o preço?"
                 elif funcao == "ver_cardapio":
                     pedido_contexto = dados.get('pedido_contexto', [])
                     return self._gerar_lista_produtos(todos_produtos, pedido_contexto)
@@ -5196,6 +5317,11 @@ Responda de forma natural e curta:"""
                     return await self._gerar_resposta_sobre_produto(user_id, produto, pergunta, dados)
                 else:
                     return "Qual produto você quer saber mais? Me fala o nome!"
+            elif funcao == "informar_sobre_produtos":
+                itens = params.get("itens", [])
+                if itens:
+                    return self._gerar_resposta_preco_itens(itens, todos_produtos)
+                return "Qual produto você quer saber o preço?"
 
             # PERSONALIZAR PRODUTO (remover ingrediente ou adicionar extra)
             elif funcao == "personalizar_produto":
