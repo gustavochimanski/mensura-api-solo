@@ -60,7 +60,7 @@ from app.api.catalogo.contracts.complemento_contract import IComplementoContract
 from app.api.pedidos.services.service_pedido_kanban import KanbanService
 # Migrado para modelos unificados - contratos não são mais necessários
 from app.api.empresas.repositories.empresa_repo import EmpresaRepository
-from app.api.chatbot.core.config_whatsapp import load_whatsapp_config
+from app.api.chatbot.core.config_whatsapp import load_whatsapp_config, format_phone_number
 from app.api.chatbot.core.notifications import OrderNotification
 from app.utils.logger import logger
 from app.utils.database_utils import now_trimmed
@@ -1699,6 +1699,9 @@ class PedidoService:
                     entregador.id,
                 )
                 return
+            
+            # Formata o telefone: remove caracteres não numéricos e garante código do país +55
+            telefone = format_phone_number(telefone)
 
             pedidos_em_rota = self.repo.list_pedidos_em_rota_por_entregador(entregador.id)
             # Garante que o pedido atual está incluído na notificação, mesmo que ainda não esteja com status "S"
