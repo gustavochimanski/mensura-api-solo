@@ -380,6 +380,39 @@ class GroqSalesHandler:
         msg = re.sub(r"\s+", " ", msg).strip()
         return msg
 
+    def _extrair_quantidade_pergunta(self, pergunta: str, nome_produto: str) -> int:
+        """
+        Extrai quantidade da pergunta quando o cliente pergunta preço com quantidade.
+        Ex: "quanto fica 6 coca" -> 6
+        """
+        if not pergunta:
+            return 1
+
+        msg = self._normalizar_mensagem(pergunta)
+        if not msg:
+            return 1
+
+        nome_norm = self._normalizar_mensagem(nome_produto)
+        tokens = [t for t in nome_norm.split() if len(t) > 2]
+        tokens = [t for t in tokens if not re.match(r'^\d+(ml|l)$', t)]
+        if not tokens:
+            tokens = nome_norm.split()
+
+        for match in re.finditer(r'\b(\d+)\s*x?\s*([a-z][a-z0-9]*)', msg):
+            qtd = int(match.group(1))
+            palavra = match.group(2)
+            if palavra in tokens:
+                return max(qtd, 1)
+
+        if any(t in msg for t in tokens):
+            for match in re.finditer(r'\b(\d+)\b', msg):
+                pos = match.end()
+                if re.match(r'^\s*(ml|l)\b', msg[pos:]):
+                    continue
+                return max(int(match.group(1)), 1)
+
+        return 1
+
     def _detectar_forma_pagamento_em_mensagem(self, mensagem: str) -> Optional[Dict]:
         """
         Detecta se a mensagem contém uma forma de pagamento.
@@ -493,6 +526,8 @@ class GroqSalesHandler:
                 produto_extraido = match_preco.group(1).strip()
                 # Remove palavras genéricas que podem ter sido capturadas
                 produto_extraido = re.sub(r'^(a|o|da|do|de)\s+', '', produto_extraido, flags=re.IGNORECASE).strip()
+                # Remove quantidade no início (ex: "6 coca")
+                produto_extraido = re.sub(r'^\d+\s*x?\s*', '', produto_extraido, flags=re.IGNORECASE).strip()
                 palavras_genericas = ['cardapio', 'menu', 'lista', 'catalogo', 'catálogo', 'ai', 'aí', 'vocês', 'vcs', 'produto']
                 if produto_extraido and produto_extraido.lower() not in palavras_genericas and len(produto_extraido) > 2:
                     return {"funcao": "informar_sobre_produto", "params": {"produto_busca": produto_extraido, "pergunta": msg}}
@@ -501,6 +536,7 @@ class GroqSalesHandler:
             match_produto_preco = re.search(r'(pizza|x-?\w+|coca|guarana|água|agua|cerveja|batata|onion|hamburguer|hambúrguer|refrigerante|suco|bebida|[\d]+ml|[\d]+\s*ml)[\w\s\-]*', msg, re.IGNORECASE)
             if match_produto_preco:
                 produto_preco = match_produto_preco.group(0).strip()
+                produto_preco = re.sub(r'^\d+\s*x?\s*', '', produto_preco, flags=re.IGNORECASE).strip()
                 return {"funcao": "informar_sobre_produto", "params": {"produto_busca": produto_preco, "pergunta": msg}}
 
         # Perguntas sobre o que tem disponível (genérico - DEVE vir DEPOIS da detecção de produto específico)
@@ -4740,7 +4776,12 @@ Responda de forma natural e curta:"""
             if ingredientes:
                 # Se foi pergunta sobre PREÇO, responde diretamente sem mostrar ingredientes
                 if eh_pergunta_preco:
-                    msg = f"💰 *{nome_produto}* - R$ {produto['preco']:.2f}\n\n"
+                    quantidade = self._extrair_quantidade_pergunta(pergunta, nome_produto)
+                    if quantidade > 1:
+                        total = produto['preco'] * quantidade
+                        msg = f"💰 *{nome_produto}* - {quantidade}x R$ {produto['preco']:.2f} = R$ {total:.2f}\n\n"
+                    else:
+                        msg = f"💰 *{nome_produto}* - R$ {produto['preco']:.2f}\n\n"
                     msg += "Quer adicionar ao pedido? 😊"
                     return msg
                 
@@ -4796,7 +4837,12 @@ Responda de forma natural e curta:"""
                 # Monta resposta apropriada
                 # Se foi pergunta sobre PREÇO, responde diretamente
                 if eh_pergunta_preco:
-                    msg = f"💰 *{nome_produto}* - R$ {produto['preco']:.2f}\n\n"
+                    quantidade = self._extrair_quantidade_pergunta(pergunta, nome_produto)
+                    if quantidade > 1:
+                        total = produto['preco'] * quantidade
+                        msg = f"💰 *{nome_produto}* - {quantidade}x R$ {produto['preco']:.2f} = R$ {total:.2f}\n\n"
+                    else:
+                        msg = f"💰 *{nome_produto}* - R$ {produto['preco']:.2f}\n\n"
                     msg += "Quer adicionar ao pedido? 😊"
                     return msg
                 
