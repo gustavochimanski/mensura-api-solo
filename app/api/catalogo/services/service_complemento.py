@@ -399,6 +399,7 @@ class ComplementoService:
                     update_data[key] = value
         
         self.repo_item.atualizar_item(item, **update_data)
+        self.db.commit()  # Garante que as mudanças sejam persistidas
         return self.buscar_item_por_id(item_id)
 
     def deletar_item(self, item_id: int):

@@ -1,5 +1,5 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, status, Path, Query
+from fastapi import APIRouter, Body, Depends, status, Path, Query
 from sqlalchemy.orm import Session
 
 from app.api.catalogo.schemas.schema_complemento import (
@@ -67,7 +67,7 @@ def buscar_adicional(
 @router.put("/{adicional_id}", response_model=AdicionalResponse)
 def atualizar_adicional(
     adicional_id: int = Path(..., description="ID do adicional"),
-    req: AtualizarAdicionalRequest = Depends(),
+    req: AtualizarAdicionalRequest = Body(...),
     db: Session = Depends(get_db),
 ):
     """Atualiza um adicional existente."""
