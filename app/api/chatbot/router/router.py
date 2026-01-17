@@ -175,9 +175,20 @@ async def _send_whatsapp_and_log(
     prompt_key: str,
     model: str,
     message_id: Optional[str] = None,
+    buttons: Optional[List[Dict[str, str]]] = None,
 ):
     notifier = OrderNotification()
-    result = await notifier.send_whatsapp_message(phone_number, response_message, empresa_id=empresa_id)
+    
+    # Se tiver botões, envia mensagem com botões
+    if buttons:
+        result = await notifier.send_whatsapp_message_with_buttons(
+            phone_number, 
+            response_message, 
+            buttons, 
+            empresa_id=empresa_id
+        )
+    else:
+        result = await notifier.send_whatsapp_message(phone_number, response_message, empresa_id=empresa_id)
 
     if isinstance(result, dict) and result.get("success"):
         conversations = chatbot_db.get_conversations_by_user(db, phone_number, empresa_id_int)
@@ -197,6 +208,85 @@ async def _send_whatsapp_and_log(
         chatbot_db.create_message(db, conversation_id, "assistant", response_message)
 
     return result
+
+
+async def _enviar_notificacao_empresa(
+    db: Session,
+    empresa_id: str,
+    empresa_id_int: int,
+    cliente_phone: str,
+    cliente_nome: Optional[str],
+    tipo_solicitacao: str,  # "preciso_ajuda" ou "chamar_atendente"
+):
+    """
+    Envia notificação para o WhatsApp da empresa quando cliente pede ajuda ou chama atendente.
+    """
+    try:
+        # Busca nome da empresa
+        empresa_query = text("""
+            SELECT nome
+            FROM cadastros.empresas
+            WHERE id = :empresa_id
+        """)
+        result_empresa = db.execute(empresa_query, {"empresa_id": empresa_id_int})
+        empresa = result_empresa.fetchone()
+        nome_empresa = empresa[0] if empresa and empresa[0] else "Empresa"
+        
+        # Monta mensagem de notificação
+        if tipo_solicitacao == "preciso_ajuda":
+            mensagem = f"🔔 *Notificação de Atendimento*\n\n"
+            mensagem += f"Cliente *{cliente_nome or cliente_phone}* está precisando de ajuda.\n\n"
+        else:  # chamar_atendente
+            mensagem = f"🔔 *Solicitação de Atendimento Humano*\n\n"
+            mensagem += f"Cliente *{cliente_nome or cliente_phone}* está solicitando atendimento de um humano.\n\n"
+        
+        mensagem += f"📱 Telefone: {cliente_phone}\n"
+        if cliente_nome:
+            mensagem += f"👤 Nome: {cliente_nome}\n"
+        mensagem += f"🏢 Empresa: {nome_empresa}\n\n"
+        mensagem += f"💬 Entre em contato com o cliente para atendê-lo."
+        
+        # Envia notificação para o número da empresa (usando o mesmo sistema de envio)
+        # O número da empresa é o display_phone_number da configuração do WhatsApp
+        # Mas como não temos acesso direto, vamos usar o sistema de notificação interno
+        # ou enviar para um número configurado. Por enquanto, vamos usar o mesmo empresa_id
+        # para enviar a notificação (a API do WhatsApp vai usar a configuração da empresa)
+        
+        # Busca display_phone_number da configuração do WhatsApp da empresa
+        from app.api.notifications.repositories.whatsapp_config_repository import WhatsAppConfigRepository
+        repo_whatsapp = WhatsAppConfigRepository(db)
+        config_whatsapp = repo_whatsapp.get_active_by_empresa(empresa_id)
+        
+        if config_whatsapp and config_whatsapp.display_phone_number:
+            # Envia notificação para o número da empresa
+            notifier = OrderNotification()
+            # Formata o número da empresa
+            from app.api.chatbot.core.config_whatsapp import format_phone_number
+            empresa_phone = format_phone_number(config_whatsapp.display_phone_number)
+            
+            result = await notifier.send_whatsapp_message(empresa_phone, mensagem, empresa_id=empresa_id)
+            
+            if result.get("success"):
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.info(f"✅ Notificação enviada para empresa {empresa_id} - Cliente: {cliente_phone}")
+                return {"success": True, "message": "Notificação enviada com sucesso"}
+            else:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"❌ Erro ao enviar notificação para empresa: {result.get('error')}")
+                return {"success": False, "error": result.get("error")}
+        else:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"⚠️ Configuração do WhatsApp não encontrada para empresa {empresa_id}")
+            return {"success": False, "error": "Configuração do WhatsApp não encontrada"}
+            
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"❌ Erro ao enviar notificação para empresa: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
 
 # Router
 router = APIRouter(
@@ -1646,6 +1736,11 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
             logger.info(f"🚫 Interceptando tentativa de pedido - aceita_pedidos_whatsapp: {aceita_pedidos_whatsapp}, button_id: {button_id}, is_pedido_intent: {is_pedido_intent}, mensagem: {message_text[:50]}")
             
             resposta = _montar_mensagem_redirecionamento(db, empresa_id_int, config)
+            # Adiciona botões quando não aceita pedidos
+            buttons = [
+                {"id": "preciso_ajuda", "title": "Preciso de ajuda"},
+                {"id": "chamar_atendente", "title": "Chamar atendente"}
+            ]
             await _send_whatsapp_and_log(
                 db=db,
                 phone_number=phone_number,
@@ -1656,7 +1751,8 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 response_message=resposta,
                 prompt_key=prompt_key_support,
                 model=DEFAULT_MODEL,
-                message_id=message_id
+                message_id=message_id,
+                buttons=buttons
             )
             return
 
@@ -1757,6 +1853,8 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 botao_clicado = "pedir_link"
             elif "preciso de ajuda" in mensagem_lower or mensagem_lower == "preciso de ajuda" or "atendimento" in mensagem_lower:
                 botao_clicado = "preciso_ajuda"
+            elif "chamar atendente" in mensagem_lower or mensagem_lower == "chamar atendente":
+                botao_clicado = "chamar_atendente"
             
             # Se for clique em botão, processa a resposta
             if botao_clicado:
@@ -1801,7 +1899,28 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                     resposta = f"📲 Perfeito! Acesse nosso cardápio completo pelo link:\n\n👉 {link_cardapio}\n\nDepois é só fazer seu pedido pelo site! 😊"
                 elif botao_clicado == "preciso_ajuda":
                     # Cliente precisa de ajuda
+                    # Envia notificação para a empresa
+                    await _enviar_notificacao_empresa(
+                        db=db,
+                        empresa_id=empresa_id,
+                        empresa_id_int=empresa_id_int,
+                        cliente_phone=phone_number,
+                        cliente_nome=contact_name,
+                        tipo_solicitacao="preciso_ajuda"
+                    )
                     resposta = "Claro! Estou aqui para te ajudar! 😊\n\nComo posso te auxiliar hoje?\n• Dúvidas sobre produtos\n• Informações sobre entrega\n• Outras questões\n\nÉ só me dizer o que você precisa!"
+                elif botao_clicado == "chamar_atendente":
+                    # Cliente quer chamar atendente humano
+                    # Envia notificação para a empresa
+                    await _enviar_notificacao_empresa(
+                        db=db,
+                        empresa_id=empresa_id,
+                        empresa_id_int=empresa_id_int,
+                        cliente_phone=phone_number,
+                        cliente_nome=contact_name,
+                        tipo_solicitacao="chamar_atendente"
+                    )
+                    resposta = "✅ *Solicitação enviada!*\n\nNossa equipe foi notificada e entrará em contato com você em breve.\n\nEnquanto isso, posso te ajudar com alguma dúvida? 😊"
                 
                 # Envia a resposta
                 notifier = OrderNotification()
@@ -1846,9 +1965,29 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
             if not resposta or not resposta.strip():
                 return
 
+            # Se não aceita pedidos, verifica se a resposta é de redirecionamento e adiciona botões
+            buttons = None
+            if not aceita_pedidos_whatsapp:
+                # Verifica se a resposta contém palavras-chave de redirecionamento
+                resposta_lower = resposta.lower()
+                palavras_redirecionamento = ["link", "cardápio", "cardapio", "acesse", "site", "online"]
+                if any(palavra in resposta_lower for palavra in palavras_redirecionamento):
+                    buttons = [
+                        {"id": "preciso_ajuda", "title": "Preciso de ajuda"},
+                        {"id": "chamar_atendente", "title": "Chamar atendente"}
+                    ]
+
             # Envia resposta via WhatsApp
             notifier = OrderNotification()
-            result = await notifier.send_whatsapp_message(phone_number, resposta, empresa_id=empresa_id)
+            if buttons:
+                result = await notifier.send_whatsapp_message_with_buttons(
+                    phone_number, 
+                    resposta, 
+                    buttons, 
+                    empresa_id=empresa_id
+                )
+            else:
+                result = await notifier.send_whatsapp_message(phone_number, resposta, empresa_id=empresa_id)
 
             if not isinstance(result, dict) or not result.get("success"):
                 import logging
@@ -1919,6 +2058,11 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
             logger.info(f"🚫 [Fluxo Antigo] Interceptando tentativa de pedido - aceita_pedidos_whatsapp: {aceita_pedidos_whatsapp}, button_id: {button_id}, is_pedido_intent: {is_pedido_intent}, mensagem: {message_text[:50]}")
             
             resposta = _montar_mensagem_redirecionamento(db, empresa_id_int, config)
+            # Adiciona botões quando não aceita pedidos
+            buttons = [
+                {"id": "preciso_ajuda", "title": "Preciso de ajuda"},
+                {"id": "chamar_atendente", "title": "Chamar atendente"}
+            ]
             await _send_whatsapp_and_log(
                 db=db,
                 phone_number=phone_number,
@@ -1929,7 +2073,8 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 response_message=resposta,
                 prompt_key=prompt_key_support,
                 model=DEFAULT_MODEL,
-                message_id=message_id
+                message_id=message_id,
+                buttons=buttons
             )
             return
 

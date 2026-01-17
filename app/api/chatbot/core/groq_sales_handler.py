@@ -218,6 +218,23 @@ AI_FUNCTIONS = [
                 "required": []
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "calcular_taxa_entrega",
+            "description": "Cliente quer saber o VALOR DA TAXA DE ENTREGA/FRETE para um endereço. Use quando perguntar sobre: 'qual a taxa de entrega?', 'quanto é o frete?', 'qual o valor da entrega?', 'quanto custa a entrega?', 'qual a taxa para [endereço]?', 'quanto fica a entrega para [endereço]?'. IMPORTANTE: Esta é uma PERGUNTA sobre taxa de entrega, NÃO é pedido de produto!",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "endereco": {
+                        "type": "string",
+                        "description": "Endereço mencionado pelo cliente (opcional, pode ser vazio se não mencionou endereço específico)"
+                    }
+                },
+                "required": []
+            }
+        }
     }
 ]
 
@@ -291,6 +308,15 @@ REGRA DE OURO: Na dúvida, use "conversar". É melhor conversar do que fazer aç
    - "tem promoção?" → ver_combos
    - "combo família" → ver_combos
    - "combos" → ver_combos
+
+✅ calcular_taxa_entrega - Quando quer saber o VALOR DA TAXA DE ENTREGA/FRETE:
+   - "qual a taxa de entrega?" → calcular_taxa_entrega()
+   - "quanto é o frete?" → calcular_taxa_entrega()
+   - "qual o valor da entrega?" → calcular_taxa_entrega()
+   - "quanto custa a entrega?" → calcular_taxa_entrega()
+   - "qual a taxa para rua xyz?" → calcular_taxa_entrega(endereco="rua xyz")
+   - "quanto fica a entrega para [endereço]?" → calcular_taxa_entrega(endereco="[endereço]")
+   ⚠️ IMPORTANTE: Perguntas sobre TAXA DE ENTREGA sempre usam esta função, NÃO use 'adicionar_produto' ou 'informar_sobre_produto'!
 
 === PRODUTOS DISPONÍVEIS ===
 {produtos_lista}
@@ -773,6 +799,15 @@ class GroqSalesHandler:
         # Ver combos
         if re.search(r'(combo|combos|promocao|promocoes)', msg):
             return {"funcao": "ver_combos", "params": {}}
+
+        # PERGUNTAS SOBRE TAXA DE ENTREGA/FRETE - DEVE vir ANTES da detecção de produtos
+        # Detecta: "qual a taxa de entrega", "quanto é o frete", "qual o valor da entrega", etc.
+        if re.search(r'(taxa\s*(de\s*)?(entrega|delivery)|frete|valor\s*(da\s*)?(entrega|delivery)|quanto\s*(é|e|fica|custa)\s*(o\s*)?(frete|entrega|delivery)|pre[cç]o\s*(do\s*)?(frete|entrega|delivery))', msg, re.IGNORECASE):
+            print(f"🚚 [Regras] Detecção de taxa de entrega na mensagem: '{msg}'")
+            # Tenta extrair endereço se mencionado
+            endereco_match = re.search(r'(?:para|pra|em|na|no|rua|avenida|av\.|av|travessa|trav\.|trav|alameda|al\.|al)\s+([a-záàâãéêíóôõúç0-9\s,\.\-]+?)(?:\?|$|,|\.)', msg, re.IGNORECASE)
+            endereco = endereco_match.group(1).strip() if endereco_match else ""
+            return {"funcao": "calcular_taxa_entrega", "params": {"endereco": endereco}}
 
         # Ver carrinho
         if re.search(r'(quanto\s*(ta|tá|esta)|meu\s*pedido|carrinho|o\s*que\s*(eu\s*)?pedi)', msg):
@@ -1805,6 +1840,9 @@ class GroqSalesHandler:
                         return msg
                     else:
                         return "No momento não temos adicionais extras disponíveis 😅"
+                elif funcao == "calcular_taxa_entrega":
+                    endereco = params.get("endereco", "")
+                    return await self._calcular_e_responder_taxa_entrega(user_id, endereco, dados)
                 elif funcao == "personalizar_produto":
                     acao = params.get("acao", "")
                     item_nome = params.get("item", "")
@@ -5461,6 +5499,60 @@ Responda de forma natural e curta:"""
                 msg += "Quer adicionar ao pedido? 😊"
             return msg
 
+    async def _calcular_e_responder_taxa_entrega(
+        self,
+        user_id: str,
+        endereco: str,
+        dados: Dict
+    ) -> str:
+        """
+        Calcula e retorna a taxa de entrega para o cliente.
+        Se tiver endereço, pode tentar calcular com base na distância.
+        """
+        try:
+            from app.api.cadastros.models.model_regiao_entrega import RegiaoEntregaModel
+            from sqlalchemy import or_
+
+            # Busca a primeira região de entrega ativa (taxa padrão)
+            regiao = self.db.query(RegiaoEntregaModel).filter(
+                and_(
+                    RegiaoEntregaModel.empresa_id == self.empresa_id,
+                    RegiaoEntregaModel.ativo == True
+                )
+            ).order_by(RegiaoEntregaModel.distancia_max_km.asc()).first()
+
+            if regiao:
+                taxa = float(regiao.taxa_entrega)
+                tempo_estimado = regiao.tempo_estimado_min or 30
+            else:
+                # Fallback se não tiver região configurada
+                taxa = 5.0
+                tempo_estimado = 30
+
+            # Monta resposta
+            msg = "🚚 *Taxa de Entrega*\n\n"
+            msg += f"💰 Valor: R$ {taxa:.2f}\n"
+            msg += f"⏱️ Tempo estimado: {tempo_estimado} minutos\n\n"
+            
+            if endereco:
+                msg += f"📍 Para o endereço: {endereco}\n\n"
+            
+            msg += "Quer fazer um pedido? 😊"
+            
+            # Salva no histórico
+            historico = dados.get('historico', [])
+            historico.append({"role": "user", "content": f"Pergunta sobre taxa de entrega{f' para {endereco}' if endereco else ''}"})
+            dados['historico'] = historico
+            self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
+            
+            return msg
+
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Erro ao calcular taxa de entrega: {e}", exc_info=True)
+            return "Desculpe, não consegui calcular a taxa de entrega no momento. Entre em contato conosco para mais informações! 😊"
+
     # ========== PROCESSAMENTO PRINCIPAL ==========
 
     async def processar_mensagem(self, user_id: str, mensagem: str) -> str:
@@ -5975,6 +6067,11 @@ Responda de forma natural e curta:"""
                     self._salvar_estado_conversa(user_id, estado, dados)
                     return resposta_preco
                 return "Qual produto você quer saber o preço?"
+
+            # CALCULAR TAXA DE ENTREGA
+            elif funcao == "calcular_taxa_entrega":
+                endereco = params.get("endereco", "")
+                return await self._calcular_e_responder_taxa_entrega(user_id, endereco, dados)
 
             # PERSONALIZAR PRODUTO (remover ingrediente ou adicionar extra)
             elif funcao == "personalizar_produto":
