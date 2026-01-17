@@ -88,19 +88,42 @@ PEDIDO_INTENT_TERMS = [
     "fechar",
     "só isso",
     "pode fechar",
+    "coloca",
+    "colocar",
+    "incluir",
+    "põe",
+    "põe na conta",
+    "pode anotar",
+    "anota",
+    "anotar",
+    "vou levar",
+    "levar",
+    "pegar",
+    "vou pegar",
 ]
 
 
 def _is_pedido_intent(message_text: Optional[str]) -> bool:
+    """
+    Detecta se a mensagem contém intenção de fazer um pedido.
+    Retorna True se detectar termos relacionados a pedidos ou padrões numéricos de pedido.
+    """
     if not message_text:
         return False
     msg = message_text.lower().strip()
     if not msg:
         return False
+    
+    # Verifica se contém termos de intenção de pedido
     if any(term in msg for term in PEDIDO_INTENT_TERMS):
         return True
-    # Padrões como "1 x-bacon", "2 pizzas", "3 coca"
-    return bool(re.match(r"^\d+\s*(x\s*)?\w+", msg))
+    
+    # Padrões como "1 x-bacon", "2 pizzas", "3 coca", "2x hambúrguer"
+    # Também detecta padrões no meio da frase: "quero 2 pizzas", "me vê 1 coca"
+    if re.search(r'\d+\s*(x\s*)?\w+', msg):
+        return True
+    
+    return False
 
 
 def _montar_mensagem_redirecionamento(db: Session, empresa_id: int, config) -> str:
@@ -1462,7 +1485,17 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
         # CARREGA CONFIGURAÇÃO DO CHATBOT (para separar agentes)
         repo_config = ChatbotConfigRepository(db)
         config = repo_config.get_by_empresa_id(empresa_id_int)
-        aceita_pedidos_whatsapp = not (config and config.aceita_pedidos_whatsapp is False)
+        # Se config existe e aceita_pedidos_whatsapp é explicitamente False, então não aceita
+        # Caso contrário (config None ou aceita_pedidos_whatsapp True/None), aceita por padrão
+        aceita_pedidos_whatsapp = True  # Padrão: aceita pedidos
+        if config is not None and config.aceita_pedidos_whatsapp is False:
+            aceita_pedidos_whatsapp = False
+        
+        # Log para debug
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"🔧 Config chatbot - empresa_id: {empresa_id_int}, aceita_pedidos_whatsapp: {aceita_pedidos_whatsapp}, config existe: {config is not None}, config.aceita_pedidos_whatsapp: {config.aceita_pedidos_whatsapp if config else 'N/A'}")
+        
         prompt_key_sales = PROMPT_ATENDIMENTO_PEDIDO_WHATSAPP
         prompt_key_support = PROMPT_ATENDIMENTO
 
@@ -1590,7 +1623,12 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
         USE_SALES_HANDLER = aceita_pedidos_whatsapp  # Só usa vendas se permitido
 
         # Se não aceita pedidos pelo WhatsApp, intercepta tentativas de pedido
-        if not aceita_pedidos_whatsapp and (button_id == "pedir_whatsapp" or _is_pedido_intent(message_text)):
+        is_pedido_intent = _is_pedido_intent(message_text)
+        if not aceita_pedidos_whatsapp and (button_id == "pedir_whatsapp" or is_pedido_intent):
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"🚫 Interceptando tentativa de pedido - aceita_pedidos_whatsapp: {aceita_pedidos_whatsapp}, button_id: {button_id}, is_pedido_intent: {is_pedido_intent}, mensagem: {message_text[:50]}")
+            
             resposta = _montar_mensagem_redirecionamento(db, empresa_id_int, config)
             await _send_whatsapp_and_log(
                 db=db,
@@ -1855,6 +1893,29 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
             content=message_text,
             whatsapp_message_id=message_id  # Passa message_id do WhatsApp para detectar duplicatas
         )
+
+        # 2.5. VERIFICA SE NÃO ACEITA PEDIDOS E INTERCEPTA TENTATIVAS DE PEDIDO
+        # (mesma verificação do fluxo principal para garantir consistência)
+        is_pedido_intent = _is_pedido_intent(message_text)
+        if not aceita_pedidos_whatsapp and (button_id == "pedir_whatsapp" or is_pedido_intent):
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"🚫 [Fluxo Antigo] Interceptando tentativa de pedido - aceita_pedidos_whatsapp: {aceita_pedidos_whatsapp}, button_id: {button_id}, is_pedido_intent: {is_pedido_intent}, mensagem: {message_text[:50]}")
+            
+            resposta = _montar_mensagem_redirecionamento(db, empresa_id_int, config)
+            await _send_whatsapp_and_log(
+                db=db,
+                phone_number=phone_number,
+                contact_name=contact_name,
+                empresa_id=empresa_id,
+                empresa_id_int=empresa_id_int,
+                user_message=message_text,
+                response_message=resposta,
+                prompt_key=prompt_key_support,
+                model=DEFAULT_MODEL,
+                message_id=message_id
+            )
+            return
 
         # 3. Busca histórico de mensagens
         messages_history = chatbot_db.get_messages(db, conversation_id)

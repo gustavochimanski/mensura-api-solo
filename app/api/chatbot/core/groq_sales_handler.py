@@ -3980,22 +3980,55 @@ REGRA PARA COMPLEMENTOS:
             from sqlalchemy import text
 
             query = text("""
-                SELECT metadata
+                SELECT id, metadata
                 FROM chatbot.conversations
-                WHERE user_id = :user_id
+                WHERE user_id = :user_id AND empresa_id = :empresa_id
                 ORDER BY updated_at DESC
                 LIMIT 1
             """)
 
-            result = self.db.execute(query, {"user_id": user_id}).fetchone()
+            result = self.db.execute(query, {
+                "user_id": user_id,
+                "empresa_id": self.empresa_id
+            }).fetchone()
 
-            if result and result[0]:
-                metadata = result[0]
-                estado = metadata.get('sales_state', STATE_WELCOME)
-                dados = metadata.get('sales_data', {})
-                return (estado, dados)
+            conversation_id = None
+            estado = STATE_WELCOME
+            dados: Dict[str, Any] = {'carrinho': [], 'historico': []}
 
-            return (STATE_WELCOME, {'carrinho': [], 'historico': []})
+            if result:
+                conversation_id = result[0]
+                metadata = result[1] or {}
+                if isinstance(metadata, str):
+                    try:
+                        metadata = json.loads(metadata)
+                    except Exception:
+                        metadata = {}
+
+                if isinstance(metadata, dict):
+                    estado = metadata.get('sales_state', STATE_WELCOME)
+                    dados = metadata.get('sales_data', {}) or {}
+
+            if not isinstance(dados, dict):
+                dados = {}
+
+            dados.setdefault('carrinho', [])
+            dados.setdefault('historico', [])
+
+            # Se não houver histórico no metadata, carrega do banco para dar contexto
+            if conversation_id and not dados.get('historico'):
+                try:
+                    from . import database as chatbot_db
+                    mensagens = chatbot_db.get_messages(self.db, conversation_id)
+                    if mensagens:
+                        dados['historico'] = [
+                            {"role": m.get("role", "user"), "content": m.get("content", "")}
+                            for m in mensagens[-10:]
+                        ]
+                except Exception as e:
+                    print(f"⚠️ Erro ao carregar histórico do banco: {e}")
+
+            return (estado, dados)
         except Exception as e:
             print(f"Erro ao obter estado: {e}")
             return (STATE_WELCOME, {'carrinho': [], 'historico': []})
@@ -4016,10 +4049,10 @@ REGRA PARA COMPLEMENTOS:
                         'sales_data', CAST(:dados AS jsonb)
                     ),
                     updated_at = CURRENT_TIMESTAMP
-                WHERE user_id = :user_id
+                WHERE user_id = :user_id AND empresa_id = :empresa_id
                 AND id = (
                     SELECT id FROM chatbot.conversations
-                    WHERE user_id = :user_id
+                    WHERE user_id = :user_id AND empresa_id = :empresa_id
                     ORDER BY updated_at DESC
                     LIMIT 1
                 )
@@ -4029,7 +4062,8 @@ REGRA PARA COMPLEMENTOS:
             result = self.db.execute(query_update, {
                 "estado": estado,
                 "dados": dados_json,
-                "user_id": user_id
+                "user_id": user_id,
+                "empresa_id": self.empresa_id
             })
 
             updated_row = result.fetchone()
@@ -4504,8 +4538,9 @@ Sua única função é ajudar a ESCOLHER PRODUTOS. Nada mais!
         # Salva produtos no estado
         dados['produtos_disponiveis'] = todos_produtos
 
-        # Adiciona mensagem atual ao histórico
-        historico.append({"role": "user", "content": mensagem})
+        # Adiciona mensagem atual ao histórico (evita duplicar quando já veio do banco)
+        if not historico or historico[-1].get("role") != "user" or historico[-1].get("content") != mensagem:
+            historico.append({"role": "user", "content": mensagem})
         dados['historico'] = historico
 
         return contexto_sistema, historico
@@ -5125,6 +5160,16 @@ Sua única função é ajudar a ESCOLHER PRODUTOS. Nada mais!
         Gera resposta conversacional natural usando a IA.
         É o coração do bot humanizado - conversa como pessoa real!
         """
+        # Monta histórico recente para dar contexto real
+        historico = dados.get('historico', [])
+        linhas_historico = []
+        for msg in historico[-6:]:
+            role = "Cliente" if msg.get("role") == "user" else "Atendente"
+            content = (msg.get("content") or "").strip()
+            if content:
+                linhas_historico.append(f"{role}: {content}")
+        historico_texto = "\n".join(linhas_historico) if linhas_historico else "Sem histórico"
+
         # Monta prompt conversacional
         prompt_conversa = f"""Você é um atendente simpático de delivery via WhatsApp.
 Responda de forma NATURAL, CURTA (1-3 frases) e AMIGÁVEL. Use no máximo 1 emoji.
@@ -5132,7 +5177,8 @@ Responda de forma NATURAL, CURTA (1-3 frases) e AMIGÁVEL. Use no máximo 1 emoj
 CONTEXTO:
 - Tipo de conversa: {tipo_conversa}
 - Carrinho do cliente: {len(carrinho)} itens, R$ {sum(i['preco']*i.get('quantidade',1) for i in carrinho):.2f}
-- Histórico recente disponível
+- Histórico recente:
+{historico_texto}
 
 REGRAS:
 1. NUNCA mostre o cardápio completo (a menos que peçam explicitamente "cardápio")
@@ -5182,9 +5228,10 @@ Responda de forma natural e curta:"""
                     if len(resposta) > 300:
                         resposta = resposta[:300] + "..."
 
-                    # Salva no histórico
+                    # Salva no histórico (evita duplicar quando já veio do banco)
                     historico = dados.get('historico', [])
-                    historico.append({"role": "user", "content": mensagem})
+                    if not historico or historico[-1].get("role") != "user" or historico[-1].get("content") != mensagem:
+                        historico.append({"role": "user", "content": mensagem})
                     historico.append({"role": "assistant", "content": resposta})
                     dados['historico'] = historico[-10:]
                     self._salvar_estado_conversa(user_id, STATE_AGUARDANDO_PEDIDO, dados)
