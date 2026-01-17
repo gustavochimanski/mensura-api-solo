@@ -611,9 +611,10 @@ async def send_notification(request: Request, db: Session = Depends(get_db)):
                     role="assistant",
                     content=message
                 )
-                print(f"   💾 Mensagem salva no histórico (conversa {conversations[0]['id']})")
         except Exception as e:
-            print(f"   ⚠️ Erro ao salvar mensagem no histórico: {e}")
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Erro ao salvar mensagem no histórico: {e}")
 
         return {
             "success": True,
@@ -720,9 +721,10 @@ async def send_media(request: Request, db: Session = Depends(get_db)):
                             role="assistant",
                             content=media_content
                         )
-                        print(f"   💾 Mídia salva no histórico (conversa {conversations[0]['id']})")
                 except Exception as save_error:
-                    print(f"   ⚠️ Erro ao salvar mídia no histórico: {save_error}")
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.error(f"Erro ao salvar mídia no histórico: {save_error}")
 
                 return {
                     "success": True,
@@ -735,7 +737,9 @@ async def send_media(request: Request, db: Session = Depends(get_db)):
                     detail=result.get("error", {}).get("message", "Erro ao enviar arquivo")
                 )
     except Exception as e:
-        print(f"Erro ao enviar media: {e}")
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Erro ao enviar media: {e}")
         raise HTTPException(
             status_code=500,
             detail=f"Erro ao enviar arquivo: {str(e)}"
@@ -796,8 +800,6 @@ async def upload_file(request: Request, file: UploadFile = File(...)):
 
         file_url = f"{base_url}/api/chatbot/files/{unique_filename}"
 
-        print(f"📁 Arquivo salvo: {file_path}")
-        print(f"🔗 URL pública: {file_url}")
 
         return {
             "success": True,
@@ -805,7 +807,9 @@ async def upload_file(request: Request, file: UploadFile = File(...)):
             "filename": unique_filename
         }
     except Exception as e:
-        print(f"Erro ao fazer upload: {e}")
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Erro ao fazer upload: {e}")
         raise HTTPException(
             status_code=500,
             detail=f"Erro ao fazer upload: {str(e)}"
@@ -869,30 +873,21 @@ async def webhook_verification(request: Request):
         # Token de verificação - você pode mudar isso
         VERIFY_TOKEN = "meu_token_secreto_123"
 
-        # Log para debug
-        print(f"\n🔍 Verificação do webhook recebida:")
-        print(f"   Mode: {mode}")
-        print(f"   Token recebido: {token}")
-        print(f"   Token esperado: {VERIFY_TOKEN}")
-        print(f"   Challenge: {challenge}")
-
         if mode == "subscribe" and token == VERIFY_TOKEN:
-            print("✅ Webhook verificado com sucesso!")
             # Retornar o challenge como texto puro (WhatsApp espera text/plain)
             if challenge:
                 return PlainTextResponse(content=str(challenge))
             else:
-                print("⚠️ Challenge não fornecido")
                 raise HTTPException(status_code=400, detail="Challenge não fornecido")
         else:
-            print("❌ Falha na verificação do webhook")
-            print(f"   Motivo: mode={mode}, token_match={token == VERIFY_TOKEN}")
             raise HTTPException(status_code=403, detail="Falha na verificação")
     except HTTPException:
         # Re-raise HTTPException para manter o comportamento correto
         raise
     except Exception as e:
-        print(f"❌ Erro inesperado na verificação do webhook: {e}")
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Erro inesperado na verificação do webhook: {e}")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Erro interno: {str(e)}")
@@ -908,36 +903,32 @@ def get_empresa_id_by_business_account_id(db: Session, business_account_id: str)
     logger = logging.getLogger(__name__)
     
     if not business_account_id:
-        logger.warning("⚠️ business_account_id vazio ou None")
         return None
     
     try:
         # Normaliza o business_account_id para string (caso venha como número)
         business_account_id = str(business_account_id).strip()
-        logger.info(f"🔍 Buscando empresa_id para business_account_id: {business_account_id}")
         
         repo = WhatsAppConfigRepository(db)
         
         # Primeiro tenta buscar apenas ativas
         config = repo.get_by_business_account_id(business_account_id, include_inactive=False)
         
-        # Se não encontrou ativa, tenta buscar inativas também (mas loga aviso)
+        # Se não encontrou ativa, tenta buscar inativas também
         if not config:
-            logger.warning(f"⚠️ Nenhuma configuração ATIVA encontrada para business_account_id={business_account_id}, tentando buscar inativas...")
             config = repo.get_by_business_account_id(business_account_id, include_inactive=True)
             if config:
-                logger.warning(f"⚠️ ATENÇÃO: Configuração encontrada mas está INATIVA (is_active={config.is_active}). Considere ativar esta configuração.")
+                logger.warning(f"Configuração inativa encontrada para business_account_id={business_account_id}")
         
         if config:
             empresa_id = str(config.empresa_id)
-            logger.info(f"✅ Empresa encontrada: business_account_id={business_account_id} -> empresa_id={empresa_id} (is_active={config.is_active})")
             return empresa_id
         else:
-            logger.error(f"❌ Nenhuma configuração encontrada para business_account_id={business_account_id}")
+            logger.error(f"Nenhuma configuração encontrada para business_account_id={business_account_id}")
             return None
             
     except Exception as e:
-        logger.error(f"⚠️ Erro ao buscar empresa_id por business_account_id={business_account_id}: {e}", exc_info=True)
+        logger.error(f"Erro ao buscar empresa_id por business_account_id={business_account_id}: {e}", exc_info=True)
         return None
 
 
@@ -951,13 +942,11 @@ def get_empresa_id_by_phone_number_id(db: Session, phone_number_id: str) -> Opti
     logger = logging.getLogger(__name__)
     
     if not phone_number_id:
-        logger.warning("⚠️ phone_number_id vazio ou None")
         return None
     
     try:
         # Normaliza o phone_number_id para string (caso venha como número)
         phone_number_id = str(phone_number_id).strip()
-        logger.info(f"🔍 Buscando empresa_id para phone_number_id: {phone_number_id}")
         
         repo = WhatsAppConfigRepository(db)
         
