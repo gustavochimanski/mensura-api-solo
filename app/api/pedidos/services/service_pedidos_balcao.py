@@ -128,7 +128,14 @@ class PedidoBalcaoService:
             try:
                 codigo = Decimal(str(payload.mesa_id))
                 mesa = self.repo_mesa.get_by_codigo(codigo)
+                if mesa is None:
+                    raise HTTPException(
+                        status.HTTP_404_NOT_FOUND,
+                        f"Mesa com código {payload.mesa_id} não encontrada"
+                    )
                 mesa_id_real = mesa.id
+            except HTTPException:
+                raise
             except Exception as e:
                 raise HTTPException(
                     status.HTTP_404_NOT_FOUND,

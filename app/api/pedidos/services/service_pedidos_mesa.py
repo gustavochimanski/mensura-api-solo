@@ -129,6 +129,13 @@ class PedidoMesaService:
                 f"Mesa com código {payload.mesa_id} não encontrada"
             )
         
+        # Valida se a mesa foi encontrada
+        if mesa is None:
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND,
+                f"Mesa com código {payload.mesa_id} não encontrada"
+            )
+        
         # Usa o ID real da mesa encontrada
         mesa_id_real = mesa.id
         if mesa.empresa_id != payload.empresa_id:

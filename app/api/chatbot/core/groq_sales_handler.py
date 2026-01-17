@@ -257,6 +257,18 @@ AI_FUNCTIONS = [
                 "required": ["tipo_pergunta"]
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "chamar_atendente",
+            "description": "Cliente quer falar com um atendente humano. Use quando o cliente pedir explicitamente: 'chamar atendente', 'quero falar com alguém', 'preciso de um humano', 'atendente humano', 'quero atendimento humano', 'falar com atendente', 'ligar atendente', 'chama alguém para mim'",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        }
     }
 ]
 
@@ -340,6 +352,16 @@ REGRA DE OURO: Na dúvida, use "conversar". É melhor conversar do que fazer aç
    - "quanto fica a entrega para [endereço]?" → calcular_taxa_entrega(endereco="[endereço]")
    - "fala pra mi quanto que fica pra entregar aqui na rua calendulas 140" → calcular_taxa_entrega(mensagem_original="fala pra mi quanto que fica pra entregar aqui na rua calendulas 140")
    ⚠️ IMPORTANTE: Perguntas sobre TAXA DE ENTREGA sempre usam esta função, NÃO use 'adicionar_produto' ou 'informar_sobre_produto'! Se o endereço está na mensagem mas não está claro, use mensagem_original.
+
+✅ chamar_atendente - Quando o cliente quer falar com um atendente humano:
+   - "chamar atendente" → chamar_atendente()
+   - "quero falar com alguém" → chamar_atendente()
+   - "preciso de um humano" → chamar_atendente()
+   - "atendente humano" → chamar_atendente()
+   - "quero atendimento humano" → chamar_atendente()
+   - "falar com atendente" → chamar_atendente()
+   - "ligar atendente" → chamar_atendente()
+   - "chama alguém para mim" → chamar_atendente()
 
 === PRODUTOS DISPONÍVEIS ===
 {produtos_lista}
@@ -2138,8 +2160,24 @@ class GroqSalesHandler:
                         localizacao = self._formatar_localizacao_empresas(empresas, self.empresa_id)
                         resposta += localizacao
                     
+                    return resposta
+                elif funcao == "chamar_atendente":
+                    # Cliente quer chamar atendente humano
+                    # Envia notificação para a empresa
+                    await self._enviar_notificacao_chamar_atendente(user_id, dados)
+                    return "✅ *Solicitação enviada!*\n\nNossa equipe foi notificada e entrará em contato com você em breve.\n\nEnquanto isso, posso te ajudar com alguma dúvida? 😊"
+                elif funcao == "informar_sobre_estabelecimento":
+                    if tipo_pergunta in ["localizacao", "ambos"]:
+                        localizacao = self._formatar_localizacao_empresas(empresas, self.empresa_id)
+                        resposta += localizacao
+                    
                     self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
                     return resposta.strip()
+                elif funcao == "chamar_atendente":
+                    # Cliente quer chamar atendente humano
+                    # Envia notificação para a empresa
+                    await self._enviar_notificacao_chamar_atendente(user_id, dados)
+                    return "✅ *Solicitação enviada!*\n\nNossa equipe foi notificada e entrará em contato com você em breve.\n\nEnquanto isso, posso te ajudar com alguma dúvida? 😊"
                 elif funcao == "personalizar_produto":
                     acao = params.get("acao", "")
                     item_nome = params.get("item", "")
@@ -5662,6 +5700,77 @@ Sua única função é ajudar a ESCOLHER PRODUTOS. Nada mais!
         
         return mensagem_cliente
 
+    async def _enviar_notificacao_chamar_atendente(self, user_id: str, dados: Dict):
+        """
+        Envia notificação para o WhatsApp da empresa quando cliente pede para chamar atendente.
+        """
+        from sqlalchemy import text
+        
+        # Busca nome do cliente
+        cliente_nome = None
+        try:
+            self.db.rollback()
+            cliente_query = text("""
+                SELECT nome
+                FROM cadastros.clientes
+                WHERE telefone = :telefone
+                LIMIT 1
+            """)
+            result = self.db.execute(cliente_query, {"telefone": user_id})
+            cliente_row = result.fetchone()
+            if cliente_row:
+                cliente_nome = cliente_row[0]
+        except Exception as e:
+            print(f"⚠️ Erro ao buscar nome do cliente: {e}")
+            try:
+                self.db.rollback()
+            except:
+                pass
+        
+        # Monta mensagem de notificação para empresa
+        mensagem_notificacao = f"🔔 *Solicitação de Atendimento Humano*\n\n"
+        mensagem_notificacao += f"Cliente *{cliente_nome or user_id}* está solicitando atendimento de um humano.\n\n"
+        mensagem_notificacao += f"📱 Telefone: {user_id}\n"
+        if cliente_nome:
+            mensagem_notificacao += f"👤 Nome: {cliente_nome}\n"
+        mensagem_notificacao += f"🏢 Empresa ID: {self.empresa_id}\n\n"
+        mensagem_notificacao += f"💬 Entre em contato com o cliente para atendê-lo."
+        
+        # Envia notificação para empresa
+        try:
+            self.db.rollback()
+            
+            # Busca display_phone_number da configuração do WhatsApp da empresa
+            from app.api.notifications.repositories.whatsapp_config_repository import WhatsAppConfigRepository
+            repo_whatsapp = WhatsAppConfigRepository(self.db)
+            config_whatsapp = repo_whatsapp.get_active_by_empresa(str(self.empresa_id))
+            
+            if config_whatsapp and config_whatsapp.display_phone_number:
+                from ..core.notifications import OrderNotification
+                from ..core.config_whatsapp import format_phone_number
+                
+                notifier = OrderNotification()
+                empresa_phone = format_phone_number(config_whatsapp.display_phone_number)
+                
+                result = await notifier.send_whatsapp_message(
+                    empresa_phone, 
+                    mensagem_notificacao, 
+                    empresa_id=str(self.empresa_id)
+                )
+                
+                if result.get("success"):
+                    print(f"✅ Notificação de chamar atendente enviada para empresa {self.empresa_id} - telefone: {empresa_phone}")
+                else:
+                    print(f"⚠️ Falha ao enviar notificação: {result.get('error')}")
+        except Exception as e:
+            print(f"⚠️ Erro ao enviar notificação para empresa: {e}")
+            import traceback
+            traceback.print_exc()
+            try:
+                self.db.rollback()
+            except:
+                pass
+
     async def _gerar_resposta_conversacional(
         self,
         user_id: str,
@@ -6581,6 +6690,13 @@ Responda de forma natural e curta:"""
                     endereco = await self._extrair_endereco_com_ia(mensagem_original)
                 
                 return await self._calcular_e_responder_taxa_entrega(user_id, endereco, dados)
+
+            # CHAMAR ATENDENTE
+            elif funcao == "chamar_atendente":
+                # Cliente quer chamar atendente humano
+                # Envia notificação para a empresa
+                await self._enviar_notificacao_chamar_atendente(user_id, dados)
+                return "✅ *Solicitação enviada!*\n\nNossa equipe foi notificada e entrará em contato com você em breve.\n\nEnquanto isso, posso te ajudar com alguma dúvida? 😊"
 
             # INFORMAR SOBRE ESTABELECIMENTO
             elif funcao == "informar_sobre_estabelecimento":
