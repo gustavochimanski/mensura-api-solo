@@ -4,7 +4,7 @@ Sistema completo de notificações em tempo real para o projeto Mensura, impleme
 
 ## 🏗️ Arquitetura
 
-O sistema segue os princípios de **Domain-Driven Design (DDD)** e **Clean Architecture**, com separação clara de responsabilidades:
+O sistema segue os princpios de **Domain-Driven Design (DDD)** e **Clean Architecture**, com separação clara de responsabilidades:
 
 ```
 notifications/
