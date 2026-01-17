@@ -1,6 +1,6 @@
 """
 Router do módulo de Chatbot
-Todas as rotas relacionadas ao chatbot com IA (Ollama)
+Todas as rotas relacionadas ao chatbot com IA (Groq)
 """
 from fastapi import APIRouter, HTTPException, Request, Depends, UploadFile, File, BackgroundTasks
 from pydantic import BaseModel
@@ -16,7 +16,7 @@ import re
 from app.database.db_connection import get_db
 from ..core import database as chatbot_db
 from ..core.notifications import OrderNotification
-from ..core.groq_sales_handler import GroqSalesHandler
+from ..core.groq_sales_handler import GroqSalesHandler, GROQ_API_URL, GROQ_API_KEY, MODEL_NAME
 from app.api.notifications.repositories.whatsapp_config_repository import WhatsAppConfigRepository
 from app.api.empresas.repositories.empresa_repo import EmpresaRepository
 from app.api.chatbot.repositories.repo_chatbot_config import ChatbotConfigRepository
@@ -43,9 +43,8 @@ from ..schemas.schemas import (
     WhatsAppConfigResponse
 )
 
-# Configurações do Ollama
-OLLAMA_URL = "http://localhost:11434/api/chat"
-DEFAULT_MODEL = "llama3.1:8b"
+# Configurações do Groq
+DEFAULT_MODEL = MODEL_NAME
 
 # Prompt padrão do sistema
 SYSTEM_PROMPT = """Você é um atendente humano chamado Alex, que trabalha no suporte ao cliente de uma empresa de restaurante/delivery.
@@ -179,22 +178,21 @@ router.include_router(router_carrinho)
 
 @router.get("/health")
 async def health_check():
-    """Verifica se o Ollama está rodando"""
+    """Verifica se a API Groq está acessível"""
+    if not GROQ_API_KEY:
+        raise HTTPException(status_code=503, detail="GROQ_API_KEY não configurada")
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.get("http://localhost:11434/api/tags")
+            response = await client.get(
+                "https://api.groq.com/openai/v1/models",
+                headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
+            )
             if response.status_code == 200:
-                models = response.json().get("models", [])
-                model_names = [m["name"] for m in models]
-                return {
-                    "ollama": "online",
-                    "models_disponiveis": model_names
-                }
+                models = response.json().get("data", [])
+                model_names = [m.get("id") for m in models if m.get("id")]
+                return {"groq": "online", "models_disponiveis": model_names}
     except Exception as e:
-        raise HTTPException(
-            status_code=503,
-            detail=f"Ollama não está rodando. Erro: {str(e)}"
-        )
+        raise HTTPException(status_code=503, detail=f"Groq indisponível. Erro: {str(e)}")
 
 
 # ==================== CHAT ====================
@@ -202,6 +200,8 @@ async def health_check():
 @router.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest, db: Session = Depends(get_db)):
     """Endpoint principal do chat"""
+    if not GROQ_API_KEY:
+        raise HTTPException(status_code=503, detail="GROQ_API_KEY não configurada")
 
     # Se o modelo for "notification-system", significa que é uma conversa de notificação
     # Vamos mudar para o modelo padrão para permitir chat normal
@@ -224,30 +224,27 @@ async def chat(request: ChatRequest, db: Session = Depends(get_db)):
             "content": msg.content
         })
 
-    # Chama o Ollama
+    # Chama a Groq (API compatível com OpenAI)
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
             payload = {
-                "model": actual_model,
+                "model": actual_model or MODEL_NAME,
                 "messages": messages,
                 "stream": False,
-                "options": {
-                    "temperature": request.temperature,
-                    "top_p": 0.9,
-                    "top_k": 40,
-                }
+                "temperature": request.temperature,
+                "top_p": 0.9,
             }
-
-            response = await client.post(OLLAMA_URL, json=payload)
+            headers = {"Authorization": f"Bearer {GROQ_API_KEY}"}
+            response = await client.post(GROQ_API_URL, json=payload, headers=headers)
 
             if response.status_code != 200:
                 raise HTTPException(
                     status_code=response.status_code,
-                    detail=f"Erro no Ollama: {response.text}"
+                    detail=f"Erro na Groq: {response.text}"
                 )
 
             result = response.json()
-            assistant_message = result["message"]["content"]
+            assistant_message = result["choices"][0]["message"]["content"]
 
             return ChatResponse(
                 response=assistant_message,
@@ -257,7 +254,7 @@ async def chat(request: ChatRequest, db: Session = Depends(get_db)):
     except httpx.TimeoutException:
         raise HTTPException(
             status_code=504,
-            detail="Timeout ao aguardar resposta do modelo"
+            detail="Timeout ao aguardar resposta da Groq"
         )
     except Exception as e:
         raise HTTPException(
