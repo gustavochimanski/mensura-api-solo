@@ -20,6 +20,12 @@ class ComboAdapter(IComboContract):
             titulo=combo.titulo,
             preco_total=combo.preco_total,
             ativo=combo.ativo,
-            itens=[ComboItemDTO(produto_cod_barras=i.produto_cod_barras, quantidade=i.quantidade) for i in combo.itens],
+            itens=[
+                ComboItemDTO(
+                    produto_cod_barras=i.produto_cod_barras,
+                    receita_id=i.receita_id,
+                    quantidade=i.quantidade
+                ) for i in combo.itens
+            ],
         )
 

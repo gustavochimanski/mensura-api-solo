@@ -7,7 +7,8 @@ from pydantic import BaseModel
 
 
 class ComboItemDTO(BaseModel):
-    produto_cod_barras: str
+    produto_cod_barras: str | None = None
+    receita_id: int | None = None
     quantidade: int
 
 
