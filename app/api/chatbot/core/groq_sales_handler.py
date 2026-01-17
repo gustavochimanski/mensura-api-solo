@@ -939,6 +939,11 @@ class GroqSalesHandler:
         msg = self._normalizar_mensagem(mensagem)
         print(f"🔍 [Regras] Analisando mensagem normalizada: '{msg}' (original: '{mensagem}')")
 
+        # CHAMAR ATENDENTE - DEVE vir PRIMEIRO, antes de qualquer detecção de pedido!
+        if re.search(r'(chamar\s+atendente|quero\s+falar\s+com\s+(algu[eé]m|atendente|humano)|preciso\s+de\s+(um\s+)?(humano|atendente)|atendente\s+humano|quero\s+atendimento\s+humano|falar\s+com\s+atendente|ligar\s+atendente|chama\s+(algu[eé]m|atendente)\s+para\s+mi)', msg, re.IGNORECASE):
+            print(f"📞 [Regras] Detecção de chamar atendente na mensagem: '{msg}'")
+            return {"funcao": "chamar_atendente", "params": {}}
+
         # Saudações
         if re.match(r'^(oi|ola|olá|eae|e ai|eaí|bom dia|boa tarde|boa noite|hey|hi)[\s!?]*$', msg):
             return {"funcao": "conversar", "params": {"tipo_conversa": "saudacao"}}
@@ -947,23 +952,29 @@ class GroqSalesHandler:
         if re.search(r'(cardapio|cardápio|menu|lista|catalogo|catálogo)', msg):
             return {"funcao": "ver_cardapio", "params": {}}
 
-        # PERGUNTAS SOBRE TAXA DE ENTREGA/FRETE - DEVE vir PRIMEIRO, ANTES de tudo!
-        # Detecta: "qual a taxa de entrega", "quanto é o frete", "quanto fica pra entregar", etc.
+        # PERGUNTAS SOBRE TAXA DE ENTREGA/FRETE - DEVE vir ANTES de perguntas de preço!
+        # Detecta: "qual a taxa de entrega", "quanto é o frete", "quanto fica pra entregar", "vocês entregam", etc.
         # IMPORTANTE: Esta verificação deve vir ANTES de perguntas de preço de produtos!
-        # Verifica primeiro padrões específicos de entrega/frete
+        
+        # Padrão 1: Perguntas diretas sobre taxa/frete/entrega
         if re.search(r'(taxa\s*(de\s*)?(entrega|delivery)|frete|valor\s*(da\s*)?(entrega|delivery)|pre[cç]o\s*(do\s*)?(frete|entrega|delivery))', msg, re.IGNORECASE):
             print(f"🚚 [Regras] Detecção de taxa de entrega (padrão 1) na mensagem: '{msg}'")
-            return {"funcao": "calcular_taxa_entrega", "params": {"mensagem_original": msg}}
+            return {"funcao": "calcular_taxa_entrega", "params": {"mensagem_original": mensagem}}
         
-        # Verifica padrões como "quanto fica pra entregar", "quanto que fica pra entregar", etc.
+        # Padrão 2: "quanto fica pra entregar", "quanto que fica pra entregar", etc.
         if re.search(r'quanto\s+(que\s+)?(fica|custa|é|e)\s+(pra|para|o\s*)?(entregar|entrega|delivery|frete)', msg, re.IGNORECASE):
             print(f"🚚 [Regras] Detecção de taxa de entrega (padrão 2) na mensagem: '{msg}'")
-            return {"funcao": "calcular_taxa_entrega", "params": {"mensagem_original": msg}}
+            return {"funcao": "calcular_taxa_entrega", "params": {"mensagem_original": mensagem}}
         
-        # Verifica se contém palavras de entrega/frete junto com "quanto"
+        # Padrão 3: "quanto" + palavras de entrega/frete (em qualquer ordem)
         if re.search(r'quanto.*(entregar|entrega|delivery|frete)|(entregar|entrega|delivery|frete).*quanto', msg, re.IGNORECASE):
             print(f"🚚 [Regras] Detecção de taxa de entrega (padrão 3) na mensagem: '{msg}'")
-            return {"funcao": "calcular_taxa_entrega", "params": {"mensagem_original": msg}}
+            return {"funcao": "calcular_taxa_entrega", "params": {"mensagem_original": mensagem}}
+        
+        # Padrão 4: "vocês entregam", "entregam em", "entregam na", "fazem entrega", etc.
+        if re.search(r'(voc[eê]s?\s+entregam|entregam\s+(em|na|no|para|pra)|fazem\s+entrega|faz\s+entrega|tem\s+entrega|fazem\s+delivery|faz\s+delivery)', msg, re.IGNORECASE):
+            print(f"🚚 [Regras] Detecção de taxa de entrega (padrão 4 - entrega) na mensagem: '{msg}'")
+            return {"funcao": "calcular_taxa_entrega", "params": {"mensagem_original": mensagem}}
 
         # Informação sobre produto ESPECÍFICO (DEVE vir ANTES da detecção genérica de "o que tem")
         # Detecta: "o que tem no X", "o que vem no X", "o que tem na X", "ingredientes do X", etc.
@@ -988,7 +999,8 @@ class GroqSalesHandler:
         # MAS NÃO se for sobre entrega/frete (já foi detectado acima)
         if re.search(r'(quanto\s+(que\s+)?(fica|custa|é|e)|qual\s+(o\s+)?(pre[cç]o|valor)|pre[cç]o\s+(d[aeo]|de|do)|valor\s+(d[aeo]|de|do))', msg, re.IGNORECASE):
             # VERIFICA PRIMEIRO se é sobre entrega/frete (não produto)
-            if re.search(r'(entregar|entrega|delivery|frete)', msg, re.IGNORECASE):
+            # Verifica múltiplos padrões para garantir que não perde nenhum caso
+            if re.search(r'(entregar|entrega|delivery|frete|entregam|fazem\s+entrega|faz\s+entrega)', msg, re.IGNORECASE):
                 print(f"🚚 [Regras] Detectado como taxa de entrega (dentro de verificação de preço) na mensagem: '{msg}'")
                 return {"funcao": "calcular_taxa_entrega", "params": {"mensagem_original": mensagem}}
             
@@ -5702,7 +5714,8 @@ Sua única função é ajudar a ESCOLHER PRODUTOS. Nada mais!
 
     async def _enviar_notificacao_chamar_atendente(self, user_id: str, dados: Dict):
         """
-        Envia notificação para o WhatsApp da empresa quando cliente pede para chamar atendente.
+        Envia notificação para a empresa quando cliente pede para chamar atendente.
+        Usa WebSocket para notificar o dashboard/frontend em tempo real.
         """
         from sqlalchemy import text
         
@@ -5727,49 +5740,64 @@ Sua única função é ajudar a ESCOLHER PRODUTOS. Nada mais!
             except:
                 pass
         
-        # Monta mensagem de notificação para empresa
-        mensagem_notificacao = f"🔔 *Solicitação de Atendimento Humano*\n\n"
-        mensagem_notificacao += f"Cliente *{cliente_nome or user_id}* está solicitando atendimento de um humano.\n\n"
-        mensagem_notificacao += f"📱 Telefone: {user_id}\n"
-        if cliente_nome:
-            mensagem_notificacao += f"👤 Nome: {cliente_nome}\n"
-        mensagem_notificacao += f"🏢 Empresa ID: {self.empresa_id}\n\n"
-        mensagem_notificacao += f"💬 Entre em contato com o cliente para atendê-lo."
+        # Monta dados da notificação
+        notification_data = {
+            "cliente_phone": user_id,
+            "cliente_nome": cliente_nome,
+            "tipo": "chamar_atendente",
+            "timestamp": datetime.utcnow().isoformat()
+        }
         
-        # Envia notificação para empresa
+        # Envia notificação via WebSocket para o dashboard
         try:
-            self.db.rollback()
+            from ..core.notifications import send_chatbot_websocket_notification
             
-            # Busca display_phone_number da configuração do WhatsApp da empresa
-            from app.api.notifications.repositories.whatsapp_config_repository import WhatsAppConfigRepository
-            repo_whatsapp = WhatsAppConfigRepository(self.db)
-            config_whatsapp = repo_whatsapp.get_active_by_empresa(str(self.empresa_id))
+            title = "🔔 Solicitação de Atendimento Humano"
+            message = f"Cliente {cliente_nome or user_id} está solicitando atendimento de um humano.\n\n📱 Telefone: {user_id}"
+            if cliente_nome:
+                message += f"\n👤 Nome: {cliente_nome}"
             
-            if config_whatsapp and config_whatsapp.display_phone_number:
-                from ..core.notifications import OrderNotification
-                from ..core.config_whatsapp import format_phone_number
+            sent_count = await send_chatbot_websocket_notification(
+                empresa_id=self.empresa_id,
+                notification_type="chamar_atendente",
+                title=title,
+                message=message,
+                data=notification_data
+            )
+            
+            if sent_count > 0:
+                print(f"✅ Notificação WebSocket enviada para empresa {self.empresa_id} - {sent_count} conexão(ões) ativa(s)")
+            else:
+                print(f"⚠️ Notificação WebSocket enviada mas nenhuma conexão ativa para empresa {self.empresa_id}")
                 
-                notifier = OrderNotification()
-                empresa_phone = format_phone_number(config_whatsapp.display_phone_number)
-                
-                result = await notifier.send_whatsapp_message(
-                    empresa_phone, 
-                    mensagem_notificacao, 
-                    empresa_id=str(self.empresa_id)
-                )
-                
-                if result.get("success"):
-                    print(f"✅ Notificação de chamar atendente enviada para empresa {self.empresa_id} - telefone: {empresa_phone}")
-                else:
-                    print(f"⚠️ Falha ao enviar notificação: {result.get('error')}")
         except Exception as e:
-            print(f"⚠️ Erro ao enviar notificação para empresa: {e}")
+            print(f"⚠️ Erro ao enviar notificação WebSocket: {e}")
             import traceback
             traceback.print_exc()
-            try:
-                self.db.rollback()
-            except:
-                pass
+        
+        # Tenta também salvar no sistema de notificações (opcional)
+        try:
+            from app.api.notifications.services.notification_service import NotificationService
+            from app.api.notifications.schemas.notification_schemas import NotificationCreate
+            
+            notification_service = NotificationService(self.db)
+            
+            notification_create = NotificationCreate(
+                empresa_id=str(self.empresa_id),
+                user_id=None,  # Notificação para a empresa, não para um usuário específico
+                notification_type="chatbot_chamar_atendente",
+                title="Solicitação de Atendimento Humano",
+                message=f"Cliente {cliente_nome or user_id} está solicitando atendimento de um humano",
+                data=notification_data,
+                channels=["in_app"]  # Apenas notificação interna
+            )
+            
+            await notification_service.create_notification(notification_create)
+            print(f"✅ Notificação salva no banco de dados para empresa {self.empresa_id}")
+            
+        except Exception as e:
+            print(f"⚠️ Erro ao salvar notificação no banco: {e}")
+            # Não é crítico, continua mesmo se falhar
 
     async def _gerar_resposta_conversacional(
         self,
