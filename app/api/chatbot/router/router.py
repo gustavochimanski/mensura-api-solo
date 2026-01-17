@@ -1769,6 +1769,12 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 # Se foi "pedir pelo whatsapp", continua o fluxo normalmente na próxima mensagem
                 return
 
+            # IMPORTANTE: Verifica novamente se a loja está fechada antes de processar
+            # (pode ser que a conversa já exista, mas a loja fechou depois)
+            if esta_aberta is False:
+                print(f"   🕐 Loja está FECHADA - não processando mensagem via chatbot")
+                return  # Não processa mensagem quando loja está fechada
+            
             # Processa com o sistema de vendas usando Groq/LLaMA
             print(f"   🤖 Usando Groq Sales Handler (LLaMA 3.1 + dados do banco)")
             resposta = await processar_mensagem_groq(
