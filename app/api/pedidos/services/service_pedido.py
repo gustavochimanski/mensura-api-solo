@@ -1719,6 +1719,15 @@ class PedidoService:
 
             title, message = self._build_rotas_message(getattr(entregador, "nome", ""), pedidos_em_rota)
             whatsapp_message = f"*{title}*\n\n{message}"
+            
+            logger.info(
+                "[Pedidos] Preparando envio WhatsApp para entregador %s - Telefone: %s - Pedidos: %s - Mensagem: %s",
+                entregador.id,
+                telefone,
+                [p.id for p in pedidos_em_rota],
+                whatsapp_message[:100] + "..." if len(whatsapp_message) > 100 else whatsapp_message
+            )
+            
             result = self._execute_async(
                 lambda: OrderNotification.send_whatsapp_message(
                     telefone,
@@ -1736,8 +1745,10 @@ class PedidoService:
 
             if isinstance(result, dict) and result.get("success"):
                 logger.info(
-                    "[Pedidos] Mensagem WhatsApp enviada para o entregador %s",
+                    "[Pedidos] Mensagem WhatsApp enviada para o entregador %s - Telefone: %s - Message ID: %s",
                     entregador.id,
+                    telefone,
+                    result.get("message_id", "N/A")
                 )
             else:
                 logger.error(
