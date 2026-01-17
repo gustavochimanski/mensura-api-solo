@@ -34,8 +34,7 @@ def criar_configuracao_chatbot(
     - **empresa_id**: ID da empresa (obrigatório, única por empresa)
     - **nome**: Nome do chatbot (padrão: "Assistente Virtual")
     - **personalidade**: Descrição da personalidade do chatbot
-    - **aceita_pedidos_whatsapp**: Se aceita fazer pedidos pelo WhatsApp (padrão: true)
-    - **link_redirecionamento**: Link para redirecionar quando não aceita pedidos (obrigatório se aceita_pedidos_whatsapp=false)
+    - **aceita_pedidos_whatsapp**: Se aceita fazer pedidos pelo WhatsApp (padrão: true). Se false, redireciona para o cardápio online
     - **mensagem_boas_vindas**: Mensagem de boas-vindas personalizada
     - **mensagem_redirecionamento**: Mensagem quando redireciona para link
     - **ativo**: Se a configuração está ativa (padrão: true)

@@ -31,14 +31,6 @@ class ChatbotConfigService:
             )
         return empresa
 
-    def _validate_link_redirecionamento(self, aceita_pedidos: bool, link: Optional[str]):
-        """Valida se link é obrigatório quando não aceita pedidos"""
-        if not aceita_pedidos and not link:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Link de redirecionamento é obrigatório quando não aceita pedidos pelo WhatsApp"
-            )
-
     def create(self, data: ChatbotConfigCreate) -> ChatbotConfigResponse:
         """Cria uma nova configuração do chatbot"""
         self._empresa_or_404(data.empresa_id)
@@ -51,15 +43,11 @@ class ChatbotConfigService:
                 detail="Já existe uma configuração de chatbot para esta empresa"
             )
         
-        # Valida link de redirecionamento
-        self._validate_link_redirecionamento(data.aceita_pedidos_whatsapp, data.link_redirecionamento)
-        
         config = self.repo.create(
             empresa_id=data.empresa_id,
             nome=data.nome,
             personalidade=data.personalidade,
             aceita_pedidos_whatsapp=data.aceita_pedidos_whatsapp,
-            link_redirecionamento=data.link_redirecionamento,
             mensagem_boas_vindas=data.mensagem_boas_vindas,
             mensagem_redirecionamento=data.mensagem_redirecionamento,
             ativo=data.ativo
@@ -129,15 +117,7 @@ class ChatbotConfigService:
                 detail="Configuração não pertence à empresa informada"
             )
         
-        # Valida link de redirecionamento se estiver atualizando aceita_pedidos_whatsapp
         update_data = data.model_dump(exclude_unset=True)
-        
-        # Se está desativando aceita_pedidos_whatsapp, valida link
-        if "aceita_pedidos_whatsapp" in update_data:
-            aceita_pedidos = update_data.get("aceita_pedidos_whatsapp", config.aceita_pedidos_whatsapp)
-            link = update_data.get("link_redirecionamento", config.link_redirecionamento)
-            self._validate_link_redirecionamento(aceita_pedidos, link)
-        
         config = self.repo.update(config, **update_data)
         
         logger.info(f"[ChatbotConfig] Atualizado config_id={config_id}")
@@ -170,7 +150,6 @@ class ChatbotConfigService:
             nome=config.nome,
             personalidade=config.personalidade,
             aceita_pedidos_whatsapp=config.aceita_pedidos_whatsapp,
-            link_redirecionamento=config.link_redirecionamento,
             mensagem_boas_vindas=config.mensagem_boas_vindas,
             mensagem_redirecionamento=config.mensagem_redirecionamento,
             ativo=config.ativo,

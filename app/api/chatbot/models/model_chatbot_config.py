@@ -27,7 +27,6 @@ class ChatbotConfigModel(Base):
     
     # Configurações de pedidos
     aceita_pedidos_whatsapp = Column(Boolean, default=True, nullable=False)  # Se aceita fazer pedidos pelo WhatsApp
-    link_redirecionamento = Column(String(500), nullable=True)  # Link para redirecionar quando não aceita pedidos
     
     # Configurações adicionais
     mensagem_boas_vindas = Column(Text, nullable=True)  # Mensagem de boas-vindas personalizada

@@ -321,6 +321,9 @@ class GroqSalesHandler:
         self.ingredientes_service = IngredientesService(db, empresa_id)
         # Cache de meios de pagamento (carregado uma vez)
         self._meios_pagamento_cache = None
+        # Carrega configurações do chatbot
+        self._config_cache = None
+        self._load_chatbot_config()
 
     def _buscar_meios_pagamento(self) -> List[Dict]:
         """
@@ -1030,8 +1033,28 @@ class GroqSalesHandler:
 
         return mensagem
 
+    def _load_chatbot_config(self):
+        """Carrega configurações do chatbot para a empresa"""
+        try:
+            from app.api.chatbot.repositories.repo_chatbot_config import ChatbotConfigRepository
+            repo = ChatbotConfigRepository(self.db)
+            config = repo.get_by_empresa_id(self.empresa_id)
+            self._config_cache = config
+            if config:
+                print(f"✅ Configuração do chatbot carregada: {config.nome} (aceita_pedidos={config.aceita_pedidos_whatsapp})")
+        except Exception as e:
+            print(f"⚠️ Erro ao carregar configuração do chatbot: {e}")
+            self._config_cache = None
+
+    def _get_chatbot_config(self):
+        """Retorna configuração do chatbot (com cache)"""
+        return self._config_cache
+
     def _gerar_mensagem_boas_vindas_conversacional(self) -> str:
         """Gera mensagem de boas-vindas para modo conversacional com botões"""
+        # Busca configuração do chatbot
+        config = self._get_chatbot_config()
+        
         # Busca nome da empresa e link do cardápio do banco
         try:
             empresa_query = text("""
@@ -1049,13 +1072,29 @@ class GroqSalesHandler:
             nome_empresa = "[Nome da Empresa]"
             link_cardapio = LINK_CARDAPIO
 
-        mensagem = f"👋 Olá! Seja bem-vindo(a) à {nome_empresa}!\n"
-        mensagem += "É um prazer te atender 😊\n\n"
-        mensagem += f"📲 Para conferir nosso cardápio completo, é só acessar o link abaixo:\n"
-        mensagem += f"👉 {link_cardapio}\n\n"
-        mensagem += "🛒 Prefere pedir por aqui mesmo?\n"
-        mensagem += "Sem problemas! É só me dizer o que você gostaria que eu te ajudo a montar seu pedido passo a passo 😉\n\n"
-        mensagem += "💬 Fico à disposição!"
+        # Usa mensagem personalizada se configurada, senão usa padrão
+        if config and config.mensagem_boas_vindas:
+            mensagem = config.mensagem_boas_vindas
+            # Substitui placeholders se necessário
+            mensagem = mensagem.replace("{nome_empresa}", nome_empresa)
+            mensagem = mensagem.replace("{link_cardapio}", link_cardapio)
+        else:
+            mensagem = f"👋 Olá! Seja bem-vindo(a) à {nome_empresa}!\n"
+            mensagem += "É um prazer te atender 😊\n\n"
+            mensagem += f"📲 Para conferir nosso cardápio completo, é só acessar o link abaixo:\n"
+            mensagem += f"👉 {link_cardapio}\n\n"
+            
+            # Só mostra opção de pedir pelo WhatsApp se aceita pedidos
+            if config and not config.aceita_pedidos_whatsapp:
+                if config.mensagem_redirecionamento:
+                    mensagem += config.mensagem_redirecionamento + "\n\n"
+                else:
+                    mensagem += "Para fazer seu pedido, acesse nosso cardápio pelo link acima! 😊\n\n"
+            else:
+                mensagem += "🛒 Prefere pedir por aqui mesmo?\n"
+                mensagem += "Sem problemas! É só me dizer o que você gostaria que eu te ajudo a montar seu pedido passo a passo 😉\n\n"
+            
+            mensagem += "💬 Fico à disposição!"
 
         return mensagem
 
@@ -1072,6 +1111,7 @@ class GroqSalesHandler:
         # Atualiza dados com os mais recentes
         dados.update(dados_atualizados)
 
+        print(f"💬 [Conversacional] Mensagem recebida (user_id={user_id}): {mensagem}")
         # PRIMEIRO: Tenta interpretar com regras (funciona mesmo sem IA)
         # Isso garante que perguntas sobre produtos específicos sejam detectadas
         todos_produtos = self._buscar_todos_produtos()
@@ -1104,6 +1144,8 @@ class GroqSalesHandler:
                     [f"{i.get('quantidade', 1)}x {i.get('produto_busca', '')}" for i in itens_preco]
                 )
                 print(f"💰 [Conversacional] Itens extraídos: {resumo_itens}")
+            else:
+                print("💰 [Conversacional] Nenhum item extraído para preço")
             if len(itens_preco) > 1:
                 return self._gerar_resposta_preco_itens(itens_preco, todos_produtos)
             if len(itens_preco) == 1:
@@ -5048,6 +5090,7 @@ Responda de forma natural e curta:"""
             # Obtém estado atual
             estado, dados = self._obter_estado_conversa(user_id)
             print(f"📊 Estado atual: {estado}")
+            print(f"💬 Mensagem recebida (user_id={user_id}): {mensagem}")
 
             # ========== DETECÇÃO ANTECIPADA DE PAGAMENTO ==========
             # Detecta forma de pagamento APENAS se já tiver itens no pedido
@@ -5064,6 +5107,34 @@ Responda de forma natural e curta:"""
                     print(f"💳 Pagamento detectado antecipadamente: {pagamento_detectado['nome']} (ID: {pagamento_detectado['id']})")
                     # Salva o estado atualizado com a forma de pagamento
                     self._salvar_estado_conversa(user_id, estado, dados)
+
+            # VERIFICA SE ACEITA PEDIDOS PELO WHATSAPP
+            config = self._get_chatbot_config()
+            if config and not config.aceita_pedidos_whatsapp:
+                # Detecta se a mensagem é uma tentativa de fazer pedido
+                msg_lower = mensagem.lower().strip()
+                termos_pedido = ['quero', 'pedir', 'pedido', 'fazer pedido', 'adicionar', 'me ve', 'manda', 'vou querer', 'vou pedir']
+                if any(termo in msg_lower for termo in termos_pedido):
+                    # Busca link do cardápio da empresa
+                    try:
+                        empresa_query = text("""
+                            SELECT nome, cardapio_link
+                            FROM cadastros.empresas
+                            WHERE id = :empresa_id
+                        """)
+                        result = self.db.execute(empresa_query, {"empresa_id": self.empresa_id})
+                        empresa = result.fetchone()
+                        link_cardapio = empresa[1] if empresa and empresa[1] else LINK_CARDAPIO
+                    except Exception as e:
+                        print(f"⚠️ Erro ao buscar link do cardápio: {e}")
+                        link_cardapio = LINK_CARDAPIO
+                    
+                    # Retorna mensagem de redirecionamento
+                    if config.mensagem_redirecionamento:
+                        resposta = config.mensagem_redirecionamento.replace("{link_cardapio}", link_cardapio)
+                    else:
+                        resposta = f"📲 Para fazer seu pedido, acesse nosso cardápio completo pelo link:\n\n👉 {link_cardapio}\n\nDepois é só fazer seu pedido pelo site! 😊"
+                    return resposta
 
             # Se for primeira mensagem (saudação), pode retornar boas-vindas (dependendo do modo)
             if self._eh_primeira_mensagem(mensagem):
@@ -5174,6 +5245,32 @@ Responda de forma natural e curta:"""
             print(f"🎯 IA interpretou: {funcao} com params {params}")
 
             # ========== EXECUTA A AÇÃO BASEADA NA DECISÃO DA IA ==========
+
+            # VERIFICA SE ACEITA PEDIDOS ANTES DE PROCESSAR AÇÕES DE PEDIDO
+            config = self._get_chatbot_config()
+            if config and not config.aceita_pedidos_whatsapp:
+                # Se não aceita pedidos, bloqueia ações de pedido
+                if funcao in ["adicionar_produto", "finalizar_pedido"]:
+                    # Busca link do cardápio da empresa
+                    try:
+                        empresa_query = text("""
+                            SELECT nome, cardapio_link
+                            FROM cadastros.empresas
+                            WHERE id = :empresa_id
+                        """)
+                        result = self.db.execute(empresa_query, {"empresa_id": self.empresa_id})
+                        empresa = result.fetchone()
+                        link_cardapio = empresa[1] if empresa and empresa[1] else LINK_CARDAPIO
+                    except Exception as e:
+                        print(f"⚠️ Erro ao buscar link do cardápio: {e}")
+                        link_cardapio = LINK_CARDAPIO
+                    
+                    # Retorna mensagem de redirecionamento
+                    if config.mensagem_redirecionamento:
+                        resposta = config.mensagem_redirecionamento.replace("{link_cardapio}", link_cardapio)
+                    else:
+                        resposta = f"📲 Para fazer seu pedido, acesse nosso cardápio completo pelo link:\n\n👉 {link_cardapio}\n\nDepois é só fazer seu pedido pelo site! 😊"
+                    return resposta
 
             # ADICIONAR PRODUTO
             if funcao == "adicionar_produto":

@@ -31,7 +31,6 @@ interface ChatbotConfigResponse {
   nome: string;
   personalidade: string | null;
   aceita_pedidos_whatsapp: boolean;
-  link_redirecionamento: string | null;
   mensagem_boas_vindas: string | null;
   mensagem_redirecionamento: string | null;
   ativo: boolean;
@@ -41,6 +40,8 @@ interface ChatbotConfigResponse {
 }
 ```
 
+**Nota:** O link de redirecionamento é obtido automaticamente do campo `cardapio_link` da tabela `empresas`. Não é necessário configurá-lo separadamente.
+
 ### ChatbotConfigCreate
 
 ```typescript
@@ -49,9 +50,8 @@ interface ChatbotConfigCreate {
   nome: string; // Obrigatório, 1-100 caracteres
   personalidade?: string | null; // Opcional
   aceita_pedidos_whatsapp?: boolean; // Padrão: true
-  link_redirecionamento?: string | null; // Obrigatório se aceita_pedidos_whatsapp = false, máx 500 caracteres
   mensagem_boas_vindas?: string | null; // Opcional
-  mensagem_redirecionamento?: string | null; // Opcional
+  mensagem_redirecionamento?: string | null; // Opcional - mensagem quando redireciona para o cardápio
   ativo?: boolean; // Padrão: true
 }
 ```
@@ -63,7 +63,6 @@ interface ChatbotConfigUpdate {
   nome?: string; // Opcional, 1-100 caracteres
   personalidade?: string | null; // Opcional
   aceita_pedidos_whatsapp?: boolean; // Opcional
-  link_redirecionamento?: string | null; // Opcional, máx 500 caracteres
   mensagem_boas_vindas?: string | null; // Opcional
   mensagem_redirecionamento?: string | null; // Opcional
   ativo?: boolean; // Opcional
@@ -87,7 +86,6 @@ Cria uma nova configuração do chatbot para uma empresa.
   "nome": "Assistente Virtual",
   "personalidade": "Você é um atendente amigável e prestativo que ajuda clientes a fazerem pedidos.",
   "aceita_pedidos_whatsapp": true,
-  "link_redirecionamento": null,
   "mensagem_boas_vindas": "Olá! Bem-vindo ao nosso atendimento. Como posso ajudar?",
   "mensagem_redirecionamento": null,
   "ativo": true
@@ -102,7 +100,6 @@ Cria uma nova configuração do chatbot para uma empresa.
   "nome": "Assistente Virtual",
   "personalidade": "Você é um atendente amigável e prestativo que ajuda clientes a fazerem pedidos.",
   "aceita_pedidos_whatsapp": true,
-  "link_redirecionamento": null,
   "mensagem_boas_vindas": "Olá! Bem-vindo ao nosso atendimento. Como posso ajudar?",
   "mensagem_redirecionamento": null,
   "ativo": true,
@@ -114,7 +111,6 @@ Cria uma nova configuração do chatbot para uma empresa.
 
 **Erros Possíveis:**
 - `400 Bad Request`: Empresa não encontrada ou já existe configuração para esta empresa
-- `400 Bad Request`: Link de redirecionamento é obrigatório quando `aceita_pedidos_whatsapp = false`
 - `401 Unauthorized`: Token inválido ou ausente
 - `422 Unprocessable Entity`: Dados inválidos (validação)
 
@@ -160,7 +156,6 @@ GET /api/chatbot/admin/config/?empresa_id=1&ativo=true&skip=0&limit=10
     "nome": "Assistente Virtual",
     "personalidade": "Você é um atendente amigável...",
     "aceita_pedidos_whatsapp": true,
-    "link_redirecionamento": null,
     "mensagem_boas_vindas": "Olá! Bem-vindo...",
     "mensagem_redirecionamento": null,
     "ativo": true,
@@ -276,7 +271,7 @@ Atualiza uma configuração existente. Todos os campos são opcionais - apenas o
 {
   "nome": "Novo Nome do Chatbot",
   "aceita_pedidos_whatsapp": false,
-  "link_redirecionamento": "https://cardapio.exemplo.com"
+  "mensagem_redirecionamento": "Por favor, acesse nosso cardápio online pelo link acima."
 }
 ```
 
@@ -288,9 +283,8 @@ Atualiza uma configuração existente. Todos os campos são opcionais - apenas o
   "nome": "Novo Nome do Chatbot",
   "personalidade": "Você é um atendente amigável...",
   "aceita_pedidos_whatsapp": false,
-  "link_redirecionamento": "https://cardapio.exemplo.com",
   "mensagem_boas_vindas": "Olá! Bem-vindo...",
-  "mensagem_redirecionamento": "Por favor, acesse nosso cardápio online.",
+  "mensagem_redirecionamento": "Por favor, acesse nosso cardápio online pelo link acima.",
   "ativo": true,
   "created_at": "2024-01-15T10:30:00Z",
   "updated_at": "2024-01-15T11:45:00Z",
@@ -299,7 +293,6 @@ Atualiza uma configuração existente. Todos os campos são opcionais - apenas o
 ```
 
 **Erros Possíveis:**
-- `400 Bad Request`: Link de redirecionamento é obrigatório quando `aceita_pedidos_whatsapp = false`
 - `401 Unauthorized`: Token inválido ou ausente
 - `404 Not Found`: Configuração não encontrada
 - `422 Unprocessable Entity`: Dados inválidos (validação)
@@ -312,7 +305,7 @@ curl -X PUT "https://api.exemplo.com/api/chatbot/admin/config/1" \
   -d '{
     "nome": "Novo Nome",
     "aceita_pedidos_whatsapp": false,
-    "link_redirecionamento": "https://cardapio.exemplo.com"
+    "mensagem_redirecionamento": "Acesse nosso cardápio online!"
   }'
 ```
 
@@ -350,13 +343,15 @@ curl -X DELETE "https://api.exemplo.com/api/chatbot/admin/config/1" \
 
 1. **Unicidade por Empresa**: Cada empresa pode ter apenas UMA configuração. Tentar criar uma segunda configuração para a mesma empresa resultará em erro 400.
 
-2. **Link de Redirecionamento Obrigatório**: 
-   - Se `aceita_pedidos_whatsapp = false`, o campo `link_redirecionamento` é **obrigatório**
-   - Se `aceita_pedidos_whatsapp = true`, o `link_redirecionamento` é opcional
+2. **Link do Cardápio**: O link de redirecionamento é obtido automaticamente do campo `cardapio_link` da tabela `empresas`. Não é necessário configurá-lo na configuração do chatbot.
 
-3. **Soft Delete**: A exclusão não remove o registro do banco, apenas marca como `ativo = false`. O registro permanece para histórico.
+3. **Aceita Pedidos pelo WhatsApp**: 
+   - Se `aceita_pedidos_whatsapp = true`, o chatbot permite fazer pedidos diretamente pelo WhatsApp
+   - Se `aceita_pedidos_whatsapp = false`, o chatbot apenas redireciona para o cardápio online (usando o `cardapio_link` da empresa)
 
-4. **Empresa Deve Existir**: A empresa informada deve existir no sistema, caso contrário retorna 404.
+4. **Soft Delete**: A exclusão não remove o registro do banco, apenas marca como `ativo = false`. O registro permanece para histórico.
+
+5. **Empresa Deve Existir**: A empresa informada deve existir no sistema, caso contrário retorna 404.
 
 ---
 
@@ -372,7 +367,6 @@ export interface ChatbotConfig {
   nome: string;
   personalidade: string | null;
   aceita_pedidos_whatsapp: boolean;
-  link_redirecionamento: string | null;
   mensagem_boas_vindas: string | null;
   mensagem_redirecionamento: string | null;
   ativo: boolean;
@@ -386,7 +380,6 @@ export interface ChatbotConfigCreate {
   nome: string;
   personalidade?: string | null;
   aceita_pedidos_whatsapp?: boolean;
-  link_redirecionamento?: string | null;
   mensagem_boas_vindas?: string | null;
   mensagem_redirecionamento?: string | null;
   ativo?: boolean;
@@ -396,7 +389,6 @@ export interface ChatbotConfigUpdate {
   nome?: string;
   personalidade?: string | null;
   aceita_pedidos_whatsapp?: boolean;
-  link_redirecionamento?: string | null;
   mensagem_boas_vindas?: string | null;
   mensagem_redirecionamento?: string | null;
   ativo?: boolean;
@@ -520,7 +512,6 @@ const ChatbotConfigForm: React.FC<{ empresaId: number }> = ({ empresaId }) => {
           nome: existing.nome,
           personalidade: existing.personalidade,
           aceita_pedidos_whatsapp: existing.aceita_pedidos_whatsapp,
-          link_redirecionamento: existing.link_redirecionamento,
           mensagem_boas_vindas: existing.mensagem_boas_vindas,
           mensagem_redirecionamento: existing.mensagem_redirecionamento,
           ativo: existing.ativo,
@@ -590,14 +581,14 @@ const ChatbotConfigForm: React.FC<{ empresaId: number }> = ({ empresaId }) => {
 
       {!formData.aceita_pedidos_whatsapp && (
         <div>
-          <label>Link de Redirecionamento: *</label>
-          <input
-            type="url"
-            value={formData.link_redirecionamento || ''}
-            onChange={(e) => setFormData({ ...formData, link_redirecionamento: e.target.value })}
-            required={!formData.aceita_pedidos_whatsapp}
-            maxLength={500}
+          <label>Mensagem de Redirecionamento:</label>
+          <textarea
+            value={formData.mensagem_redirecionamento || ''}
+            onChange={(e) => setFormData({ ...formData, mensagem_redirecionamento: e.target.value })}
+            rows={2}
+            placeholder="Mensagem exibida ao redirecionar para o cardápio online"
           />
+          <small>O link do cardápio é obtido automaticamente da configuração da empresa.</small>
         </div>
       )}
 
@@ -661,12 +652,11 @@ export default ChatbotConfigForm;
 
 1. **Timezone**: Todas as datas são retornadas em formato ISO 8601 (UTC).
 
-2. **Validação de URL**: Embora não seja validado no backend, recomenda-se validar o formato de URL no frontend antes de enviar.
-
-3. **Limites de Caracteres**:
+2. **Limites de Caracteres**:
    - `nome`: 1-100 caracteres
-   - `link_redirecionamento`: máximo 500 caracteres
    - `personalidade`, `mensagem_boas_vindas`, `mensagem_redirecionamento`: sem limite (mas use com moderação)
+
+3. **Link do Cardápio**: O link de redirecionamento é obtido automaticamente do campo `cardapio_link` da tabela `empresas`. Certifique-se de que a empresa tenha este campo configurado.
 
 4. **Paginação**: Use os parâmetros `skip` e `limit` para paginar resultados grandes.
 

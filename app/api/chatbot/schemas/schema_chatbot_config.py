@@ -8,7 +8,6 @@ class ChatbotConfigBase(BaseModel):
     nome: str = Field(..., min_length=1, max_length=100, description="Nome do chatbot")
     personalidade: Optional[str] = Field(None, description="Descrição da personalidade do chatbot")
     aceita_pedidos_whatsapp: bool = Field(True, description="Se aceita fazer pedidos pelo WhatsApp")
-    link_redirecionamento: Optional[str] = Field(None, max_length=500, description="Link para redirecionar quando não aceita pedidos")
     mensagem_boas_vindas: Optional[str] = Field(None, description="Mensagem de boas-vindas personalizada")
     mensagem_redirecionamento: Optional[str] = Field(None, description="Mensagem quando redireciona para link")
     ativo: bool = Field(True, description="Se a configuração está ativa")
@@ -24,7 +23,6 @@ class ChatbotConfigUpdate(BaseModel):
     nome: Optional[str] = Field(None, min_length=1, max_length=100)
     personalidade: Optional[str] = None
     aceita_pedidos_whatsapp: Optional[bool] = None
-    link_redirecionamento: Optional[str] = Field(None, max_length=500)
     mensagem_boas_vindas: Optional[str] = None
     mensagem_redirecionamento: Optional[str] = None
     ativo: Optional[bool] = None
@@ -37,7 +35,6 @@ class ChatbotConfigResponse(BaseModel):
     nome: str
     personalidade: Optional[str] = None
     aceita_pedidos_whatsapp: bool
-    link_redirecionamento: Optional[str] = None
     mensagem_boas_vindas: Optional[str] = None
     mensagem_redirecionamento: Optional[str] = None
     ativo: bool
