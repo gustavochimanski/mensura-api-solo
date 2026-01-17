@@ -1531,12 +1531,16 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 # Verifica se há mensagens anteriores na conversa
                 conversation_id = conversations[0]['id']
                 messages = chatbot_db.get_messages(db, conversation_id)
-                # Se só tem a mensagem atual (ou nenhuma), é primeira mensagem
-                is_first_message = len(messages) <= 1
+                # Só consideramos "primeira mensagem" quando a conversa ainda não tem histórico
+                # (evita re-enviar boas-vindas/botões em conversas já iniciadas)
+                is_first_message = len(messages) == 0
 
             # Se for primeira mensagem E a loja estiver aberta (ou horários não configurados), envia mensagem com botões
             # Se esta_aberta for False, não envia boas-vindas (já foi enviada mensagem de horários)
             if is_first_message and esta_aberta is not False:
+                # Mensagem "antiga" de boas-vindas (com nome/link) + botões
+                handler = GroqSalesHandler(db, empresa_id_int)
+                mensagem_boas_vindas = handler._gerar_mensagem_boas_vindas_conversacional()
                 
                 # Define os botões
                 buttons = [
@@ -1545,11 +1549,11 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                     {"id": "preciso_ajuda", "title": "Preciso de ajuda"}
                 ]
                 
-                # Envia mensagem com botões (texto mínimo para WhatsApp aceitar)
+                # Envia mensagem com botões (WhatsApp exige um corpo de texto)
                 notifier = OrderNotification()
                 result = await notifier.send_whatsapp_message_with_buttons(
                     phone_number, 
-                    "Como posso ajudar?", 
+                    mensagem_boas_vindas,
                     buttons, 
                     empresa_id=empresa_id
                 )
@@ -1568,7 +1572,7 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                             contact_name=contact_name,
                             empresa_id=empresa_id_int
                         )
-                    chatbot_db.create_message(db, conversation_id, "assistant", "Como posso ajudar?")
+                    chatbot_db.create_message(db, conversation_id, "assistant", mensagem_boas_vindas)
                 else:
                     import logging
                     logger = logging.getLogger(__name__)
@@ -1651,7 +1655,8 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 db=db,
                 user_id=phone_number,
                 mensagem=message_text,
-                empresa_id=int(empresa_id) if empresa_id else 1
+                empresa_id=int(empresa_id) if empresa_id else 1,
+                emit_welcome_message=False
             )
             
             # Verifica se a resposta não está vazia

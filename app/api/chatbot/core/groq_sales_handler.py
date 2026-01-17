@@ -311,9 +311,12 @@ class GroqSalesHandler:
     Integra fluxo de endereços com Google Maps
     """
 
-    def __init__(self, db: Session, empresa_id: int = 1):
+    def __init__(self, db: Session, empresa_id: int = 1, emit_welcome_message: bool = True):
         self.db = db
         self.empresa_id = empresa_id
+        # Quando True, o handler pode responder com a mensagem longa de boas-vindas.
+        # No WhatsApp, preferimos enviar a boas-vindas com botões no router.py (mensagem interativa).
+        self.emit_welcome_message = emit_welcome_message
         self.address_service = ChatbotAddressService(db, empresa_id)
         self.ingredientes_service = IngredientesService(db, empresa_id)
         # Cache de meios de pagamento (carregado uma vez)
@@ -2256,11 +2259,10 @@ REGRA PARA COMPLEMENTOS:
                 resp += "\n\nQuer mais alguma coisa? 😊"
                 return resp
 
-        # REMOVIDO: Detecção de saudação que retornava mensagem longa - agora gerenciada pelo router.py que envia botões
-        # As saudações serão tratadas normalmente pelo fluxo conversacional
-        # saudacoes = ['oi', 'olá', 'ola', 'hey', 'eae', 'e ai', 'opa', 'bom dia', 'boa tarde', 'boa noite', 'tudo bem', 'tudo bom']
-        # if any(s in msg_lower for s in saudacoes):
-        #     return self._gerar_mensagem_boas_vindas_conversacional()
+        # 1. Saudações - pode retornar boas-vindas (dependendo do modo)
+        saudacoes = ['oi', 'olá', 'ola', 'hey', 'eae', 'e ai', 'opa', 'bom dia', 'boa tarde', 'boa noite', 'tudo bem', 'tudo bom']
+        if self.emit_welcome_message and any(s in msg_lower for s in saudacoes):
+            return self._gerar_mensagem_boas_vindas_conversacional()
 
         # 2. PERGUNTAS SOBRE PRODUTOS - Detecta perguntas sobre ingredientes/composição
         # Exemplos: "O que vem nele", "O que tem no xburger", "Quais ingredientes do xburger"
@@ -4866,10 +4868,22 @@ Responda de forma natural e curta:"""
                     # Salva o estado atualizado com a forma de pagamento
                     self._salvar_estado_conversa(user_id, estado, dados)
 
-            # REMOVIDO: Detecção de primeira mensagem - agora gerenciada pelo router.py que envia botões
-            # A mensagem de boas-vindas longa foi substituída por botões no router.py
-            # if self._eh_primeira_mensagem(mensagem):
-            #     return self._gerar_mensagem_boas_vindas_conversacional()
+            # Se for primeira mensagem (saudação), pode retornar boas-vindas (dependendo do modo)
+            if self._eh_primeira_mensagem(mensagem):
+                dados['historico'] = [{"role": "user", "content": mensagem}]
+                dados['carrinho'] = []
+                dados['pedido_contexto'] = []  # Lista de itens mencionados na conversa
+                dados['produtos_encontrados'] = self._buscar_promocoes()
+                # LIMPA pagamento de conversa anterior
+                dados['forma_pagamento'] = None
+                dados['meio_pagamento_id'] = None
+                self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
+
+                if self.emit_welcome_message:
+                    return self._gerar_mensagem_boas_vindas_conversacional()
+                # Quando o WhatsApp já mandou a boas-vindas em mensagem interativa com botões,
+                # não devolvemos o texto longo aqui.
+                return "Perfeito! 😊 Me diga o que você gostaria de pedir."
 
             # ========== FLUXO DE CADASTRO RÁPIDO DE CLIENTE ==========
             
@@ -5236,7 +5250,8 @@ async def processar_mensagem_groq(
     db: Session,
     user_id: str,
     mensagem: str,
-    empresa_id: int = 1
+    empresa_id: int = 1,
+    emit_welcome_message: bool = True
 ) -> str:
     """
     Processa mensagem usando Groq API com LLaMA 3.1
@@ -5286,7 +5301,7 @@ async def processar_mensagem_groq(
         print(f"   ⚠️ Erro ao enviar notificação WebSocket (user): {e}")
 
     # 3. Processa mensagem com o handler
-    handler = GroqSalesHandler(db, empresa_id)
+    handler = GroqSalesHandler(db, empresa_id, emit_welcome_message=emit_welcome_message)
     resposta = await handler.processar_mensagem(user_id, mensagem)
 
     # 4. Salva resposta do bot no banco
