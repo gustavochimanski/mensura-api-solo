@@ -1898,7 +1898,25 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 }
             }
 
-            response = await client.post(OLLAMA_URL, json=payload)
+            try:
+                response = await client.post(OLLAMA_URL, json=payload)
+            except httpx.RequestError as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Erro ao conectar no Ollama: {e}", exc_info=True)
+                fallback_msg = (
+                    "Desculpe, estou com instabilidade no atendimento agora. "
+                    "Pode tentar novamente em instantes? 🙏"
+                )
+                chatbot_db.create_message(
+                    db=db,
+                    conversation_id=conversation_id,
+                    role="assistant",
+                    content=fallback_msg
+                )
+                notifier = OrderNotification()
+                await notifier.send_whatsapp_message(phone_number, fallback_msg, empresa_id=empresa_id)
+                return
 
             if response.status_code == 200:
                 result = response.json()
