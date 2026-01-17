@@ -564,7 +564,7 @@ class GroqSalesHandler:
                 return {"funcao": "finalizar_pedido", "params": {}}
             else:
                 # Carrinho vazio, "não" pode ser resposta a uma pergunta
-                return {"funcao": "conversar", "params": {"tipo_conversa": "nao_entendi"}}
+                return {"funcao": "conversar", "params": {"tipo_conversa": "resposta_generica"}}
 
         # Remover produto
         if re.search(r'(tira|remove|cancela|retira)\s+(?:a|o)?\s*(.+)', msg):
