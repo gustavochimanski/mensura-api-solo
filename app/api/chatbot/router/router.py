@@ -953,23 +953,21 @@ def get_empresa_id_by_phone_number_id(db: Session, phone_number_id: str) -> Opti
         # Primeiro tenta buscar apenas ativas
         config = repo.get_by_phone_number_id(phone_number_id, include_inactive=False)
         
-        # Se não encontrou ativa, tenta buscar inativas também (mas loga aviso)
+        # Se não encontrou ativa, tenta buscar inativas também
         if not config:
-            logger.warning(f"⚠️ Nenhuma configuração ATIVA encontrada para phone_number_id={phone_number_id}, tentando buscar inativas...")
             config = repo.get_by_phone_number_id(phone_number_id, include_inactive=True)
             if config:
-                logger.warning(f"⚠️ ATENÇÃO: Configuração encontrada mas está INATIVA (is_active={config.is_active}). Considere ativar esta configuração.")
+                logger.warning(f"Configuração inativa encontrada para phone_number_id={phone_number_id}")
         
         if config:
             empresa_id = str(config.empresa_id)
-            logger.info(f"✅ Empresa encontrada: phone_number_id={phone_number_id} -> empresa_id={empresa_id} (is_active={config.is_active})")
             return empresa_id
         else:
-            logger.error(f"❌ Nenhuma configuração encontrada para phone_number_id={phone_number_id}")
+            logger.error(f"Nenhuma configuração encontrada para phone_number_id={phone_number_id}")
             return None
             
     except Exception as e:
-        logger.error(f"⚠️ Erro ao buscar empresa_id por phone_number_id={phone_number_id}: {e}", exc_info=True)
+        logger.error(f"Erro ao buscar empresa_id por phone_number_id={phone_number_id}: {e}", exc_info=True)
         return None
 
 
@@ -995,12 +993,11 @@ def get_empresa_id_by_slug(db: Session, slug: Optional[str]) -> Optional[str]:
         repo = EmpresaRepository(db)
         empresa = repo.get_emp_by_slug(slug)
         if empresa:
-            logger.info(f"✅ Empresa encontrada por slug: {slug} -> empresa_id={empresa.id}")
             return str(empresa.id)
-        logger.warning(f"❌ Nenhuma EMPRESA encontrada para slug={slug} (verifique se a empresa existe no banco)")
+        logger.warning(f"Nenhuma EMPRESA encontrada para slug={slug}")
         return None
     except Exception as e:
-        logger.error(f"⚠️ Erro ao buscar empresa por slug={slug}: {e}", exc_info=True)
+        logger.error(f"Erro ao buscar empresa por slug={slug}: {e}", exc_info=True)
         return None
 
 
@@ -1024,32 +1021,17 @@ def get_empresa_id_from_webhook(db: Session, metadata: dict, business_account_id
         # Estratégia 1: business_account_id (MAIS CONFIÁVEL - vem no entry.id do webhook)
         if business_account_id:
             business_account_id = str(business_account_id).strip()
-            print(f"   🔍 [Estratégia 1] Tentando identificar EMPRESA por business_account_id: {business_account_id}")
-            logger.info(f"🔍 Tentando identificar EMPRESA por business_account_id: {business_account_id}")
             empresa_id = get_empresa_id_by_business_account_id(db, business_account_id)
             if empresa_id:
-                print(f"   ✅ EMPRESA identificada por business_account_id: {business_account_id} -> empresa_id: {empresa_id}")
-                logger.info(f"✅ EMPRESA identificada por business_account_id: {business_account_id} -> empresa_id: {empresa_id}")
                 return empresa_id
-            else:
-                print(f"   ⚠️ EMPRESA não encontrada para business_account_id: {business_account_id}")
-                logger.warning(f"⚠️ EMPRESA não encontrada para business_account_id: {business_account_id}")
 
         # Estratégia 2: slug da empresa vindo do header (x-cliente) ou host
         if slug_hint:
-            print(f"   🔍 [Estratégia 2] Tentando identificar EMPRESA por slug: {slug_hint}")
-            logger.info(f"🔍 Tentando identificar EMPRESA por slug: {slug_hint}")
             empresa_id = get_empresa_id_by_slug(db, slug_hint)
             if empresa_id:
-                print(f"   ✅ EMPRESA identificada por slug: {slug_hint} -> empresa_id: {empresa_id}")
-                logger.info(f"✅ EMPRESA identificada por slug: {slug_hint} -> empresa_id: {empresa_id}")
                 return empresa_id
-            else:
-                print(f"   ⚠️ EMPRESA não encontrada para slug: {slug_hint}")
-                logger.warning(f"⚠️ EMPRESA não encontrada para slug: {slug_hint}")
         
         if not metadata:
-            logger.warning("⚠️ Metadata vazio ou None no webhook")
             return None
         
         # Estratégia 3: Buscar por phone_number_id
@@ -1057,53 +1039,34 @@ def get_empresa_id_from_webhook(db: Session, metadata: dict, business_account_id
         if phone_number_id:
             # Normaliza para string
             phone_number_id = str(phone_number_id).strip()
-            print(f"   🔍 [Estratégia 3] Tentando identificar EMPRESA por phone_number_id: {phone_number_id}")
-            logger.info(f"🔍 Tentando identificar EMPRESA por phone_number_id: {phone_number_id}")
             
             # Usa a função melhorada que já tenta buscar inativas se necessário
             empresa_id = get_empresa_id_by_phone_number_id(db, phone_number_id)
             if empresa_id:
-                print(f"   ✅ EMPRESA identificada por phone_number_id: {phone_number_id} -> empresa_id: {empresa_id}")
-                logger.info(f"✅ EMPRESA identificada por phone_number_id: {phone_number_id} -> empresa_id: {empresa_id}")
                 return empresa_id
-            else:
-                print(f"   ⚠️ Não foi possível identificar EMPRESA por phone_number_id: {phone_number_id}")
-                logger.warning(f"⚠️ Não foi possível identificar EMPRESA por phone_number_id: {phone_number_id}")
         
         # Estratégia 4: Buscar por display_phone_number (útil para 360dialog)
         display_phone_number = metadata.get("display_phone_number")
         if display_phone_number:
             display_phone_number = str(display_phone_number).strip()
-            print(f"   🔍 [Estratégia 4] Tentando identificar EMPRESA por display_phone_number: {display_phone_number}")
-            logger.info(f"🔍 Tentando identificar EMPRESA por display_phone_number: {display_phone_number}")
             
             # Primeiro tenta buscar apenas ativas
             config = repo.get_by_display_phone_number(display_phone_number, include_inactive=False)
             
             # Se não encontrou ativa, tenta buscar inativas também
             if not config:
-                print(f"   ⚠️ Nenhuma configuração ATIVA encontrada para display_phone_number={display_phone_number}, tentando buscar inativas...")
-                logger.warning(f"⚠️ Nenhuma configuração ATIVA encontrada para display_phone_number={display_phone_number}, tentando buscar inativas...")
                 config = repo.get_by_display_phone_number(display_phone_number, include_inactive=True)
                 if config:
-                    print(f"   ⚠️ ATENÇÃO: Configuração encontrada mas está INATIVA (is_active={config.is_active}). Considere ativar esta configuração.")
-                    logger.warning(f"⚠️ ATENÇÃO: Configuração encontrada mas está INATIVA (is_active={config.is_active}). Considere ativar esta configuração.")
+                    logger.warning(f"Configuração inativa encontrada para display_phone_number={display_phone_number}")
             
             if config:
                 empresa_id = str(config.empresa_id)
-                print(f"   ✅ EMPRESA identificada por display_phone_number: {display_phone_number} -> empresa_id: {empresa_id}")
-                logger.info(f"✅ EMPRESA identificada por display_phone_number: {display_phone_number} -> empresa_id: {empresa_id}")
                 return empresa_id
-            else:
-                print(f"   ⚠️ Não foi possível identificar EMPRESA por display_phone_number: {display_phone_number}")
-                logger.warning(f"⚠️ Não foi possível identificar EMPRESA por display_phone_number: {display_phone_number}")
         
-        print("   ❌ Não foi possível identificar EMPRESA usando nenhuma estratégia")
-        logger.warning("❌ Não foi possível identificar EMPRESA usando nenhuma estratégia")
+        logger.warning("Não foi possível identificar EMPRESA usando nenhuma estratégia")
         return None
     except Exception as e:
-        print(f"   ❌ Erro ao identificar empresa do webhook: {e}")
-        logger.error(f"⚠️ Erro ao identificar empresa do webhook: {e}", exc_info=True)
+        logger.error(f"Erro ao identificar empresa do webhook: {e}", exc_info=True)
         return None
 
 
@@ -1121,8 +1084,7 @@ async def webhook_handler(request: Request, background_tasks: BackgroundTasks, d
     try:
         global_status = chatbot_db.get_global_bot_status(db)
         if not global_status.get("is_active", True):
-            # Bot desligado: retorna OK sem processar nada, apenas um aviso no log
-            print("⚠️ Chatbot desligado - webhook ignorado")
+            # Bot desligado: retorna OK sem processar nada
             return {"status": "ok", "message": "Chatbot desligado"}
     except Exception as e:
         # Se falhar ao verificar status, assume que está ligado para não bloquear webhooks
@@ -1133,13 +1095,14 @@ async def webhook_handler(request: Request, background_tasks: BackgroundTasks, d
         try:
             body_bytes = await request.body()
         except Exception as e:
-            print(f"⚠️ Erro ao ler body da requisição: {e}")
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Erro ao ler body da requisição: {e}")
             # Retorna 200 OK imediatamente mesmo com erro (requisito da 360Dialog)
             return {"status": "ok", "message": "Erro ao ler body, mas webhook recebido"}
         
         # Verifica se há body
         if not body_bytes or len(body_bytes) == 0:
-            print("⚠️ Webhook POST recebido sem body - retornando OK")
             # Retorna 200 OK imediatamente (requisito da 360Dialog)
             return {"status": "ok", "message": "Webhook recebido sem body"}
         
@@ -1147,18 +1110,15 @@ async def webhook_handler(request: Request, background_tasks: BackgroundTasks, d
         try:
             body_text = body_bytes.decode('utf-8')
             if not body_text.strip():
-                print("⚠️ Webhook POST recebido com body vazio - retornando OK")
                 # Retorna 200 OK imediatamente (requisito da 360Dialog)
                 return {"status": "ok", "message": "Webhook recebido com body vazio"}
             body = json.loads(body_text)
         except json.JSONDecodeError as e:
-            print(f"❌ Erro ao parsear JSON do webhook: {e}")
-            print(f"   Body recebido (primeiros 200 chars): {body_text[:200] if 'body_text' in locals() else 'N/A'}")
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Erro ao parsear JSON do webhook: {e}")
             # Retorna 200 OK imediatamente mesmo com erro de JSON (requisito da 360Dialog)
             return {"status": "ok", "message": "Webhook recebido (JSON inválido, mas processado)"}
-
-        # Log do webhook recebido (apenas log, não bloqueia resposta)
-        print(f"\n📥 Webhook POST recebido: {json.dumps(body, indent=2)}")
 
         # CRÍTICO: Retorna 200 OK IMEDIATAMENTE antes de processar
         # Conforme documentação 360Dialog: "acknowledge immediately after receiving the webhook"
@@ -1176,7 +1136,9 @@ async def webhook_handler(request: Request, background_tasks: BackgroundTasks, d
         return {"status": "ok"}
 
     except Exception as e:
-        print(f"❌ Erro no webhook: {e}")
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Erro no webhook: {e}", exc_info=True)
         # Mesmo com erro, retorna 200 OK para não quebrar o webhook
         return {"status": "ok", "message": f"Webhook recebido (erro: {str(e)})"}
 
@@ -1227,26 +1189,10 @@ async def process_webhook_background(body: dict, headers_info: Optional[dict] = 
                     empresa_id = get_empresa_id_from_webhook(db, metadata, business_account_id=business_account_id, slug_hint=slug_hint)
                     
                     if not empresa_id:
-                        # Se não encontrou, mostra mensagens de erro mais específicas
-                        phone_number_id = metadata.get("phone_number_id")
-                        display_phone_number = metadata.get("display_phone_number")
-                        
-                        if business_account_id:
-                            print(f"   ⚠️ EMPRESA não encontrada para business_account_id: {business_account_id}")
-                            print(f"   💡 Dica: Cadastre a configuração do WhatsApp no banco com business_account_id={business_account_id}")
-                        if slug_hint:
-                            print(f"   ⚠️ EMPRESA não encontrada para slug: {slug_hint}")
-                            print(f"   💡 Dica: Verifique se existe uma empresa com slug='{slug_hint}' no banco de dados")
-                        if phone_number_id:
-                            print(f"   ⚠️ EMPRESA não encontrada para phone_number_id: {phone_number_id}")
-                            print(f"   💡 Dica: Cadastre a configuração do WhatsApp no banco com phone_number_id={phone_number_id}")
-                        elif display_phone_number:
-                            print(f"   ⚠️ EMPRESA não encontrada para display_phone_number: {display_phone_number}")
-                            print(f"   💡 Dica: Cadastre a configuração do WhatsApp no banco com display_phone_number={display_phone_number}")
-                        else:
-                            print(f"   ⚠️ Dados insuficientes no webhook para identificar EMPRESA")
-                        
-                        print(f"   🔄 Usando fallback empresa_id=1 (configuração padrão)")
+                        # Fallback para empresa_id padrão
+                        import logging
+                        logger = logging.getLogger(__name__)
+                        logger.warning("Empresa não identificada no webhook, usando fallback empresa_id=1")
                         empresa_id = "1"
 
                     # Processa MESSAGES (mensagens recebidas)
@@ -1278,28 +1224,17 @@ async def process_webhook_background(body: dict, headers_info: Optional[dict] = 
                                 button_response = interactive.get("button_reply", {})
                                 button_id = button_response.get("id")
                                 message_text = button_response.get("title")  # Texto do botão
-                                print(f"   🔘 Botão clicado - ID: {button_id}, Título: {message_text}")
-
-                            print(f"\n📨 Mensagem recebida:")
-                            print(f"   De: {from_number}")
-                            print(f"   Nome: {contact_name}")
-                            print(f"   Tipo: {message_type}")
-                            print(f"   Texto: {message_text}")
-                            if button_id:
-                                print(f"   Button ID: {button_id}")
 
                             if message_text:
                                 # Marca mensagem como lida (conforme documentação 360Dialog)
                                 # Todas as mensagens recebidas aparecem como "delivered" por padrão
                                 # Para aparecerem como "read", precisamos marcar explicitamente
                                 try:
-                                    mark_result = await OrderNotification.mark_message_as_read(message_id, empresa_id)
-                                    if mark_result.get("success"):
-                                        print(f"   ✅ Mensagem {message_id} marcada como lida")
-                                    else:
-                                        print(f"   ⚠️ Não foi possível marcar mensagem como lida: {mark_result.get('error')}")
+                                    await OrderNotification.mark_message_as_read(message_id, empresa_id)
                                 except Exception as mark_error:
-                                    print(f"   ⚠️ Erro ao marcar mensagem como lida: {mark_error}")
+                                    import logging
+                                    logger = logging.getLogger(__name__)
+                                    logger.error(f"Erro ao marcar mensagem como lida: {mark_error}")
                                 
                                 # Processa a mensagem com a IA (passa o nome do contato, empresa_id, message_id e button_id)
                                 await process_whatsapp_message(db, from_number, message_text, contact_name, empresa_id, message_id, button_id)
@@ -1308,50 +1243,33 @@ async def process_webhook_background(body: dict, headers_info: Optional[dict] = 
                     statuses = value.get("statuses", [])
                     if statuses:
                         for status in statuses:
-                            status_id = status.get("id")
                             status_type = status.get("status")  # sent, delivered, read, failed
-                            recipient_id = status.get("recipient_id")
-                            timestamp = status.get("timestamp")
                             
-                            print(f"\n📊 Status recebido:")
-                            print(f"   Message ID: {status_id}")
-                            print(f"   Status: {status_type}")
-                            print(f"   Recipient: {recipient_id}")
-                            print(f"   Timestamp: {timestamp}")
-                            
-                            # Aqui você pode salvar status no banco, atualizar conversas, etc.
-                            # Por exemplo, marcar mensagem como lida quando status_type == "read"
-                            if status_type == "read":
-                                print(f"   ✅ Mensagem {status_id} foi lida pelo usuário")
-                            elif status_type == "delivered":
-                                print(f"   📬 Mensagem {status_id} foi entregue")
-                            elif status_type == "sent":
-                                print(f"   📤 Mensagem {status_id} foi enviada")
-                            elif status_type == "failed":
+                            # Loga apenas erros de falha
+                            if status_type == "failed":
+                                import logging
+                                logger = logging.getLogger(__name__)
+                                status_id = status.get("id")
                                 error_info = status.get("errors", [])
-                                print(f"   ❌ Mensagem {status_id} falhou: {error_info}")
+                                logger.error(f"Mensagem {status_id} falhou: {error_info}")
 
                     # Processa ERRORS (erros do webhook)
                     errors = value.get("errors", [])
                     if errors:
+                        import logging
+                        logger = logging.getLogger(__name__)
                         for error in errors:
                             error_code = error.get("code")
                             error_title = error.get("title")
                             error_message = error.get("message")
                             error_details = error.get("error_data", {})
                             
-                            print(f"\n❌ Erro recebido do webhook:")
-                            print(f"   Code: {error_code}")
-                            print(f"   Title: {error_title}")
-                            print(f"   Message: {error_message}")
-                            print(f"   Details: {error_details}")
-                            
-                            # Aqui você pode logar erros, notificar administradores, etc.
+                            logger.error(f"Erro recebido do webhook - Code: {error_code}, Title: {error_title}, Message: {error_message}, Details: {error_details}")
 
     except Exception as e:
-        print(f"❌ Erro ao processar webhook em background: {e}")
-        import traceback
-        traceback.print_exc()
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Erro ao processar webhook em background: {e}", exc_info=True)
     finally:
         # Fecha a sessão do banco
         db.close()
@@ -1371,10 +1289,6 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
         message_id: ID único da mensagem do WhatsApp (opcional, usado para evitar duplicação)
     """
     try:
-        print(f"\n🤖 Processando mensagem de {phone_number} ({contact_name or 'sem nome'}): {message_text}")
-        print(f"   🏢 empresa_id: {empresa_id}")
-        if message_id:
-            print(f"   📨 Message ID: {message_id}")
 
         # IDENTIFICA/CRIA CLIENTE pelo número de telefone (quem enviou a mensagem)
         empresa_id_int = int(empresa_id) if empresa_id else 1
@@ -1449,12 +1363,7 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 duplicate = result.fetchone()
                 
                 if duplicate:
-                    print(f"   ⚠️ Mensagem duplicada detectada por conteúdo! A mesma mensagem foi recebida há menos de 5 segundos.")
-                    print(f"   🔄 Ignorando processamento duplicado para evitar resposta repetida.")
                     return  # Ignora mensagem duplicada
-            else:
-                # Mensagem curta sem message_id - não verifica duplicata para permitir respostas legítimas
-                print(f"   ℹ️ Mensagem curta sem message_id - permitindo processamento (pode ser resposta legítima repetida)")
 
         # VERIFICA SE A LOJA ESTÁ ABERTA
         esta_aberta = None  # Variável para verificar depois se precisa enviar boas-vindas
@@ -1533,22 +1442,17 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                     notifier = OrderNotification()
                     result = await notifier.send_whatsapp_message(phone_number, mensagem_horarios, empresa_id=empresa_id)
                     
-                    if isinstance(result, dict) and result.get("success"):
-                        print(f"   ✅ Mensagem de horários enviada com sucesso!")
-                    else:
+                    if not isinstance(result, dict) or not result.get("success"):
+                        import logging
+                        logger = logging.getLogger(__name__)
                         error_msg = result.get("error") if isinstance(result, dict) else str(result)
-                        print(f"   ⚠️ Erro ao enviar mensagem de horários: {error_msg}")
+                        logger.error(f"Erro ao enviar mensagem de horários: {error_msg}")
                     
                     return  # Não processa a mensagem normalmente
-                elif esta_aberta is True:
-                    print(f"   ✅ Loja está ABERTA - processando mensagem normalmente")
-                else:
-                    # None = horários não configurados, processa normalmente
-                    print(f"   ℹ️ Horários não configurados - processando mensagem normalmente")
         except Exception as e:
-            print(f"   ⚠️ Erro ao verificar horário de funcionamento: {e}")
-            import traceback
-            traceback.print_exc()
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Erro ao verificar horário de funcionamento: {e}", exc_info=True)
             # Continua processando normalmente em caso de erro
 
         # VERIFICA SE O BOT ESTÁ ATIVO PARA ESTE NÚMERO
@@ -1605,7 +1509,6 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                     contact_name=contact_name,
                     empresa_id=empresa_id_int
                 )
-                print(f"   ✅ Nova conversa criada: {conversation_id} (contato: {contact_name})")
                 
                 # Envia notificação WebSocket de nova conversa
                 from ..core.notifications import send_chatbot_websocket_notification
@@ -1649,7 +1552,6 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
             # Se for primeira mensagem E a loja estiver aberta (ou horários não configurados), envia mensagem com botões
             # Se esta_aberta for False, não envia boas-vindas (já foi enviada mensagem de horários)
             if is_first_message and esta_aberta is not False:
-                print(f"   🎯 Primeira mensagem detectada - enviando mensagem com botões")
                 
                 # Define os botões
                 buttons = [
@@ -1658,11 +1560,11 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                     {"id": "preciso_ajuda", "title": "Preciso de ajuda"}
                 ]
                 
-                # Envia mensagem com botões (sem texto, apenas botões)
+                # Envia mensagem com botões (texto mínimo para WhatsApp aceitar)
                 notifier = OrderNotification()
                 result = await notifier.send_whatsapp_message_with_buttons(
                     phone_number, 
-                    "", 
+                    "Como posso ajudar?", 
                     buttons, 
                     empresa_id=empresa_id
                 )
@@ -1682,11 +1584,9 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                             contact_name=contact_name,
                             empresa_id=empresa_id_int
                         )
-                    chatbot_db.create_message(db, conversation_id, "assistant", mensagem_boas_vindas)
+                    chatbot_db.create_message(db, conversation_id, "assistant", "Como posso ajudar?")
                 else:
                     print(f"   ⚠️ Erro ao enviar mensagem com botões: {result.get('error')}")
-                    # Fallback: envia mensagem normal
-                    result = await notifier.send_whatsapp_message(phone_number, mensagem_boas_vindas, empresa_id=empresa_id)
                 
                 return  # Não processa a mensagem do usuário ainda, aguarda clique no botão
 
@@ -1759,11 +1659,9 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
             # IMPORTANTE: Verifica novamente se a loja está fechada antes de processar
             # (pode ser que a conversa já exista, mas a loja fechou depois)
             if esta_aberta is False:
-                print(f"   🕐 Loja está FECHADA - não processando mensagem via chatbot")
                 return  # Não processa mensagem quando loja está fechada
             
             # Processa com o sistema de vendas usando Groq/LLaMA
-            print(f"   🤖 Usando Groq Sales Handler (LLaMA 3.1 + dados do banco)")
             resposta = await processar_mensagem_groq(
                 db=db,
                 user_id=phone_number,
