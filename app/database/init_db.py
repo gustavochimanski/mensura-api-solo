@@ -352,6 +352,8 @@ def importar_models():
     from app.api.notifications.models.event import Event
     from app.api.notifications.models.subscription import NotificationSubscription
     from app.api.notifications.models.whatsapp_config_model import WhatsAppConfigModel
+    # ─── Models Chatbot ───────────────────────────────────────────
+    from app.api.chatbot.models.model_chatbot_config import ChatbotConfigModel
     logger.info("📦 Models importados com sucesso.")
 
 

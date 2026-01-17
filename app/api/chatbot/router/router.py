@@ -71,6 +71,10 @@ router = APIRouter(
     tags=["API - Chatbot"]
 )
 
+# Incluir router de configurações do chatbot
+from .router_chatbot_config import router as router_chatbot_config
+router.include_router(router_chatbot_config)
+
 
 # ==================== ENDPOINTS BÁSICOS ====================
 
