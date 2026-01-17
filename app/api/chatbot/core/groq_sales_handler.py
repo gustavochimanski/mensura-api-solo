@@ -239,6 +239,24 @@ AI_FUNCTIONS = [
                 "required": []
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "informar_sobre_estabelecimento",
+            "description": "Cliente quer saber informações sobre o estabelecimento, como horário de funcionamento, localização, onde fica. Use quando perguntar: 'qual o horário?', 'que horas vocês abrem?', 'até que horas?', 'onde vocês ficam?', 'onde fica?', 'qual o endereço?', 'onde está localizado?', 'qual a localização?', 'horário de funcionamento', 'horário de trabalho'",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "tipo_pergunta": {
+                        "type": "string",
+                        "enum": ["horario", "localizacao", "ambos"],
+                        "description": "Tipo de informação solicitada: horario (horário de funcionamento), localizacao (onde fica), ambos (horário e localização)"
+                    }
+                },
+                "required": ["tipo_pergunta"]
+            }
+        }
     }
 ]
 
@@ -414,6 +432,169 @@ class GroqSalesHandler:
                 {'id': 2, 'nome': 'Dinheiro', 'tipo': 'DINHEIRO'},
                 {'id': 3, 'nome': 'Cartão', 'tipo': 'CARTAO_ENTREGA'}
             ]
+
+    def _buscar_empresas_ativas(self) -> List[Dict]:
+        """
+        Busca todas as empresas ativas do banco de dados.
+        Retorna lista de dicionários com informações das empresas.
+        """
+        try:
+            result = self.db.execute(text("""
+                SELECT id, nome, bairro, cidade, estado, logradouro, numero, 
+                       complemento, horarios_funcionamento
+                FROM cadastros.empresas
+                ORDER BY nome
+            """))
+            empresas = []
+            for row in result.fetchall():
+                empresas.append({
+                    'id': row[0],
+                    'nome': row[1],
+                    'bairro': row[2],
+                    'cidade': row[3],
+                    'estado': row[4],
+                    'logradouro': row[5],
+                    'numero': row[6],
+                    'complemento': row[7],
+                    'horarios_funcionamento': row[8]
+                })
+            return empresas
+        except Exception as e:
+            print(f"❌ Erro ao buscar empresas: {e}")
+            return []
+
+    def _formatar_horarios_funcionamento(self, horarios_funcionamento) -> str:
+        """
+        Formata os horários de funcionamento em texto legível.
+        horarios_funcionamento é um JSONB com estrutura:
+        [{"dia_semana": 0..6, "intervalos": [{"inicio":"HH:MM","fim":"HH:MM"}]}]
+        """
+        if not horarios_funcionamento:
+            return "Horários de funcionamento não informados."
+        
+        try:
+            # Se já é uma lista, usa direto; se é string, faz parse
+            if isinstance(horarios_funcionamento, str):
+                horarios = json.loads(horarios_funcionamento)
+            else:
+                horarios = horarios_funcionamento
+            
+            if not horarios or not isinstance(horarios, list):
+                return "Horários de funcionamento não informados."
+            
+            # Mapeia dias da semana
+            dias_semana = {
+                0: "Domingo",
+                1: "Segunda-feira",
+                2: "Terça-feira",
+                3: "Quarta-feira",
+                4: "Quinta-feira",
+                5: "Sexta-feira",
+                6: "Sábado"
+            }
+            
+            # Agrupa por dia
+            horarios_formatados = []
+            for horario in horarios:
+                dia_num = horario.get('dia_semana')
+                intervalos = horario.get('intervalos', [])
+                
+                if dia_num is None or not intervalos:
+                    continue
+                
+                dia_nome = dias_semana.get(dia_num, f"Dia {dia_num}")
+                intervalos_str = []
+                for intervalo in intervalos:
+                    inicio = intervalo.get('inicio', '')
+                    fim = intervalo.get('fim', '')
+                    if inicio and fim:
+                        intervalos_str.append(f"{inicio} às {fim}")
+                
+                if intervalos_str:
+                    horarios_formatados.append(f"• {dia_nome}: {', '.join(intervalos_str)}")
+            
+            if horarios_formatados:
+                return "🕐 *Horário de Funcionamento:*\n\n" + "\n".join(horarios_formatados)
+            else:
+                return "Horários de funcionamento não informados."
+        except Exception as e:
+            print(f"❌ Erro ao formatar horários: {e}")
+            return "Horários de funcionamento não informados."
+
+    def _formatar_localizacao_empresas(self, empresas: List[Dict], empresa_atual_id: int) -> str:
+        """
+        Formata informações de localização das empresas.
+        Se houver apenas 1 empresa, retorna informações dela.
+        Se houver mais de 1, retorna informações da atual + lista das outras.
+        """
+        if not empresas:
+            return "Informações de localização não disponíveis."
+        
+        # Filtra apenas empresas com endereço completo
+        empresas_com_endereco = [
+            emp for emp in empresas 
+            if emp.get('bairro') and emp.get('cidade') and emp.get('estado')
+        ]
+        
+        if not empresas_com_endereco:
+            return "Informações de localização não disponíveis."
+        
+        # Encontra a empresa atual
+        empresa_atual = None
+        outras_empresas = []
+        
+        for emp in empresas_com_endereco:
+            if emp['id'] == empresa_atual_id:
+                empresa_atual = emp
+            else:
+                outras_empresas.append(emp)
+        
+        resposta = ""
+        
+        # Se há apenas 1 empresa ou não encontrou a atual, mostra só ela
+        if len(empresas_com_endereco) == 1 or not empresa_atual:
+            emp = empresas_com_endereco[0]
+            resposta = "📍 *Nossa Localização:*\n\n"
+            
+            # Monta endereço completo
+            endereco_parts = []
+            if emp.get('logradouro'):
+                endereco_parts.append(emp['logradouro'])
+                if emp.get('numero'):
+                    endereco_parts.append(f", {emp['numero']}")
+            if emp.get('complemento'):
+                endereco_parts.append(f" - {emp['complemento']}")
+            
+            if endereco_parts:
+                resposta += "".join(endereco_parts) + "\n"
+            
+            resposta += f"{emp['bairro']} ({emp['cidade']}) / {emp['estado']}"
+        else:
+            # Há mais de 1 empresa - mostra a atual + lista das outras
+            resposta = "📍 *Nossa Localização:*\n\n"
+            
+            # Informações da empresa atual
+            resposta += f"*{empresa_atual['nome']}* (unidade atual):\n"
+            endereco_parts = []
+            if empresa_atual.get('logradouro'):
+                endereco_parts.append(empresa_atual['logradouro'])
+                if empresa_atual.get('numero'):
+                    endereco_parts.append(f", {empresa_atual['numero']}")
+            if empresa_atual.get('complemento'):
+                endereco_parts.append(f" - {empresa_atual['complemento']}")
+            
+            if endereco_parts:
+                resposta += "".join(endereco_parts) + "\n"
+            
+            resposta += f"{empresa_atual['bairro']} ({empresa_atual['cidade']}) / {empresa_atual['estado']}\n"
+            
+            # Lista outras unidades
+            if outras_empresas:
+                resposta += "\n*Outras unidades disponíveis:*\n"
+                for emp in outras_empresas:
+                    resposta += f"• {emp['nome']} - {emp['bairro']} ({emp['cidade']}) / {emp['estado']}\n"
+        
+        return resposta
 
     def _normalizar_mensagem(self, mensagem: str) -> str:
         """
@@ -784,6 +965,11 @@ class GroqSalesHandler:
         # Detecta: "quanto fica", "quanto custa", "qual o preço", "qual preço", "quanto é"
         # MAS NÃO se for sobre entrega/frete (já foi detectado acima)
         if re.search(r'(quanto\s+(que\s+)?(fica|custa|é|e)|qual\s+(o\s+)?(pre[cç]o|valor)|pre[cç]o\s+(d[aeo]|de|do)|valor\s+(d[aeo]|de|do))', msg, re.IGNORECASE):
+            # VERIFICA PRIMEIRO se é sobre entrega/frete (não produto)
+            if re.search(r'(entregar|entrega|delivery|frete)', msg, re.IGNORECASE):
+                print(f"🚚 [Regras] Detectado como taxa de entrega (dentro de verificação de preço) na mensagem: '{msg}'")
+                return {"funcao": "calcular_taxa_entrega", "params": {"mensagem_original": mensagem}}
+            
             print(f"💰 [Regras] Detecção de preço na mensagem: '{msg}'")
             itens_preco = self._extrair_itens_pergunta_preco(mensagem)
             if itens_preco:
@@ -1898,6 +2084,62 @@ class GroqSalesHandler:
                         endereco = await self._extrair_endereco_com_ia(mensagem_original)
                     
                     return await self._calcular_e_responder_taxa_entrega(user_id, endereco, dados)
+                elif funcao == "informar_sobre_estabelecimento":
+                    tipo_pergunta = params.get("tipo_pergunta", "ambos")
+                    empresas = self._buscar_empresas_ativas()
+                    
+                    if not empresas:
+                        return "❌ Não foi possível obter informações do estabelecimento no momento. 😔"
+                    
+                    # Busca empresa atual (se não estiver na lista, busca do banco)
+                    empresa_atual = None
+                    for emp in empresas:
+                        if emp['id'] == self.empresa_id:
+                            empresa_atual = emp
+                            break
+                    
+                    # Se não encontrou na lista, busca diretamente do banco
+                    if not empresa_atual:
+                        try:
+                            result = self.db.execute(text("""
+                                SELECT id, nome, bairro, cidade, estado, logradouro, numero, 
+                                       complemento, horarios_funcionamento
+                                FROM cadastros.empresas
+                                WHERE id = :empresa_id
+                            """), {"empresa_id": self.empresa_id})
+                            row = result.fetchone()
+                            if row:
+                                empresa_atual = {
+                                    'id': row[0],
+                                    'nome': row[1],
+                                    'bairro': row[2],
+                                    'cidade': row[3],
+                                    'estado': row[4],
+                                    'logradouro': row[5],
+                                    'numero': row[6],
+                                    'complemento': row[7],
+                                    'horarios_funcionamento': row[8]
+                                }
+                                # Adiciona à lista para usar na formatação
+                                empresas.append(empresa_atual)
+                        except Exception as e:
+                            print(f"❌ Erro ao buscar empresa atual: {e}")
+                    
+                    resposta = ""
+                    
+                    if tipo_pergunta in ["horario", "ambos"]:
+                        if empresa_atual:
+                            horarios = self._formatar_horarios_funcionamento(empresa_atual.get('horarios_funcionamento'))
+                            resposta += horarios + "\n\n"
+                        else:
+                            resposta += "Horários de funcionamento não disponíveis.\n\n"
+                    
+                    if tipo_pergunta in ["localizacao", "ambos"]:
+                        localizacao = self._formatar_localizacao_empresas(empresas, self.empresa_id)
+                        resposta += localizacao
+                    
+                    self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
+                    return resposta.strip()
                 elif funcao == "personalizar_produto":
                     acao = params.get("acao", "")
                     item_nome = params.get("item", "")
@@ -3080,11 +3322,65 @@ REGRA PARA COMPLEMENTOS:
                 return resumo
             return "Seu carrinho está vazio! O que vai querer? 😊"
 
-        # 6. Perguntas genéricas - responde de forma útil
+        # 6. Perguntas sobre estabelecimento (localização/horário) - DEVE vir ANTES de perguntas genéricas
+        msg_lower_fallback = mensagem.lower()
+        padroes_localizacao = [
+            r'onde\s+(voc[eê]s\s+)?(fic|est[aá]|ficam|est[aã]o)',
+            r'onde\s+(fic|est[aá])',
+            r'qual\s+(o\s+)?(endere[cç]o|localiza[cç][aã]o)',
+            r'localiza[cç][aã]o',
+            r'endere[cç]o'
+        ]
+        padroes_horario = [
+            r'(qual|que)\s+(o\s+)?hor[aá]rio',
+            r'que\s+horas\s+(voc[eê]s\s+)?(abr|funcion)',
+            r'at[eé]\s+que\s+horas',
+            r'hor[aá]rio\s+(de\s+)?(funcionamento|trabalho)',
+            r'funcionam\s+(at[eé]|at)'
+        ]
+        
+        eh_pergunta_localizacao = any(re.search(p, msg_lower_fallback, re.IGNORECASE) for p in padroes_localizacao)
+        eh_pergunta_horario = any(re.search(p, msg_lower_fallback, re.IGNORECASE) for p in padroes_horario)
+        
+        if eh_pergunta_localizacao or eh_pergunta_horario:
+            # Trata como informar_sobre_estabelecimento
+            tipo_pergunta = "ambos"
+            if eh_pergunta_localizacao and not eh_pergunta_horario:
+                tipo_pergunta = "localizacao"
+            elif eh_pergunta_horario and not eh_pergunta_localizacao:
+                tipo_pergunta = "horario"
+            
+            empresas = self._buscar_empresas_ativas()
+            if not empresas:
+                return "❌ Não foi possível obter informações do estabelecimento no momento. 😔"
+            
+            # Busca empresa atual
+            empresa_atual = None
+            for emp in empresas:
+                if emp['id'] == self.empresa_id:
+                    empresa_atual = emp
+                    break
+            
+            resposta = ""
+            
+            if tipo_pergunta in ["horario", "ambos"]:
+                if empresa_atual:
+                    horarios = self._formatar_horarios_funcionamento(empresa_atual.get('horarios_funcionamento'))
+                    resposta += horarios + "\n\n"
+                else:
+                    resposta += "Horários de funcionamento não disponíveis.\n\n"
+            
+            if tipo_pergunta in ["localizacao", "ambos"]:
+                localizacao = self._formatar_localizacao_empresas(empresas, self.empresa_id)
+                resposta += localizacao
+            
+            return resposta.strip() if resposta.strip() else "Informações não disponíveis no momento. 😔"
+
+        # 7. Perguntas genéricas - responde de forma útil
         if '?' in mensagem:
             return "Hmm, deixa eu te ajudar! Posso te mostrar nosso cardápio ou tirar dúvidas sobre algum produto específico. O que prefere? 😊"
 
-        # 7. Fallback final - sempre útil, nunca erro
+        # 8. Fallback final - sempre útil, nunca erro
         if pedido_contexto:
             total = sum((i['preco'] + i.get('preco_adicionais', 0)) * i.get('quantidade', 1) for i in pedido_contexto)
             return f"Entendi! Você já tem R$ {total:.2f} no pedido. Quer adicionar mais alguma coisa ou posso fechar? 😊"
@@ -5249,97 +5545,122 @@ Sua única função é ajudar a ESCOLHER PRODUTOS. Nada mais!
         2. Envia mensagem para cliente avisando que vai chamar atendente
         3. Desativa o chatbot para esse cliente
         """
+        from . import database as chatbot_db
+        from sqlalchemy import text
+        
+        # Busca nome do cliente (em transação separada para evitar problemas)
+        cliente_nome = None
         try:
-            from . import database as chatbot_db
-            from sqlalchemy import text
+            # Faz rollback de qualquer transação anterior que possa ter falhado
+            self.db.rollback()
             
-            # Busca nome do cliente
-            cliente_nome = None
+            cliente_query = text("""
+                SELECT nome
+                FROM cadastros.clientes
+                WHERE telefone = :telefone
+                LIMIT 1
+            """)
+            result = self.db.execute(cliente_query, {
+                "telefone": user_id
+            })
+            cliente_row = result.fetchone()
+            if cliente_row:
+                cliente_nome = cliente_row[0]
+        except Exception as e:
+            print(f"⚠️ Erro ao buscar nome do cliente: {e}")
+            # Faz rollback e continua
             try:
-                cliente_query = text("""
-                    SELECT nome
-                    FROM cadastros.clientes
-                    WHERE telefone = :telefone
-                    AND empresa_id = :empresa_id
-                    LIMIT 1
-                """)
-                result = self.db.execute(cliente_query, {
-                    "telefone": user_id,
-                    "empresa_id": self.empresa_id
-                })
-                cliente_row = result.fetchone()
-                if cliente_row:
-                    cliente_nome = cliente_row[0]
-            except Exception as e:
-                print(f"⚠️ Erro ao buscar nome do cliente: {e}")
+                self.db.rollback()
+            except:
+                pass
+        
+        # Monta mensagem de notificação para empresa
+        mensagem_notificacao = f"🔔 *Chatbot não entendeu mensagem*\n\n"
+        mensagem_notificacao += f"O chatbot não conseguiu entender a mensagem do cliente.\n\n"
+        mensagem_notificacao += f"📱 *Cliente:* {cliente_nome or user_id}\n"
+        mensagem_notificacao += f"💬 *Mensagem:* {mensagem}\n"
+        mensagem_notificacao += f"🏢 *Empresa ID:* {self.empresa_id}\n\n"
+        mensagem_notificacao += f"⚠️ O chatbot foi desativado para este cliente. Entre em contato para atendê-lo."
+        
+        # Envia notificação para empresa (em try separado para garantir execução)
+        notificacao_enviada = False
+        try:
+            # Faz rollback de qualquer transação anterior
+            self.db.rollback()
             
-            # Monta mensagem de notificação para empresa
-            mensagem_notificacao = f"🔔 *Chatbot não entendeu mensagem*\n\n"
-            mensagem_notificacao += f"O chatbot não conseguiu entender a mensagem do cliente.\n\n"
-            mensagem_notificacao += f"📱 *Cliente:* {cliente_nome or user_id}\n"
-            mensagem_notificacao += f"💬 *Mensagem:* {mensagem}\n"
-            mensagem_notificacao += f"🏢 *Empresa ID:* {self.empresa_id}\n\n"
-            mensagem_notificacao += f"⚠️ O chatbot foi desativado para este cliente. Entre em contato para atendê-lo."
+            # Busca display_phone_number da configuração do WhatsApp da empresa
+            from app.api.notifications.repositories.whatsapp_config_repository import WhatsAppConfigRepository
+            repo_whatsapp = WhatsAppConfigRepository(self.db)
+            config_whatsapp = repo_whatsapp.get_active_by_empresa(str(self.empresa_id))
             
-            # Envia notificação para empresa
-            try:
-                # Busca display_phone_number da configuração do WhatsApp da empresa
-                from app.api.notifications.repositories.whatsapp_config_repository import WhatsAppConfigRepository
-                repo_whatsapp = WhatsAppConfigRepository(self.db)
-                config_whatsapp = repo_whatsapp.get_active_by_empresa(str(self.empresa_id))
+            if config_whatsapp and config_whatsapp.display_phone_number:
+                from ..core.notifications import OrderNotification
+                from ..core.config_whatsapp import format_phone_number
                 
-                if config_whatsapp and config_whatsapp.display_phone_number:
-                    from ..core.notifications import OrderNotification
-                    from ..core.config_whatsapp import format_phone_number
-                    
-                    notifier = OrderNotification()
-                    empresa_phone = format_phone_number(config_whatsapp.display_phone_number)
-                    
-                    await notifier.send_whatsapp_message(
-                        empresa_phone, 
-                        mensagem_notificacao, 
-                        empresa_id=str(self.empresa_id)
-                    )
-                    print(f"✅ Notificação enviada para empresa {self.empresa_id}")
-            except Exception as e:
-                print(f"⚠️ Erro ao enviar notificação para empresa: {e}")
-                import traceback
-                traceback.print_exc()
-            
-            # Desativa chatbot para este cliente
-            try:
-                chatbot_db.set_bot_status(
-                    self.db,
-                    user_id,
-                    is_active=False,
-                    paused_by="sistema_nao_entendeu",
-                    empresa_id=self.empresa_id
+                notifier = OrderNotification()
+                empresa_phone = format_phone_number(config_whatsapp.display_phone_number)
+                
+                result = await notifier.send_whatsapp_message(
+                    empresa_phone, 
+                    mensagem_notificacao, 
+                    empresa_id=str(self.empresa_id)
                 )
-                print(f"✅ Chatbot desativado para cliente {user_id}")
-            except Exception as e:
-                print(f"⚠️ Erro ao desativar chatbot: {e}")
-                import traceback
-                traceback.print_exc()
+                
+                if result.get("success"):
+                    print(f"✅ Notificação enviada para empresa {self.empresa_id} - telefone: {empresa_phone}")
+                    notificacao_enviada = True
+                else:
+                    print(f"⚠️ Falha ao enviar notificação: {result.get('error')}")
+        except Exception as e:
+            print(f"⚠️ Erro ao enviar notificação para empresa: {e}")
+            import traceback
+            traceback.print_exc()
+            # Faz rollback e continua
+            try:
+                self.db.rollback()
+            except:
+                pass
+        
+        # Desativa chatbot para este cliente (em try separado)
+        try:
+            # Faz rollback de qualquer transação anterior
+            self.db.rollback()
             
-            # Mensagem para o cliente
-            mensagem_cliente = "Desculpe, não consegui entender o que você precisa. 😔\n\n"
-            mensagem_cliente += "Vou chamar um atendente para te ajudar. Em breve alguém entrará em contato! 🙏"
-            
-            # Salva no histórico
+            chatbot_db.set_bot_status(
+                self.db,
+                user_id,
+                is_active=False,
+                paused_by="sistema_nao_entendeu",
+                empresa_id=self.empresa_id
+            )
+            # Commit da desativação
+            self.db.commit()
+            print(f"✅ Chatbot desativado para cliente {user_id}")
+        except Exception as e:
+            print(f"⚠️ Erro ao desativar chatbot: {e}")
+            import traceback
+            traceback.print_exc()
+            # Faz rollback e continua
+            try:
+                self.db.rollback()
+            except:
+                pass
+        
+        # Mensagem para o cliente
+        mensagem_cliente = "Desculpe, não consegui entender o que você precisa. 😔\n\n"
+        mensagem_cliente += "Vou chamar um atendente para te ajudar. Em breve alguém entrará em contato! 🙏"
+        
+        # Salva no histórico (sem commit para não interferir)
+        try:
             historico = dados.get('historico', [])
             historico.append({"role": "user", "content": mensagem})
             historico.append({"role": "assistant", "content": mensagem_cliente})
             dados['historico'] = historico[-10:]
             self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
-            
-            return mensagem_cliente
-            
         except Exception as e:
-            print(f"❌ Erro em _nao_entendeu_mensagem: {e}")
-            import traceback
-            traceback.print_exc()
-            # Fallback caso algo dê errado
-            return "Desculpe, não entendi. Vou chamar um atendente para te ajudar!"
+            print(f"⚠️ Erro ao salvar histórico: {e}")
+        
+        return mensagem_cliente
 
     async def _gerar_resposta_conversacional(
         self,
@@ -6260,6 +6581,64 @@ Responda de forma natural e curta:"""
                     endereco = await self._extrair_endereco_com_ia(mensagem_original)
                 
                 return await self._calcular_e_responder_taxa_entrega(user_id, endereco, dados)
+
+            # INFORMAR SOBRE ESTABELECIMENTO
+            elif funcao == "informar_sobre_estabelecimento":
+                tipo_pergunta = params.get("tipo_pergunta", "ambos")
+                empresas = self._buscar_empresas_ativas()
+                
+                if not empresas:
+                    return "❌ Não foi possível obter informações do estabelecimento no momento. 😔"
+                
+                # Busca empresa atual (se não estiver na lista, busca do banco)
+                empresa_atual = None
+                for emp in empresas:
+                    if emp['id'] == self.empresa_id:
+                        empresa_atual = emp
+                        break
+                
+                # Se não encontrou na lista, busca diretamente do banco
+                if not empresa_atual:
+                    try:
+                        result = self.db.execute(text("""
+                            SELECT id, nome, bairro, cidade, estado, logradouro, numero, 
+                                   complemento, horarios_funcionamento
+                            FROM cadastros.empresas
+                            WHERE id = :empresa_id
+                        """), {"empresa_id": self.empresa_id})
+                        row = result.fetchone()
+                        if row:
+                            empresa_atual = {
+                                'id': row[0],
+                                'nome': row[1],
+                                'bairro': row[2],
+                                'cidade': row[3],
+                                'estado': row[4],
+                                'logradouro': row[5],
+                                'numero': row[6],
+                                'complemento': row[7],
+                                'horarios_funcionamento': row[8]
+                            }
+                            # Adiciona à lista para usar na formatação
+                            empresas.append(empresa_atual)
+                    except Exception as e:
+                        print(f"❌ Erro ao buscar empresa atual: {e}")
+                
+                resposta = ""
+                
+                if tipo_pergunta in ["horario", "ambos"]:
+                    if empresa_atual:
+                        horarios = self._formatar_horarios_funcionamento(empresa_atual.get('horarios_funcionamento'))
+                        resposta += horarios + "\n\n"
+                    else:
+                        resposta += "Horários de funcionamento não disponíveis.\n\n"
+                
+                if tipo_pergunta in ["localizacao", "ambos"]:
+                    localizacao = self._formatar_localizacao_empresas(empresas, self.empresa_id)
+                    resposta += localizacao
+                
+                self._salvar_estado_conversa(user_id, estado, dados)
+                return resposta.strip()
 
             # PERSONALIZAR PRODUTO (remover ingrediente ou adicionar extra)
             elif funcao == "personalizar_produto":

@@ -503,6 +503,117 @@ class PedidoBalcaoService:
         pedido = self.repo.get(pedido_id, TipoEntrega.BALCAO)  # Recarrega com itens atualizados
         return PedidoResponseBuilder.pedido_to_response_completo(pedido)
 
+    def atualizar_item(
+        self,
+        pedido_id: int,
+        item_id: int,
+        quantidade: Optional[int] = None,
+        observacao: Optional[str] = None,
+        complementos: Optional[List[ItemComplementoRequest]] = None,
+        usuario_id: int | None = None
+    ) -> PedidoResponseCompleto:
+        """
+        Atualiza um item do pedido de balcão.
+        Permite atualizar quantidade, observação e complementos.
+        """
+        pedido = self.repo.get(pedido_id, TipoEntrega.BALCAO)
+        if pedido.status in ("C", "E"):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Pedido fechado/cancelado")
+        
+        # Busca o item
+        item_db = self.repo.get_item_by_id(item_id)
+        if not item_db:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, f"Item {item_id} não encontrado")
+        
+        if item_db.pedido_id != pedido_id:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Item {item_id} não pertence ao pedido {pedido_id}")
+        
+        quantidade_alterada = False
+        
+        # Atualiza quantidade se fornecida
+        if quantidade is not None and quantidade != item_db.quantidade:
+            if quantidade <= 0:
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, "Quantidade deve ser maior que zero")
+            item_db.quantidade = quantidade
+            quantidade_alterada = True
+        
+        # Atualiza observação se fornecida
+        if observacao is not None:
+            item_db.observacao = observacao
+        
+        # Processa complementos se fornecidos
+        if complementos is not None:
+            # Remove complementos antigos do item
+            from app.api.pedidos.models.model_pedido_item_complemento import PedidoItemComplementoModel
+            complementos_antigos = self.db.query(PedidoItemComplementoModel).filter(
+                PedidoItemComplementoModel.pedido_item_id == item_db.id
+            ).all()
+            for comp_antigo in complementos_antigos:
+                self.db.delete(comp_antigo)
+            self.db.flush()
+            
+            # Busca o produto/receita/combo para calcular preço com complementos
+            product = None
+            if item_db.produto_cod_barras:
+                product = self.product_core.buscar_produto(
+                    empresa_id=pedido.empresa_id,
+                    cod_barras=str(item_db.produto_cod_barras)
+                )
+            elif item_db.receita_id:
+                receita_model = self.db.query(ReceitaModel).filter(ReceitaModel.id == item_db.receita_id).first()
+                product = self.product_core.buscar_receita(receita_id=item_db.receita_id, receita_model=receita_model)
+            elif item_db.combo_id:
+                product = self.product_core.buscar_combo(combo_id=item_db.combo_id)
+            
+            if product:
+                # Calcula novo preço com complementos
+                quantidade_item = quantidade if quantidade is not None else item_db.quantidade
+                preco_total_com_complementos, _ = self.product_core.calcular_preco_com_complementos(
+                    product=product,
+                    quantidade=quantidade_item,
+                    complementos_request=complementos,
+                )
+                # Atualiza preço unitário (preço total dividido pela quantidade)
+                item_db.preco_unitario = preco_total_com_complementos / Decimal(str(quantidade_item))
+                item_db.preco_total = preco_total_com_complementos
+            
+            # Persiste novos complementos
+            self.repo._persistir_complementos_do_request(
+                item=item_db,
+                pedido_id=pedido_id,
+                complementos_request=complementos,
+            )
+        elif quantidade_alterada:
+            # Se quantidade mudou mas não há complementos, recalcula apenas o preço total
+            item_db.preco_total = item_db.preco_unitario * Decimal(str(item_db.quantidade))
+        
+        # Recalcula valor total do pedido
+        self.repo.recalcular_valor_total(pedido_id)
+        
+        # Registra histórico
+        descricao_parts = []
+        if quantidade_alterada:
+            descricao_parts.append(f"quantidade: {quantidade}")
+        if observacao is not None:
+            descricao_parts.append("observação atualizada")
+        if complementos is not None:
+            descricao_parts.append("complementos atualizados")
+        
+        descricao = f"Item {item_id} atualizado"
+        if descricao_parts:
+            descricao += f" ({', '.join(descricao_parts)})"
+        
+        self.repo.add_historico(
+            pedido_id=pedido_id,
+            tipo_operacao=TipoOperacaoPedido.ITEM_ATUALIZADO,
+            descricao=descricao,
+            usuario_id=usuario_id,
+        )
+        
+        self.repo.commit()
+        pedido = self.repo.get(pedido_id, TipoEntrega.BALCAO)  # Recarrega com itens atualizados
+        return PedidoResponseBuilder.pedido_to_response_completo(pedido)
+
     def remover_item(self, pedido_id: int, item_id: int, usuario_id: int | None = None) -> RemoverItemResponse:
         pedido = self.repo.get(pedido_id, TipoEntrega.BALCAO)
         if pedido.status in ("C", "E"):
