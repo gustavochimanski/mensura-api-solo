@@ -87,7 +87,6 @@ class EmpresaService:
             horarios_funcionamento=data.horarios_funcionamento,
             cardapio_tema=data.cardapio_tema,
             aceita_pedido_automatico=bool(data.aceita_pedido_automatico),
-            tempo_entrega_maximo=data.tempo_entrega_maximo,
             # pagina_unica=bool(data.pagina_unica),  # Comentado: coluna não existe no banco ainda
             cep=data.cep,
             logradouro=data.logradouro,

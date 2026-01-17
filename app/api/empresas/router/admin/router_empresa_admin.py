@@ -150,7 +150,6 @@ async def update_empresa(
         cardapio_link=cardapio_link,
         cardapio_tema=cardapio_tema,
         aceita_pedido_automatico = aceita_pedido_automatico.lower() == "true" if aceita_pedido_automatico else None,
-        tempo_entrega_maximo=tempo_entrega_maximo,
         pagina_unica = pagina_unica.lower() == "true" if pagina_unica else None,
         **endereco_payload,
     )
