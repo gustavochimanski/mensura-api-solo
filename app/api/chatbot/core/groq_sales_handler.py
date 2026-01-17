@@ -223,13 +223,17 @@ AI_FUNCTIONS = [
         "type": "function",
         "function": {
             "name": "calcular_taxa_entrega",
-            "description": "Cliente quer saber o VALOR DA TAXA DE ENTREGA/FRETE para um endereço. Use quando perguntar sobre: 'qual a taxa de entrega?', 'quanto é o frete?', 'qual o valor da entrega?', 'quanto custa a entrega?', 'qual a taxa para [endereço]?', 'quanto fica a entrega para [endereço]?'. IMPORTANTE: Esta é uma PERGUNTA sobre taxa de entrega, NÃO é pedido de produto!",
+            "description": "Cliente quer saber o VALOR DA TAXA DE ENTREGA/FRETE para um endereço. Use quando perguntar sobre: 'qual a taxa de entrega?', 'quanto é o frete?', 'qual o valor da entrega?', 'quanto custa a entrega?', 'qual a taxa para [endereço]?', 'quanto fica a entrega para [endereço]?', 'fala pra mi quanto que fica pra entregar aqui na rua X'. IMPORTANTE: Esta é uma PERGUNTA sobre taxa de entrega, NÃO é pedido de produto! Se a mensagem contém um endereço, passe a mensagem completa em mensagem_original para extração automática.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "endereco": {
                         "type": "string",
                         "description": "Endereço mencionado pelo cliente (opcional, pode ser vazio se não mencionou endereço específico)"
+                    },
+                    "mensagem_original": {
+                        "type": "string",
+                        "description": "Mensagem original do cliente completa (use quando o endereço está na mensagem mas não está claro, ex: 'fala pra mi quanto que fica pra entregar aqui na rua calendulas 140')"
                     }
                 },
                 "required": []
@@ -316,7 +320,8 @@ REGRA DE OURO: Na dúvida, use "conversar". É melhor conversar do que fazer aç
    - "quanto custa a entrega?" → calcular_taxa_entrega()
    - "qual a taxa para rua xyz?" → calcular_taxa_entrega(endereco="rua xyz")
    - "quanto fica a entrega para [endereço]?" → calcular_taxa_entrega(endereco="[endereço]")
-   ⚠️ IMPORTANTE: Perguntas sobre TAXA DE ENTREGA sempre usam esta função, NÃO use 'adicionar_produto' ou 'informar_sobre_produto'!
+   - "fala pra mi quanto que fica pra entregar aqui na rua calendulas 140" → calcular_taxa_entrega(mensagem_original="fala pra mi quanto que fica pra entregar aqui na rua calendulas 140")
+   ⚠️ IMPORTANTE: Perguntas sobre TAXA DE ENTREGA sempre usam esta função, NÃO use 'adicionar_produto' ou 'informar_sobre_produto'! Se o endereço está na mensagem mas não está claro, use mensagem_original.
 
 === PRODUTOS DISPONÍVEIS ===
 {produtos_lista}
@@ -650,7 +655,7 @@ class GroqSalesHandler:
             msg += f"Obs: não encontrei {', '.join(faltando)} no cardápio.\n\n"
 
         dados["pendente_adicao_itens"] = pendentes
-        msg += "Quer adicionar ao pedido? 😊"
+        msg += self._obter_mensagem_final_pedido()
         return msg
 
     def _detectar_forma_pagamento_em_mensagem(self, mensagem: str) -> Optional[Dict]:
@@ -802,43 +807,11 @@ class GroqSalesHandler:
 
         # PERGUNTAS SOBRE TAXA DE ENTREGA/FRETE - DEVE vir ANTES da detecção de produtos
         # Detecta: "qual a taxa de entrega", "quanto é o frete", "qual o valor da entrega", etc.
+        # NÃO extrai endereço aqui - a IA vai extrair depois
         if re.search(r'(taxa\s*(de\s*)?(entrega|delivery)|frete|valor\s*(da\s*)?(entrega|delivery)|quanto\s*(é|e|fica|custa)\s*(o\s*)?(frete|entrega|delivery)|pre[cç]o\s*(do\s*)?(frete|entrega|delivery))', msg, re.IGNORECASE):
             print(f"🚚 [Regras] Detecção de taxa de entrega na mensagem: '{msg}'")
-            # Tenta extrair endereço se mencionado - remove palavras-chave de pergunta
-            # Padrão: "taxa de entrega para [endereço]" ou "frete para [endereço]"
-            endereco = ""
-            
-            # Remove a parte da pergunta para pegar só o endereço
-            msg_sem_pergunta = re.sub(
-                r'(?:qual\s+(a\s+)?(taxa|valor|pre[cç]o)\s+(de\s+)?(entrega|delivery|frete)|quanto\s+(é|e|fica|custa)\s+(o\s+)?(frete|entrega|delivery)|taxa\s+(de\s+)?(entrega|delivery)|valor\s+(da\s+)?(entrega|delivery)|pre[cç]o\s+(do\s+)?(frete|entrega|delivery))\s*(?:para|pra)?\s*',
-                '',
-                msg,
-                flags=re.IGNORECASE
-            ).strip()
-            
-            # Se sobrou algo na mensagem após remover a pergunta, é o endereço
-            if msg_sem_pergunta and len(msg_sem_pergunta) > 3:
-                # Remove pontuação final
-                endereco = re.sub(r'[?.,;!]+$', '', msg_sem_pergunta).strip()
-            
-            # Se não extraiu, tenta padrão mais específico
-            if not endereco or len(endereco) < 5:
-                endereco_match = re.search(r'(?:para|pra|em|na|no)\s+([a-záàâãéêíóôõúç0-9\s,\.\-]+?)(?:\?|$|,|\.)', msg, re.IGNORECASE)
-                if endereco_match:
-                    endereco = endereco_match.group(1).strip()
-                    # Remove palavras comuns que podem ter sido capturadas
-                    endereco = re.sub(r'^(a|o|da|do|de|para|pra)\s+', '', endereco, flags=re.IGNORECASE).strip()
-            
-            # Se ainda não tem endereço, tenta detectar padrão de endereço direto (rua, avenida, etc)
-            if not endereco or len(endereco) < 5:
-                endereco_match = re.search(r'(rua|avenida|av\.|av|travessa|trav\.|trav|alameda|al\.|al|r\.|r\s)\s+([a-záàâãéêíóôõúç0-9\s,\.\-]+?)(?:\?|$|,|\.)', msg, re.IGNORECASE)
-                if endereco_match:
-                    # Pega a palavra-chave + o resto
-                    endereco = endereco_match.group(0).strip()
-                    endereco = re.sub(r'[?.,;!]+$', '', endereco).strip()
-            
-            print(f"🚚 [Regras] Endereço extraído: '{endereco}'")
-            return {"funcao": "calcular_taxa_entrega", "params": {"endereco": endereco}}
+            # A IA vai extrair o endereço depois
+            return {"funcao": "calcular_taxa_entrega", "params": {"mensagem_original": msg}}
 
         # Ver carrinho
         if re.search(r'(quanto\s*(ta|tá|esta)|meu\s*pedido|carrinho|o\s*que\s*(eu\s*)?pedi)', msg):
@@ -1222,6 +1195,38 @@ class GroqSalesHandler:
     def _get_chatbot_config(self):
         """Retorna configuração do chatbot (com cache)"""
         return self._config_cache
+
+    def _obter_link_cardapio(self) -> str:
+        """Obtém o link do cardápio da empresa"""
+        try:
+            empresa_query = text("""
+                SELECT cardapio_link
+                FROM cadastros.empresas
+                WHERE id = :empresa_id
+            """)
+            result = self.db.execute(empresa_query, {"empresa_id": self.empresa_id})
+            empresa = result.fetchone()
+            return empresa[0] if empresa and empresa[0] else LINK_CARDAPIO
+        except Exception as e:
+            print(f"⚠️ Erro ao buscar link do cardápio: {e}")
+            return LINK_CARDAPIO
+
+    def _obter_mensagem_final_pedido(self) -> str:
+        """
+        Retorna a mensagem final apropriada baseada em aceita_pedidos_whatsapp.
+        Se aceita pedidos: "Quer adicionar ao pedido? 😊"
+        Se não aceita: mensagem com link do cardápio
+        """
+        config = self._get_chatbot_config()
+        if config and not config.aceita_pedidos_whatsapp:
+            link_cardapio = self._obter_link_cardapio()
+            if config.mensagem_redirecionamento:
+                mensagem = config.mensagem_redirecionamento.replace("{link_cardapio}", link_cardapio)
+            else:
+                mensagem = f"📲 Para fazer seu pedido, acesse nosso cardápio completo pelo link:\n\n👉 {link_cardapio}\n\nDepois é só fazer seu pedido pelo site! 😊"
+            return mensagem
+        else:
+            return "Quer adicionar ao pedido? 😊"
 
     def _gerar_mensagem_boas_vindas_conversacional(self) -> str:
         """Gera mensagem de boas-vindas para modo conversacional com botões"""
@@ -1872,7 +1877,14 @@ class GroqSalesHandler:
                     else:
                         return "No momento não temos adicionais extras disponíveis 😅"
                 elif funcao == "calcular_taxa_entrega":
+                    # Extrai endereço usando IA
+                    mensagem_original = params.get("mensagem_original", "")
                     endereco = params.get("endereco", "")
+                    
+                    # Se não veio endereço direto, extrai da mensagem original com IA
+                    if not endereco and mensagem_original:
+                        endereco = await self._extrair_endereco_com_ia(mensagem_original)
+                    
                     return await self._calcular_e_responder_taxa_entrega(user_id, endereco, dados)
                 elif funcao == "personalizar_produto":
                     acao = params.get("acao", "")
@@ -5424,7 +5436,7 @@ Responda de forma natural e curta:"""
                         msg = f"💰 *{nome_produto}* - {quantidade}x R$ {produto['preco']:.2f} = R$ {total:.2f}\n\n"
                     else:
                         msg = f"💰 *{nome_produto}* - R$ {produto['preco']:.2f}\n\n"
-                    msg += "Quer adicionar ao pedido? 😊"
+                    msg += self._obter_mensagem_final_pedido()
                     return msg
                 
                 # Monta resposta com ingredientes reais
@@ -5445,7 +5457,7 @@ Responda de forma natural e curta:"""
                     for add in adicionais[:4]:  # Mostra até 4 adicionais
                         msg += f"• {add['nome']} (+R$ {add['preco']:.2f})\n"
 
-                msg += "\nQuer pedir? 😊"
+                msg += "\n" + self._obter_mensagem_final_pedido()
                 return msg
             else:
                 # Se não encontrou ingredientes, tenta buscar descrição da receita no banco
@@ -5485,7 +5497,7 @@ Responda de forma natural e curta:"""
                         msg = f"💰 *{nome_produto}* - {quantidade}x R$ {produto['preco']:.2f} = R$ {total:.2f}\n\n"
                     else:
                         msg = f"💰 *{nome_produto}* - R$ {produto['preco']:.2f}\n\n"
-                    msg += "Quer adicionar ao pedido? 😊"
+                    msg += self._obter_mensagem_final_pedido()
                     return msg
                 
                 msg = f"*{nome_produto}* - R$ {produto['preco']:.2f}\n\n"
@@ -5501,14 +5513,14 @@ Responda de forma natural e curta:"""
                     if not descricao_receita and produto.get('descricao'):
                         msg += f"{produto['descricao']}\n\n"
                     
-                    msg += "Quer adicionar ao pedido mesmo assim? 😊"
+                    msg += self._obter_mensagem_final_pedido()
                 else:
                     # Se não foi pergunta específica sobre ingredientes, usa descrição se disponível
                     if descricao_receita:
                         msg += f"{descricao_receita}\n\n"
                     elif produto.get('descricao'):
                         msg += f"{produto['descricao']}\n\n"
-                    msg += "Quer adicionar ao pedido? 😊"
+                    msg += self._obter_mensagem_final_pedido()
                 
                 return msg
         except Exception as e:
@@ -5524,10 +5536,10 @@ Responda de forma natural e curta:"""
             
             if eh_pergunta_preco:
                 msg = f"💰 *{produto['nome']}* - R$ {produto['preco']:.2f}\n\n"
-                msg += "Quer adicionar ao pedido? 😊"
+                msg += self._obter_mensagem_final_pedido()
             else:
                 msg = f"*{produto['nome']}* - R$ {produto['preco']:.2f}\n\n"
-                msg += "Quer adicionar ao pedido? 😊"
+                msg += self._obter_mensagem_final_pedido()
             return msg
 
     async def _calcular_e_responder_taxa_entrega(
@@ -5584,7 +5596,7 @@ Responda de forma natural e curta:"""
             msg += f"💰 *Valor:* R$ {taxa:.2f}\n"
             msg += f"⏱️ *Tempo estimado:* {tempo_estimado} minutos\n\n"
             
-            msg += "Quer fazer um pedido? 😊"
+            msg += self._obter_mensagem_final_pedido()
             
             # Salva no histórico
             historico = dados.get('historico', [])
@@ -5977,7 +5989,16 @@ Responda de forma natural e curta:"""
                         dados['complementos_disponiveis'] = complementos
                         self._salvar_estado_conversa(user_id, STATE_AGUARDANDO_PEDIDO, dados)
                     else:
-                        msg_resposta += "\n\n💬 Quer adicionar mais alguma coisa ou posso fechar o pedido? 😊"
+                        config = self._get_chatbot_config()
+                        if config and not config.aceita_pedidos_whatsapp:
+                            link_cardapio = self._obter_link_cardapio()
+                            if config.mensagem_redirecionamento:
+                                msg_final = config.mensagem_redirecionamento.replace("{link_cardapio}", link_cardapio)
+                            else:
+                                msg_final = f"📲 Para fazer seu pedido, acesse nosso cardápio completo pelo link:\n\n👉 {link_cardapio}\n\nDepois é só fazer seu pedido pelo site! 😊"
+                            msg_resposta += f"\n\n{msg_final}"
+                        else:
+                            msg_resposta += "\n\n💬 Quer adicionar mais alguma coisa ou posso fechar o pedido? 😊"
 
                     return msg_resposta
                 else:
@@ -6091,7 +6112,16 @@ Responda de forma natural e curta:"""
                 print("🛒 Cliente pediu para ver o carrinho")
                 if carrinho:
                     msg = self._formatar_carrinho(carrinho)
-                    msg += "\n\n💬 Quer adicionar mais alguma coisa ou posso fechar o pedido? 😊"
+                    config = self._get_chatbot_config()
+                    if config and not config.aceita_pedidos_whatsapp:
+                        link_cardapio = self._obter_link_cardapio()
+                        if config.mensagem_redirecionamento:
+                            msg_final = config.mensagem_redirecionamento.replace("{link_cardapio}", link_cardapio)
+                        else:
+                            msg_final = f"📲 Para fazer seu pedido, acesse nosso cardápio completo pelo link:\n\n👉 {link_cardapio}\n\nDepois é só fazer seu pedido pelo site! 😊"
+                        msg += f"\n\n{msg_final}"
+                    else:
+                        msg += "\n\n💬 Quer adicionar mais alguma coisa ou posso fechar o pedido? 😊"
                     return msg
                 else:
                     return "🛒 *Seu carrinho está vazio!*\n\nO que você gostaria de pedir hoje? 😊"
@@ -6117,7 +6147,14 @@ Responda de forma natural e curta:"""
 
             # CALCULAR TAXA DE ENTREGA
             elif funcao == "calcular_taxa_entrega":
+                # Extrai endereço usando IA
+                mensagem_original = params.get("mensagem_original", "")
                 endereco = params.get("endereco", "")
+                
+                # Se não veio endereço direto, extrai da mensagem original com IA
+                if not endereco and mensagem_original:
+                    endereco = await self._extrair_endereco_com_ia(mensagem_original)
+                
                 return await self._calcular_e_responder_taxa_entrega(user_id, endereco, dados)
 
             # PERSONALIZAR PRODUTO (remover ingrediente ou adicionar extra)
