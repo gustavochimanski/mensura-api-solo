@@ -734,6 +734,7 @@ class GroqSalesHandler:
         """
         import re
         msg = self._normalizar_mensagem(mensagem)
+        print(f"🔍 [Regras] Analisando mensagem normalizada: '{msg}' (original: '{mensagem}')")
 
         # Saudações
         if re.match(r'^(oi|ola|olá|eae|e ai|eaí|bom dia|boa tarde|boa noite|hey|hi)[\s!?]*$', msg):
@@ -742,6 +743,24 @@ class GroqSalesHandler:
         # Ver cardápio - perguntas sobre o que tem, quais produtos, etc.
         if re.search(r'(cardapio|cardápio|menu|lista|catalogo|catálogo)', msg):
             return {"funcao": "ver_cardapio", "params": {}}
+
+        # PERGUNTAS SOBRE TAXA DE ENTREGA/FRETE - DEVE vir PRIMEIRO, ANTES de tudo!
+        # Detecta: "qual a taxa de entrega", "quanto é o frete", "quanto fica pra entregar", etc.
+        # IMPORTANTE: Esta verificação deve vir ANTES de perguntas de preço de produtos!
+        # Verifica primeiro padrões específicos de entrega/frete
+        if re.search(r'(taxa\s*(de\s*)?(entrega|delivery)|frete|valor\s*(da\s*)?(entrega|delivery)|pre[cç]o\s*(do\s*)?(frete|entrega|delivery))', msg, re.IGNORECASE):
+            print(f"🚚 [Regras] Detecção de taxa de entrega (padrão 1) na mensagem: '{msg}'")
+            return {"funcao": "calcular_taxa_entrega", "params": {"mensagem_original": msg}}
+        
+        # Verifica padrões como "quanto fica pra entregar", "quanto que fica pra entregar", etc.
+        if re.search(r'quanto\s+(que\s+)?(fica|custa|é|e)\s+(pra|para|o\s*)?(entregar|entrega|delivery|frete)', msg, re.IGNORECASE):
+            print(f"🚚 [Regras] Detecção de taxa de entrega (padrão 2) na mensagem: '{msg}'")
+            return {"funcao": "calcular_taxa_entrega", "params": {"mensagem_original": msg}}
+        
+        # Verifica se contém palavras de entrega/frete junto com "quanto"
+        if re.search(r'quanto.*(entregar|entrega|delivery|frete)|(entregar|entrega|delivery|frete).*quanto', msg, re.IGNORECASE):
+            print(f"🚚 [Regras] Detecção de taxa de entrega (padrão 3) na mensagem: '{msg}'")
+            return {"funcao": "calcular_taxa_entrega", "params": {"mensagem_original": msg}}
 
         # Informação sobre produto ESPECÍFICO (DEVE vir ANTES da detecção genérica de "o que tem")
         # Detecta: "o que tem no X", "o que vem no X", "o que tem na X", "ingredientes do X", etc.
@@ -763,6 +782,7 @@ class GroqSalesHandler:
 
         # PERGUNTAS DE PREÇO - DEVE vir ANTES da detecção genérica (muito importante!)
         # Detecta: "quanto fica", "quanto custa", "qual o preço", "qual preço", "quanto é"
+        # MAS NÃO se for sobre entrega/frete (já foi detectado acima)
         if re.search(r'(quanto\s+(que\s+)?(fica|custa|é|e)|qual\s+(o\s+)?(pre[cç]o|valor)|pre[cç]o\s+(d[aeo]|de|do)|valor\s+(d[aeo]|de|do))', msg, re.IGNORECASE):
             print(f"💰 [Regras] Detecção de preço na mensagem: '{msg}'")
             itens_preco = self._extrair_itens_pergunta_preco(mensagem)
@@ -804,14 +824,6 @@ class GroqSalesHandler:
         # Ver combos
         if re.search(r'(combo|combos|promocao|promocoes)', msg):
             return {"funcao": "ver_combos", "params": {}}
-
-        # PERGUNTAS SOBRE TAXA DE ENTREGA/FRETE - DEVE vir ANTES da detecção de produtos
-        # Detecta: "qual a taxa de entrega", "quanto é o frete", "qual o valor da entrega", etc.
-        # NÃO extrai endereço aqui - a IA vai extrair depois
-        if re.search(r'(taxa\s*(de\s*)?(entrega|delivery)|frete|valor\s*(da\s*)?(entrega|delivery)|quanto\s*(é|e|fica|custa)\s*(o\s*)?(frete|entrega|delivery)|pre[cç]o\s*(do\s*)?(frete|entrega|delivery))', msg, re.IGNORECASE):
-            print(f"🚚 [Regras] Detecção de taxa de entrega na mensagem: '{msg}'")
-            # A IA vai extrair o endereço depois
-            return {"funcao": "calcular_taxa_entrega", "params": {"mensagem_original": msg}}
 
         # Ver carrinho
         if re.search(r'(quanto\s*(ta|tá|esta)|meu\s*pedido|carrinho|o\s*que\s*(eu\s*)?pedi)', msg):
@@ -2717,14 +2729,14 @@ REGRA PARA COMPLEMENTOS:
                 else:
                     print(f"❌ Erro Groq: {response.status_code}")
                     # Fallback inteligente em vez de erro
-                    return self._fallback_resposta_inteligente(mensagem, dados)
+                    return await self._fallback_resposta_inteligente(mensagem, dados, user_id)
 
         except Exception as e:
             print(f"❌ Erro na conversa IA: {e}")
             # Fallback inteligente - analisa a mensagem e responde de forma natural
-            return self._fallback_resposta_inteligente(mensagem, dados)
+            return await self._fallback_resposta_inteligente(mensagem, dados, user_id)
 
-    def _fallback_resposta_inteligente(self, mensagem: str, dados: dict, user_id: str = None) -> str:
+    async def _fallback_resposta_inteligente(self, mensagem: str, dados: dict, user_id: str = None) -> str:
         """
         Fallback quando a IA falha - analisa a mensagem e toma uma decisão inteligente.
         Nunca retorna erro genérico.
@@ -3077,7 +3089,8 @@ REGRA PARA COMPLEMENTOS:
             total = sum((i['preco'] + i.get('preco_adicionais', 0)) * i.get('quantidade', 1) for i in pedido_contexto)
             return f"Entendi! Você já tem R$ {total:.2f} no pedido. Quer adicionar mais alguma coisa ou posso fechar? 😊"
 
-        return "Opa! Como posso te ajudar? Posso mostrar o cardápio, tirar dúvidas ou anotar seu pedido! 😊"
+        # Se chegou aqui, não conseguiu entender - chama função de não entendimento
+        return await self._nao_entendeu_mensagem(user_id, mensagem, dados)
 
     def _formatar_cardapio_para_ia(self, produtos: List[Dict]) -> str:
         """Formata cardápio completo para o prompt da IA"""
@@ -5229,6 +5242,105 @@ Sua única função é ajudar a ESCOLHER PRODUTOS. Nada mais!
 
     # ========== RESPOSTAS CONVERSACIONAIS ==========
 
+    async def _nao_entendeu_mensagem(self, user_id: str, mensagem: str, dados: Dict) -> str:
+        """
+        Quando o chatbot não entende a mensagem:
+        1. Envia notificação para WhatsApp da empresa
+        2. Envia mensagem para cliente avisando que vai chamar atendente
+        3. Desativa o chatbot para esse cliente
+        """
+        try:
+            from . import database as chatbot_db
+            from sqlalchemy import text
+            
+            # Busca nome do cliente
+            cliente_nome = None
+            try:
+                cliente_query = text("""
+                    SELECT nome
+                    FROM cadastros.clientes
+                    WHERE telefone = :telefone
+                    AND empresa_id = :empresa_id
+                    LIMIT 1
+                """)
+                result = self.db.execute(cliente_query, {
+                    "telefone": user_id,
+                    "empresa_id": self.empresa_id
+                })
+                cliente_row = result.fetchone()
+                if cliente_row:
+                    cliente_nome = cliente_row[0]
+            except Exception as e:
+                print(f"⚠️ Erro ao buscar nome do cliente: {e}")
+            
+            # Monta mensagem de notificação para empresa
+            mensagem_notificacao = f"🔔 *Chatbot não entendeu mensagem*\n\n"
+            mensagem_notificacao += f"O chatbot não conseguiu entender a mensagem do cliente.\n\n"
+            mensagem_notificacao += f"📱 *Cliente:* {cliente_nome or user_id}\n"
+            mensagem_notificacao += f"💬 *Mensagem:* {mensagem}\n"
+            mensagem_notificacao += f"🏢 *Empresa ID:* {self.empresa_id}\n\n"
+            mensagem_notificacao += f"⚠️ O chatbot foi desativado para este cliente. Entre em contato para atendê-lo."
+            
+            # Envia notificação para empresa
+            try:
+                # Busca display_phone_number da configuração do WhatsApp da empresa
+                from app.api.notifications.repositories.whatsapp_config_repository import WhatsAppConfigRepository
+                repo_whatsapp = WhatsAppConfigRepository(self.db)
+                config_whatsapp = repo_whatsapp.get_active_by_empresa(str(self.empresa_id))
+                
+                if config_whatsapp and config_whatsapp.display_phone_number:
+                    from ..core.notifications import OrderNotification
+                    from ..core.config_whatsapp import format_phone_number
+                    
+                    notifier = OrderNotification()
+                    empresa_phone = format_phone_number(config_whatsapp.display_phone_number)
+                    
+                    await notifier.send_whatsapp_message(
+                        empresa_phone, 
+                        mensagem_notificacao, 
+                        empresa_id=str(self.empresa_id)
+                    )
+                    print(f"✅ Notificação enviada para empresa {self.empresa_id}")
+            except Exception as e:
+                print(f"⚠️ Erro ao enviar notificação para empresa: {e}")
+                import traceback
+                traceback.print_exc()
+            
+            # Desativa chatbot para este cliente
+            try:
+                chatbot_db.set_bot_status(
+                    self.db,
+                    user_id,
+                    is_active=False,
+                    paused_by="sistema_nao_entendeu",
+                    empresa_id=self.empresa_id
+                )
+                print(f"✅ Chatbot desativado para cliente {user_id}")
+            except Exception as e:
+                print(f"⚠️ Erro ao desativar chatbot: {e}")
+                import traceback
+                traceback.print_exc()
+            
+            # Mensagem para o cliente
+            mensagem_cliente = "Desculpe, não consegui entender o que você precisa. 😔\n\n"
+            mensagem_cliente += "Vou chamar um atendente para te ajudar. Em breve alguém entrará em contato! 🙏"
+            
+            # Salva no histórico
+            historico = dados.get('historico', [])
+            historico.append({"role": "user", "content": mensagem})
+            historico.append({"role": "assistant", "content": mensagem_cliente})
+            dados['historico'] = historico[-10:]
+            self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
+            
+            return mensagem_cliente
+            
+        except Exception as e:
+            print(f"❌ Erro em _nao_entendeu_mensagem: {e}")
+            import traceback
+            traceback.print_exc()
+            # Fallback caso algo dê errado
+            return "Desculpe, não entendi. Vou chamar um atendente para te ajudar!"
+
     async def _gerar_resposta_conversacional(
         self,
         user_id: str,
@@ -5324,16 +5436,8 @@ Responda de forma natural e curta:"""
         except Exception as e:
             print(f"❌ Erro na conversa: {e}")
 
-        # Fallback para respostas padrão por tipo
-        fallbacks = {
-            "saudacao": "E aí! Tudo bem? 😊 O que vai ser hoje?",
-            "pergunta_vaga": "Temos várias opções! Quer uma pizza, lanche ou bebida?",
-            "pedido_sugestao": "Recomendo nosso X-Bacon, tá fazendo sucesso! Ou prefere pizza?",
-            "duvida_geral": "Como posso te ajudar?",
-            "resposta_generica": "Entendi! O que você gostaria de pedir?",
-            "nao_entendi": "Hmm, não entendi. 🤔 Quer ver o cardápio ou prefere uma sugestão?"
-        }
-        return fallbacks.get(tipo_conversa, "O que você gostaria de pedir?")
+        # Se chegou aqui, não conseguiu gerar resposta adequada - trata como não entendido
+        return await self._nao_entendeu_mensagem(user_id, mensagem, dados)
 
     async def _gerar_resposta_sobre_produto(
         self,
@@ -6241,14 +6345,14 @@ Responda de forma natural e curta:"""
 
         except httpx.TimeoutException:
             print("⏰ Timeout no Groq - usando fallback")
-            return self._fallback_resposta_inteligente(mensagem, dados, user_id)
+            return await self._fallback_resposta_inteligente(mensagem, dados, user_id)
 
         except Exception as e:
             print(f"❌ Erro ao processar: {e}")
             import traceback
             traceback.print_exc()
             # Fallback inteligente - nunca retorna erro
-            return self._fallback_resposta_inteligente(mensagem, dados, user_id)
+            return await self._fallback_resposta_inteligente(mensagem, dados, user_id)
 
 
 # Função principal para usar no webhook
