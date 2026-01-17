@@ -277,7 +277,12 @@ def criar_enums():
                 ("notifications", "messagetype", ["marketing", "utility", "transactional", "promotional", "alert", "system", "news"]),
             ]
             
-            all_enums = enums_cardapio + enums_cadastros + enums_cadastros_caixas + enums_notifications
+            # ENUMs do schema chatbot
+            enums_chatbot = [
+                ("chatbot", "tipo_entrega_carrinho_enum", ["DELIVERY", "RETIRADA", "BALCAO", "MESA"]),
+            ]
+            
+            all_enums = enums_cardapio + enums_cadastros + enums_cadastros_caixas + enums_notifications + enums_chatbot
             
             for schema, enum_name, values in all_enums:
                 try:
@@ -354,6 +359,10 @@ def importar_models():
     from app.api.notifications.models.whatsapp_config_model import WhatsAppConfigModel
     # ─── Models Chatbot ───────────────────────────────────────────
     from app.api.chatbot.models.model_chatbot_config import ChatbotConfigModel
+    from app.api.chatbot.models.model_carrinho import CarrinhoTemporarioModel, TipoEntregaCarrinhoEnum
+    from app.api.chatbot.models.model_carrinho_item import CarrinhoItemModel
+    from app.api.chatbot.models.model_carrinho_item_complemento import CarrinhoItemComplementoModel
+    from app.api.chatbot.models.model_carrinho_item_complemento_adicional import CarrinhoItemComplementoAdicionalModel
     logger.info("📦 Models importados com sucesso.")
 
 

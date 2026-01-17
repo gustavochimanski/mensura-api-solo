@@ -468,6 +468,76 @@ class GroqSalesHandler:
 
         return itens
 
+    def _extrair_itens_pedido(self, mensagem: str) -> List[Dict[str, Any]]:
+        """
+        Extrai itens e quantidades de pedidos com múltiplos produtos.
+        Ex: "não, vou querer apenas 1 x bacon e 1 coca" -> [{"produto_busca": "x bacon", "quantidade": 1}, ...]
+        """
+        msg = self._normalizar_mensagem(mensagem)
+        if not msg:
+            return []
+
+        # Remove negação inicial e frases comuns de pedido
+        msg = re.sub(r'^(n[aã]o|nao)\s*,?\s*', '', msg, flags=re.IGNORECASE)
+        msg = re.sub(
+            r'^(vou\s+querer|quero|qro|gostaria\s+de|me\s+ve|me\s+v[eê]|manda|traz|adiciona|adicionar)\s+',
+            '',
+            msg,
+            flags=re.IGNORECASE
+        )
+        msg = re.sub(r'^(apenas|so|só|somente)\s+', '', msg, flags=re.IGNORECASE)
+        if not msg:
+            return []
+
+        partes = re.split(r'\s+e\s+|,|;|\s+mais\s+', msg)
+        itens = []
+        mapa_qtd = {
+            'um': 1, 'uma': 1,
+            'dois': 2, 'duas': 2,
+            'tres': 3, 'três': 3,
+            'quatro': 4, 'cinco': 5
+        }
+
+        for parte in partes:
+            trecho = parte.strip()
+            if not trecho:
+                continue
+
+            qtd = 1
+            produto = trecho
+            tem_x = False
+
+            m_qtd = re.match(r'^(\d+)\s*(x)?\s*(.+)$', trecho)
+            if m_qtd:
+                qtd = int(m_qtd.group(1))
+                tem_x = bool(m_qtd.group(2))
+                produto = m_qtd.group(3).strip()
+            else:
+                m_qtd_txt = re.match(r'^(um|uma|dois|duas|tres|três|quatro|cinco)\s+(.+)$', trecho)
+                if m_qtd_txt:
+                    qtd = mapa_qtd.get(m_qtd_txt.group(1), 1)
+                    produto = m_qtd_txt.group(2).strip()
+
+            produto = re.sub(r'^(a|o|da|do|de)\s+', '', produto, flags=re.IGNORECASE).strip()
+            produto = re.sub(r'\s+por\s+favor$', '', produto, flags=re.IGNORECASE).strip()
+            if not produto:
+                continue
+
+            prefer_alt = False
+            produto_alt = ""
+            if tem_x and produto and not produto.startswith("x "):
+                produto_alt = f"x {produto}"
+                prefer_alt = True
+
+            itens.append({
+                "produto_busca": produto,
+                "quantidade": max(qtd, 1),
+                "produto_busca_alt": produto_alt,
+                "prefer_alt": prefer_alt
+            })
+
+        return itens
+
     def _resolver_produto_para_preco(
         self,
         produto_busca: str,
@@ -700,6 +770,11 @@ class GroqSalesHandler:
         # Ver adicionais
         if re.search(r'(adicionais|extras|o\s*que\s*posso\s*adicionar)', msg):
             return {"funcao": "ver_adicionais", "params": {}}
+
+        # Pedido com múltiplos itens (ex: "1 x bacon e 1 coca")
+        itens_pedido = self._extrair_itens_pedido(mensagem)
+        if len(itens_pedido) > 1:
+            return {"funcao": "adicionar_produtos", "params": {"itens": itens_pedido}}
 
         # Adicionar produto (padrões: "quero X", "me ve X", "manda X", "X por favor")
         # IMPORTANTE: Verificar ANTES da personalização para capturar "quero X sem Y"
@@ -1439,17 +1514,31 @@ class GroqSalesHandler:
         
         # 1. Tenta detectar adicionar produto
         resultado_adicionar = self._interpretar_intencao_regras(mensagem, todos_produtos, carrinho)
-        if resultado_adicionar and resultado_adicionar.get("funcao") == "adicionar_produto":
-            acoes_detectadas.append(resultado_adicionar)
-            # Remove a parte do produto da mensagem para buscar outras ações
-            produto_busca = resultado_adicionar.get("params", {}).get("produto_busca", "")
-            if produto_busca:
-                # Tenta remover o nome do produto da mensagem
-                padrao_produto = re.escape(produto_busca)
-                msg_para_personalizacao = re.sub(padrao_produto, '', mensagem, flags=re.IGNORECASE)
-                # Remove também padrões de quantidade e palavras de pedido
-                msg_para_personalizacao = re.sub(r'\d+\s*x?\s*', '', msg_para_personalizacao, flags=re.IGNORECASE)
-                msg_para_personalizacao = msg_para_personalizacao.replace('quero', '').replace('dois', '').replace('duas', '').replace('uma', '').replace('um', '').strip()
+        if resultado_adicionar:
+            funcao_detectada = resultado_adicionar.get("funcao")
+            if funcao_detectada == "adicionar_produto":
+                acoes_detectadas.append(resultado_adicionar)
+                # Remove a parte do produto da mensagem para buscar outras ações
+                produto_busca = resultado_adicionar.get("params", {}).get("produto_busca", "")
+                if produto_busca:
+                    # Tenta remover o nome do produto da mensagem
+                    padrao_produto = re.escape(produto_busca)
+                    msg_para_personalizacao = re.sub(padrao_produto, '', mensagem, flags=re.IGNORECASE)
+                    # Remove também padrões de quantidade e palavras de pedido
+                    msg_para_personalizacao = re.sub(r'\d+\s*x?\s*', '', msg_para_personalizacao, flags=re.IGNORECASE)
+                    msg_para_personalizacao = msg_para_personalizacao.replace('quero', '').replace('dois', '').replace('duas', '').replace('uma', '').replace('um', '').strip()
+            elif funcao_detectada == "adicionar_produtos":
+                itens = resultado_adicionar.get("params", {}).get("itens", [])
+                for item in itens:
+                    acoes_detectadas.append({
+                        "funcao": "adicionar_produto",
+                        "params": {
+                            "produto_busca": item.get("produto_busca", ""),
+                            "produto_busca_alt": item.get("produto_busca_alt", ""),
+                            "prefer_alt": bool(item.get("prefer_alt", False)),
+                            "quantidade": item.get("quantidade", 1)
+                        }
+                    })
         
         # 2. Detecta personalização na mensagem (original ou sem o produto)
         if re.search(r'sem\s+(\w+)', msg_para_personalizacao, re.IGNORECASE):
@@ -1485,9 +1574,13 @@ class GroqSalesHandler:
                 
                 if funcao == "adicionar_produto":
                     produto_busca = params.get("produto_busca", "")
+                    produto_busca_alt = params.get("produto_busca_alt", "")
+                    prefer_alt = bool(params.get("prefer_alt", False))
                     quantidade = params.get("quantidade", 1)
                     personalizacao = params.get("personalizacao")  # Pode ter personalizacao junto
-                    produto = self._buscar_produto_por_termo(produto_busca, todos_produtos)
+                    produto = self._resolver_produto_para_preco(
+                        produto_busca, produto_busca_alt, prefer_alt, todos_produtos
+                    )
                     
                     if produto:
                         # Adiciona ao pedido_contexto no modo conversacional
@@ -1572,6 +1665,69 @@ class GroqSalesHandler:
                     if itens:
                         return self._gerar_resposta_preco_itens(itens, todos_produtos)
                     return "Qual produto você quer saber o preço?"
+                elif funcao == "adicionar_produto":
+                    produto_busca = params.get("produto_busca", "")
+                    produto_busca_alt = params.get("produto_busca_alt", "")
+                    prefer_alt = bool(params.get("prefer_alt", False))
+                    quantidade = params.get("quantidade", 1)
+                    produto = self._resolver_produto_para_preco(
+                        produto_busca, produto_busca_alt, prefer_alt, todos_produtos
+                    )
+                    if not produto:
+                        return f"❌ Não encontrei *{produto_busca}* no cardápio 😔\n\nQuer que eu mostre o que temos disponível? 😊"
+
+                    pedido_contexto = dados.get('pedido_contexto', [])
+                    for _ in range(quantidade):
+                        pedido_contexto.append({
+                            'id': str(produto['id']),
+                            'nome': produto['nome'],
+                            'preco': produto['preco'],
+                            'quantidade': 1,
+                            'removidos': [],
+                            'adicionais': [],
+                            'preco_adicionais': 0.0
+                        })
+                    dados['pedido_contexto'] = pedido_contexto
+                    dados['ultimo_produto_adicionado'] = produto['nome']
+                    self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
+                    return f"✅ Adicionei {quantidade}x *{produto['nome']}* ao pedido!\n\nMais alguma coisa? 😊"
+                elif funcao == "adicionar_produtos":
+                    itens = params.get("itens", [])
+                    if not itens:
+                        return "O que você gostaria de pedir?"
+
+                    pedido_contexto = dados.get('pedido_contexto', [])
+                    mensagens_resposta = []
+                    for item in itens:
+                        produto_busca = item.get("produto_busca", "")
+                        produto_busca_alt = item.get("produto_busca_alt", "")
+                        prefer_alt = bool(item.get("prefer_alt", False))
+                        quantidade = int(item.get("quantidade", 1) or 1)
+                        produto = self._resolver_produto_para_preco(
+                            produto_busca, produto_busca_alt, prefer_alt, todos_produtos
+                        )
+                        if not produto:
+                            mensagens_resposta.append(f"❌ Não encontrei *{produto_busca}* no cardápio 😔")
+                            continue
+
+                        for _ in range(quantidade):
+                            pedido_contexto.append({
+                                'id': str(produto['id']),
+                                'nome': produto['nome'],
+                                'preco': produto['preco'],
+                                'quantidade': 1,
+                                'removidos': [],
+                                'adicionais': [],
+                                'preco_adicionais': 0.0
+                            })
+                        mensagens_resposta.append(f"✅ Adicionei {quantidade}x *{produto['nome']}* ao pedido!")
+                        dados['ultimo_produto_adicionado'] = produto['nome']
+
+                    dados['pedido_contexto'] = pedido_contexto
+                    self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
+                    resposta_final = "\n\n".join(mensagens_resposta) if mensagens_resposta else "O que você gostaria de pedir?"
+                    resposta_final += "\n\nMais alguma coisa? 😊"
+                    return resposta_final
                 elif funcao == "ver_cardapio":
                     pedido_contexto = dados.get('pedido_contexto', [])
                     return self._gerar_lista_produtos(todos_produtos, pedido_contexto)
@@ -4701,6 +4857,7 @@ Sua única função é ajudar a ESCOLHER PRODUTOS. Nada mais!
     async def _salvar_pedido_via_checkout(self, user_id: str, dados: Dict) -> Optional[int]:
         """
         Salva o pedido chamando o endpoint /checkout via HTTP
+        Usa o carrinho temporário do banco de dados (schema chatbot)
 
         Args:
             user_id: Telefone do cliente (WhatsApp)
@@ -4710,16 +4867,33 @@ Sua única função é ajudar a ESCOLHER PRODUTOS. Nada mais!
             ID do pedido criado ou None se falhar
         """
         try:
-            carrinho = dados.get('carrinho', [])
+            # Importa serviço de carrinho
+            from app.api.chatbot.services.service_carrinho import CarrinhoService
+            from app.api.catalogo.adapters.produto_adapter import ProdutoAdapter
+            from app.api.catalogo.adapters.complemento_adapter import ComplementoAdapter
+            from app.api.catalogo.adapters.receitas_adapter import ReceitasAdapter
+            from app.api.catalogo.adapters.combo_adapter import ComboAdapter
+            
+            # Cria serviço de carrinho
+            produto_contract = ProdutoAdapter(self.db)
+            complemento_contract = ComplementoAdapter(self.db)
+            receitas_contract = ReceitasAdapter(self.db)
+            combo_contract = ComboAdapter(self.db)
+            
+            carrinho_service = CarrinhoService(
+                db=self.db,
+                produto_contract=produto_contract,
+                complemento_contract=complemento_contract,
+                receitas_contract=receitas_contract,
+                combo_contract=combo_contract
+            )
+            
+            # Busca carrinho do banco de dados
+            carrinho = carrinho_service.obter_carrinho(user_id, self.empresa_id)
             if not carrinho:
-                print("[Checkout] Carrinho vazio, nada a salvar")
+                print("[Checkout] Carrinho vazio ou não encontrado no banco")
                 return None
-
-            # Dados do pedido
-            tipo_entrega = dados.get('tipo_entrega', 'ENTREGA')
-            endereco_id = dados.get('endereco_id')
-            forma_pagamento = dados.get('forma_pagamento', 'PIX')
-
+            
             # Buscar ou criar cliente para obter o super_token
             cliente = self.address_service.criar_cliente_se_nao_existe(user_id)
             if not cliente:
@@ -4731,90 +4905,29 @@ Sua única função é ajudar a ESCOLHER PRODUTOS. Nada mais!
                 print("[Checkout] ERRO: Cliente sem super_token")
                 return None
 
-            # Mapear tipo_entrega do chatbot para ENUM do checkout
-            # Para ENTREGA em casa: tipo_pedido = DELIVERY
-            # Para RETIRADA na loja: tipo_pedido = BALCAO (o schema força tipo_entrega=DELIVERY quando tipo_pedido=DELIVERY)
-            if tipo_entrega == 'ENTREGA':
-                tipo_pedido = "DELIVERY"
-                tipo_entrega_enum = "DELIVERY"
-            else:
-                tipo_pedido = "BALCAO"  # Para retirada na loja
-                tipo_entrega_enum = "RETIRADA"
-
-            # Montar payload do checkout
-            # Separa produtos (cod_barras) de receitas (receita_ID)
-            itens_checkout = []
-            receitas_checkout = []
-
-            for item in carrinho:
-                item_id = item.get('id', '')
-                quantidade = item.get('quantidade', 1)
-                observacao = item.get('observacoes')  # Só os "SEM:" vão aqui
-                complementos = item.get('complementos', [])  # Estrutura com IDs
-
-                # Se o ID começa com "receita_", é uma receita
-                if isinstance(item_id, str) and item_id.startswith('receita_'):
-                    receita_id = int(item_id.replace('receita_', ''))
-                    receita_item = {
-                        "receita_id": receita_id,
-                        "quantidade": quantidade,
-                        "observacao": observacao
-                    }
-                    # Adiciona complementos se tiver
-                    if complementos:
-                        receita_item["complementos"] = complementos
-                    receitas_checkout.append(receita_item)
-                else:
-                    # É um produto com código de barras
-                    produto_item = {
-                        "produto_cod_barras": item_id,
-                        "quantidade": quantidade,
-                        "observacao": observacao
-                    }
-                    # Adiciona complementos se tiver
-                    if complementos:
-                        produto_item["complementos"] = complementos
-                    itens_checkout.append(produto_item)
-
-            # Monta o payload com itens e/ou receitas
-            produtos_payload = {}
-            if itens_checkout:
-                produtos_payload["itens"] = itens_checkout
-            if receitas_checkout:
-                produtos_payload["receitas"] = receitas_checkout
-
-            payload = {
-                "empresa_id": self.empresa_id,
-                "tipo_pedido": tipo_pedido,
-                "tipo_entrega": tipo_entrega_enum,
-                "origem": "APP",  # WhatsApp = APP
-                "produtos": produtos_payload
-            }
-
-            # Adiciona endereço apenas se for entrega
-            if tipo_entrega == 'ENTREGA' and endereco_id:
-                payload["endereco_id"] = endereco_id
-
+            # Converte carrinho do banco para formato do checkout
+            from app.api.chatbot.repositories.repo_carrinho import CarrinhoRepository
+            from app.api.chatbot.models.model_carrinho import CarrinhoTemporarioModel
+            
+            carrinho_repo = CarrinhoRepository(self.db)
+            carrinho_model = carrinho_repo.get_by_id(carrinho.id, load_items=True)
+            if not carrinho_model:
+                print("[Checkout] ERRO: Carrinho não encontrado após busca")
+                return None
+            
+            payload = carrinho_service.converter_para_checkout(carrinho_model)
+            
             # Adiciona meio de pagamento se foi detectado
-            meio_pagamento_id = dados.get('meio_pagamento_id')
+            meio_pagamento_id = dados.get('meio_pagamento_id') or carrinho_model.meio_pagamento_id
             if meio_pagamento_id:
-                # Calcula o total do pedido para o valor do pagamento
-                total = sum(
-                    (item.get('preco', 0) + item.get('personalizacoes', {}).get('preco_adicionais', 0))
-                    * item.get('quantidade', 1)
-                    for item in carrinho
-                )
-                # Adiciona taxa de entrega se for delivery
-                if tipo_entrega == 'ENTREGA':
-                    total += 5.00  # TODO: calcular taxa real baseada na distância
-
+                total = float(carrinho_model.valor_total)
                 payload["meios_pagamento"] = [{
                     "id": meio_pagamento_id,
                     "valor": total
                 }]
-                print(f"[Checkout] Meio de pagamento: {forma_pagamento} (ID: {meio_pagamento_id}), Valor: R$ {total:.2f}")
+                print(f"[Checkout] Meio de pagamento (ID: {meio_pagamento_id}), Valor: R$ {total:.2f}")
 
-            print(f"[Checkout] Payload: {json.dumps(payload, indent=2)}")
+            print(f"[Checkout] Payload: {json.dumps(payload, indent=2, default=str)}")
 
             # Chamar endpoint /checkout
             async with httpx.AsyncClient(timeout=30.0) as client:
@@ -4835,6 +4948,11 @@ Sua única função é ajudar a ESCOLHER PRODUTOS. Nada mais!
                     result = response.json()
                     pedido_id = result.get('id')
                     print(f"[Checkout] ✅ Pedido criado com sucesso! ID: {pedido_id}")
+                    
+                    # Limpa o carrinho após sucesso no checkout
+                    carrinho_service.limpar_carrinho(user_id, self.empresa_id)
+                    print(f"[Checkout] ✅ Carrinho limpo após criação do pedido")
+                    
                     return pedido_id
                 else:
                     # Extrair mensagem de erro da resposta
@@ -5365,7 +5483,7 @@ Responda de forma natural e curta:"""
             config = self._get_chatbot_config()
             if config and not config.aceita_pedidos_whatsapp:
                 # Se não aceita pedidos, bloqueia ações de pedido
-                if funcao in ["adicionar_produto", "finalizar_pedido"]:
+                if funcao in ["adicionar_produto", "adicionar_produtos", "finalizar_pedido"]:
                     # Busca link do cardápio da empresa
                     try:
                         empresa_query = text("""
@@ -5390,11 +5508,15 @@ Responda de forma natural e curta:"""
             # ADICIONAR PRODUTO
             if funcao == "adicionar_produto":
                 produto_busca = params.get("produto_busca", "")
+                produto_busca_alt = params.get("produto_busca_alt", "")
+                prefer_alt = bool(params.get("prefer_alt", False))
                 quantidade = params.get("quantidade", 1)
                 personalizacao = params.get("personalizacao")  # Personalização que vem junto
 
                 # Busca o produto pelo termo que a IA extraiu
-                produto = self._buscar_produto_por_termo(produto_busca, todos_produtos)
+                produto = self._resolver_produto_para_preco(
+                    produto_busca, produto_busca_alt, prefer_alt, todos_produtos
+                )
 
                 if produto:
                     self._adicionar_ao_carrinho(dados, produto, quantidade)
@@ -5494,6 +5616,33 @@ Responda de forma natural e curta:"""
                     if any(t in produto_busca.lower() for t in termos_genericos):
                         return "Claro! O que você gostaria de pedir? Posso te mostrar o cardápio se quiser! 😊"
                     return f"❌ Não encontrei *{produto_busca}* no cardápio 🤔\n\nQuer que eu mostre o que temos disponível? 😊"
+
+            # ADICIONAR MÚLTIPLOS PRODUTOS
+            elif funcao == "adicionar_produtos":
+                itens = params.get("itens", [])
+                if not itens:
+                    return "O que você gostaria de pedir?"
+
+                mensagens_resposta = []
+                for item in itens:
+                    produto_busca = item.get("produto_busca", "")
+                    produto_busca_alt = item.get("produto_busca_alt", "")
+                    prefer_alt = bool(item.get("prefer_alt", False))
+                    quantidade = int(item.get("quantidade", 1) or 1)
+                    produto = self._resolver_produto_para_preco(
+                        produto_busca, produto_busca_alt, prefer_alt, todos_produtos
+                    )
+                    if not produto:
+                        mensagens_resposta.append(f"❌ Não encontrei *{produto_busca}* no cardápio 😔")
+                        continue
+
+                    self._adicionar_ao_carrinho(dados, produto, quantidade)
+                    mensagens_resposta.append(f"✅ Adicionei {quantidade}x *{produto['nome']}* ao pedido!")
+
+                self._salvar_estado_conversa(user_id, STATE_AGUARDANDO_PEDIDO, dados)
+                resposta_final = "\n\n".join(mensagens_resposta) if mensagens_resposta else "O que você gostaria de pedir?"
+                resposta_final += "\n\nMais alguma coisa? 😊"
+                return resposta_final
 
             # REMOVER PRODUTO
             elif funcao == "remover_produto":

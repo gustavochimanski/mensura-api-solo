@@ -14,7 +14,7 @@ from app.database.db_connection import get_db
 from app.utils.logger import logger
 
 router = APIRouter(
-    prefix="/api/chatbot/admin/config",
+    prefix="/admin/config",
     tags=["Admin - Chatbot (Configurações)"],
     dependencies=[Depends(get_current_user)]
 )

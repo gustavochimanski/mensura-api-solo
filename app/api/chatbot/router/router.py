@@ -75,6 +75,10 @@ router = APIRouter(
 from .router_chatbot_config import router as router_chatbot_config
 router.include_router(router_chatbot_config)
 
+# Incluir router do carrinho
+from .router_carrinho import router as router_carrinho
+router.include_router(router_carrinho)
+
 
 # ==================== ENDPOINTS BÁSICOS ====================
 
