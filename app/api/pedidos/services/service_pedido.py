@@ -715,7 +715,7 @@ class PedidoService:
                 subtotal=subtotal,
                 empresa_id=empresa_id,
             )
-            taxa_entrega, taxa_servico, distancia_km, _ = self._calcular_taxas(
+            taxa_entrega, taxa_servico, distancia_km, tempo_estimado_min = self._calcular_taxas(
                 tipo_entrega=payload.tipo_entrega if isinstance(payload.tipo_entrega, TipoEntregaEnum)
                             else TipoEntregaEnum(payload.tipo_entrega),
                 subtotal=subtotal,
@@ -731,6 +731,26 @@ class PedidoService:
                 taxa_servico=taxa_servico,
                 distancia_km=distancia_km,
             )
+
+            # Define a previsão de entrega baseada no tempo estimado
+            if tempo_estimado_min is not None and payload.tipo_entrega == TipoEntregaEnum.DELIVERY:
+                try:
+                    from datetime import timedelta
+                    previsao_entrega = now_trimmed() + timedelta(minutes=int(tempo_estimado_min))
+                    pedido.previsao_entrega = previsao_entrega
+                    logger.info(f"[finalizar_pedido] Previsão de entrega definida: {previsao_entrega} (tempo estimado: {tempo_estimado_min} minutos)")
+                except Exception as e:
+                    logger.warning(f"[finalizar_pedido] Erro ao definir previsão de entrega: {e}")
+            elif payload.tipo_entrega == TipoEntregaEnum.DELIVERY and empresa and getattr(empresa, "tempo_entrega_maximo", None) is not None:
+                # Fallback: usa tempo_entrega_maximo da empresa se não houver tempo estimado da região
+                try:
+                    from datetime import timedelta
+                    tempo_fallback = int(empresa.tempo_entrega_maximo)
+                    previsao_entrega = now_trimmed() + timedelta(minutes=tempo_fallback)
+                    pedido.previsao_entrega = previsao_entrega
+                    logger.info(f"[finalizar_pedido] Previsão de entrega definida (fallback): {previsao_entrega} (tempo: {tempo_fallback} minutos)")
+                except Exception as e:
+                    logger.warning(f"[finalizar_pedido] Erro ao definir previsão de entrega (fallback): {e}")
 
             pedido.observacao_geral = payload.observacao_geral
             if payload.troco_para:
