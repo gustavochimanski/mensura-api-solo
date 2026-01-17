@@ -10,7 +10,7 @@ from typing import List, Optional
 import httpx
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from app.database.db_connection import get_db
 from ..core import database as chatbot_db
@@ -1479,13 +1479,21 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
         USE_SALES_HANDLER = True  # Usar SalesHandler com produtos reais
 
         if USE_SALES_HANDLER:
-            # IMPORTANTE: Criar conversa primeiro para que o estado possa ser salvo
+            # IMPORTANTE: "nova conversa" = sem histórico OU inatividade > 16 horas.
+            # Dentro das 16h, o bot deve considerar o histórico sempre.
+            empresa_id_int = int(empresa_id) if empresa_id else 1
             user_id = phone_number
-            conversations = chatbot_db.get_conversations_by_user(db, user_id)
+            conversations = chatbot_db.get_conversations_by_user(db, user_id, empresa_id_int)
 
-            if not conversations:
-                # Cria nova conversa com nome do contato
-                empresa_id_int = int(empresa_id) if empresa_id else 1
+            now = datetime.now()
+            last_activity = None
+            if conversations:
+                last_activity = conversations[0].get("updated_at") or conversations[0].get("created_at")
+
+            is_new_session = (not conversations) or (last_activity and (now - last_activity) > timedelta(hours=16))
+
+            if is_new_session:
+                # Cria uma nova conversa (nova sessão)
                 conversation_id = chatbot_db.create_conversation(
                     db=db,
                     session_id=f"whatsapp_{phone_number}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
@@ -1495,7 +1503,7 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                     contact_name=contact_name,
                     empresa_id=empresa_id_int
                 )
-                
+
                 # Envia notificação WebSocket de nova conversa
                 from ..core.notifications import send_chatbot_websocket_notification
                 await send_chatbot_websocket_notification(
@@ -1511,33 +1519,19 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                     }
                 )
             else:
-                conversation_id = conversations[0]['id']
+                conversation_id = conversations[0]["id"]
                 # Atualiza o nome do contato se disponível e ainda não tiver
-                if contact_name and not conversations[0].get('contact_name'):
-                    chatbot_db.update_conversation_contact_name(db, conversations[0]['id'], contact_name)
+                if contact_name and not conversations[0].get("contact_name"):
+                    chatbot_db.update_conversation_contact_name(db, conversations[0]["id"], contact_name)
 
             # Importa o Groq Sales Handler (LLaMA 3.1 via API - rápido!)
             # NOTA: O processar_mensagem_groq já salva a mensagem do usuário e a resposta,
             # além de enviar as notificações WebSocket necessárias
             from ..core.groq_sales_handler import processar_mensagem_groq
 
-            # Verifica se é a primeira mensagem (conversa nova ou sem mensagens anteriores)
-            # IMPORTANTE: Não envia boas-vindas se a loja estiver fechada
-            empresa_id_int = int(empresa_id) if empresa_id else 1
-            is_first_message = False
-            if not conversations:
-                is_first_message = True
-            else:
-                # Verifica se há mensagens anteriores na conversa
-                conversation_id = conversations[0]['id']
-                messages = chatbot_db.get_messages(db, conversation_id)
-                # Só consideramos "primeira mensagem" quando a conversa ainda não tem histórico
-                # (evita re-enviar boas-vindas/botões em conversas já iniciadas)
-                is_first_message = len(messages) == 0
-
-            # Se for primeira mensagem E a loja estiver aberta (ou horários não configurados), envia mensagem com botões
+            # Se for nova sessão (sem histórico ou >16h) E a loja estiver aberta (ou horários não configurados), envia mensagem com botões
             # Se esta_aberta for False, não envia boas-vindas (já foi enviada mensagem de horários)
-            if is_first_message and esta_aberta is not False:
+            if is_new_session and esta_aberta is not False:
                 # Mensagem "antiga" de boas-vindas (com nome/link) + botões
                 handler = GroqSalesHandler(db, empresa_id_int)
                 mensagem_boas_vindas = handler._gerar_mensagem_boas_vindas_conversacional()
@@ -1559,26 +1553,12 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 )
                 
                 if isinstance(result, dict) and result.get("success"):
-                    # Salva a mensagem no histórico
-                    if conversations:
-                        conversation_id = conversations[0]['id']
-                    else:
-                        conversation_id = chatbot_db.create_conversation(
-                            db=db,
-                            session_id=f"whatsapp_{phone_number}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
-                            user_id=phone_number,
-                            prompt_key="default",
-                            model="llm-sales",
-                            contact_name=contact_name,
-                            empresa_id=empresa_id_int
-                        )
                     chatbot_db.create_message(db, conversation_id, "assistant", mensagem_boas_vindas)
+                    return  # Não processa a mensagem do usuário ainda, aguarda clique no botão
                 else:
                     import logging
                     logger = logging.getLogger(__name__)
-                    logger.error(f"Erro ao enviar mensagem com botões: {result.get('error')}")
-                
-                return  # Não processa a mensagem do usuário ainda, aguarda clique no botão
+                    logger.error(f"Erro ao enviar mensagem com botões: {result.get('error') if isinstance(result, dict) else result}")
 
             # Detecta se a mensagem é uma resposta de botão
             # O WhatsApp pode enviar o ID do botão diretamente ou o texto do botão
