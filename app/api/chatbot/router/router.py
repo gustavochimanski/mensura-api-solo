@@ -107,6 +107,7 @@ def _is_pedido_intent(message_text: Optional[str]) -> bool:
     """
     Detecta se a mensagem contém intenção de fazer um pedido.
     Retorna True se detectar termos relacionados a pedidos ou padrões numéricos de pedido.
+    IMPORTANTE: NÃO detecta perguntas sobre preços/informações (ex: "quanto fica", "qual o preço").
     """
     if not message_text:
         return False
@@ -114,14 +115,29 @@ def _is_pedido_intent(message_text: Optional[str]) -> bool:
     if not msg:
         return False
     
-    # Verifica se contém termos de intenção de pedido
+    # Palavras que indicam PERGUNTA (não pedido)
+    palavras_pergunta = ['quanto', 'qual', 'quais', 'tem', 'tem?', 'custa', 'fica', 'preço', 'preco', 'valor', 'informação', 'informacao', 'saber', 'dizer']
+    
+    # Se começa com pergunta, não é pedido
+    if any(msg.startswith(p) for p in palavras_pergunta):
+        return False
+    
+    # Se contém padrão de pergunta no início (ex: "quanto fica 2 xbacon")
+    if re.match(r'^(quanto|qual|quais|tem|preço|preco|valor).*', msg):
+        return False
+    
+    # Verifica se contém termos de intenção de pedido (mas não se for pergunta)
     if any(term in msg for term in PEDIDO_INTENT_TERMS):
-        return True
+        # Se contém termos de pedido MAS também palavras de pergunta, é pergunta, não pedido
+        if not any(p in msg for p in palavras_pergunta):
+            return True
     
     # Padrões como "1 x-bacon", "2 pizzas", "3 coca", "2x hambúrguer"
-    # Também detecta padrões no meio da frase: "quero 2 pizzas", "me vê 1 coca"
+    # Mas só se NÃO for pergunta (ex: "quanto fica 2 xbacon" não é pedido)
     if re.search(r'\d+\s*(x\s*)?\w+', msg):
-        return True
+        # Se contém palavras de pergunta, não é pedido
+        if not any(p in msg for p in palavras_pergunta):
+            return True
     
     return False
 

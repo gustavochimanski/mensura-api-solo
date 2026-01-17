@@ -1221,33 +1221,10 @@ class GroqSalesHandler:
 
         print(f"💬 [Conversacional] Mensagem recebida (user_id={user_id}): {mensagem}")
         
-        # VERIFICA SE ACEITA PEDIDOS PELO WHATSAPP (ANTES DE PROCESSAR)
-        config = self._get_chatbot_config()
-        if config and not config.aceita_pedidos_whatsapp:
-            # Detecta se a mensagem é uma tentativa de fazer pedido
-            msg_lower = mensagem.lower().strip()
-            termos_pedido = ['quero', 'pedir', 'pedido', 'fazer pedido', 'adicionar', 'me ve', 'manda', 'vou querer', 'vou pedir', 'finalizar', 'fechar']
-            if any(termo in msg_lower for termo in termos_pedido):
-                # Busca link do cardápio da empresa
-                try:
-                    empresa_query = text("""
-                        SELECT nome, cardapio_link
-                        FROM cadastros.empresas
-                        WHERE id = :empresa_id
-                    """)
-                    result = self.db.execute(empresa_query, {"empresa_id": self.empresa_id})
-                    empresa = result.fetchone()
-                    link_cardapio = empresa[1] if empresa and empresa[1] else LINK_CARDAPIO
-                except Exception as e:
-                    print(f"⚠️ Erro ao buscar link do cardápio: {e}")
-                    link_cardapio = LINK_CARDAPIO
-                
-                # Retorna mensagem de redirecionamento
-                if config.mensagem_redirecionamento:
-                    resposta = config.mensagem_redirecionamento.replace("{link_cardapio}", link_cardapio)
-                else:
-                    resposta = f"📲 Para fazer seu pedido, acesse nosso cardápio completo pelo link:\n\n👉 {link_cardapio}\n\nDepois é só fazer seu pedido pelo site! 😊"
-                return resposta
+        # NOTA: Não bloqueamos aqui perguntas sobre preços/informações de produtos.
+        # A IA interpreta a intenção e diferencia perguntas (informar_sobre_produto) de pedidos (adicionar_produto).
+        # A verificação de aceita_pedidos_whatsapp é feita DEPOIS da interpretação da IA, nas linhas 5709-5733,
+        # onde bloqueamos apenas ações reais de pedido (adicionar_produto, finalizar_pedido).
         
         # PRIMEIRO: Tenta interpretar com regras (funciona mesmo sem IA)
         # Isso garante que perguntas sobre produtos específicos sejam detectadas
