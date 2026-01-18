@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, Body, Path, Query, status
+from fastapi import APIRouter, Depends, Body, Path, Query, status, HTTPException, UploadFile, File, Form
 from sqlalchemy.orm import Session
 from typing import Optional
 from enum import Enum
 
 from app.api.catalogo.services.service_receitas import ReceitasService
+from app.utils.minio_client import update_file_to_minio
 from app.api.catalogo.services.service_complemento import ComplementoService
 from app.api.catalogo.schemas.schema_receitas import (
     ReceitaIn,
@@ -160,6 +161,48 @@ def update_receita(
 ):
     """Atualiza uma receita"""
     return ReceitasService(db).update_receita(receita_id, body)
+
+
+@router.put("/{receita_id}/imagem", response_model=ReceitaOut, status_code=status.HTTP_200_OK)
+async def atualizar_imagem_receita(
+    receita_id: int = Path(..., description="ID da receita"),
+    cod_empresa: int = Form(..., description="ID da empresa dona da receita"),
+    imagem: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    """
+    Faz upload/atualização da imagem da receita no MinIO e salva a URL pública no campo `imagem`.
+
+    - Envia como `multipart/form-data`
+    - Campos: `cod_empresa` e `imagem`
+    """
+    if imagem.content_type not in {"image/jpeg", "image/png", "image/webp"}:
+        raise HTTPException(status_code=400, detail="Formato de imagem inválido")
+
+    service = ReceitasService(db)
+    receita = service.get_receita(receita_id)
+    if not receita:
+        raise HTTPException(status_code=404, detail="Receita não encontrada.")
+
+    if int(receita.empresa_id) != int(cod_empresa):
+        raise HTTPException(status_code=400, detail="cod_empresa não confere com a empresa da receita.")
+
+    try:
+        nova_url = update_file_to_minio(
+            db=db,
+            cod_empresa=cod_empresa,
+            file=imagem,
+            slug="receitas",
+            url_antiga=receita.imagem,
+        )
+    except Exception as e:
+        logger.error(f"[Receitas] Erro upload imagem - id={receita_id} empresa={cod_empresa}: {e}")
+        raise HTTPException(status_code=500, detail="Erro ao fazer upload da imagem")
+
+    # Atualiza a imagem da receita
+    update_data = ReceitaUpdate(imagem=nova_url)
+    receita_atualizada = service.update_receita(receita_id, update_data)
+    return receita_atualizada
 
 
 @router.delete("/{receita_id}", status_code=status.HTTP_204_NO_CONTENT)

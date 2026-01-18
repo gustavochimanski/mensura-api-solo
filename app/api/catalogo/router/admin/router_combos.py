@@ -13,6 +13,8 @@ from app.api.catalogo.schemas.schema_combo import (
 from app.api.catalogo.services.service_combo import CombosService
 from app.core.admin_dependencies import get_current_user
 from app.database.db_connection import get_db
+from app.utils.logger import logger
+from app.utils.minio_client import update_file_to_minio
 
 
 router = APIRouter(prefix="/api/catalogo/admin/combos", tags=["Admin - Catalogo - Combos"], dependencies=[Depends(get_current_user)])
@@ -94,6 +96,59 @@ async def atualizar_combo(
         return svc.atualizar(combo_id, req, imagem=imagem)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.put("/{combo_id}/imagem", response_model=ComboDTO, status_code=status.HTTP_200_OK)
+async def atualizar_imagem_combo(
+    combo_id: int = Path(..., description="ID do combo"),
+    cod_empresa: int = Form(..., description="ID da empresa dona do combo"),
+    imagem: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    """
+    Faz upload/atualização da imagem do combo no MinIO e salva a URL pública no campo `imagem`.
+
+    - Envia como `multipart/form-data`
+    - Campos: `cod_empresa` e `imagem`
+    """
+    if imagem.content_type not in {"image/jpeg", "image/png", "image/webp"}:
+        raise HTTPException(status_code=400, detail="Formato de imagem inválido")
+
+    svc = CombosService(db)
+    combo_dto = svc.obter(combo_id)
+    if not combo_dto:
+        raise HTTPException(status_code=404, detail="Combo não encontrado.")
+
+    if int(combo_dto.empresa_id) != int(cod_empresa):
+        raise HTTPException(status_code=400, detail="cod_empresa não confere com a empresa do combo.")
+
+    try:
+        nova_url = update_file_to_minio(
+            db=db,
+            cod_empresa=cod_empresa,
+            file=imagem,
+            slug="combos",
+            url_antiga=combo_dto.imagem,
+        )
+    except Exception as e:
+        logger.error(f"[Combos] Erro upload imagem - id={combo_id} empresa={cod_empresa}: {e}")
+        raise HTTPException(status_code=500, detail="Erro ao fazer upload da imagem")
+
+    # Atualiza apenas a imagem do combo usando o repositório diretamente
+    combo_model = svc.repo.get_by_id(combo_id)
+    combo_model = svc.repo.atualizar_combo(
+        combo_model,
+        titulo=None,
+        descricao=None,
+        preco_total=None,
+        custo_total=None,
+        ativo=None,
+        imagem_url=nova_url,
+        itens=None,
+    )
+    db.commit()
+    db.refresh(combo_model)
+    return svc._to_dto(combo_model)
 
 
 @router.delete("/{combo_id}", status_code=status.HTTP_204_NO_CONTENT)
