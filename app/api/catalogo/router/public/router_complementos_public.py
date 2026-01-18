@@ -134,7 +134,8 @@ def listar_complementos_unificado(
             )
         
         # Converte para response
-        result = [service.complemento_to_response(c) for c in complementos]
+        # Os métodos listar_por_* retornam tuplas (complemento, ordem), então extraímos apenas o complemento
+        result = [service.complemento_to_response(c) for c, _ in complementos]
         
         if not result:
             logger.warning(f"[Complementos Public] Nenhum complemento encontrado para {tipo.value}={identificador} (apenas_ativos={apenas_ativos}, tipo_pedido={tipo_pedido.value})")
