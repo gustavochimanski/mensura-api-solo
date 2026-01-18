@@ -8,6 +8,7 @@ from app.api.catalogo.models.model_receita import ReceitaModel
 from app.api.catalogo.repositories.repo_adicional import AdicionalRepository
 from app.api.catalogo.schemas.schema_adicional import (
     AdicionalResponse,
+    AdicionalResumidoResponse,
     CriarAdicionalRequest,
     AtualizarAdicionalRequest,
     VincularAdicionaisProdutoRequest,
@@ -147,7 +148,16 @@ class AdicionalService:
         adicionais = self.repo.listar_por_produto(cod_barras, apenas_ativos=False)
         return {
             "produto_cod_barras": cod_barras,
-            "adicionais_vinculados": [AdicionalResponse.model_validate(a) for a in adicionais],
+            "adicionais_vinculados": [
+                AdicionalResumidoResponse(
+                    id=a.id,
+                    nome=a.nome,
+                    preco=float(a.preco),
+                    obrigatorio=a.obrigatorio,
+                    imagem=getattr(a, "imagem", None),
+                )
+                for a in adicionais
+            ],
             "message": "Adicionais vinculados com sucesso"
         }
 

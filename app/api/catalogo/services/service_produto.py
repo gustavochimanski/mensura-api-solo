@@ -123,6 +123,7 @@ class ProdutosMensuraService:
                         "nome": a.nome,
                         "preco": float(a.preco),
                         "obrigatorio": a.obrigatorio,
+                        "imagem": getattr(a, "imagem", None),
                     }
                     for a in adicionais_list
                 ]
@@ -276,6 +277,7 @@ class ProdutosMensuraService:
                         "nome": a.nome,
                         "preco": float(a.preco),
                         "obrigatorio": a.obrigatorio,
+                        "imagem": getattr(a, "imagem", None),
                     }
                     for a in adicionais_list
                 ]

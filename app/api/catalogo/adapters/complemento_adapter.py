@@ -22,6 +22,7 @@ class ComplementoAdapter(IComplementoContract):
                 nome=item.nome,
                 preco=getattr(item, "preco_aplicado", item.preco),
                 ordem=ordem,
+                imagem=getattr(item, "imagem", None),
             )
             for item, ordem in itens
         ]

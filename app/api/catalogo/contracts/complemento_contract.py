@@ -13,6 +13,7 @@ class AdicionalDTO(BaseModel):
     nome: str
     preco: Decimal
     ordem: int
+    imagem: Optional[str] = None
 
 
 class ComplementoDTO(BaseModel):

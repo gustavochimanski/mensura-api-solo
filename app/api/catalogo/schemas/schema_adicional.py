@@ -55,6 +55,7 @@ class AdicionalResumidoResponse(BaseModel):
     nome: str
     preco: float
     obrigatorio: bool
+    imagem: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
