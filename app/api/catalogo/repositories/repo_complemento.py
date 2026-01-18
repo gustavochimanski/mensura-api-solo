@@ -33,20 +33,28 @@ class ComplementoRepository:
             query = query.options(joinedload(ComplementoModel.adicionais))
         return query.order_by(ComplementoModel.ordem, ComplementoModel.nome).all()
 
-    def listar_por_produto(self, cod_barras: str, apenas_ativos: bool = True, carregar_adicionais: bool = False) -> List[ComplementoModel]:
-        """Lista todos os complementos vinculados a um produto."""
+    def listar_por_produto(self, cod_barras: str, apenas_ativos: bool = True, carregar_adicionais: bool = False) -> List[tuple]:
+        """Lista todos os complementos vinculados a um produto.
+        
+        Returns:
+            Lista de tuplas (complemento, ordem) ordenadas por ordem.
+        """
         from app.api.catalogo.models.association_tables import produto_complemento_link
+        from sqlalchemy import select
         
         query = (
-            self.db.query(ComplementoModel)
+            select(ComplementoModel, produto_complemento_link.c.ordem)
             .join(produto_complemento_link, ComplementoModel.id == produto_complemento_link.c.complemento_id)
-            .filter(produto_complemento_link.c.produto_cod_barras == cod_barras)
+            .where(produto_complemento_link.c.produto_cod_barras == cod_barras)
         )
         if apenas_ativos:
-            query = query.filter(ComplementoModel.ativo == True)
+            query = query.where(ComplementoModel.ativo == True)
         if carregar_adicionais:
             query = query.options(joinedload(ComplementoModel.adicionais))
-        return query.order_by(produto_complemento_link.c.ordem, ComplementoModel.nome).all()
+        query = query.order_by(produto_complemento_link.c.ordem, ComplementoModel.nome)
+        
+        results = self.db.execute(query).all()
+        return [(complemento, ordem) for complemento, ordem in results]
 
     def atualizar_complemento(self, complemento: ComplementoModel, **data) -> ComplementoModel:
         """Atualiza um complemento existente."""
@@ -61,8 +69,14 @@ class ComplementoRepository:
         self.db.delete(complemento)
         self.db.flush()
 
-    def vincular_complementos_produto(self, cod_barras: str, complemento_ids: List[int]):
-        """Vincula múltiplos complementos a um produto."""
+    def vincular_complementos_produto(self, cod_barras: str, complemento_ids: List[int], ordens: Optional[List[int]] = None):
+        """Vincula múltiplos complementos a um produto.
+        
+        Args:
+            cod_barras: Código de barras do produto
+            complemento_ids: Lista de IDs dos complementos a vincular
+            ordens: Lista opcional de ordens. Se não informado, usa o índice como ordem.
+        """
         from app.api.catalogo.models.association_tables import produto_complemento_link
         
         produto = self.db.query(ProdutoModel).filter_by(cod_barras=cod_barras).first()
@@ -76,6 +90,12 @@ class ComplementoRepository:
             .all()
         )
         
+        # Valida que todos os complementos foram encontrados
+        if len(complementos) != len(complemento_ids):
+            encontrados_ids = {c.id for c in complementos}
+            nao_encontrados = [cid for cid in complemento_ids if cid not in encontrados_ids]
+            raise ValueError(f"Complementos não encontrados: {nao_encontrados}")
+        
         # Remove vinculações existentes
         self.db.execute(
             produto_complemento_link.delete().where(
@@ -83,15 +103,25 @@ class ComplementoRepository:
             )
         )
         
-        # Adiciona novas vinculações
-        for i, complemento in enumerate(complementos):
-            self.db.execute(
-                produto_complemento_link.insert().values(
-                    produto_cod_barras=cod_barras,
-                    complemento_id=complemento.id,
-                    ordem=i
+        # Adiciona novas vinculações com ordens
+        if ordens is None:
+            ordens = list(range(len(complemento_ids)))
+        
+        # Garante que ordens tenha o mesmo tamanho de complemento_ids
+        if len(ordens) != len(complemento_ids):
+            ordens = list(range(len(complemento_ids)))
+        
+        for complemento_id, ordem in zip(complemento_ids, ordens):
+            # Encontra o complemento correspondente
+            complemento = next((c for c in complementos if c.id == complemento_id), None)
+            if complemento:
+                self.db.execute(
+                    produto_complemento_link.insert().values(
+                        produto_cod_barras=cod_barras,
+                        complemento_id=complemento.id,
+                        ordem=ordem
+                    )
                 )
-            )
         
         self.db.flush()
 
@@ -107,23 +137,37 @@ class ComplementoRepository:
         )
         self.db.flush()
 
-    def listar_por_receita(self, receita_id: int, apenas_ativos: bool = True, carregar_adicionais: bool = False) -> List[ComplementoModel]:
-        """Lista todos os complementos vinculados a uma receita."""
+    def listar_por_receita(self, receita_id: int, apenas_ativos: bool = True, carregar_adicionais: bool = False) -> List[tuple]:
+        """Lista todos os complementos vinculados a uma receita.
+        
+        Returns:
+            Lista de tuplas (complemento, ordem) ordenadas por ordem.
+        """
         from app.api.catalogo.models.association_tables import receita_complemento_link
+        from sqlalchemy import select
         
         query = (
-            self.db.query(ComplementoModel)
+            select(ComplementoModel, receita_complemento_link.c.ordem)
             .join(receita_complemento_link, ComplementoModel.id == receita_complemento_link.c.complemento_id)
-            .filter(receita_complemento_link.c.receita_id == receita_id)
+            .where(receita_complemento_link.c.receita_id == receita_id)
         )
         if apenas_ativos:
-            query = query.filter(ComplementoModel.ativo == True)
+            query = query.where(ComplementoModel.ativo == True)
         if carregar_adicionais:
             query = query.options(joinedload(ComplementoModel.adicionais))
-        return query.order_by(receita_complemento_link.c.ordem, ComplementoModel.nome).all()
+        query = query.order_by(receita_complemento_link.c.ordem, ComplementoModel.nome)
+        
+        results = self.db.execute(query).all()
+        return [(complemento, ordem) for complemento, ordem in results]
 
-    def vincular_complementos_receita(self, receita_id: int, complemento_ids: List[int]):
-        """Vincula múltiplos complementos a uma receita."""
+    def vincular_complementos_receita(self, receita_id: int, complemento_ids: List[int], ordens: Optional[List[int]] = None):
+        """Vincula múltiplos complementos a uma receita.
+        
+        Args:
+            receita_id: ID da receita
+            complemento_ids: Lista de IDs dos complementos a vincular
+            ordens: Lista opcional de ordens. Se não informado, usa o índice como ordem.
+        """
         from app.api.catalogo.models.association_tables import receita_complemento_link
         from app.api.catalogo.models.model_receita import ReceitaModel
         
@@ -138,6 +182,12 @@ class ComplementoRepository:
             .all()
         )
         
+        # Valida que todos os complementos foram encontrados
+        if len(complementos) != len(complemento_ids):
+            encontrados_ids = {c.id for c in complementos}
+            nao_encontrados = [cid for cid in complemento_ids if cid not in encontrados_ids]
+            raise ValueError(f"Complementos não encontrados: {nao_encontrados}")
+        
         # Remove vinculações existentes
         self.db.execute(
             receita_complemento_link.delete().where(
@@ -145,15 +195,25 @@ class ComplementoRepository:
             )
         )
         
-        # Adiciona novas vinculações
-        for i, complemento in enumerate(complementos):
-            self.db.execute(
-                receita_complemento_link.insert().values(
-                    receita_id=receita_id,
-                    complemento_id=complemento.id,
-                    ordem=i
+        # Adiciona novas vinculações com ordens
+        if ordens is None:
+            ordens = list(range(len(complemento_ids)))
+        
+        # Garante que ordens tenha o mesmo tamanho de complemento_ids
+        if len(ordens) != len(complemento_ids):
+            ordens = list(range(len(complemento_ids)))
+        
+        for complemento_id, ordem in zip(complemento_ids, ordens):
+            # Encontra o complemento correspondente
+            complemento = next((c for c in complementos if c.id == complemento_id), None)
+            if complemento:
+                self.db.execute(
+                    receita_complemento_link.insert().values(
+                        receita_id=receita_id,
+                        complemento_id=complemento.id,
+                        ordem=ordem
+                    )
                 )
-            )
         
         self.db.flush()
 
@@ -169,23 +229,37 @@ class ComplementoRepository:
         )
         self.db.flush()
 
-    def listar_por_combo(self, combo_id: int, apenas_ativos: bool = True, carregar_adicionais: bool = False) -> List[ComplementoModel]:
-        """Lista todos os complementos vinculados a um combo."""
+    def listar_por_combo(self, combo_id: int, apenas_ativos: bool = True, carregar_adicionais: bool = False) -> List[tuple]:
+        """Lista todos os complementos vinculados a um combo.
+        
+        Returns:
+            Lista de tuplas (complemento, ordem) ordenadas por ordem.
+        """
         from app.api.catalogo.models.association_tables import combo_complemento_link
+        from sqlalchemy import select
         
         query = (
-            self.db.query(ComplementoModel)
+            select(ComplementoModel, combo_complemento_link.c.ordem)
             .join(combo_complemento_link, ComplementoModel.id == combo_complemento_link.c.complemento_id)
-            .filter(combo_complemento_link.c.combo_id == combo_id)
+            .where(combo_complemento_link.c.combo_id == combo_id)
         )
         if apenas_ativos:
-            query = query.filter(ComplementoModel.ativo == True)
+            query = query.where(ComplementoModel.ativo == True)
         if carregar_adicionais:
             query = query.options(joinedload(ComplementoModel.adicionais))
-        return query.order_by(combo_complemento_link.c.ordem, ComplementoModel.nome).all()
+        query = query.order_by(combo_complemento_link.c.ordem, ComplementoModel.nome)
+        
+        results = self.db.execute(query).all()
+        return [(complemento, ordem) for complemento, ordem in results]
 
-    def vincular_complementos_combo(self, combo_id: int, complemento_ids: List[int]):
-        """Vincula múltiplos complementos a um combo."""
+    def vincular_complementos_combo(self, combo_id: int, complemento_ids: List[int], ordens: Optional[List[int]] = None):
+        """Vincula múltiplos complementos a um combo.
+        
+        Args:
+            combo_id: ID do combo
+            complemento_ids: Lista de IDs dos complementos a vincular
+            ordens: Lista opcional de ordens. Se não informado, usa o índice como ordem.
+        """
         from app.api.catalogo.models.association_tables import combo_complemento_link
         from app.api.catalogo.models.model_combo import ComboModel
         
@@ -222,15 +296,25 @@ class ComplementoRepository:
             )
         )
         
-        # Adiciona novas vinculações
-        for i, complemento in enumerate(complementos):
-            self.db.execute(
-                combo_complemento_link.insert().values(
-                    combo_id=combo_id,
-                    complemento_id=complemento.id,
-                    ordem=i
+        # Adiciona novas vinculações com ordens
+        if ordens is None:
+            ordens = list(range(len(complemento_ids)))
+        
+        # Garante que ordens tenha o mesmo tamanho de complemento_ids
+        if len(ordens) != len(complemento_ids):
+            ordens = list(range(len(complemento_ids)))
+        
+        for complemento_id, ordem in zip(complemento_ids, ordens):
+            # Encontra o complemento correspondente
+            complemento = next((c for c in complementos if c.id == complemento_id), None)
+            if complemento:
+                self.db.execute(
+                    combo_complemento_link.insert().values(
+                        combo_id=combo_id,
+                        complemento_id=complemento.id,
+                        ordem=ordem
+                    )
                 )
-            )
         
         self.db.flush()
 

@@ -157,6 +157,7 @@ class ComplementoResumidoResponse(BaseModel):
 class VincularComplementosProdutoRequest(BaseModel):
     """Request para vincular múltiplos complementos a um produto"""
     complemento_ids: List[int] = Field(..., description="IDs dos complementos a vincular")
+    ordens: Optional[List[int]] = Field(None, description="Ordem de cada complemento (opcional, usa índice se não informado)")
 
 
 class VincularComplementosProdutoResponse(BaseModel):
@@ -172,6 +173,7 @@ class VincularComplementosProdutoResponse(BaseModel):
 class VincularComplementosReceitaRequest(BaseModel):
     """Request para vincular múltiplos complementos a uma receita"""
     complemento_ids: List[int] = Field(..., description="IDs dos complementos a vincular")
+    ordens: Optional[List[int]] = Field(None, description="Ordem de cada complemento (opcional, usa índice se não informado)")
 
 
 class VincularComplementosReceitaResponse(BaseModel):
@@ -187,6 +189,7 @@ class VincularComplementosReceitaResponse(BaseModel):
 class VincularComplementosComboRequest(BaseModel):
     """Request para vincular múltiplos complementos a um combo"""
     complemento_ids: List[int] = Field(..., description="IDs dos complementos a vincular")
+    ordens: Optional[List[int]] = Field(None, description="Ordem de cada complemento (opcional, usa índice se não informado)")
 
 
 class VincularComplementosComboResponse(BaseModel):

@@ -13,19 +13,28 @@ class ComplementoAdapter(IComplementoContract):
         self.repo = ComplementoRepository(db)
         self.repo_item = ComplementoItemRepository(db)
 
-    def _build_complemento_dto(self, complemento) -> ComplementoDTO:
-        """Monta o DTO de complemento garantindo ordem e preço aplicado por complemento."""
+    def _build_complemento_dto(self, complemento, ordem: int = None) -> ComplementoDTO:
+        """Monta o DTO de complemento garantindo ordem e preço aplicado por complemento.
+        
+        Args:
+            complemento: Modelo do complemento
+            ordem: Ordem do complemento no contexto (produto/receita/combo). 
+                   Se None, usa a ordem do complemento em si.
+        """
         itens = self.repo_item.listar_itens_complemento(complemento.id, apenas_ativos=True)
         adicionais_dto = [
             AdicionalDTO(
                 id=item.id,
                 nome=item.nome,
                 preco=getattr(item, "preco_aplicado", item.preco),
-                ordem=ordem,
+                ordem=ordem_item,
                 imagem=getattr(item, "imagem", None),
             )
-            for item, ordem in itens
+            for item, ordem_item in itens
         ]
+
+        # Usa a ordem fornecida (da tabela de associação) ou a ordem do complemento
+        ordem_final = ordem if ordem is not None else complemento.ordem
 
         return ComplementoDTO(
             id=complemento.id,
@@ -33,27 +42,27 @@ class ComplementoAdapter(IComplementoContract):
             descricao=complemento.descricao,
             obrigatorio=complemento.obrigatorio,
             quantitativo=complemento.quantitativo,
-            ordem=complemento.ordem,
+            ordem=ordem_final,
             adicionais=adicionais_dto,
         )
 
     def listar_por_produto(self, cod_barras: str, apenas_ativos: bool = True) -> List[ComplementoDTO]:
-        complementos = self.repo.listar_por_produto(
+        complementos_com_ordem = self.repo.listar_por_produto(
             cod_barras,
             apenas_ativos=apenas_ativos,
             carregar_adicionais=False,
         )
-        return [self._build_complemento_dto(c) for c in complementos]
+        return [self._build_complemento_dto(c, ordem=ordem) for c, ordem in complementos_com_ordem]
 
     def buscar_por_ids_para_produto(self, cod_barras: str, complemento_ids: List[int]) -> List[ComplementoDTO]:
-        vinculados = self.repo.listar_por_produto(
+        vinculados_com_ordem = self.repo.listar_por_produto(
             cod_barras,
             apenas_ativos=True,
             carregar_adicionais=False,
         )
         ids_set = set(complemento_ids or [])
-        filtrados = [c for c in vinculados if c.id in ids_set]
-        return [self._build_complemento_dto(c) for c in filtrados]
+        filtrados = [(c, ordem) for c, ordem in vinculados_com_ordem if c.id in ids_set]
+        return [self._build_complemento_dto(c, ordem=ordem) for c, ordem in filtrados]
 
     def buscar_por_ids(self, empresa_id: int, complemento_ids: List[int]) -> List[ComplementoDTO]:
         complementos = self.repo.listar_por_empresa(
@@ -67,19 +76,19 @@ class ComplementoAdapter(IComplementoContract):
     
     def listar_por_receita(self, receita_id: int, apenas_ativos: bool = True) -> List[ComplementoDTO]:
         """Lista todos os complementos vinculados a uma receita."""
-        complementos = self.repo.listar_por_receita(
+        complementos_com_ordem = self.repo.listar_por_receita(
             receita_id,
             apenas_ativos=apenas_ativos,
             carregar_adicionais=False,
         )
-        return [self._build_complemento_dto(c) for c in complementos]
+        return [self._build_complemento_dto(c, ordem=ordem) for c, ordem in complementos_com_ordem]
     
     def listar_por_combo(self, combo_id: int, apenas_ativos: bool = True) -> List[ComplementoDTO]:
         """Lista todos os complementos vinculados a um combo."""
-        complementos = self.repo.listar_por_combo(
+        complementos_com_ordem = self.repo.listar_por_combo(
             combo_id,
             apenas_ativos=apenas_ativos,
             carregar_adicionais=False,
         )
-        return [self._build_complemento_dto(c) for c in complementos]
+        return [self._build_complemento_dto(c, ordem=ordem) for c, ordem in complementos_com_ordem]
 

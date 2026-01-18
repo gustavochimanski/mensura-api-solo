@@ -118,10 +118,10 @@ class ComplementoService:
                 detail=f"Produto {cod_barras} não encontrado."
             )
         
-        self.repo.vincular_complementos_produto(cod_barras, req.complemento_ids)
+        self.repo.vincular_complementos_produto(cod_barras, req.complemento_ids, req.ordens)
         
         # Busca os complementos vinculados para retornar
-        complementos = self.repo.listar_por_produto(cod_barras, apenas_ativos=True)
+        complementos_com_ordem = self.repo.listar_por_produto(cod_barras, apenas_ativos=True)
         complementos_vinculados = [
             ComplementoResumidoResponse(
                 id=c.id,
@@ -130,9 +130,9 @@ class ComplementoService:
                 quantitativo=c.quantitativo,
                 minimo_itens=c.minimo_itens,
                 maximo_itens=c.maximo_itens,
-                ordem=c.ordem,
+                ordem=ordem,
             )
-            for c in complementos
+            for c, ordem in complementos_com_ordem
         ]
         
         return VincularComplementosProdutoResponse(
@@ -142,8 +142,8 @@ class ComplementoService:
 
     def listar_complementos_produto(self, cod_barras: str, apenas_ativos: bool = True) -> List[ComplementoResponse]:
         """Lista todos os complementos de um produto específico."""
-        complementos = self.repo.listar_por_produto(cod_barras, apenas_ativos=apenas_ativos, carregar_adicionais=True)
-        return [self.complemento_to_response(c) for c in complementos]
+        complementos_com_ordem = self.repo.listar_por_produto(cod_barras, apenas_ativos=apenas_ativos, carregar_adicionais=True)
+        return [self.complemento_to_response(c) for c, _ in complementos_com_ordem]
 
     def vincular_complementos_receita(self, receita_id: int, req: VincularComplementosReceitaRequest) -> VincularComplementosReceitaResponse:
         """Vincula múltiplos complementos a uma receita."""
@@ -156,11 +156,11 @@ class ComplementoService:
                 detail=f"Receita {receita_id} não encontrada."
             )
         
-        self.repo.vincular_complementos_receita(receita_id, req.complemento_ids)
+        self.repo.vincular_complementos_receita(receita_id, req.complemento_ids, req.ordens)
         self.db.commit()  # Garante que as vinculações sejam persistidas
         
         # Busca os complementos vinculados para retornar (sem filtro de ativos para garantir que retorne os vinculados)
-        complementos = self.repo.listar_por_receita(receita_id, apenas_ativos=False, carregar_adicionais=False)
+        complementos_com_ordem = self.repo.listar_por_receita(receita_id, apenas_ativos=False, carregar_adicionais=False)
         complementos_vinculados = [
             ComplementoResumidoResponse(
                 id=c.id,
@@ -169,9 +169,9 @@ class ComplementoService:
                 quantitativo=c.quantitativo,
                 minimo_itens=c.minimo_itens,
                 maximo_itens=c.maximo_itens,
-                ordem=c.ordem,
+                ordem=ordem,
             )
-            for c in complementos
+            for c, ordem in complementos_com_ordem
         ]
         
         return VincularComplementosReceitaResponse(
@@ -181,8 +181,8 @@ class ComplementoService:
 
     def listar_complementos_receita(self, receita_id: int, apenas_ativos: bool = True) -> List[ComplementoResponse]:
         """Lista todos os complementos de uma receita específica."""
-        complementos = self.repo.listar_por_receita(receita_id, apenas_ativos=apenas_ativos, carregar_adicionais=True)
-        return [self.complemento_to_response(c) for c in complementos]
+        complementos_com_ordem = self.repo.listar_por_receita(receita_id, apenas_ativos=apenas_ativos, carregar_adicionais=True)
+        return [self.complemento_to_response(c) for c, _ in complementos_com_ordem]
 
     def vincular_complementos_combo(self, combo_id: int, req: VincularComplementosComboRequest) -> VincularComplementosComboResponse:
         """Vincula múltiplos complementos a um combo."""
@@ -219,11 +219,11 @@ class ComplementoService:
                         detail=f"Complemento {complemento.id} pertence a empresa diferente do combo."
                     )
         
-        self.repo.vincular_complementos_combo(combo_id, req.complemento_ids)
+        self.repo.vincular_complementos_combo(combo_id, req.complemento_ids, req.ordens)
         self.db.commit()  # Garante que as vinculações sejam persistidas
         
         # Busca os complementos vinculados para retornar (sem filtro de ativos para garantir que retorne os vinculados)
-        complementos = self.repo.listar_por_combo(combo_id, apenas_ativos=False, carregar_adicionais=False)
+        complementos_com_ordem = self.repo.listar_por_combo(combo_id, apenas_ativos=False, carregar_adicionais=False)
         complementos_vinculados = [
             ComplementoResumidoResponse(
                 id=c.id,
@@ -232,9 +232,9 @@ class ComplementoService:
                 quantitativo=c.quantitativo,
                 minimo_itens=c.minimo_itens,
                 maximo_itens=c.maximo_itens,
-                ordem=c.ordem,
+                ordem=ordem,
             )
-            for c in complementos
+            for c, ordem in complementos_com_ordem
         ]
         
         return VincularComplementosComboResponse(
@@ -244,8 +244,8 @@ class ComplementoService:
 
     def listar_complementos_combo(self, combo_id: int, apenas_ativos: bool = True) -> List[ComplementoResponse]:
         """Lista todos os complementos de um combo específico."""
-        complementos = self.repo.listar_por_combo(combo_id, apenas_ativos=apenas_ativos, carregar_adicionais=True)
-        return [self.complemento_to_response(c) for c in complementos]
+        complementos_com_ordem = self.repo.listar_por_combo(combo_id, apenas_ativos=apenas_ativos, carregar_adicionais=True)
+        return [self.complemento_to_response(c) for c, _ in complementos_com_ordem]
 
     # ------ Adicionais dentro de complementos (DEPRECADO - usar criar_item + vincular) ------
     def criar_adicional(self, complemento_id: int, req: CriarAdicionalRequest) -> AdicionalResponse:
