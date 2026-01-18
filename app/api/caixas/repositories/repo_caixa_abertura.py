@@ -188,16 +188,21 @@ class CaixaAberturaRepository:
         )
         total_entradas = query_entradas.scalar() or Decimal("0")
         
-        # Saídas: trocos dados
+        # Saídas: trocos dados (troco_para - valor_total, quando troco_para > valor_total)
+        # Calcula o troco real dado para pedidos pagos em dinheiro com troco
         query_saidas = (
-            self.db.query(func.sum(PedidoUnificadoModel.troco_para))
+            self.db.query(func.sum(PedidoUnificadoModel.troco_para - PedidoUnificadoModel.valor_total))
+            .join(TransacaoPagamentoModel, TransacaoPagamentoModel.pedido_id == PedidoUnificadoModel.id)
+            .join(MeioPagamentoModel, TransacaoPagamentoModel.meio_pagamento_id == MeioPagamentoModel.id)
             .filter(
                 and_(
                     PedidoUnificadoModel.empresa_id == empresa_id,
                     PedidoUnificadoModel.created_at >= caixa_abertura.data_abertura,
                     PedidoUnificadoModel.created_at <= data_fim,
                     PedidoUnificadoModel.troco_para.isnot(None),
-                    PedidoUnificadoModel.troco_para > 0
+                    PedidoUnificadoModel.troco_para > PedidoUnificadoModel.valor_total,
+                    TransacaoPagamentoModel.status == PagamentoStatusEnum.PAGO.value,
+                    MeioPagamentoModel.tipo == "DINHEIRO"
                 )
             )
         )
@@ -217,6 +222,12 @@ class CaixaAberturaRepository:
         total_retiradas = query_retiradas.scalar() or Decimal("0")
         
         saldo_esperado = saldo + total_entradas - total_saidas - total_retiradas
+        
+        logger.info(
+            f"[CaixaAbertura] Cálculo saldo esperado - caixa_abertura_id={caixa_abertura_id} "
+            f"valor_inicial={saldo} entradas={total_entradas} saidas={total_saidas} "
+            f"retiradas={total_retiradas} saldo_esperado={saldo_esperado}"
+        )
         
         # Atualiza o saldo esperado
         caixa_abertura.saldo_esperado = saldo_esperado
