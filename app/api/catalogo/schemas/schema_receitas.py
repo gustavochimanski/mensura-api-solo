@@ -72,6 +72,11 @@ class ReceitaIngredienteIn(BaseModel):
         return self
 
 
+class ReceitaIngredienteUpdate(BaseModel):
+    """Schema para atualizar um item de receita"""
+    quantidade: float
+
+
 class ReceitaIngredienteOut(BaseModel):
     """Schema de resposta para item de receita (pode ser sub-receita, produto ou combo)"""
     id: int

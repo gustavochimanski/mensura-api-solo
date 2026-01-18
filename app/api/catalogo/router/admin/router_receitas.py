@@ -10,6 +10,7 @@ from app.api.catalogo.schemas.schema_receitas import (
     ReceitaOut,
     ReceitaUpdate,
     ReceitaIngredienteIn,
+    ReceitaIngredienteUpdate,
     ReceitaIngredienteOut,
     ReceitaComIngredientesOut,
     AdicionalIn,
@@ -121,11 +122,11 @@ def add_item(
 @router.put("/itens/{receita_ingrediente_id}", response_model=ReceitaIngredienteOut)
 def update_item(
     receita_ingrediente_id: int = Path(..., description="ID do vínculo item-receita (pode ser sub-receita, produto ou combo)"),
-    quantidade: Optional[float] = Body(None, description="Quantidade do item"),
+    body: ReceitaIngredienteUpdate = Body(...),
     db: Session = Depends(get_db),
 ):
     """Atualiza a quantidade de um item (sub-receita, produto ou combo) em uma receita"""
-    return ReceitasService(db).update_ingrediente(receita_ingrediente_id, quantidade)
+    return ReceitasService(db).update_ingrediente(receita_ingrediente_id, body.quantidade)
 
 
 @router.delete("/itens/{receita_ingrediente_id}", status_code=status.HTTP_204_NO_CONTENT)
