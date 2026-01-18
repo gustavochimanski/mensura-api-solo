@@ -18,6 +18,8 @@ class AdicionalModel(Base):
     # Informações do item
     nome = Column(String(100), nullable=False)
     descricao = Column(String(255), nullable=True)
+    # URL pública da imagem (ex.: MinIO)
+    imagem = Column(String(255), nullable=True)
     preco = Column(Numeric(18, 2), nullable=False, default=0)
     custo = Column(Numeric(18, 2), nullable=False, default=0)  # Custo interno do item
     

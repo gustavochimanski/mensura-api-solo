@@ -141,3 +141,17 @@ class AdicionalOut(BaseModel):
     preco: Optional[Decimal] = None
     model_config = ConfigDict(from_attributes=True)
 
+
+class ClonarIngredientesRequest(BaseModel):
+    """Schema para clonar ingredientes de uma receita para outra"""
+    receita_origem_id: int
+    receita_destino_id: int
+
+
+class ClonarIngredientesResponse(BaseModel):
+    """Schema de resposta para clonagem de ingredientes"""
+    receita_origem_id: int
+    receita_destino_id: int
+    ingredientes_clonados: int
+    mensagem: str
+

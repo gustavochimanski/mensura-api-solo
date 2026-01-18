@@ -45,6 +45,7 @@ class AdicionalService:
             empresa_id=req.empresa_id,
             nome=req.nome,
             descricao=req.descricao,
+            imagem=req.imagem,
             preco=Decimal(str(req.preco)),
             custo=Decimal(str(req.custo)),
             ativo=req.ativo,
@@ -88,6 +89,8 @@ class AdicionalService:
             update_data["nome"] = req.nome
         if req.descricao is not None:
             update_data["descricao"] = req.descricao
+        if req.imagem is not None:
+            update_data["imagem"] = req.imagem
         if req.preco is not None:
             update_data["preco"] = Decimal(str(req.preco))
         if req.custo is not None:

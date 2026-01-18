@@ -10,6 +10,8 @@ from app.api.catalogo.schemas.schema_receitas import (
     ReceitaIn,
     ReceitaUpdate,
     ReceitaOut,
+    ClonarIngredientesRequest,
+    ClonarIngredientesResponse,
 )
 
 
@@ -200,4 +202,24 @@ class ReceitasService:
 
     def remove_adicional(self, adicional_id: int):
         return self.repo.remove_adicional(adicional_id)
+
+    def clonar_ingredientes(self, receita_origem_id: int, receita_destino_id: int) -> ClonarIngredientesResponse:
+        """
+        Clona todos os ingredientes de uma receita para outra.
+        
+        Args:
+            receita_origem_id: ID da receita de origem
+            receita_destino_id: ID da receita de destino
+        
+        Returns:
+            ClonarIngredientesResponse com informações sobre a clonagem
+        """
+        ingredientes_clonados = self.repo.clonar_ingredientes(receita_origem_id, receita_destino_id)
+        
+        return ClonarIngredientesResponse(
+            receita_origem_id=receita_origem_id,
+            receita_destino_id=receita_destino_id,
+            ingredientes_clonados=ingredientes_clonados,
+            mensagem=f"{ingredientes_clonados} ingrediente(s) clonado(s) com sucesso"
+        )
 

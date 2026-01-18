@@ -530,3 +530,99 @@ class ReceitasRepository:
         
         return custo_total
 
+    def clonar_ingredientes(self, receita_origem_id: int, receita_destino_id: int) -> int:
+        """
+        Clona todos os ingredientes de uma receita para outra.
+        
+        Args:
+            receita_origem_id: ID da receita de origem (de onde serão copiados os ingredientes)
+            receita_destino_id: ID da receita de destino (para onde serão copiados os ingredientes)
+        
+        Returns:
+            Número de ingredientes clonados
+        """
+        # Verifica se as receitas existem
+        receita_origem = self.get_receita_by_id(receita_origem_id)
+        if not receita_origem:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, f"Receita origem (ID: {receita_origem_id}) não encontrada")
+        
+        receita_destino = self.get_receita_by_id(receita_destino_id)
+        if not receita_destino:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, f"Receita destino (ID: {receita_destino_id}) não encontrada")
+        
+        # Verifica se as receitas são diferentes
+        if receita_origem_id == receita_destino_id:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Não é possível clonar ingredientes para a mesma receita")
+        
+        # Busca todos os ingredientes da receita origem
+        ingredientes_origem = (
+            self.db.query(ReceitaIngredienteModel)
+            .filter(ReceitaIngredienteModel.receita_id == receita_origem_id)
+            .all()
+        )
+        
+        if not ingredientes_origem:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                f"A receita origem (ID: {receita_origem_id}) não possui ingredientes para clonar"
+            )
+        
+        # Contador de ingredientes clonados
+        ingredientes_clonados = 0
+        
+        # Clona cada ingrediente para a receita destino
+        for ingrediente_origem in ingredientes_origem:
+            # Verifica se o ingrediente já existe na receita destino
+            # (para evitar duplicatas)
+            if ingrediente_origem.receita_ingrediente_id is not None:
+                # Sub-receita
+                exists = (
+                    self.db.query(ReceitaIngredienteModel)
+                    .filter_by(receita_id=receita_destino_id, receita_ingrediente_id=ingrediente_origem.receita_ingrediente_id)
+                    .filter(ReceitaIngredienteModel.produto_cod_barras.is_(None))
+                    .filter(ReceitaIngredienteModel.combo_id.is_(None))
+                    .first()
+                )
+            elif ingrediente_origem.produto_cod_barras is not None:
+                # Produto
+                exists = (
+                    self.db.query(ReceitaIngredienteModel)
+                    .filter_by(receita_id=receita_destino_id, produto_cod_barras=ingrediente_origem.produto_cod_barras)
+                    .filter(ReceitaIngredienteModel.receita_ingrediente_id.is_(None))
+                    .filter(ReceitaIngredienteModel.combo_id.is_(None))
+                    .first()
+                )
+            elif ingrediente_origem.combo_id is not None:
+                # Combo
+                exists = (
+                    self.db.query(ReceitaIngredienteModel)
+                    .filter_by(receita_id=receita_destino_id, combo_id=ingrediente_origem.combo_id)
+                    .filter(ReceitaIngredienteModel.receita_ingrediente_id.is_(None))
+                    .filter(ReceitaIngredienteModel.produto_cod_barras.is_(None))
+                    .first()
+                )
+            else:
+                # Item inválido (não deveria acontecer)
+                continue
+            
+            # Se o ingrediente já existe, pula
+            if exists:
+                continue
+            
+            # Cria novo ingrediente na receita destino
+            novo_ingrediente = ReceitaIngredienteModel(
+                receita_id=receita_destino_id,
+                receita_ingrediente_id=ingrediente_origem.receita_ingrediente_id,
+                produto_cod_barras=ingrediente_origem.produto_cod_barras,
+                combo_id=ingrediente_origem.combo_id,
+                quantidade=ingrediente_origem.quantidade,
+            )
+            
+            self.db.add(novo_ingrediente)
+            ingredientes_clonados += 1
+        
+        # Commit de todas as alterações
+        self.db.commit()
+        
+        return ingredientes_clonados
+

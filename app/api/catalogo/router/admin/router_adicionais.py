@@ -1,5 +1,5 @@
 from typing import List, Optional
-from fastapi import APIRouter, Body, Depends, status, Path, Query
+from fastapi import APIRouter, Body, Depends, status, Path, Query, UploadFile, File, Form, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.catalogo.schemas.schema_complemento import (
@@ -11,6 +11,7 @@ from app.api.catalogo.services.service_complemento import ComplementoService
 from app.core.admin_dependencies import get_current_user
 from app.database.db_connection import get_db
 from app.utils.logger import logger
+from app.utils.minio_client import update_file_to_minio
 
 router = APIRouter(
     prefix="/api/catalogo/admin/adicionais",
@@ -86,4 +87,46 @@ def deletar_adicional(
     service = ComplementoService(db)
     service.deletar_item(adicional_id)
     return {"message": "Adicional deletado com sucesso"}
+
+
+@router.put("/{adicional_id}/imagem", response_model=AdicionalResponse, status_code=status.HTTP_200_OK)
+async def atualizar_imagem_adicional(
+    adicional_id: int = Path(..., description="ID do adicional (item)"),
+    cod_empresa: int = Form(..., description="ID da empresa dona do adicional"),
+    imagem: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    """
+    Faz upload/atualização da imagem do adicional (item) no MinIO e salva a URL pública no campo `imagem`.
+
+    - Envia como `multipart/form-data`
+    - Campos: `cod_empresa` e `imagem`
+    """
+    if imagem.content_type not in {"image/jpeg", "image/png", "image/webp"}:
+        raise HTTPException(status_code=400, detail="Formato de imagem inválido")
+
+    service = ComplementoService(db)
+    item = service.repo_item.buscar_por_id(adicional_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Adicional não encontrado.")
+
+    if int(getattr(item, "empresa_id", 0) or 0) != int(cod_empresa):
+        raise HTTPException(status_code=400, detail="cod_empresa não confere com a empresa do adicional.")
+
+    try:
+        nova_url = update_file_to_minio(
+            db=db,
+            cod_empresa=cod_empresa,
+            file=imagem,
+            slug="adicionais",
+            url_antiga=getattr(item, "imagem", None),
+        )
+    except Exception as e:
+        logger.error(f"[Adicionais] Erro upload imagem - id={adicional_id} empresa={cod_empresa}: {e}")
+        raise HTTPException(status_code=500, detail="Erro ao fazer upload da imagem")
+
+    service.repo_item.atualizar_item(item, imagem=nova_url)
+    db.commit()
+    db.refresh(item)
+    return service.buscar_item_por_id(adicional_id)
 

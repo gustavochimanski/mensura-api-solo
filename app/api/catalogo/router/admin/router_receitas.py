@@ -14,6 +14,8 @@ from app.api.catalogo.schemas.schema_receitas import (
     ReceitaComIngredientesOut,
     AdicionalIn,
     AdicionalOut,
+    ClonarIngredientesRequest,
+    ClonarIngredientesResponse,
 )
 from app.api.catalogo.schemas.schema_complemento import (
     VincularComplementosReceitaRequest,
@@ -223,4 +225,22 @@ def vincular_complementos_receita(
     logger.info(f"[Receitas] Vincular complementos - receita={receita_id} complementos={req.complemento_ids}")
     service = ComplementoService(db)
     return service.vincular_complementos_receita(receita_id, req)
+
+
+# Clonagem de ingredientes
+@router.post("/clonar-ingredientes", response_model=ClonarIngredientesResponse, status_code=status.HTTP_200_OK)
+def clonar_ingredientes(
+    req: ClonarIngredientesRequest = Body(...),
+    db: Session = Depends(get_db),
+):
+    """
+    Clona todos os ingredientes de uma receita para outra.
+    
+    - `receita_origem_id`: ID da receita de origem (de onde serão copiados os ingredientes)
+    - `receita_destino_id`: ID da receita de destino (para onde serão copiados os ingredientes)
+    
+    Nota: Ingredientes duplicados (que já existem na receita destino) são ignorados.
+    """
+    logger.info(f"[Receitas] Clonar ingredientes - origem={req.receita_origem_id} destino={req.receita_destino_id}")
+    return ReceitasService(db).clonar_ingredientes(req.receita_origem_id, req.receita_destino_id)
 

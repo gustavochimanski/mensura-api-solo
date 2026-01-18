@@ -8,6 +8,7 @@ class CriarAdicionalRequest(BaseModel):
     empresa_id: int
     nome: str = Field(..., min_length=1, max_length=100)
     descricao: Optional[str] = Field(None, max_length=255)
+    imagem: Optional[str] = Field(None, max_length=255, description="URL pública da imagem do adicional (opcional)")
     preco: condecimal(max_digits=18, decimal_places=2) = Field(default=0)
     custo: condecimal(max_digits=18, decimal_places=2) = Field(default=0)
     ativo: bool = True
@@ -20,6 +21,7 @@ class CriarAdicionalRequest(BaseModel):
 class AtualizarAdicionalRequest(BaseModel):
     nome: Optional[str] = Field(None, min_length=1, max_length=100)
     descricao: Optional[str] = Field(None, max_length=255)
+    imagem: Optional[str] = Field(None, max_length=255, description="URL pública da imagem do adicional (opcional)")
     preco: Optional[condecimal(max_digits=18, decimal_places=2)] = None
     custo: Optional[condecimal(max_digits=18, decimal_places=2)] = None
     ativo: Optional[bool] = None
@@ -35,6 +37,7 @@ class AdicionalResponse(BaseModel):
     empresa_id: int
     nome: str
     descricao: Optional[str] = None
+    imagem: Optional[str] = None
     preco: float
     custo: float
     ativo: bool
