@@ -115,7 +115,12 @@ class VitrinesService:
         if not v:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Vitrine não encontrada")
 
-        ok = self.repo.desvincular_produto(vitrine_id=vitrine_id, empresa_id=empresa_id, cod_barras=cod_barras)
+        # Validação de segurança: garante que o código de barras pertence à empresa informada
+        if not self.repo.exists_prod_emp(empresa_id=empresa_id, cod_barras=cod_barras):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Produto da empresa não encontrado")
+
+        # O vínculo em si não precisa do empresa_id, apenas do código de barras e da vitrine
+        ok = self.repo.desvincular_produto(vitrine_id=vitrine_id, cod_barras=cod_barras)
         if not ok:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Produto não estava vinculado")
         return {"ok": True}
