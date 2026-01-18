@@ -1,16 +1,58 @@
 # Documentação: Endpoint Unificado de Complementos
 
+## 🚀 Resumo Rápido
+
+**Endpoint Unificado:** `GET /api/catalogo/public/complementos`
+
+**Parâmetros obrigatórios:**
+- `tipo`: `produto`, `combo` ou `receita`
+- `identificador`: Código de barras (produto) ou ID (combo/receita)
+- `tipo_pedido`: `balcao`, `mesa` ou `delivery`
+
+**Exemplo para Receita (ID 3):**
+```http
+GET /api/catalogo/public/complementos?tipo=receita&identificador=3&tipo_pedido=delivery&apenas_ativos=true
+```
+
+**Exemplo para Combo (ID 5):**
+```http
+GET /api/catalogo/public/complementos?tipo=combo&identificador=5&tipo_pedido=mesa&apenas_ativos=true
+```0
+
+**Exemplo para Produto (código 123456):**
+```http
+GET /api/catalogo/public/complementos?tipo=produto&identificador=123456&tipo_pedido=delivery&apenas_ativos=true
+```
+
 ## 📋 Resumo das Mudanças
 
 Os três endpoints separados para listar complementos foram **unificados em um único endpoint** que aceita parâmetros de query string.
+
+### ⚠️ IMPORTANTE: Erro 404 com Formato Antigo
+
+**Se você está recebendo erro 404**, isso acontece porque está usando o formato antigo que foi **removido**. 
+
+**❌ Formato antigo (retorna 404):**
+```
+GET /api/catalogo/public/complementos/receita/3?apenas_ativos=true
+GET /api/catalogo/public/complementos/combo/5?apenas_ativos=true
+GET /api/catalogo/public/complementos/produto/123456?apenas_ativos=true
+```
+
+**✅ Formato correto (novo endpoint unificado):**
+```
+GET /api/catalogo/public/complementos?tipo=receita&identificador=3&tipo_pedido=delivery&apenas_ativos=true
+GET /api/catalogo/public/complementos?tipo=combo&identificador=5&tipo_pedido=mesa&apenas_ativos=true
+GET /api/catalogo/public/complementos?tipo=produto&identificador=123456&tipo_pedido=delivery&apenas_ativos=true
+```
 
 ### ❌ Endpoints Removidos (DEPRECADOS - não usar mais)
 
 Os seguintes endpoints foram **removidos** e não devem mais ser utilizados:
 
-1. `GET /api/catalogo/public/complementos/produto/{cod_barras}`
-2. `GET /api/catalogo/public/complementos/combo/{combo_id}`
-3. `GET /api/catalogo/public/complementos/receita/{receita_id}`
+1. `GET /api/catalogo/public/complementos/produto/{cod_barras}` ❌ **Retorna 404**
+2. `GET /api/catalogo/public/complementos/combo/{combo_id}` ❌ **Retorna 404**
+3. `GET /api/catalogo/public/complementos/receita/{receita_id}` ❌ **Retorna 404**
 
 ### ✅ Novo Endpoint Unificado
 
@@ -93,8 +135,12 @@ GET /api/catalogo/public/complementos?tipo=combo&identificador=5&tipo_pedido=mes
 #### 3. Listar complementos de uma Receita
 
 ```http
-GET /api/catalogo/public/complementos?tipo=receita&identificador=10&tipo_pedido=balcao&apenas_ativos=true
+GET /api/catalogo/public/complementos?tipo=receita&identificador=3&tipo_pedido=delivery&apenas_ativos=true
 ```
+
+**Exemplo prático resolvendo o erro 404:**
+- ❌ **Errado:** `GET /api/catalogo/public/complementos/receita/3?apenas_ativos=true` (retorna 404)
+- ✅ **Correto:** `GET /api/catalogo/public/complementos?tipo=receita&identificador=3&tipo_pedido=delivery&apenas_ativos=true`
 
 #### 4. Incluir complementos inativos
 
@@ -114,7 +160,7 @@ const response = await fetch(`/api/catalogo/public/complementos/produto/${codBar
 // Para combo
 const response = await fetch(`/api/catalogo/public/complementos/combo/${comboId}?apenas_ativos=true`);
 
-// Para receita
+// Para receita (FORMATO ANTIGO - NÃO USAR MAIS - retorna 404)
 const response = await fetch(`/api/catalogo/public/complementos/receita/${receitaId}?apenas_ativos=true`);
 ```
 
@@ -193,27 +239,65 @@ async function buscarComplementos(
 
 ## ⚠️ Observações Importantes
 
-1. **Parâmetro `tipo_pedido` é obrigatório**: Mesmo que atualmente não seja usado para filtrar os resultados, o parâmetro é obrigatório para garantir compatibilidade com futuras implementações.
+1. **Parâmetro `tipo_pedido` é obrigatório**: Mesmo que atualmente não seja usado para filtrar os resultados, o parâmetro é obrigatório para garantir compatibilidade com futuras implementações. Valores aceitos: `balcao`, `mesa`, `delivery`.
 
 2. **Formato do `identificador`**:
-   - Para **produtos**: Use o código de barras (string)
-   - Para **combos**: Use o ID numérico (convertido para string na URL)
-   - Para **receitas**: Use o ID numérico (convertido para string na URL)
+   - Para **produtos**: Use o código de barras (string), exemplo: `"123456789"`
+   - Para **combos**: Use o ID numérico (convertido para string na URL), exemplo: `"5"`
+   - Para **receitas**: Use o ID numérico (convertido para string na URL), exemplo: `"3"`
 
-3. **Resposta vazia**: Se não houver complementos vinculados, o endpoint retorna uma lista vazia `[]` com status `200 OK`.
+3. **Todos os parâmetros obrigatórios devem estar presentes**:
+   - `tipo` (obrigatório): `produto`, `combo` ou `receita`
+   - `identificador` (obrigatório): código de barras ou ID
+   - `tipo_pedido` (obrigatório): `balcao`, `mesa` ou `delivery`
 
-4. **Validações**: O endpoint valida se o produto/combo/receita existe e está ativo antes de retornar os complementos.
+4. **Resposta vazia**: Se não houver complementos vinculados, o endpoint retorna uma lista vazia `[]` com status `200 OK`.
+
+5. **Validações**: O endpoint valida se o produto/combo/receita existe e está ativo antes de retornar os complementos.
+
+6. **Endpoint unificado**: Um único endpoint serve para produtos, combos e receitas. Use o parâmetro `tipo` para especificar qual tipo está consultando.
 
 ## 🐛 Tratamento de Erros
 
+### Erro 404 - Not Found (Formato de URL Antigo)
+
+**Se você está recebendo 404, verifique se está usando o formato correto:**
+
+```http
+❌ GET /api/catalogo/public/complementos/receita/3?apenas_ativos=true
+   → Retorna: 404 Not Found
+
+✅ GET /api/catalogo/public/complementos?tipo=receita&identificador=3&tipo_pedido=delivery&apenas_ativos=true
+   → Retorna: 200 OK com lista de complementos
+```
+
+**Os endpoints antigos com path parameters (`/receita/{id}`, `/combo/{id}`, `/produto/{cod}`) foram removidos e retornam 404.**
+
 ### Erro 400 - Bad Request
+
+**Identificador inválido:**
 ```json
 {
   "detail": "Para combos, o identificador deve ser um número inteiro. Recebido: abc"
 }
 ```
 
-### Erro 404 - Not Found
+**Parâmetros obrigatórios faltando:**
+```json
+{
+  "detail": "Field required: tipo"
+}
+```
+
+### Erro 404 - Not Found (Recurso não encontrado)
+
+**Receita/Combo não encontrado ou inativo:**
+```json
+{
+  "detail": "Receita 3 não encontrada ou inativa"
+}
+```
+
 ```json
 {
   "detail": "Combo 5 não encontrado ou inativo"
@@ -225,6 +309,44 @@ async function buscarComplementos(
 {
   "detail": "Erro ao listar complementos: [mensagem de erro]"
 }
+```
+
+## 📝 Exemplos Práticos Completos
+
+### Exemplo 1: Buscar complementos de uma Receita (ID 3)
+
+**❌ Formato antigo (retorna 404):**
+```bash
+curl "http://localhost:8000/api/catalogo/public/complementos/receita/3?apenas_ativos=true"
+```
+
+**✅ Formato correto (novo endpoint unificado):**
+```bash
+curl "http://localhost:8000/api/catalogo/public/complementos?tipo=receita&identificador=3&tipo_pedido=delivery&apenas_ativos=true"
+```
+
+### Exemplo 2: Buscar complementos de um Combo (ID 5)
+
+**❌ Formato antigo (retorna 404):**
+```bash
+curl "http://localhost:8000/api/catalogo/public/complementos/combo/5?apenas_ativos=true"
+```
+
+**✅ Formato correto (novo endpoint unificado):**
+```bash
+curl "http://localhost:8000/api/catalogo/public/complementos?tipo=combo&identificador=5&tipo_pedido=mesa&apenas_ativos=true"
+```
+
+### Exemplo 3: Buscar complementos de um Produto (código 123456)
+
+**❌ Formato antigo (retorna 404):**
+```bash
+curl "http://localhost:8000/api/catalogo/public/complementos/produto/123456?apenas_ativos=true"
+```
+
+**✅ Formato correto (novo endpoint unificado):**
+```bash
+curl "http://localhost:8000/api/catalogo/public/complementos?tipo=produto&identificador=123456&tipo_pedido=delivery&apenas_ativos=true"
 ```
 
 ## 📅 Data da Mudança

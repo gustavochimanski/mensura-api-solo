@@ -53,7 +53,11 @@ class ComplementoRepository:
             query = query.options(joinedload(ComplementoModel.adicionais))
         query = query.order_by(produto_complemento_link.c.ordem, ComplementoModel.nome)
         
-        results = self.db.execute(query).all()
+        # Quando usamos joinedload com relacionamentos de coleção, precisamos usar .unique()
+        result = self.db.execute(query)
+        if carregar_adicionais:
+            result = result.unique()
+        results = result.all()
         return [(complemento, ordem) for complemento, ordem in results]
 
     def atualizar_complemento(self, complemento: ComplementoModel, **data) -> ComplementoModel:
@@ -157,7 +161,11 @@ class ComplementoRepository:
             query = query.options(joinedload(ComplementoModel.adicionais))
         query = query.order_by(receita_complemento_link.c.ordem, ComplementoModel.nome)
         
-        results = self.db.execute(query).all()
+        # Quando usamos joinedload com relacionamentos de coleção, precisamos usar .unique()
+        result = self.db.execute(query)
+        if carregar_adicionais:
+            result = result.unique()
+        results = result.all()
         return [(complemento, ordem) for complemento, ordem in results]
 
     def vincular_complementos_receita(self, receita_id: int, complemento_ids: List[int], ordens: Optional[List[int]] = None):
@@ -249,7 +257,11 @@ class ComplementoRepository:
             query = query.options(joinedload(ComplementoModel.adicionais))
         query = query.order_by(combo_complemento_link.c.ordem, ComplementoModel.nome)
         
-        results = self.db.execute(query).all()
+        # Quando usamos joinedload com relacionamentos de coleção, precisamos usar .unique()
+        result = self.db.execute(query)
+        if carregar_adicionais:
+            result = result.unique()
+        results = result.all()
         return [(complemento, ordem) for complemento, ordem in results]
 
     def vincular_complementos_combo(self, combo_id: int, complemento_ids: List[int], ordens: Optional[List[int]] = None):
