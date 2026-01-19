@@ -4,7 +4,7 @@ from pydantic import BaseModel
 
 from app.core.admin_dependencies import get_current_user
 from app.database.db_connection import get_db
-from app.utils.minio_client import corrigir_permissoes_todos_buckets, gerar_nome_bucket, configurar_permissoes_bucket, client
+from app.utils.minio_client import corrigir_permissoes_todos_buckets, gerar_nome_bucket, verificar_e_configurar_permissoes, get_minio_client
 from app.api.empresas.repositories.empresa_repo import EmpresaRepository
 
 router = APIRouter(prefix="/api/cardapio/admin/minio", tags=["Admin - Cardápio - MinIO"], dependencies=[Depends(get_current_user)])
@@ -101,13 +101,23 @@ def verificar_bucket_empresa(empresa_id: int, db: Session = Depends(get_db)):
             }
         
         # Verifica status do bucket
+        client = get_minio_client()
         bucket_existe = client.bucket_exists(bucket_name)
         tem_politica = False
         
         if bucket_existe:
             try:
-                client.get_bucket_policy(bucket_name)
-                tem_politica = True
+                policy = client.get_bucket_policy(bucket_name)
+                if policy:
+                    import json
+                    policy_dict = json.loads(policy)
+                    statements = policy_dict.get("Statement", [])
+                    tem_politica = any(
+                        stmt.get("Effect") == "Allow" and 
+                        stmt.get("Principal") == "*" and
+                        "s3:GetObject" in stmt.get("Action", [])
+                        for stmt in statements
+                    )
             except:
                 tem_politica = False
         

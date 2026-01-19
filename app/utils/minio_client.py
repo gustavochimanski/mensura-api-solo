@@ -100,12 +100,69 @@ def configurar_permissoes_bucket(bucket_name: str) -> bool:
         }
         
         import json
-        client.set_bucket_policy(bucket_name, json.dumps(policy))
+        policy_json = json.dumps(policy)
+        client.set_bucket_policy(bucket_name, policy_json)
         logger.info(f"[MinIO] Permissões públicas configuradas com sucesso para bucket: {bucket_name}")
+        
+        # Verifica se a política foi aplicada corretamente
+        try:
+            policy_verificada = client.get_bucket_policy(bucket_name)
+            logger.info(f"[MinIO] Política verificada com sucesso para bucket: {bucket_name}")
+        except Exception as e:
+            logger.warning(f"[MinIO] Não foi possível verificar a política após configuração: {e}")
+        
         return True
         
     except Exception as e:
         logger.error(f"[MinIO] Erro ao configurar permissões do bucket {bucket_name}: {e}")
+        return False
+
+
+def verificar_e_configurar_permissoes(bucket_name: str) -> bool:
+    """
+    Verifica se o bucket tem permissões configuradas e configura se necessário.
+    Retorna True se as permissões estão configuradas, False caso contrário.
+    """
+    try:
+        client = get_minio_client()
+        
+        if not client.bucket_exists(bucket_name):
+            logger.warning(f"[MinIO] Bucket não existe: {bucket_name}")
+            return False
+        
+        # Tenta obter a política do bucket
+        try:
+            policy = client.get_bucket_policy(bucket_name)
+            if policy:
+                # Verifica se a política permite acesso público
+                import json
+                policy_dict = json.loads(policy)
+                statements = policy_dict.get("Statement", [])
+                
+                # Verifica se há uma statement que permite GetObject público
+                tem_permissao_publica = any(
+                    stmt.get("Effect") == "Allow" and 
+                    stmt.get("Principal") == "*" and
+                    "s3:GetObject" in stmt.get("Action", [])
+                    for stmt in statements
+                )
+                
+                if tem_permissao_publica:
+                    logger.info(f"[MinIO] Bucket {bucket_name} já possui permissões públicas configuradas")
+                    return True
+                else:
+                    logger.info(f"[MinIO] Bucket {bucket_name} tem política mas sem permissão pública, reconfigurando...")
+                    return configurar_permissoes_bucket(bucket_name)
+            else:
+                logger.info(f"[MinIO] Bucket {bucket_name} não tem política, configurando...")
+                return configurar_permissoes_bucket(bucket_name)
+        except Exception as e:
+            # Se não conseguir obter a política, assume que não tem e configura
+            logger.info(f"[MinIO] Não foi possível obter política do bucket {bucket_name} (erro: {e}), configurando permissões...")
+            return configurar_permissoes_bucket(bucket_name)
+            
+    except Exception as e:
+        logger.error(f"[MinIO] Erro ao verificar permissões do bucket {bucket_name}: {e}")
         return False
 
 
@@ -148,17 +205,12 @@ def upload_file_to_minio(
         logger.info(f"[MinIO] Criando bucket: {bucket_name}")
         client.make_bucket(bucket_name)
         # Configura permissões públicas automaticamente para novos buckets
-        configurar_permissoes_bucket(bucket_name)
+        if not configurar_permissoes_bucket(bucket_name):
+            logger.warning(f"[MinIO] Falha ao configurar permissões para novo bucket {bucket_name}, mas continuando...")
     else:
         logger.info(f"[MinIO] Bucket já existe: {bucket_name}")
-        # Verifica e configura permissões se necessário
-        try:
-            # Tenta acessar a política do bucket para verificar se já está configurada
-            client.get_bucket_policy(bucket_name)
-        except Exception:
-            # Se não conseguir obter a política, configura as permissões
-            logger.info(f"[MinIO] Configurando permissões para bucket existente: {bucket_name}")
-            configurar_permissoes_bucket(bucket_name)
+        # Sempre verifica e configura permissões se necessário
+        verificar_e_configurar_permissoes(bucket_name)
 
     # 3️⃣ Usa o arquivo original
     file_data = file.file

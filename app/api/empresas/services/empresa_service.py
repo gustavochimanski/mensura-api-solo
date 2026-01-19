@@ -12,7 +12,7 @@ from app.api.empresas.schemas.schema_empresa import (
     EmpresaUpdate,
     EmpresaCardapioLinkResponse,
 )
-from app.utils.minio_client import upload_file_to_minio, remover_arquivo_minio, gerar_nome_bucket, configurar_permissoes_bucket
+from app.utils.minio_client import upload_file_to_minio, remover_arquivo_minio, gerar_nome_bucket, verificar_e_configurar_permissoes
 
 
 from app.api.cadastros.models.association_tables import entregador_empresa, usuario_empresa
@@ -121,11 +121,12 @@ class EmpresaService:
                 try:
                     bucket_name = gerar_nome_bucket(empresa.cnpj)
                     if bucket_name:
-                        from app.utils.minio_client import client
+                        from app.utils.minio_client import get_minio_client
+                        client = get_minio_client()
                         if not client.bucket_exists(bucket_name):
                             client.make_bucket(bucket_name)
-                        # Configura permissões públicas
-                        configurar_permissoes_bucket(bucket_name)
+                        # Verifica e configura permissões públicas
+                        verificar_e_configurar_permissoes(bucket_name)
                 except Exception as e:
                     # Log do erro mas não falha a criação da empresa
                     from app.utils.logger import logger
@@ -219,13 +220,14 @@ class EmpresaService:
             try:
                 bucket_name = gerar_nome_bucket(empresa.cnpj)
                 if bucket_name:
-                    from app.utils.minio_client import client
+                    from app.utils.minio_client import get_minio_client
+                    client = get_minio_client()
                     # Verifica se bucket existe
                     if not client.bucket_exists(bucket_name):
                         client.make_bucket(bucket_name)
                     
-                    # Configura permissões públicas (sempre verifica na edição)
-                    configurar_permissoes_bucket(bucket_name)
+                    # Verifica e configura permissões públicas (sempre verifica na edição)
+                    verificar_e_configurar_permissoes(bucket_name)
             except Exception as e:
                 # Log do erro mas não falha a edição da empresa
                 from app.utils.logger import logger
