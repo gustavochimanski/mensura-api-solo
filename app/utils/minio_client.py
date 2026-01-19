@@ -27,12 +27,41 @@ MINIO_PUBLIC_ENDPOINT = os.getenv("MINIO_PUBLIC_ENDPOINT", "")
 MINIO_ROOT_USER = os.getenv("MINIO_ROOT_USER", "")
 MINIO_ROOT_PASSWORD = os.getenv("MINIO_ROOT_PASSWORD", "")
 
-client = Minio(
-    endpoint=MINIO_ENDPOINT,
-    access_key=MINIO_ROOT_USER,
-    secret_key=MINIO_ROOT_PASSWORD,
-    secure=MINIO_ENDPOINT.startswith("https")
-)
+def criar_cliente_minio():
+    """Cria um cliente MinIO com as configurações do ambiente."""
+    return Minio(
+        endpoint=MINIO_ENDPOINT,
+        access_key=MINIO_ROOT_USER,
+        secret_key=MINIO_ROOT_PASSWORD,
+        secure=MINIO_ENDPOINT.startswith("https")
+    )
+
+
+def verificar_conexao_minio() -> bool:
+    """
+    Verifica se o MinIO está acessível.
+    Retorna True se conseguir conectar, False caso contrário.
+    """
+    try:
+        client = criar_cliente_minio()
+        # Tenta listar buckets como teste de conexão
+        client.list_buckets()
+        return True
+    except Exception as e:
+        logger.warning(f"[MinIO] Não foi possível conectar ao MinIO em {MINIO_ENDPOINT}: {e}")
+        return False
+
+
+# Cliente MinIO global (lazy initialization)
+client = None
+
+
+def get_minio_client():
+    """Obtém o cliente MinIO, criando se necessário."""
+    global client
+    if client is None:
+        client = criar_cliente_minio()
+    return client
 
 
 def gerar_nome_bucket(cnpj: str) -> str:
@@ -49,6 +78,8 @@ def configurar_permissoes_bucket(bucket_name: str) -> bool:
     """
     try:
         logger.info(f"[MinIO] Configurando permissões públicas para bucket: {bucket_name}")
+        
+        client = get_minio_client()
         
         # Verifica se o bucket existe
         if not client.bucket_exists(bucket_name):
@@ -97,13 +128,21 @@ def upload_file_to_minio(
 
     logger.info(f"[MinIO] CNPJ encontrado: {cnpj}")
 
-    # 2️⃣ Bucket
+    # 2️⃣ Verifica conexão com MinIO
+    if not verificar_conexao_minio():
+        error_msg = f"MinIO não está acessível em {MINIO_ENDPOINT}. Verifique se o serviço está rodando e se as variáveis de ambiente estão configuradas corretamente."
+        logger.error(f"[MinIO] {error_msg}")
+        raise ConnectionError(error_msg)
+
+    # 3️⃣ Bucket
     bucket_name = gerar_nome_bucket(cnpj)
     if not bucket_name:
         logger.error(f"[MinIO] Falha ao gerar nome de bucket para CNPJ: {cnpj}")
         raise ValueError(f"Falha ao gerar nome de bucket para CNPJ: {cnpj}")
     
     logger.info(f"[MinIO] Nome do bucket: {bucket_name}")
+    
+    client = get_minio_client()
     
     if not client.bucket_exists(bucket_name):
         logger.info(f"[MinIO] Criando bucket: {bucket_name}")
@@ -205,6 +244,8 @@ def remover_arquivo_minio(file_url: str) -> bool:
         
         logger.info(f"[MinIO] Tentando remover - bucket: {bucket_name}, key: {object_key}")
 
+        client = get_minio_client()
+        
         # Verifica se o bucket existe antes de tentar remover
         if not client.bucket_exists(bucket_name):
             logger.warning(f"[MinIO] Bucket não existe: {bucket_name}")
@@ -234,6 +275,19 @@ def corrigir_permissoes_todos_buckets() -> dict:
     
     try:
         logger.info("[MinIO] Iniciando correção de permissões para todos os buckets")
+        
+        # Verifica conexão
+        if not verificar_conexao_minio():
+            logger.error(f"[MinIO] Não foi possível conectar ao MinIO em {MINIO_ENDPOINT}")
+            return {
+                "buckets_processados": 0,
+                "sucessos": 0,
+                "falhas": 0,
+                "detalhes": [],
+                "erro_geral": f"MinIO não está acessível em {MINIO_ENDPOINT}"
+            }
+        
+        client = get_minio_client()
         
         # Lista todos os buckets
         buckets = client.list_buckets()
