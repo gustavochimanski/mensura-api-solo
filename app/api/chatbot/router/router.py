@@ -142,6 +142,47 @@ def _is_pedido_intent(message_text: Optional[str]) -> bool:
     return False
 
 
+def _is_saudacao_intent(message_text: Optional[str]) -> bool:
+    """
+    Detecta se a mensagem é uma saudação/entrada ("oi", "olá", "menu", "cardápio", etc).
+    Usado para roteamento de fluxo (ex.: quando pedidos no WhatsApp estão desativados,
+    a saudação deve responder com o link/redirecionamento).
+    """
+    if not message_text:
+        return False
+    msg = str(message_text).lower().strip()
+    if not msg:
+        return False
+
+    saudacoes = {
+        "oi",
+        "ola",
+        "olá",
+        "oie",
+        "eai",
+        "e aí",
+        "bom dia",
+        "boa tarde",
+        "boa noite",
+        "menu",
+        "cardapio",
+        "cardápio",
+        "inicio",
+        "início",
+        "começar",
+        "comecar",
+        "start",
+    }
+    if msg in saudacoes:
+        return True
+
+    # Ex.: "oi tudo bem", "bom dia!"
+    if any(msg.startswith(s + " ") for s in ("oi", "ola", "olá", "bom dia", "boa tarde", "boa noite")):
+        return True
+
+    return False
+
+
 def _montar_mensagem_redirecionamento(db: Session, empresa_id: int, config) -> str:
     link_cardapio = "https://chatbot.mensuraapi.com.br"
     try:
@@ -1724,6 +1765,30 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
         # Você pode adicionar lógica para detectar se é venda ou suporte
         USE_SALES_HANDLER = aceita_pedidos_whatsapp  # Só usa vendas se permitido
 
+        # Intenções simples para roteamento rápido
+        is_saudacao = _is_saudacao_intent(message_text)
+
+        # Se não aceita pedidos pelo WhatsApp, uma saudação deve responder com o link/cardápio (sem cair em IA/vendas)
+        if not aceita_pedidos_whatsapp and is_saudacao:
+            resposta = _montar_mensagem_redirecionamento(db, empresa_id_int, config)
+            buttons = [
+                {"id": "chamar_atendente", "title": "Chamar um atendente"}
+            ]
+            await _send_whatsapp_and_log(
+                db=db,
+                phone_number=phone_number,
+                contact_name=contact_name,
+                empresa_id=empresa_id,
+                empresa_id_int=empresa_id_int,
+                user_message=message_text,
+                response_message=resposta,
+                prompt_key=prompt_key_support,
+                model=DEFAULT_MODEL,
+                message_id=message_id,
+                buttons=buttons
+            )
+            return
+
         # Se não aceita pedidos pelo WhatsApp, intercepta tentativas de pedido
         is_pedido_intent = _is_pedido_intent(message_text)
         if not aceita_pedidos_whatsapp and (button_id == "pedir_whatsapp" or is_pedido_intent):
@@ -1948,13 +2013,22 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 user_id=phone_number,
                 mensagem=message_text,
                 empresa_id=int(empresa_id) if empresa_id else 1,
-                emit_welcome_message=False,
+                emit_welcome_message=is_saudacao,
                 prompt_key=prompt_key_sales
             )
             
-            # Verifica se a resposta não está vazia
-            if not resposta or not resposta.strip():
-                return
+            # Se vier vazio, tenta novamente permitindo boas-vindas (mantém "inteligência", sem fallback hardcoded).
+            if not resposta or not str(resposta).strip():
+                resposta = await processar_mensagem_groq(
+                    db=db,
+                    user_id=phone_number,
+                    mensagem=message_text,
+                    empresa_id=int(empresa_id) if empresa_id else 1,
+                    emit_welcome_message=True,
+                    prompt_key=prompt_key_sales
+                )
+                if not resposta or not str(resposta).strip():
+                    return
 
             # Se não aceita pedidos, verifica se a resposta é de redirecionamento e adiciona botões
             buttons = None
@@ -2093,6 +2167,19 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
             emit_welcome_message=False,
             prompt_key=prompt_key
         )
+
+        # Se vier vazio, tenta novamente permitindo boas-vindas (sem fallback fixo).
+        if not ai_response or not str(ai_response).strip():
+            ai_response = await processar_mensagem_groq(
+                db=db,
+                user_id=phone_number,
+                mensagem=message_text,
+                empresa_id=empresa_id_int,
+                emit_welcome_message=True,
+                prompt_key=prompt_key
+            )
+            if not ai_response or not str(ai_response).strip():
+                return
 
         # 6. Envia resposta via WhatsApp
         notifier = OrderNotification()
