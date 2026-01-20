@@ -3215,11 +3215,17 @@ REGRA PARA COMPLEMENTOS:
                                                 dados['aguardando_complemento'] = True
                                                 self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
                                             else:
-                                                # Opcionais - mostra direto sem pedir SIM
+                                                # Opcionais - pergunta de forma compacta e rápida
                                                 resposta_limpa = resposta_limpa.replace("Quer mais algo?", "").replace("Quer mais algo? 😊", "").strip()
-                                                # Mostra os complementos opcionais disponíveis
-                                                resposta_limpa += self.ingredientes_service.formatar_complementos_para_chat(complementos, nome_produto)
-                                                resposta_limpa += "\n\n_Digite o que deseja adicionar ou continue seu pedido!_ 😊"
+                                                # Cria lista resumida de complementos disponíveis
+                                                nomes_complementos = [comp.get('nome', 'Complemento') for comp in complementos]
+                                                if len(nomes_complementos) == 1:
+                                                    resposta_limpa += f"\n\n💬 Quer adicionar *{nomes_complementos[0]}*? (Digite o que deseja ou 'não' para continuar)"
+                                                elif len(nomes_complementos) <= 3:
+                                                    complementos_txt = ", ".join([f"*{nome}*" for nome in nomes_complementos[:-1]])
+                                                    resposta_limpa += f"\n\n💬 Quer adicionar algum complemento? Temos {complementos_txt} ou *{nomes_complementos[-1]}*.\n(Digite o que deseja ou 'não' para continuar)"
+                                                else:
+                                                    resposta_limpa += f"\n\n💬 Quer adicionar algum complemento? Temos {len(complementos)} opções disponíveis.\n(Digite o que deseja ou 'não' para continuar)"
                                                 dados['complementos_disponiveis'] = complementos
                                                 dados['aguardando_complemento'] = True
                                                 dados['ultimo_produto_com_complementos'] = nome_produto
@@ -3525,7 +3531,17 @@ REGRA PARA COMPLEMENTOS:
                                 dados['complementos_disponiveis'] = complementos
                                 dados['aguardando_complemento'] = True
                             else:
-                                resp += "\n\nQuer mais alguma coisa? 😊"
+                                # Complementos opcionais - pergunta de forma compacta
+                                nomes_complementos = [comp.get('nome', 'Complemento') for comp in complementos]
+                                if len(nomes_complementos) == 1:
+                                    resp += f"\n\n💬 Quer adicionar *{nomes_complementos[0]}*? (Digite o que deseja ou 'não' para continuar)"
+                                elif len(nomes_complementos) <= 3:
+                                    complementos_txt = ", ".join([f"*{nome}*" for nome in nomes_complementos[:-1]])
+                                    resp += f"\n\n💬 Quer adicionar algum complemento? Temos {complementos_txt} ou *{nomes_complementos[-1]}*.\n(Digite o que deseja ou 'não' para continuar)"
+                                else:
+                                    resp += f"\n\n💬 Quer adicionar algum complemento? Temos {len(complementos)} opções disponíveis.\n(Digite o que deseja ou 'não' para continuar)"
+                                dados['complementos_disponiveis'] = complementos
+                                dados['aguardando_complemento'] = True
                         else:
                             resp += "\n\nQuer mais alguma coisa? 😊"
                     except Exception as e:
@@ -6980,9 +6996,17 @@ Responda de forma natural e curta:"""
                             # Marca que está aguardando a escolha do complemento obrigatório
                             dados['aguardando_complemento'] = True
                         else:
-                            # Se não for obrigatório, mostra os complementos direto
-                            msg_resposta += self.ingredientes_service.formatar_complementos_para_chat(complementos, produto['nome'])
-                            msg_resposta += "\n\n_Digite o que deseja adicionar ou continue seu pedido!_ 😊"
+                            # Se não for obrigatório, pergunta de forma compacta e rápida
+                            # Cria lista resumida de complementos disponíveis
+                            nomes_complementos = [comp.get('nome', 'Complemento') for comp in complementos]
+                            if len(nomes_complementos) == 1:
+                                msg_resposta += f"\n\n💬 Quer adicionar *{nomes_complementos[0]}*? (Digite o que deseja ou 'não' para continuar)"
+                            elif len(nomes_complementos) <= 3:
+                                complementos_txt = ", ".join([f"*{nome}*" for nome in nomes_complementos[:-1]])
+                                msg_resposta += f"\n\n💬 Quer adicionar algum complemento? Temos {complementos_txt} ou *{nomes_complementos[-1]}*.\n(Digite o que deseja ou 'não' para continuar)"
+                            else:
+                                msg_resposta += f"\n\n💬 Quer adicionar algum complemento? Temos {len(complementos)} opções disponíveis.\n(Digite o que deseja ou 'não' para continuar)"
+                            # Salva complementos para quando cliente responder
                             dados['aguardando_complemento'] = True
 
                         # Salva produto atual para referência dos complementos
