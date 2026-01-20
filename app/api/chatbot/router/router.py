@@ -1802,9 +1802,19 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
             # além de enviar as notificações WebSocket necessárias
             from ..core.groq_sales_handler import processar_mensagem_groq
 
-            # Se for nova sessão (sem histórico ou >16h) E a loja estiver aberta (ou horários não configurados), envia mensagem com botões
-            # Se esta_aberta for False, não envia boas-vindas (já foi enviada mensagem de horários)
-            if is_new_session and esta_aberta is not False:
+            # Se for nova sessão (sem histórico ou >16h) E a loja estiver aberta (ou horários não configurados), envia mensagem com botões.
+            # Se esta_aberta for False, não envia boas-vindas (já foi enviada mensagem de horários).
+            #
+            # BUGFIX: evitar mandar "boas-vindas" indevidas após pausar/despausar (ou quando a empresa_id do webhook falha e cai no fallback),
+            # situação em que `conversations` pode vir vazio para a empresa atual, mas o número já tem histórico no sistema.
+            #
+            # Observação: não queremos bloquear o "boas-vindas" legítimo de "nova sessão após 16h";
+            # só suprimimos quando NÃO encontramos conversa para a empresa atual (provável mismatch de empresa/telefone),
+            # mas o número já tem histórico em alguma conversa.
+            no_conversations_for_empresa = not conversations
+            has_any_conversation_for_phone = bool(chatbot_db.get_conversations_by_user(db, user_id))
+            should_suppress_welcome = no_conversations_for_empresa and has_any_conversation_for_phone
+            if is_new_session and esta_aberta is not False and not should_suppress_welcome:
                 # Mensagem "antiga" de boas-vindas (com nome/link) + botões
                 handler = GroqSalesHandler(db, empresa_id_int, prompt_key=prompt_key_sales)
                 mensagem_boas_vindas = handler._gerar_mensagem_boas_vindas_conversacional()

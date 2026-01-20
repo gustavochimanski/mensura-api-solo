@@ -64,6 +64,9 @@ from app.api.chatbot.core.config_whatsapp import load_whatsapp_config, format_ph
 from app.api.chatbot.core.notifications import OrderNotification
 from app.utils.logger import logger
 from app.utils.database_utils import now_trimmed
+from app.api.pedidos.utils.entregador_notification_debouncer import (
+    schedule_entregador_rotas_notification,
+)
 
 from app.api.catalogo.models.model_receita import ReceitaModel
 from app.api.catalogo.models.model_combo import ComboModel
@@ -1182,7 +1185,11 @@ class PedidoService:
         self.db.commit()
         self.db.refresh(pedido)
         if novo_status == PedidoStatusEnum.S and pedido.entregador_id:
-            self._notificar_entregador_rotas(pedido)
+            schedule_entregador_rotas_notification(
+                empresa_id=int(pedido.empresa_id),
+                entregador_id=int(pedido.entregador_id),
+                pedido_id=int(pedido.id),
+            )
         return self._pedido_to_response(pedido)
 
     def editar_pedido_parcial(self, pedido_id: int, payload: EditarPedidoRequest) -> PedidoResponse:
@@ -1511,7 +1518,11 @@ class PedidoService:
             self.db.refresh(pedido)
             logger.info(f"[vincular_entregador] Entregador {entregador_id} vinculado ao pedido {pedido_id}")
             # Sempre notifica o entregador quando é vinculado, independente do status
-            self._notificar_entregador_rotas(pedido)
+            schedule_entregador_rotas_notification(
+                empresa_id=int(pedido.empresa_id),
+                entregador_id=int(pedido.entregador_id),
+                pedido_id=int(pedido.id),
+            )
             return self._pedido_to_response(pedido)
         except Exception as exc:
             self.db.rollback()
@@ -1695,7 +1706,12 @@ class PedidoService:
         titulo = f"Rotas de entrega ({quantidade})"
         return titulo, mensagem
 
-    def _notificar_entregador_rotas(self, pedido: PedidoUnificadoModel) -> None:
+    def _notificar_entregador_rotas(
+        self,
+        pedido: PedidoUnificadoModel,
+        *,
+        extra_pedidos: Optional[list[PedidoUnificadoModel]] = None,
+    ) -> None:
         if not pedido or not getattr(pedido, "entregador_id", None):
             return
 
@@ -1731,11 +1747,27 @@ class PedidoService:
                 telefone[2:4] if len(telefone) >= 4 else "N/A"
             )
 
-            pedidos_em_rota = self.repo.list_pedidos_em_rota_por_entregador(entregador.id)
-            # Garante que o pedido atual está incluído na notificação, mesmo que ainda não esteja com status "S"
-            pedido_ids_em_rota = {p.id for p in pedidos_em_rota}
-            if pedido.id not in pedido_ids_em_rota and pedido.tipo_entrega == TipoEntrega.DELIVERY.value:
-                pedidos_em_rota = list(pedidos_em_rota) + [pedido]
+            pedidos_em_rota = list(self.repo.list_pedidos_em_rota_por_entregador(entregador.id) or [])
+
+            # Garante que o pedido "âncora" esteja incluído, mesmo que ainda não esteja com status "S".
+            pedido_ids = {p.id for p in pedidos_em_rota}
+            if pedido.id not in pedido_ids and pedido.tipo_entrega == TipoEntrega.DELIVERY.value:
+                pedidos_em_rota.append(pedido)
+                pedido_ids.add(pedido.id)
+
+            # Inclui pedidos extras (ex.: múltiplas vinculações em sequência com debounce).
+            for extra in extra_pedidos or []:
+                if not extra:
+                    continue
+                if getattr(extra, "id", None) in pedido_ids:
+                    continue
+                if getattr(extra, "tipo_entrega", None) != TipoEntrega.DELIVERY.value:
+                    continue
+                # Mantém apenas pedidos do mesmo entregador (segurança).
+                if getattr(extra, "entregador_id", None) != entregador.id:
+                    continue
+                pedidos_em_rota.append(extra)
+                pedido_ids.add(extra.id)
             
             if not pedidos_em_rota:
                 logger.info(

@@ -44,11 +44,12 @@ def corrigir_bucket_empresa(empresa_id: int, db: Session = Depends(get_db)):
             raise HTTPException(status_code=400, detail="Falha ao gerar nome do bucket")
         
         # Verifica se bucket existe
+        client = get_minio_client()
         if not client.bucket_exists(bucket_name):
             client.make_bucket(bucket_name)
         
-        # Configura permissões
-        sucesso = configurar_permissoes_bucket(bucket_name)
+        # Verifica e configura permissões
+        sucesso = verificar_e_configurar_permissoes(bucket_name)
         
         return {
             "empresa_id": empresa_id,
