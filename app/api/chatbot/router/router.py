@@ -1729,6 +1729,14 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
 
         # VERIFICA SE O BOT ESTÁ ATIVO PARA ESTE NÚMERO
         if not chatbot_db.is_bot_active_for_phone(db, phone_number):
+            # Log explícito: este é um "return silencioso" (não responde ao cliente).
+            try:
+                status_info = chatbot_db.get_bot_status(db, phone_number) or {}
+            except Exception:
+                status_info = {}
+            logger.info(
+                f"⏸️ Bot pausado para o número - phone={phone_number}, empresa_id={empresa_id_int}, status={status_info}"
+            )
             # Salva a mensagem no histórico mesmo pausado (para ver no preview)
             if conversations:
                 chatbot_db.create_message(
