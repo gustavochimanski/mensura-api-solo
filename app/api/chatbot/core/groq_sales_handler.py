@@ -976,7 +976,13 @@ class GroqSalesHandler:
 
         return None
 
-    def _interpretar_intencao_regras(self, mensagem: str, produtos: List[Dict], carrinho: List[Dict]) -> Optional[Dict[str, Any]]:
+    def _interpretar_intencao_regras(
+        self,
+        mensagem: str,
+        produtos: List[Dict],
+        carrinho: List[Dict],
+        dados: Optional[dict] = None,
+    ) -> Optional[Dict[str, Any]]:
         """
         Interpretação de intenção usando regras simples (fallback quando Groq não disponível)
         Retorna None se não conseguir interpretar, ou dict com funcao e params
@@ -984,6 +990,111 @@ class GroqSalesHandler:
         import re
         msg = self._normalizar_mensagem(mensagem)
         print(f"🔍 [Regras] Analisando mensagem normalizada: '{msg}' (original: '{mensagem}')")
+
+        def _parse_quantidade_token(token: Optional[str]) -> int:
+            if not token:
+                return 1
+            t = self._normalizar_mensagem(str(token))
+            if not t:
+                return 1
+            if t.isdigit():
+                return max(int(t), 1)
+            mapa = {
+                "um": 1,
+                "uma": 1,
+                "dois": 2,
+                "duas": 2,
+                "doise": 2,  # erro comum de digitação
+                "tres": 3,
+                "três": 3,
+                "quatro": 4,
+                "cinco": 5,
+                "seis": 6,
+                "sete": 7,
+                "oito": 8,
+                "nove": 9,
+                "dez": 10,
+            }
+            if t in mapa:
+                return mapa[t]
+            # Heurística leve para "doi..." (ex: doise, doiss)
+            if t.startswith("doi"):
+                return 2
+            return 1
+
+        def _limpar_termos_finais_preenchimento(texto: str) -> str:
+            # Remove termos como "então", "aí", "por favor" no final do pedido
+            if not texto:
+                return ""
+            t = texto.strip()
+            stop_finais = {
+                "entao",
+                "então",
+                "ai",
+                "aí",
+                "pf",
+                "pfv",
+                "por favor",
+                "porfavor",
+                "porfav",
+                "ok",
+                "blz",
+                "beleza",
+                "valeu",
+                "obg",
+                "obrigado",
+                "obrigada",
+                "ta",
+                "tá",
+            }
+            # normaliza espaços e remove repetidamente no final
+            while True:
+                t_norm = self._normalizar_mensagem(t)
+                if not t_norm:
+                    return ""
+                tokens = t_norm.split()
+                if not tokens:
+                    return ""
+                # tenta remover sufixos multi-palavra
+                if t_norm.endswith("por favor"):
+                    t = re.sub(r"\s*por\s+favor\s*$", "", t, flags=re.IGNORECASE).strip()
+                    continue
+                last = tokens[-1]
+                if last in stop_finais:
+                    t = re.sub(rf"\s*{re.escape(last)}\s*$", "", t, flags=re.IGNORECASE).strip()
+                    continue
+                return t.strip()
+
+        def _obter_ultimo_produto_contexto() -> Optional[str]:
+            # Prioridade: pedido_contexto (último produto mencionado/consultado) → ultimo_produto_adicionado → carrinho
+            if dados:
+                pedido_contexto = dados.get("pedido_contexto") or []
+                if pedido_contexto and isinstance(pedido_contexto, list):
+                    ultimo = pedido_contexto[-1] or {}
+                    if isinstance(ultimo, dict):
+                        nome = (ultimo.get("nome") or "").strip()
+                        if nome:
+                            return nome
+
+                ultimo_produto_adicionado = dados.get("ultimo_produto_adicionado")
+                if ultimo_produto_adicionado:
+                    if isinstance(ultimo_produto_adicionado, dict):
+                        nome = (ultimo_produto_adicionado.get("nome") or "").strip()
+                        if nome:
+                            return nome
+                    else:
+                        nome = str(ultimo_produto_adicionado).strip()
+                        if nome:
+                            return nome
+
+            if carrinho and isinstance(carrinho, list):
+                try:
+                    nome = (carrinho[-1].get("nome") or "").strip()
+                    if nome:
+                        return nome
+                except Exception:
+                    pass
+            return None
 
         # CHAMAR ATENDENTE - DEVE vir PRIMEIRO, antes de qualquer detecção de pedido!
         if re.search(r'(chamar\s+atendente|quero\s+falar\s+com\s+(algu[eé]m|atendente|humano)|preciso\s+de\s+(um\s+)?(humano|atendente)|atendente\s+humano|quero\s+atendimento\s+humano|falar\s+com\s+atendente|ligar\s+atendente|chama\s+(algu[eé]m|atendente)\s+para\s+mi)', msg, re.IGNORECASE):
@@ -1128,20 +1239,26 @@ class GroqSalesHandler:
         # Adicionar produto (padrões: "quero X", "me ve X", "manda X", "X por favor")
         # IMPORTANTE: Verificar ANTES da personalização para capturar "quero X sem Y"
         patterns_pedido = [
-            r'(?:quero|qro)\s+(?:uma?|duas?|dois|\d+)?\s*(.+)',  # "quero um X" ou "quero X"
-            r'(?:me\s+)?(?:ve|vê|manda|traz)\s+(?:uma?|duas?|dois|\d+)?\s*(.+)',
-            r'(?:uma?|duas?|dois|\d+)\s+(.+?)(?:\s+por\s+favor)?$',
-            r'(?:pode\s+ser|vou\s+querer)\s+(?:uma?|duas?|dois|\d+)?\s*(.+)',
+            # (regex, group_qtd, group_produto)
+            (r'(?:quero|qro)\s+(?:(uma?|um|duas?|dois|doise|tres|tr[eê]s|\d+)\s*)?(.+)', 1, 2),
+            (r'(?:me\s+)?(?:ve|vê|manda|traz)\s+(?:(uma?|um|duas?|dois|doise|tres|tr[eê]s|\d+)\s*)?(.+)', 1, 2),
+            (r'(?:(uma?|um|duas?|dois|doise|tres|tr[eê]s|\d+))\s+(.+?)(?:\s+por\s+favor)?$', 1, 2),
+            (r'(?:pode\s+ser|vou\s+querer)\s+(?:(uma?|um|duas?|dois|doise|tres|tr[eê]s|\d+)\s*)?(.+)', 1, 2),
         ]
 
-        for pattern in patterns_pedido:
+        for pattern, qtd_group, produto_group in patterns_pedido:
             match = re.search(pattern, msg)
             if match:
-                produto_completo = match.group(1).strip()
-                # Extrai quantidade se houver
+                qtd_token = (match.group(qtd_group) or "").strip() if match.lastindex and match.lastindex >= qtd_group else ""
+                produto_completo = (match.group(produto_group) or "").strip() if match.lastindex and match.lastindex >= produto_group else ""
+
+                # Quantidade pode vir como "2", "dois", "duas" etc.
+                quantidade = _parse_quantidade_token(qtd_token)
+
+                # Fallback: casos tipo "2x bacon" dentro do produto (mesmo sem qtd_token)
                 qtd_match = re.search(r'^(\d+)\s*x?\s*', produto_completo)
-                quantidade = int(qtd_match.group(1)) if qtd_match else 1
                 if qtd_match:
+                    quantidade = max(int(qtd_match.group(1)), 1)
                     produto_completo = produto_completo[qtd_match.end():].strip()
                 
                 # Verifica se tem personalização junto (sem X, com X, mais X)
@@ -1161,8 +1278,15 @@ class GroqSalesHandler:
                     personalizacao = {"acao": "adicionar_extra", "item": match_extra.group(1)}
                     produto_limpo = re.sub(r'\s+(?:com|mais|extra)\s+\w+', '', produto_completo, flags=re.IGNORECASE).strip()
                 
+                produto_limpo = _limpar_termos_finais_preenchimento(produto_limpo)
+                # Se ficou algo do tipo "então/ai/pf", usa contexto do último produto mencionado
+                if not produto_limpo or len(self._normalizar_mensagem(produto_limpo)) < 2:
+                    ultimo = _obter_ultimo_produto_contexto()
+                    if ultimo:
+                        produto_limpo = ultimo
+
                 # Retorna adicionar produto com personalização se houver
-                params = {"produto_busca": produto_limpo, "quantidade": quantidade}
+                params = {"produto_busca": produto_limpo, "quantidade": max(int(quantidade), 1)}
                 if personalizacao:
                     params["personalizacao"] = personalizacao
                     print(f"   🎯 Detectado produto + personalização: {produto_limpo} {personalizacao}")
@@ -1205,7 +1329,10 @@ class GroqSalesHandler:
             palavras_ignorar = [
                 'sim', 'ok', 'obrigado', 'obrigada', 'valeu', 'blz', 'beleza', 'certo', 'ta', 'tá',
                 'nao', 'não', 'qual', 'quais', 'que', 'como', 'onde', 'quando', 'porque', 'por que',
-                'so', 'so isso', 'só', 'só isso', 'isso', 'somente', 'apenas', 'nada', 'nada mais'
+                'so', 'so isso', 'só', 'só isso', 'isso', 'somente', 'apenas', 'nada', 'nada mais',
+                # evita interpretar quantidade/enchimento como produto
+                'um', 'uma', 'dois', 'duas', 'doise', 'tres', 'três', 'quatro', 'cinco', 'seis', 'sete', 'oito', 'nove', 'dez',
+                'entao', 'então', 'ai', 'aí', 'pf', 'pfv', 'por favor'
             ]
             # Verifica se não é uma pergunta (termina com ?)
             if msg.endswith('?'):
@@ -1582,7 +1709,7 @@ class GroqSalesHandler:
         pedido_contexto = dados.get('pedido_contexto', [])
         
         # VERIFICAÇÃO PRIORITÁRIA: Se detectar finalizar_pedido, segue fluxo estruturado
-        resultado_finalizar = self._interpretar_intencao_regras(mensagem, todos_produtos, carrinho)
+        resultado_finalizar = self._interpretar_intencao_regras(mensagem, todos_produtos, carrinho, dados)
         if resultado_finalizar and resultado_finalizar.get("funcao") == "finalizar_pedido":
             # Se tem itens no carrinho ou no pedido_contexto, inicia fluxo de finalização
             if carrinho or pedido_contexto:
@@ -1874,7 +2001,7 @@ class GroqSalesHandler:
         import re
         
         # 1. Tenta detectar adicionar produto
-        resultado_adicionar = self._interpretar_intencao_regras(mensagem, todos_produtos, carrinho)
+        resultado_adicionar = self._interpretar_intencao_regras(mensagem, todos_produtos, carrinho, dados)
         if resultado_adicionar:
             funcao_detectada = resultado_adicionar.get("funcao")
             if funcao_detectada == "adicionar_produto":
@@ -1999,7 +2126,7 @@ class GroqSalesHandler:
                 return resposta_final
         
         # Processamento normal de uma única ação
-        resultado_regras = self._interpretar_intencao_regras(mensagem, todos_produtos, carrinho)
+        resultado_regras = self._interpretar_intencao_regras(mensagem, todos_produtos, carrinho, dados)
         
         if resultado_regras:
             funcao = resultado_regras.get("funcao")
@@ -3071,13 +3198,24 @@ REGRA PARA COMPLEMENTOS:
 
         except Exception as e:
             print(f"❌ Erro na conversa IA: {e}")
-            # Fallback inteligente - analisa a mensagem e responde de forma natural
-            return await self._fallback_resposta_inteligente(mensagem, dados, user_id)
+            # Verifica se o erro é por falta de GROQ_API_KEY
+            is_api_key_missing = "GROQ_API_KEY não configurada" in str(e) or not GROQ_API_KEY or not GROQ_API_KEY.strip()
+            
+            if is_api_key_missing:
+                # Se a IA não está disponível, usa fallback mas não desativa o chatbot
+                return await self._fallback_resposta_inteligente(mensagem, dados, user_id, skip_desativar=True)
+            else:
+                # Fallback inteligente - analisa a mensagem e responde de forma natural
+                return await self._fallback_resposta_inteligente(mensagem, dados, user_id)
 
-    async def _fallback_resposta_inteligente(self, mensagem: str, dados: dict, user_id: str = None) -> str:
+    async def _fallback_resposta_inteligente(self, mensagem: str, dados: dict, user_id: str = None, skip_desativar: bool = False) -> str:
         """
         Fallback quando a IA falha - analisa a mensagem e toma uma decisão inteligente.
         Nunca retorna erro genérico.
+        
+        Args:
+            skip_desativar: Se True, não desativa o chatbot mesmo quando não entende a mensagem
+                           (útil quando a IA não está disponível por falta de API key)
         """
         msg_lower = mensagem.lower().strip()
         pedido_contexto = dados.get('pedido_contexto', [])
@@ -3481,7 +3619,12 @@ REGRA PARA COMPLEMENTOS:
             total = sum((i['preco'] + i.get('preco_adicionais', 0)) * i.get('quantidade', 1) for i in pedido_contexto)
             return f"Entendi! Você já tem R$ {total:.2f} no pedido. Quer adicionar mais alguma coisa ou posso fechar? 😊"
 
-        # Se chegou aqui, não conseguiu entender - chama função de não entendimento
+        # Se chegou aqui, não conseguiu entender
+        # Se skip_desativar=True (IA não disponível), responde de forma genérica sem desativar
+        if skip_desativar:
+            return "Desculpe, não consegui entender completamente sua mensagem. 😔\n\nVocê pode:\n• Ver nosso cardápio\n• Fazer um pedido\n• Tirar dúvidas sobre produtos\n\nO que você gostaria? 😊"
+        
+        # Caso contrário, chama função de não entendimento (desativa chatbot)
         return await self._nao_entendeu_mensagem(user_id, mensagem, dados)
 
     def _formatar_cardapio_para_ia(self, produtos: List[Dict]) -> str:
@@ -6051,14 +6194,7 @@ Responda de forma natural e curta:"""
                 msg = f"*{nome_produto}* - R$ {produto['preco']:.2f}\n\n"
                 msg += "📋 *Ingredientes:*\n"
                 for ing in ingredientes:
-                    quantidade_str = ""
-                    if ing.get('quantidade') and ing.get('quantidade') > 0:
-                        unidade = ing.get('unidade', '')
-                        if unidade:
-                            quantidade_str = f" ({ing['quantidade']} {unidade})"
-                        else:
-                            quantidade_str = f" ({ing['quantidade']})"
-                    msg += f"• {ing['nome']}{quantidade_str}\n"
+                    msg += f"• {ing['nome']}\n"
 
                 if adicionais:
                     msg += "\n➕ *Adicionais disponíveis:*\n"
