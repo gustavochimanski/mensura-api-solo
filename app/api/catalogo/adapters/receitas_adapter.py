@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from typing import List
+from typing import List, Optional
 from sqlalchemy.orm import Session
 
 from app.api.catalogo.contracts.receitas_contract import (
     IReceitasContract,
     ProdutoIngredienteDTO,
     ProdutoAdicionalDTO,
+    ReceitaMiniDTO,
 )
 from app.api.catalogo.repositories.repo_receitas import ReceitasRepository
 
@@ -39,4 +40,18 @@ class ReceitasAdapter(IReceitasContract):
             )
             for i in itens
         ]
+
+    def obter_receita_por_id(self, receita_id: int) -> Optional[ReceitaMiniDTO]:
+        """Obtém uma receita por ID."""
+        receita = self.repo.get_receita_by_id(receita_id)
+        if not receita or not receita.ativo:
+            return None
+        return ReceitaMiniDTO(
+            id=receita.id,
+            empresa_id=receita.empresa_id,
+            nome=receita.nome,
+            preco_venda=receita.preco_venda,
+            ativo=receita.ativo,
+            disponivel=receita.disponivel,
+        )
 

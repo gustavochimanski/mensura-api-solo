@@ -6963,6 +6963,23 @@ Responda de forma natural e curta:"""
                 # Cliente quer chamar atendente humano
                 # Envia notificação para a empresa
                 await self._enviar_notificacao_chamar_atendente(user_id, dados)
+                
+                # PAUSA O CHATBOT PARA ESTE CLIENTE
+                try:
+                    from . import database as chatbot_db
+                    chatbot_db.set_bot_status(
+                        db=self.db,
+                        phone_number=user_id,
+                        is_active=False,
+                        paused_by="cliente_chamou_atendente",
+                        empresa_id=self.empresa_id
+                    )
+                    print(f"⏸️ Chatbot pausado para cliente {user_id} (chamou atendente via IA)")
+                except Exception as e:
+                    print(f"❌ Erro ao pausar chatbot: {e}")
+                    import traceback
+                    traceback.print_exc()
+                
                 return "✅ *Solicitação enviada!*\n\nNossa equipe foi notificada e entrará em contato com você em breve.\n\nEnquanto isso, posso te ajudar com alguma dúvida? 😊"
 
             # INFORMAR SOBRE ESTABELECIMENTO

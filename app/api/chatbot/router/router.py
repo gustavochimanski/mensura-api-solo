@@ -2019,6 +2019,24 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                         cliente_nome=contact_name,
                         tipo_solicitacao="chamar_atendente"
                     )
+                    
+                    # PAUSA O CHATBOT PARA ESTE CLIENTE
+                    try:
+                        chatbot_db.set_bot_status(
+                            db=db,
+                            phone_number=phone_number,
+                            is_active=False,
+                            paused_by="cliente_chamou_atendente",
+                            empresa_id=empresa_id_int
+                        )
+                        import logging
+                        logger = logging.getLogger(__name__)
+                        logger.info(f"⏸️ Chatbot pausado para cliente {phone_number} (chamou atendente)")
+                    except Exception as e:
+                        import logging
+                        logger = logging.getLogger(__name__)
+                        logger.error(f"❌ Erro ao pausar chatbot: {e}", exc_info=True)
+                    
                     resposta = "✅ *Solicitação enviada!*\n\nNossa equipe foi notificada e entrará em contato com você em breve.\n\nEnquanto isso, posso te ajudar com alguma dúvida? 😊"
                 
                 # Envia a resposta
