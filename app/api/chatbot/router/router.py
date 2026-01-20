@@ -2172,15 +2172,27 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 itens_formatados = []
                 if pedido_completo and pedido_completo.itens:
                     for item in pedido_completo.itens:
-                        # Usa o método get_descricao_item() ou produto_descricao_snapshot
-                        nome_item = item.get_descricao_item() if hasattr(item, 'get_descricao_item') else (
-                            item.produto_descricao_snapshot or 
-                            (item.produto.descricao if hasattr(item, 'produto') and item.produto else None) or
-                            (item.receita.nome if hasattr(item, 'receita') and item.receita else None) or
-                            (item.combo.titulo if hasattr(item, 'combo') and item.combo else None) or
-                            item.produto_cod_barras or 
-                            "Item"
-                        )
+                        # Usa o método get_descricao_item() para obter o nome do item
+                        try:
+                            if hasattr(item, 'get_descricao_item'):
+                                nome_item = item.get_descricao_item()
+                            elif hasattr(item, 'produto_descricao_snapshot') and item.produto_descricao_snapshot:
+                                nome_item = item.produto_descricao_snapshot
+                            elif hasattr(item, 'produto') and item.produto:
+                                nome_item = getattr(item.produto, 'descricao', None) or getattr(item.produto, 'nome', None) or "Produto"
+                            elif hasattr(item, 'combo') and item.combo:
+                                nome_item = getattr(item.combo, 'descricao', None) or getattr(item.combo, 'titulo', None) or "Combo"
+                            elif hasattr(item, 'receita') and item.receita:
+                                nome_item = getattr(item.receita, 'descricao', None) or getattr(item.receita, 'nome', None) or "Receita"
+                            elif hasattr(item, 'produto_cod_barras') and item.produto_cod_barras:
+                                nome_item = item.produto_cod_barras
+                            else:
+                                nome_item = "Item"
+                        except Exception as e:
+                            import logging
+                            logger = logging.getLogger(__name__)
+                            logger.error(f"Erro ao obter nome do item: {e}", exc_info=True)
+                            nome_item = "Item"
                         quantidade = item.quantidade or 1
                         preco_unit = float(item.preco_unitario) if item.preco_unitario else 0.0
                         preco_total = float(item.preco_total) if item.preco_total else (preco_unit * quantidade)
@@ -2275,7 +2287,9 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                     ]
 
             # Envia resposta via WhatsApp
-            notifier = OrderNotification()
+            # Garante que OrderNotification está disponível no escopo
+            from ..core.notifications import OrderNotification as OrderNotificationClass
+            notifier = OrderNotificationClass()
             if buttons:
                 result = await notifier.send_whatsapp_message_with_buttons(
                     phone_number, 
