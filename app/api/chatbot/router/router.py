@@ -1598,122 +1598,83 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
         address_service = ChatbotAddressService(db, empresa_id_int)
         cliente = address_service.get_cliente_by_telefone(phone_number)
         cliente_id = None
+        precisa_cadastrar = False
         
         if cliente:
             cliente_id = cliente.get('id')
             nome_cliente = cliente.get('nome', '')
             # Se cliente existe mas tem nome genérico, precisa cadastrar nome
             if nome_cliente in ['Cliente WhatsApp', 'Cliente', ''] or len(nome_cliente.split()) < 2:
-                cliente = None  # Trata como não cadastrado para pedir nome
+                precisa_cadastrar = True
+        else:
+            # Cliente não existe - precisa cadastrar
+            precisa_cadastrar = True
         
-        # Se cliente não existe ou tem nome genérico, verifica se já está aguardando nome
-        if not cliente:
+        # Se precisa cadastrar, verifica se já está aguardando nome
+        if precisa_cadastrar:
             conversations = chatbot_db.get_conversations_by_user(db, user_id, empresa_id_int)
             
+            # Verifica se já está no estado de cadastro de nome
+            estado_atual = None
             if conversations:
-                # Verifica estado da conversa
                 from sqlalchemy import text
                 estado_query = text("""
-                    SELECT state_data
+                    SELECT metadata->>'sales_state' as estado
                     FROM chatbot.conversations
                     WHERE id = :conversation_id
                     LIMIT 1
                 """)
-                result = db.execute(estado_query, {"conversation_id": conversations[0]['id']})
-                row = result.fetchone()
-                
-                if row and row[0]:
-                    import json
-                    try:
-                        state_data = json.loads(row[0]) if isinstance(row[0], str) else row[0]
-                        estado_atual = state_data.get('estado', '')
-                        
-                        # Se já está aguardando nome, processa normalmente (o handler vai tratar)
-                        if estado_atual == 'cadastro_nome':
-                            pass  # Continua processamento normal
-                        else:
-                            # Primeira vez que detecta cliente não cadastrado - pergunta nome
-                            from app.api.chatbot.core.groq_sales_handler import GroqSalesHandler, STATE_CADASTRO_NOME
-                            
-                            # Cria handler temporário para processar cadastro
-                            handler = GroqSalesHandler(db, empresa_id_int, emit_welcome_message=False)
-                            
-                            # Salva estado de cadastro
-                            dados_cadastro = state_data.copy() if state_data else {}
-                            dados_cadastro['cadastro_rapido'] = True
-                            handler._salvar_estado_conversa(user_id, STATE_CADASTRO_NOME, dados_cadastro)
-                            
-                            # Retorna mensagem pedindo nome
-                            mensagem_cadastro = "👋 *Olá! Bem-vindo(a)!*\n\n"
-                            mensagem_cadastro += "Antes de começarmos, preciso saber com quem estou falando 😊\n\n"
-                            mensagem_cadastro += "Por favor, digite seu *nome completo*:"
-                            
-                            # Salva mensagem do usuário e resposta do bot
-                            conversation_id = conversations[0]['id']
-                            chatbot_db.create_message(db, conversation_id, "user", message_text)
-                            chatbot_db.create_message(db, conversation_id, "assistant", mensagem_cadastro)
-                            
-                            return mensagem_cadastro
-                    except Exception as e:
-                        import logging
-                        logger = logging.getLogger(__name__)
-                        logger.error(f"Erro ao verificar estado de cadastro: {e}")
-                else:
-                    # Primeira conversa - pergunta nome
-                    from app.api.chatbot.core.groq_sales_handler import GroqSalesHandler, STATE_CADASTRO_NOME
-                    
-                    handler = GroqSalesHandler(db, empresa_id_int, emit_welcome_message=False)
-                    dados_cadastro = {'cadastro_rapido': True}
-                    handler._salvar_estado_conversa(user_id, STATE_CADASTRO_NOME, dados_cadastro)
-                    
-                    mensagem_cadastro = "👋 *Olá! Bem-vindo(a)!*\n\n"
-                    mensagem_cadastro += "Antes de começarmos, preciso saber com quem estou falando 😊\n\n"
-                    mensagem_cadastro += "Por favor, digite seu *nome completo*:"
-                    
-                    # Cria conversa se não existir
-                    if not conversations:
-                        from datetime import datetime
-                        conversation_id = chatbot_db.create_conversation(
-                            db=db,
-                            session_id=f"whatsapp_{user_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
-                            user_id=user_id,
-                            prompt_key="atendimento-pedido-whatsapp",
-                            model="groq-sales",
-                            empresa_id=empresa_id_int
-                        )
-                    else:
-                        conversation_id = conversations[0]['id']
-                    
-                    chatbot_db.create_message(db, conversation_id, "user", message_text)
-                    chatbot_db.create_message(db, conversation_id, "assistant", mensagem_cadastro)
-                    
-                    return mensagem_cadastro
-            else:
-                # Primeira conversa - pergunta nome
+                try:
+                    result = db.execute(estado_query, {"conversation_id": conversations[0]['id']})
+                    row = result.fetchone()
+                    if row and row[0]:
+                        estado_atual = row[0]
+                except Exception as e:
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.error(f"Erro ao verificar estado de cadastro: {e}")
+            
+            # Se já está aguardando nome, deixa o handler processar normalmente
+            if estado_atual != 'cadastro_nome':
+                # Primeira vez que detecta cliente não cadastrado - pergunta nome
                 from app.api.chatbot.core.groq_sales_handler import GroqSalesHandler, STATE_CADASTRO_NOME
                 from datetime import datetime
                 
+                # Cria handler temporário para processar cadastro
                 handler = GroqSalesHandler(db, empresa_id_int, emit_welcome_message=False)
+                
+                # Salva estado de cadastro
                 dados_cadastro = {'cadastro_rapido': True}
                 handler._salvar_estado_conversa(user_id, STATE_CADASTRO_NOME, dados_cadastro)
                 
+                # Retorna mensagem pedindo nome
                 mensagem_cadastro = "👋 *Olá! Bem-vindo(a)!*\n\n"
                 mensagem_cadastro += "Antes de começarmos, preciso saber com quem estou falando 😊\n\n"
                 mensagem_cadastro += "Por favor, digite seu *nome completo*:"
                 
-                conversation_id = chatbot_db.create_conversation(
-                    db=db,
-                    session_id=f"whatsapp_{user_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
-                    user_id=user_id,
-                    prompt_key="atendimento-pedido-whatsapp",
-                    model="groq-sales",
-                    empresa_id=empresa_id_int
-                )
+                # Cria conversa se não existir
+                if not conversations:
+                    conversation_id = chatbot_db.create_conversation(
+                        db=db,
+                        session_id=f"whatsapp_{user_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                        user_id=user_id,
+                        prompt_key="atendimento-pedido-whatsapp",
+                        model="groq-sales",
+                        empresa_id=empresa_id_int
+                    )
+                else:
+                    conversation_id = conversations[0]['id']
                 
+                # Salva mensagem do usuário e resposta do bot
                 chatbot_db.create_message(db, conversation_id, "user", message_text)
                 chatbot_db.create_message(db, conversation_id, "assistant", mensagem_cadastro)
                 
-                return mensagem_cadastro
+                # Envia mensagem via WhatsApp
+                from ..core.notifications import OrderNotification
+                notifier = OrderNotification()
+                await notifier.send_whatsapp_message(phone_number, mensagem_cadastro, empresa_id=empresa_id)
+                
+                return
 
         # VERIFICA PEDIDOS EM ABERTO para este cliente
         pedido_aberto = None
