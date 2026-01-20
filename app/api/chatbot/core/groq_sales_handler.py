@@ -21,6 +21,7 @@ from .ingredientes_service import (
     detectar_adicao_extra,
     detectar_pergunta_ingredientes
 )
+from .intention_agents import IntentionRouter
 from app.api.chatbot.services.service_carrinho import CarrinhoService
 from app.api.chatbot.schemas.schema_carrinho import (
     AdicionarItemCarrinhoRequest,
@@ -439,6 +440,8 @@ class GroqSalesHandler:
         # Carrega configurações do chatbot
         self._config_cache = None
         self._carrinho_service = None
+        # Router de intenções com múltiplos agentes especializados
+        self.intention_router = IntentionRouter()
         self._load_chatbot_config()
 
     def _buscar_meios_pagamento(self) -> List[Dict]:
@@ -1013,12 +1016,28 @@ class GroqSalesHandler:
         dados: Optional[dict] = None,
     ) -> Optional[Dict[str, Any]]:
         """
-        Interpretação de intenção usando regras simples (fallback quando Groq não disponível)
+        Interpretação de intenção usando múltiplos agentes especializados + regras simples (fallback)
         Retorna None se não conseguir interpretar, ou dict com funcao e params
         """
         import re
         msg = self._normalizar_mensagem(mensagem)
         print(f"🔍 [Regras] Analisando mensagem normalizada: '{msg}' (original: '{mensagem}')")
+        
+        # PRIMEIRO: Tenta usar os agentes especializados (arquitetura de múltiplos agentes)
+        context = {
+            "produtos": produtos,
+            "carrinho": carrinho,
+            "dados": dados
+        }
+        intention_result = self.intention_router.detect_intention(mensagem, msg, context)
+        if intention_result:
+            print(f"✅ [Agentes] Intenção detectada: {intention_result.get('intention')} -> {intention_result.get('funcao')}")
+            return {
+                "funcao": intention_result.get("funcao"),
+                "params": intention_result.get("params", {})
+            }
+        
+        # FALLBACK: Continua com as regras antigas para outras intenções não cobertas pelos agentes
 
         def _parse_quantidade_token(token: Optional[str]) -> int:
             if not token:
@@ -1267,12 +1286,8 @@ class GroqSalesHandler:
             if match:
                 return {"funcao": "remover_produto", "params": {"produto_busca": match.group(2).strip()}}
 
-        # Iniciar novo pedido - DEVE vir ANTES da detecção de adicionar produto!
-        # Detecta: "fazer novo pedido", "novo pedido", "começar de novo", "quero fazer pedido", etc.
-        if re.search(r'(fazer\s+(novo\s+)?pedido|novo\s+pedido|come[cç]ar\s+(de\s+)?novo|comecar\s+(de\s+)?novo|iniciar\s+(novo\s+)?pedido|quero\s+fazer\s+pedido|quero\s+pedir)', msg, re.IGNORECASE):
-            print(f"🆕 [Regras] Detecção de iniciar novo pedido na mensagem: '{msg}'")
-            # Retorna uma função especial para limpar carrinho e iniciar novo pedido
-            return {"funcao": "iniciar_novo_pedido", "params": {}}
+        # NOTA: Detecção de "iniciar novo pedido" agora é feita pelo IniciarPedidoAgent
+        # (já processado acima pelos agentes especializados antes das regras antigas)
 
         # Ver adicionais
         if re.search(r'(adicionais|extras|o\s*que\s*posso\s*adicionar)', msg):
