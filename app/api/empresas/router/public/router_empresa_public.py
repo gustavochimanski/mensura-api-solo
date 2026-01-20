@@ -37,6 +37,7 @@ def listar_empresas_publicas(
             cidade=empresa.cidade,
             estado=empresa.estado,
             distancia_km=None,
+            tema=empresa.cardapio_tema,
         )
         for empresa in empresas
     ]

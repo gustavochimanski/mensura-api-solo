@@ -2395,6 +2395,35 @@ class GroqSalesHandler:
                         resposta += localizacao
                     
                     return resposta
+                elif funcao == "cancelar_pedido":
+                    # Cliente quer cancelar um pedido
+                    # Verifica se há pedido aberto (passado como parâmetro)
+                    if pedido_aberto:
+                        pedido_id = pedido_aberto.get('pedido_id')
+                        if pedido_id:
+                            sucesso, mensagem_resultado = await self._cancelar_pedido(pedido_id)
+                            if sucesso:
+                                # Limpa o carrinho também
+                                dados['carrinho'] = []
+                                dados['pedido_contexto'] = []
+                                dados.pop('pedido_aberto_id', None)
+                                dados.pop('pedido_aberto_tratado', None)
+                                self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
+                                return f"✅ {mensagem_resultado}\n\nComo posso te ajudar agora? 😊"
+                            else:
+                                return f"❌ {mensagem_resultado}\n\nComo posso te ajudar? 😊"
+                    
+                    # Verifica se há carrinho com itens (pedido em andamento)
+                    carrinho = dados.get('carrinho', [])
+                    if carrinho and len(carrinho) > 0:
+                        # Limpa o carrinho
+                        dados['carrinho'] = []
+                        dados['pedido_contexto'] = []
+                        self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
+                        return "✅ Pedido cancelado! Limpei o carrinho.\n\nComo posso te ajudar agora? 😊"
+                    
+                    # Não há pedido para cancelar
+                    return "Não há nenhum pedido em aberto para cancelar. 😊\n\nComo posso te ajudar?"
                 elif funcao == "chamar_atendente":
                     # Cliente quer chamar atendente humano
                     # Envia notificação para a empresa
@@ -4251,6 +4280,76 @@ REGRA PARA COMPLEMENTOS:
         service = self._get_carrinho_service()
         return service.obter_carrinho(user_id=user_id, empresa_id=self.empresa_id)
 
+    def _verificar_carrinho_aberto(self, user_id: str) -> Optional[Any]:
+        """
+        Verifica se existe um carrinho temporário em aberto para o usuário.
+        Retorna o carrinho se existir, None caso contrário.
+        """
+        try:
+            carrinho_resp = self._obter_carrinho_db(user_id)
+            if carrinho_resp and carrinho_resp.itens and len(carrinho_resp.itens) > 0:
+                return carrinho_resp
+            return None
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Erro ao verificar carrinho aberto: {e}", exc_info=True)
+            return None
+
+    def _formatar_mensagem_carrinho_aberto(self, carrinho_resp) -> str:
+        """
+        Formata mensagem informando sobre o carrinho em aberto.
+        """
+        if not carrinho_resp or not carrinho_resp.itens:
+            return ""
+        
+        mensagem = "🛒 *Você tem um pedido em aberto:*\n\n"
+        
+        # Lista os itens do carrinho
+        for item in carrinho_resp.itens:
+            qtd = int(item.quantidade or 1)
+            preco_item = float(item.preco_total or 0)
+            nome_item = item.produto_descricao_snapshot or "Item"
+            mensagem += f"• {qtd}x {nome_item} - R$ {preco_item:.2f}\n"
+        
+        # Mostra o total
+        total = float(carrinho_resp.valor_total or 0)
+        mensagem += f"\n💰 *Total: R$ {total:.2f}*\n\n"
+        mensagem += "💬 Quer continuar esse pedido ou cancelar para fazer um novo?\n"
+        mensagem += "(Digite 'continuar' para seguir com esse pedido ou 'cancelar' para fazer um novo)"
+        
+        return mensagem
+
+    def _detectar_confirmacao_cancelamento_carrinho(self, mensagem: str) -> Optional[bool]:
+        """
+        Detecta se o cliente quer cancelar o carrinho em aberto.
+        Retorna True se confirmou cancelamento, False se não quer cancelar, None se não ficou claro.
+        """
+        msg = self._normalizar_mensagem(mensagem)
+        if not msg:
+            return None
+        
+        termos_cancelar = [
+            "cancelar", "cancela", "cancel", "desistir", "desist",
+            "nao quero", "não quero", "nao quero mais", "não quero mais",
+            "fazer novo", "novo pedido", "começar de novo", "comecar de novo",
+            "limpar", "apagar", "deletar", "remover tudo"
+        ]
+        
+        termos_continuar = [
+            "continuar", "seguir", "manter", "quero continuar",
+            "quero esse", "esse mesmo", "esse pedido", "manter esse",
+            "sim", "ok", "pode", "claro", "vamos", "bora", "isso mesmo",
+            "quero adicionar", "adicionar mais", "mais alguma coisa",
+            "quero mais", "adiciona", "adicionar"
+        ]
+        
+        if any(termo in msg for termo in termos_cancelar):
+            return True
+        if any(termo in msg for termo in termos_continuar):
+            return False
+        return None
+
     def _carrinho_response_para_lista(self, carrinho_resp) -> List[Dict]:
         if not carrinho_resp or not carrinho_resp.itens:
             return []
@@ -4645,8 +4744,8 @@ REGRA PARA COMPLEMENTOS:
 
     async def _processar_cadastro_nome_rapido(self, user_id: str, mensagem: str, dados: Dict) -> str:
         """
-        Processa o nome do cliente durante o cadastro rápido (durante pedido)
-        Após coletar o nome, atualiza o cliente e continua com o fluxo de pedido
+        Processa o nome do cliente durante o cadastro rápido
+        Após coletar o nome, cria/atualiza o cliente e continua com o fluxo normal
         """
         nome = mensagem.strip()
         if len(nome) < 2:
@@ -4658,30 +4757,31 @@ REGRA PARA COMPLEMENTOS:
             return "❓ Por favor, digite seu *nome completo* (nome e sobrenome) 😊"
         
         try:
-            # Atualiza ou cria o cliente com o nome
-            from app.api.cadastros.schemas.schema_cliente import ClienteCreate, ClienteUpdate
-            from app.api.cadastros.services.service_cliente import ClienteService
-            from app.api.cadastros.repositories.repo_cliente import ClienteRepository
+            # Usa o address_service para criar/atualizar cliente (garante consistência)
+            cliente = self.address_service.criar_cliente_se_nao_existe(
+                telefone=user_id,
+                nome=nome
+            )
             
-            cliente_service = ClienteService(self.db)
-            repo = ClienteRepository(self.db)
-            cliente_existente = repo.get_by_telefone(user_id)
+            if not cliente:
+                return "❌ Ops! Ocorreu um erro ao salvar seu nome. Tente novamente 😊"
             
-            if cliente_existente:
-                # Atualiza cliente existente
-                update_data = ClienteUpdate(nome=nome)
-                cliente_service.update(cliente_existente.super_token, update_data)
-            else:
-                # Cria novo cliente
-                create_data = ClienteCreate(nome=nome, telefone=user_id)
-                cliente_service.create(create_data)
-            
-            # Nome salvo - continua com o fluxo de pedido (pergunta entrega/retirada)
+            # Nome salvo - remove flag de cadastro e continua com o fluxo normal
             dados.pop('cadastro_rapido', None)
-            print(f"✅ Cliente cadastrado/atualizado: {nome}")
+            print(f"✅ Cliente cadastrado/atualizado: {nome} (telefone: {user_id})")
             
-            # Continua com o fluxo normal de pedido
-            return self._perguntar_entrega_ou_retirada(user_id, dados)
+            # Se estava no meio de um pedido, continua com o fluxo de pedido
+            if dados.get('carrinho') or dados.get('tipo_entrega'):
+                return self._perguntar_entrega_ou_retirada(user_id, dados)
+            
+            # Caso contrário, volta para o estado de conversação normal
+            self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
+            
+            mensagem_boas_vindas = f"✅ *Perfeito, {nome}!*\n\n"
+            mensagem_boas_vindas += "Agora posso te ajudar! 😊\n\n"
+            mensagem_boas_vindas += "O que você gostaria de pedir hoje?"
+            
+            return mensagem_boas_vindas
             
         except Exception as e:
             print(f"❌ Erro ao salvar nome do cliente: {e}")
@@ -5867,15 +5967,19 @@ Sua única função é ajudar a ESCOLHER PRODUTOS. Nada mais!
                 print("[Checkout] Carrinho vazio ou não encontrado no banco")
                 return None
             
-            # Buscar ou criar cliente para obter o super_token
+            # Buscar ou criar cliente para obter o super_token e cliente_id
             cliente = self.address_service.criar_cliente_se_nao_existe(user_id)
             if not cliente:
                 print("[Checkout] ERRO: Não foi possível criar/buscar cliente")
                 return None
 
             super_token = cliente.get('super_token')
+            cliente_id = cliente.get('id')
             if not super_token:
                 print("[Checkout] ERRO: Cliente sem super_token")
+                return None
+            if not cliente_id:
+                print("[Checkout] ERRO: Cliente sem ID")
                 return None
 
             # Converte carrinho do banco para formato do checkout
@@ -5888,7 +5992,8 @@ Sua única função é ajudar a ESCOLHER PRODUTOS. Nada mais!
                 print("[Checkout] ERRO: Carrinho não encontrado após busca")
                 return None
             
-            payload = carrinho_service.converter_para_checkout(carrinho_model)
+            # Converte carrinho passando cliente_id para garantir que sempre tenha
+            payload = carrinho_service.converter_para_checkout(carrinho_model, cliente_id=cliente_id)
             
             # Adiciona meio de pagamento se foi detectado
             meio_pagamento_id = dados.get('meio_pagamento_id') or carrinho_model.meio_pagamento_id
@@ -6712,6 +6817,89 @@ Responda de forma natural e curta:"""
                     numero_pedido = pedido_aberto.get('numero_pedido', 'N/A')
                     return f"Entendi! Você não quer falar sobre o pedido #{numero_pedido}.\n\n⚠️ Posso cancelar esse pedido para você? (Responda 'sim' para confirmar ou 'não' para manter o pedido)"
 
+            # VERIFICA CARRINHO TEMPORÁRIO EM ABERTO
+            carrinho_aberto = self._verificar_carrinho_aberto(user_id)
+            
+            # Se existe carrinho em aberto e ainda não foi tratado
+            if carrinho_aberto and not dados.get('carrinho_aberto_tratado'):
+                # Verifica se o cliente quer cancelar o carrinho
+                confirmacao_cancelar = self._detectar_confirmacao_cancelamento_carrinho(mensagem)
+                
+                if confirmacao_cancelar is True:
+                    # Cliente quer cancelar - pergunta confirmação
+                    dados['aguardando_confirmacao_cancelamento_carrinho'] = True
+                    dados['carrinho_aberto_tratado'] = True
+                    self._salvar_estado_conversa(user_id, estado, dados)
+                    return "⚠️ Você quer cancelar o pedido em aberto para fazer um novo?\n\n(Responda 'sim' para confirmar ou 'não' para continuar com o pedido atual)"
+                elif confirmacao_cancelar is False:
+                    # Cliente quer continuar - marca como tratado e permite continuar
+                    dados['carrinho_aberto_tratado'] = True
+                    dados['carrinho_aberto_continuado'] = True
+                    self._salvar_estado_conversa(user_id, estado, dados)
+                    # Sincroniza carrinho nos dados
+                    self._sincronizar_carrinho_dados(user_id, dados)
+                    # Continua o processamento normalmente
+                else:
+                    # Primeira vez que detecta carrinho - informa sobre ele
+                    dados['carrinho_aberto_tratado'] = True
+                    self._salvar_estado_conversa(user_id, estado, dados)
+                    return self._formatar_mensagem_carrinho_aberto(carrinho_aberto)
+            
+            # Se está aguardando confirmação de cancelamento do carrinho
+            if dados.get('aguardando_confirmacao_cancelamento_carrinho'):
+                confirmacao = self._detectar_confirmacao_cancelamento_carrinho(mensagem)
+                
+                if confirmacao is True:
+                    # Cliente confirmou cancelamento - remove carrinho
+                    try:
+                        service = self._get_carrinho_service()
+                        service.limpar_carrinho(user_id, self.empresa_id)
+                        dados.pop('aguardando_confirmacao_cancelamento_carrinho', None)
+                        dados.pop('carrinho_aberto_tratado', None)
+                        dados.pop('carrinho_aberto_continuado', None)
+                        dados['carrinho'] = []
+                        self._salvar_estado_conversa(user_id, estado, dados)
+                        return "✅ Pedido em aberto cancelado!\n\nAgora você pode fazer um novo pedido. O que você gostaria de pedir? 😊"
+                    except Exception as e:
+                        import logging
+                        logger = logging.getLogger(__name__)
+                        logger.error(f"Erro ao cancelar carrinho: {e}", exc_info=True)
+                        dados.pop('aguardando_confirmacao_cancelamento_carrinho', None)
+                        self._salvar_estado_conversa(user_id, estado, dados)
+                        return "❌ Não foi possível cancelar o pedido. Tente novamente ou continue com o pedido atual."
+                elif confirmacao is False:
+                    # Cliente não quer cancelar - continua com o pedido
+                    dados.pop('aguardando_confirmacao_cancelamento_carrinho', None)
+                    dados['carrinho_aberto_continuado'] = True
+                    self._salvar_estado_conversa(user_id, estado, dados)
+                    # Sincroniza carrinho nos dados
+                    self._sincronizar_carrinho_dados(user_id, dados)
+                    return "Perfeito! Vamos continuar com seu pedido atual. O que mais você gostaria de adicionar? 😊"
+                else:
+                    # Resposta não clara
+                    return "Não entendi 😅 Você quer cancelar o pedido em aberto para fazer um novo? (Responda 'sim' para confirmar ou 'não' para continuar)"
+            
+            # Se existe carrinho em aberto e cliente tenta fazer novo pedido, bloqueia
+            # Mas permite ações como ver carrinho, ver cardápio, etc
+            if carrinho_aberto and dados.get('carrinho_aberto_tratado') and not dados.get('carrinho_aberto_continuado'):
+                # Detecta se é tentativa de fazer novo pedido
+                msg_lower = mensagem.lower().strip()
+                termos_novo_pedido = [
+                    'quero', 'pedir', 'pedido', 'fazer pedido', 'adicionar', 
+                    'me ve', 'manda', 'vou querer', 'vou pedir', 'quero um',
+                    'quero uma', 'quero dois', 'quero duas'
+                ]
+                
+                # Verifica se a mensagem parece ser um novo pedido
+                if any(termo in msg_lower for termo in termos_novo_pedido):
+                    # Verifica se não é apenas uma pergunta sobre o carrinho atual ou cardápio
+                    termos_ver_carrinho = ['ver', 'mostrar', 'quanto', 'total', 'resumo', 'o que tem', 'cardapio', 'cardápio', 'menu']
+                    if not any(termo in msg_lower for termo in termos_ver_carrinho):
+                        # É tentativa de novo pedido - pergunta sobre cancelar
+                        dados['aguardando_confirmacao_cancelamento_carrinho'] = True
+                        self._salvar_estado_conversa(user_id, estado, dados)
+                        return self._formatar_mensagem_carrinho_aberto(carrinho_aberto)
+
             # VERIFICA SE ACEITA PEDIDOS PELO WHATSAPP
             config = self._get_chatbot_config()
             if config and not config.aceita_pedidos_whatsapp:
@@ -6832,6 +7020,9 @@ Responda de forma natural e curta:"""
 
                     # Sucesso - limpar carrinho e resetar estado
                     dados['carrinho'] = []
+                    dados.pop('carrinho_aberto_tratado', None)
+                    dados.pop('carrinho_aberto_continuado', None)
+                    dados.pop('aguardando_confirmacao_cancelamento_carrinho', None)
                     self._salvar_estado_conversa(user_id, STATE_WELCOME, dados)
 
                     if resultado:
@@ -6853,6 +7044,9 @@ Responda de forma natural e curta:"""
                         return msg_confirmacao
                 elif 'cancelar' in mensagem.lower():
                     dados['carrinho'] = []
+                    dados.pop('carrinho_aberto_tratado', None)
+                    dados.pop('carrinho_aberto_continuado', None)
+                    dados.pop('aguardando_confirmacao_cancelamento_carrinho', None)
                     self._salvar_estado_conversa(user_id, STATE_WELCOME, dados)
                     return "✅ *Pedido cancelado!*\n\nQuando quiser fazer um pedido, é só me chamar! 😊"
                 else:
@@ -6899,6 +7093,21 @@ Responda de forma natural e curta:"""
                     else:
                         resposta = f"📲 Para fazer seu pedido, acesse nosso cardápio completo pelo link:\n\n👉 {link_cardapio}\n\nDepois é só fazer seu pedido pelo site! 😊"
                     return resposta
+
+            # VERIFICA CARRINHO EM ABERTO ANTES DE ADICIONAR PRODUTOS
+            # Se existe carrinho em aberto e cliente tenta adicionar produto, bloqueia
+            if funcao in ["adicionar_produto", "adicionar_produtos", "finalizar_pedido"]:
+                carrinho_aberto_check = self._verificar_carrinho_aberto(user_id)
+                if carrinho_aberto_check:
+                    # Se não foi tratado ainda, informa sobre ele
+                    if not dados.get('carrinho_aberto_tratado'):
+                        dados['carrinho_aberto_tratado'] = True
+                        self._salvar_estado_conversa(user_id, estado, dados)
+                        return self._formatar_mensagem_carrinho_aberto(carrinho_aberto_check)
+                    # Se foi tratado mas cliente não confirmou continuar, bloqueia
+                    elif dados.get('carrinho_aberto_tratado') and not dados.get('carrinho_aberto_continuado'):
+                        return self._formatar_mensagem_carrinho_aberto(carrinho_aberto_check)
+                    # Se cliente confirmou continuar, permite adicionar produtos normalmente
 
             # ADICIONAR PRODUTO
             if funcao == "adicionar_produto":

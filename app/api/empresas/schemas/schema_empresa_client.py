@@ -43,6 +43,7 @@ class EmpresaPublicListItem(BaseModel):
     cidade: Optional[str] = None
     estado: Optional[str] = None
     distancia_km: Optional[float] = None
+    tema: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

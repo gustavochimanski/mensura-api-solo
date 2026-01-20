@@ -546,9 +546,13 @@ class CarrinhoService:
             ]
         )
 
-    def converter_para_checkout(self, carrinho: CarrinhoTemporarioModel) -> dict:
+    def converter_para_checkout(self, carrinho: CarrinhoTemporarioModel, cliente_id: Optional[int] = None) -> dict:
         """
         Converte carrinho do banco para formato do checkout (FinalizarPedidoRequest).
+        
+        Args:
+            carrinho: Carrinho temporário do banco
+            cliente_id: ID do cliente (opcional, mas recomendado para garantir que sempre tenha)
         
         Returns:
             dict com estrutura compatível com FinalizarPedidoRequest
@@ -641,6 +645,10 @@ class CarrinhoService:
             "observacao_geral": carrinho.observacao_geral,
             "troco_para": float(carrinho.troco_para) if carrinho.troco_para else None,
         }
+        
+        # Adiciona cliente_id se fornecido (garante que sempre tenha para delivery e retirada)
+        if cliente_id:
+            payload["cliente_id"] = str(cliente_id)
         
         # Adiciona campos específicos de mesa
         if carrinho.mesa_id:
