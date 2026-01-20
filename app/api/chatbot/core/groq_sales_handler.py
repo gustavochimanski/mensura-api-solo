@@ -3876,6 +3876,9 @@ REGRA PARA COMPLEMENTOS:
             if pedido.status == StatusPedido.CANCELADO.value:
                 return False, "Este pedido já está cancelado."
             
+            # Salva o status anterior antes de cancelar
+            status_anterior = pedido.status
+            
             # Cancela o pedido
             pedido.status = StatusPedido.CANCELADO.value
             pedido_repo.db.commit()
@@ -3885,7 +3888,7 @@ REGRA PARA COMPLEMENTOS:
             pedido_repo.add_historico(
                 pedido_id=pedido_id,
                 tipo_operacao=TipoOperacaoPedido.STATUS_ALTERADO,
-                status_anterior=pedido.status,
+                status_anterior=status_anterior,
                 status_novo=StatusPedido.CANCELADO.value,
                 descricao=f"Pedido cancelado pelo cliente via WhatsApp",
                 cliente_id=pedido.cliente_id
@@ -6658,6 +6661,7 @@ Responda de forma natural e curta:"""
                     # Cliente confirmou cancelamento
                     dados.pop('aguardando_confirmacao_cancelamento', None)
                     dados.pop('pedido_aberto_id', None)
+                    dados.pop('pedido_aberto_tratado', None)  # Remove flag para não tentar informar novamente
                     self._salvar_estado_conversa(user_id, estado, dados)
                     
                     if pedido_id:
@@ -6678,6 +6682,19 @@ Responda de forma natural e curta:"""
                 else:
                     # Resposta não clara, pede confirmação novamente
                     return "Não entendi 😅 Você quer cancelar o pedido? (Responda 'sim' para confirmar ou 'não' para manter o pedido)"
+            
+            # VERIFICA SE O CLIENTE NÃO QUER FALAR SOBRE O PEDIDO (mesmo após ter sido informado)
+            if pedido_aberto and dados.get('pedido_aberto_tratado') and not dados.get('aguardando_confirmacao_cancelamento'):
+                nao_quer_falar_pedido = self._detectar_nao_quer_falar_pedido(mensagem)
+                
+                if nao_quer_falar_pedido:
+                    # Cliente não quer falar sobre o pedido - pergunta se pode cancelar
+                    dados['aguardando_confirmacao_cancelamento'] = True
+                    dados['pedido_aberto_id'] = pedido_aberto.get('pedido_id')
+                    self._salvar_estado_conversa(user_id, estado, dados)
+                    
+                    numero_pedido = pedido_aberto.get('numero_pedido', 'N/A')
+                    return f"Entendi! Você não quer falar sobre o pedido #{numero_pedido}.\n\n⚠️ Posso cancelar esse pedido para você? (Responda 'sim' para confirmar ou 'não' para manter o pedido)"
 
             # VERIFICA SE ACEITA PEDIDOS PELO WHATSAPP
             config = self._get_chatbot_config()
@@ -6960,6 +6977,8 @@ Responda de forma natural e curta:"""
                             # Se tem complemento obrigatório, mostra e pede para escolher
                             msg_resposta += self.ingredientes_service.formatar_complementos_para_chat(complementos, produto['nome'])
                             msg_resposta += "\n\n_Escolha os complementos obrigatórios para continuar!_"
+                            # Marca que está aguardando a escolha do complemento obrigatório
+                            dados['aguardando_complemento'] = True
                         else:
                             # Se não for obrigatório, mostra os complementos direto
                             msg_resposta += self.ingredientes_service.formatar_complementos_para_chat(complementos, produto['nome'])
