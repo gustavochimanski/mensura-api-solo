@@ -2342,23 +2342,22 @@ class GroqSalesHandler:
                     else:
                         return "Carrinho vazio ainda! O que vai ser hoje?"
                 elif funcao == "iniciar_novo_pedido":
-                    # Limpa o carrinho e reinicia o pedido
-                    dados['carrinho'] = []
-                    dados['pedido_contexto'] = []
-                    dados['ultimo_produto_adicionado'] = None
-                    dados['ultimo_produto_mencionado'] = None
+                    # Verifica se há carrinho em aberto
+                    carrinho_aberto = self._verificar_carrinho_aberto(user_id)
                     
-                    # Limpa o carrinho temporário do schema chatbot
-                    try:
-                        service = self._get_carrinho_service()
-                        service.limpar_carrinho(user_id, self.empresa_id)
-                    except Exception as e:
-                        import logging
-                        logger = logging.getLogger(__name__)
-                        logger.error(f"Erro ao limpar carrinho ao iniciar novo pedido: {e}", exc_info=True)
-                    
-                    self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
-                    return "✅ Perfeito! Vamos começar um novo pedido! 😊\n\nO que você gostaria de pedir hoje?"
+                    if carrinho_aberto:
+                        # Há carrinho aberto - pergunta confirmação antes de limpar
+                        dados['aguardando_confirmacao_cancelamento_carrinho'] = True
+                        dados['carrinho_aberto_tratado'] = True
+                        self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
+                        return self._formatar_mensagem_carrinho_aberto(carrinho_aberto)
+                    else:
+                        # Não há carrinho aberto - apenas reinicia o contexto
+                        dados['pedido_contexto'] = []
+                        dados['ultimo_produto_adicionado'] = None
+                        dados['ultimo_produto_mencionado'] = None
+                        self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
+                        return "✅ Perfeito! Vamos começar um novo pedido! 😊\n\nO que você gostaria de pedir hoje?"
                 elif funcao == "ver_combos":
                     return self.ingredientes_service.formatar_combos_para_chat()
                 elif funcao == "ver_adicionais":
@@ -2455,7 +2454,7 @@ class GroqSalesHandler:
                     if pedido_aberto:
                         pedido_id = pedido_aberto.get('pedido_id')
                         if pedido_id:
-                            sucesso, mensagem_resultado = await self._cancelar_pedido(pedido_id)
+                            sucesso, mensagem_resultado = await self._cancelar_pedido(pedido_id=pedido_id, user_id=user_id)
                             if sucesso:
                                 # Limpa o carrinho também
                                 dados['carrinho'] = []
@@ -2499,25 +2498,24 @@ class GroqSalesHandler:
                     # Não há pedido para cancelar
                     return "Não há nenhum pedido em aberto para cancelar. 😊\n\nComo posso te ajudar?"
                 elif funcao == "iniciar_novo_pedido":
-                    # Limpa o carrinho e reinicia o pedido
-                    dados['carrinho'] = []
-                    dados['pedido_contexto'] = []
-                    dados['ultimo_produto_adicionado'] = None
-                    dados['ultimo_produto_mencionado'] = None
-                    dados.pop('pedido_aberto_id', None)
-                    dados.pop('pedido_aberto_tratado', None)
+                    # Verifica se há carrinho em aberto
+                    carrinho_aberto = self._verificar_carrinho_aberto(user_id)
                     
-                    # Limpa o carrinho temporário do schema chatbot
-                    try:
-                        service = self._get_carrinho_service()
-                        service.limpar_carrinho(user_id, self.empresa_id)
-                    except Exception as e:
-                        import logging
-                        logger = logging.getLogger(__name__)
-                        logger.error(f"Erro ao limpar carrinho ao iniciar novo pedido: {e}", exc_info=True)
-                    
-                    self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
-                    return "✅ Perfeito! Vamos começar um novo pedido! 😊\n\nO que você gostaria de pedir hoje?"
+                    if carrinho_aberto:
+                        # Há carrinho aberto - pergunta confirmação antes de limpar
+                        dados['aguardando_confirmacao_cancelamento_carrinho'] = True
+                        dados['carrinho_aberto_tratado'] = True
+                        self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
+                        return self._formatar_mensagem_carrinho_aberto(carrinho_aberto)
+                    else:
+                        # Não há carrinho aberto - apenas reinicia o contexto
+                        dados['pedido_contexto'] = []
+                        dados['ultimo_produto_adicionado'] = None
+                        dados['ultimo_produto_mencionado'] = None
+                        dados.pop('pedido_aberto_id', None)
+                        dados.pop('pedido_aberto_tratado', None)
+                        self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
+                        return "✅ Perfeito! Vamos começar um novo pedido! 😊\n\nO que você gostaria de pedir hoje?"
                 elif funcao == "chamar_atendente":
                     # Cliente quer chamar atendente humano
                     # Envia notificação para a empresa
@@ -6972,9 +6970,9 @@ Responda de forma natural e curta:"""
                     self._salvar_estado_conversa(user_id, estado, dados)
                     
                     if pedido_id:
-                        sucesso, mensagem_resultado = await self._cancelar_pedido(pedido_id)
+                        sucesso, mensagem_resultado = await self._cancelar_pedido(pedido_id=pedido_id, user_id=user_id)
                         if sucesso:
-                            # Limpa o carrinho temporário do schema chatbot
+                            # Limpa o carrinho temporário do schema chatbot (caso ainda exista)
                             try:
                                 service = self._get_carrinho_service()
                                 service.limpar_carrinho(user_id, self.empresa_id)
@@ -6987,7 +6985,12 @@ Responda de forma natural e curta:"""
                         else:
                             return f"❌ Não foi possível cancelar o pedido. {mensagem_resultado}\n\nComo posso te ajudar? 😊"
                     else:
-                        return "❌ Não encontrei o pedido para cancelar. Como posso te ajudar? 😊"
+                        # Se não tem pedido_id, tenta cancelar pelo carrinho (schema chatbot)
+                        sucesso, mensagem_resultado = await self._cancelar_pedido(user_id=user_id)
+                        if sucesso:
+                            return f"✅ {mensagem_resultado}\n\nComo posso te ajudar agora? 😊"
+                        else:
+                            return f"❌ {mensagem_resultado}\n\nComo posso te ajudar? 😊"
                 
                 elif confirmacao is False:
                     # Cliente não quer cancelar
@@ -7612,25 +7615,24 @@ Responda de forma natural e curta:"""
 
             # INICIAR NOVO PEDIDO
             elif funcao == "iniciar_novo_pedido":
-                # Limpa o carrinho e reinicia o pedido
-                dados['carrinho'] = []
-                dados['pedido_contexto'] = []
-                dados['ultimo_produto_adicionado'] = None
-                dados['ultimo_produto_mencionado'] = None
-                dados.pop('pedido_aberto_id', None)
-                dados.pop('pedido_aberto_tratado', None)
+                # Verifica se há carrinho em aberto
+                carrinho_aberto = self._verificar_carrinho_aberto(user_id)
                 
-                # Limpa o carrinho temporário do schema chatbot
-                try:
-                    service = self._get_carrinho_service()
-                    service.limpar_carrinho(user_id, self.empresa_id)
-                except Exception as e:
-                    import logging
-                    logger = logging.getLogger(__name__)
-                    logger.error(f"Erro ao limpar carrinho ao iniciar novo pedido: {e}", exc_info=True)
-                
-                self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
-                return "✅ Perfeito! Vamos começar um novo pedido! 😊\n\nO que você gostaria de pedir hoje?"
+                if carrinho_aberto:
+                    # Há carrinho aberto - pergunta confirmação antes de limpar
+                    dados['aguardando_confirmacao_cancelamento_carrinho'] = True
+                    dados['carrinho_aberto_tratado'] = True
+                    self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
+                    return self._formatar_mensagem_carrinho_aberto(carrinho_aberto)
+                else:
+                    # Não há carrinho aberto - apenas reinicia o contexto
+                    dados['pedido_contexto'] = []
+                    dados['ultimo_produto_adicionado'] = None
+                    dados['ultimo_produto_mencionado'] = None
+                    dados.pop('pedido_aberto_id', None)
+                    dados.pop('pedido_aberto_tratado', None)
+                    self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
+                    return "✅ Perfeito! Vamos começar um novo pedido! 😊\n\nO que você gostaria de pedir hoje?"
 
             # INFORMAR SOBRE ESTABELECIMENTO
             elif funcao == "informar_sobre_estabelecimento":
@@ -7832,6 +7834,44 @@ async def processar_mensagem_groq(
             data={
                 "conversation_id": conversation_id,
                 "message_id": user_message_id,
+                "user_id": user_id,
+                "role": "user",
+                "content_preview": mensagem[:100] if len(mensagem) > 100 else mensagem
+            }
+        )
+    except Exception as e:
+        # Não falha se WebSocket falhar
+        print(f"   ⚠️ Erro ao enviar notificação WebSocket (user): {e}")
+
+    # 3. Processa mensagem com o handler
+    handler = GroqSalesHandler(db, empresa_id, emit_welcome_message=emit_welcome_message, prompt_key=prompt_key)
+    resposta = await handler.processar_mensagem(user_id, mensagem, pedido_aberto=pedido_aberto)
+
+    # 4. Salva resposta do bot no banco
+    assistant_message_id = chatbot_db.create_message(db, conversation_id, "assistant", resposta)
+    
+    # 4.1. Envia notificação WebSocket de resposta do bot
+    try:
+        from .notifications import send_chatbot_websocket_notification
+        await send_chatbot_websocket_notification(
+            empresa_id=empresa_id,
+            notification_type="chatbot_message",
+            title="Nova Resposta do Bot",
+            message=f"Bot respondeu na conversa {conversation_id}",
+            data={
+                "conversation_id": conversation_id,
+                "message_id": assistant_message_id,
+                "user_id": user_id,
+                "role": "assistant",
+                "content_preview": resposta[:100] if len(resposta) > 100 else resposta
+            }
+        )
+    except Exception as e:
+        # Não falha se WebSocket falhar
+        print(f"   ⚠️ Erro ao enviar notificação WebSocket (assistant): {e}")
+
+    return resposta
+: user_message_id,
                 "user_id": user_id,
                 "role": "user",
                 "content_preview": mensagem[:100] if len(mensagem) > 100 else mensagem
