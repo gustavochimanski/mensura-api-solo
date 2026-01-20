@@ -122,7 +122,21 @@ class AdicionarProdutoAgent(IntentionAgent):
         Detecta intenção de adicionar produto.
         IMPORTANTE: Só detecta se houver MENÇÃO CLARA de produto.
         """
-        # PRIMEIRO: Verifica se NÃO é uma intenção de iniciar pedido genérico
+        # PRIMEIRO: Verifica se é uma pergunta de preço/valor (NÃO é pedido)
+        # Ex: "qual valor do x bacon", "quanto custa a pizza", etc.
+        padroes_pergunta_preco = [
+            r'(?:qual|quais?)\s+(?:o\s+)?(?:valor|pre[cç]o)',
+            r'quanto\s+(?:que\s+)?(?:fica|custa|é|e)',
+            r'(?:pre[cç]o|valor)\s+(?:d[aeo]|de|do|da)',
+            r'quanto\s+(?:que\s+)?(?:fica|custa)\s+(?:a|o|o\s+)?',
+        ]
+        
+        # Se é pergunta de preço, NÃO é adicionar produto
+        for padrao in padroes_pergunta_preco:
+            if re.search(padrao, mensagem_normalizada, re.IGNORECASE):
+                return None  # Deixa outras verificações lidarem com perguntas de preço
+        
+        # Verifica se NÃO é uma intenção de iniciar pedido genérico
         # Ex: "gostaria de fazer um pedido" não deve ser capturado como produto "pedido"
         padroes_iniciar_pedido = [
             r'(?:gostaria|gostaria de|queria|queria de)\s+(?:fazer|fazer um|fazer uma)\s+(?:pedido|novo\s+pedido)',

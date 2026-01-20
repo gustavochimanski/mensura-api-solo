@@ -4549,6 +4549,129 @@ REGRA PARA COMPLEMENTOS:
             return False
         return None
 
+    async def _adicionar_endereco_ao_pedido(
+        self,
+        user_id: str,
+        dados: Dict,
+        endereco_pendente: Dict[str, Any]
+    ) -> str:
+        """
+        Adiciona endereço ao pedido/carrinho após calcular taxa de entrega.
+        Verifica se o endereço já existe para o cliente, se não existir cadastra,
+        e vincula ao carrinho/pedido atual.
+        """
+        try:
+            # Cria ou obtém o cliente
+            cliente = self.address_service.get_cliente_by_telefone(user_id)
+            if not cliente:
+                # Cria cliente se não existir
+                cliente = self.address_service.criar_cliente_se_nao_existe(user_id)
+                if not cliente:
+                    return "❌ Não foi possível criar seu cadastro. Por favor, tente novamente."
+
+            cliente_id = cliente["id"]
+
+            # Verifica se o endereço já existe para este cliente
+            logradouro = endereco_pendente.get('logradouro')
+            numero = endereco_pendente.get('numero')
+            bairro = endereco_pendente.get('bairro')
+            cidade = endereco_pendente.get('cidade')
+            estado = endereco_pendente.get('estado')
+            cep = endereco_pendente.get('cep')
+
+            # Busca endereço existente
+            query_existente = text("""
+                SELECT id, logradouro, numero, complemento, bairro, cidade, estado,
+                       cep, ponto_referencia, latitude, longitude, is_principal
+                FROM cadastros.enderecos
+                WHERE cliente_id = :cliente_id
+                  AND logradouro = :logradouro
+                  AND numero = :numero
+                  AND bairro = :bairro
+                  AND cidade = :cidade
+                  AND estado = :estado
+                  AND cep = :cep
+                LIMIT 1
+            """)
+            result = self.db.execute(query_existente, {
+                "cliente_id": cliente_id,
+                "logradouro": logradouro,
+                "numero": numero,
+                "bairro": bairro,
+                "cidade": cidade,
+                "estado": estado,
+                "cep": cep
+            }).fetchone()
+
+            endereco_id = None
+            endereco_formatado = endereco_pendente.get('endereco_formatado', '')
+
+            if result:
+                # Endereço já existe - usa o ID existente
+                endereco_id = result[0]
+                print(f"✅ Endereço já cadastrado encontrado - ID: {endereco_id}")
+            else:
+                # Endereço não existe - cadastra novo
+                dados_endereco = {
+                    "logradouro": logradouro,
+                    "numero": numero,
+                    "complemento": endereco_pendente.get('complemento'),
+                    "bairro": bairro,
+                    "cidade": cidade,
+                    "estado": estado,
+                    "cep": cep,
+                    "latitude": endereco_pendente.get('latitude'),
+                    "longitude": endereco_pendente.get('longitude'),
+                }
+                
+                endereco_salvo = self.address_service.criar_endereco_cliente(
+                    user_id,
+                    dados_endereco,
+                    is_principal=False  # Não marca como principal automaticamente
+                )
+
+                if endereco_salvo:
+                    endereco_id = endereco_salvo['id']
+                    print(f"✅ Novo endereço cadastrado - ID: {endereco_id}")
+                else:
+                    return "❌ Não foi possível cadastrar o endereço. Por favor, tente novamente."
+
+            # Obtém ou cria o carrinho
+            service = self._get_carrinho_service()
+            tipo_entrega = dados.get("tipo_entrega") or "DELIVERY"
+            carrinho = service.obter_ou_criar_carrinho(
+                user_id=user_id,
+                empresa_id=self.empresa_id,
+                tipo_entrega=tipo_entrega
+            )
+
+            # Atualiza o carrinho com o endereço_id
+            carrinho.endereco_id = endereco_id
+            carrinho.tipo_entrega = tipo_entrega
+            self.db.commit()
+            self.db.refresh(carrinho)
+
+            # Atualiza os dados da conversa
+            dados['endereco_id'] = endereco_id
+            dados['endereco_texto'] = endereco_formatado
+            dados['tipo_entrega'] = tipo_entrega
+
+            # Sincroniza o carrinho nos dados
+            self._sincronizar_carrinho_dados(user_id, dados)
+
+            # Retorna mensagem de sucesso
+            msg = f"✅ *Endereço adicionado ao pedido!*\n\n"
+            msg += f"📍 {endereco_formatado}\n\n"
+            msg += "O que você gostaria de pedir? 😊"
+
+            return msg
+
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Erro ao adicionar endereço ao pedido: {e}", exc_info=True)
+            return "❌ Não foi possível adicionar o endereço ao pedido. Por favor, tente novamente."
+
     def _adicionar_ao_carrinho(self, user_id: str, dados: Dict, produto: Dict, quantidade: int = 1):
         """
         Adiciona um produto ao carrinho usando o banco de dados
@@ -6716,6 +6839,7 @@ Responda de forma natural e curta:"""
         """
         Calcula e retorna a taxa de entrega para o cliente.
         Se tiver endereço, busca no Google Maps e mostra o endereço formatado.
+        Salva o endereço encontrado no contexto para permitir adicionar ao pedido depois.
         """
         try:
             from app.api.cadastros.models.model_regiao_entrega import RegiaoEntregaModel
@@ -6723,6 +6847,7 @@ Responda de forma natural e curta:"""
 
             # Se tiver endereço, busca no Google Maps
             endereco_formatado = None
+            endereco_encontrado = None
             if endereco and len(endereco.strip()) > 5:
                 print(f"🔍 Buscando endereço no Google Maps: {endereco}")
                 enderecos_google = self.address_service.buscar_enderecos_google(endereco, max_results=1)
@@ -6731,6 +6856,20 @@ Responda de forma natural e curta:"""
                     endereco_encontrado = enderecos_google[0]
                     endereco_formatado = endereco_encontrado.get('endereco_completo', endereco)
                     print(f"✅ Endereço encontrado: {endereco_formatado}")
+                    
+                    # Salva o endereço encontrado no contexto para permitir adicionar ao pedido depois
+                    dados['endereco_pendente_adicao'] = {
+                        'endereco_formatado': endereco_formatado,
+                        'logradouro': endereco_encontrado.get('logradouro'),
+                        'numero': endereco_encontrado.get('numero'),
+                        'complemento': endereco_encontrado.get('complemento'),
+                        'bairro': endereco_encontrado.get('bairro'),
+                        'cidade': endereco_encontrado.get('cidade'),
+                        'estado': endereco_encontrado.get('estado'),
+                        'cep': endereco_encontrado.get('cep'),
+                        'latitude': endereco_encontrado.get('latitude'),
+                        'longitude': endereco_encontrado.get('longitude'),
+                    }
                 else:
                     print(f"⚠️ Endereço não encontrado no Google Maps, usando endereço original")
                     endereco_formatado = endereco
@@ -6907,6 +7046,22 @@ Responda de forma natural e curta:"""
                 
                 # Retorna a mensagem sobre o pedido
                 return mensagem_pedido
+
+            # ========== VERIFICA SE HÁ ENDEREÇO PENDENTE DE ADIÇÃO APÓS CALCULAR TAXA ==========
+            endereco_pendente = dados.get("endereco_pendente_adicao")
+            if endereco_pendente:
+                decisao_adicao = self._detectar_confirmacao_adicao(mensagem)
+                if decisao_adicao is True:
+                    # Cliente confirmou - adiciona endereço ao pedido/carrinho
+                    resultado = await self._adicionar_endereco_ao_pedido(user_id, dados, endereco_pendente)
+                    dados.pop("endereco_pendente_adicao", None)
+                    self._salvar_estado_conversa(user_id, estado, dados)
+                    return resultado
+                elif decisao_adicao is False:
+                    # Cliente não quer adicionar
+                    dados.pop("endereco_pendente_adicao", None)
+                    self._salvar_estado_conversa(user_id, estado, dados)
+                    return "Sem problemas! Quer mais alguma coisa? 😊"
 
             pendentes_adicao = dados.get("pendente_adicao_itens") or []
             if pendentes_adicao:
