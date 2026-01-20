@@ -3991,53 +3991,80 @@ REGRA PARA COMPLEMENTOS:
         
         return None
 
-    async def _cancelar_pedido(self, pedido_id: int) -> Tuple[bool, str]:
+    async def _cancelar_pedido(self, pedido_id: Optional[int] = None, user_id: Optional[str] = None) -> Tuple[bool, str]:
         """
         Cancela um pedido.
+        Trata dois casos:
+        1. Pedido no schema pedidos (após checkout) - usa pedido_id
+        2. Carrinho no schema chatbot (antes do checkout) - usa user_id
+        
         Retorna (sucesso, mensagem)
         """
         try:
-            from app.api.pedidos.repositories.repo_pedidos import PedidoRepository
-            from app.api.pedidos.models.model_pedido_unificado import StatusPedido
+            # CASO 1: Tenta cancelar pedido no schema pedidos (após checkout)
+            if pedido_id:
+                from app.api.pedidos.repositories.repo_pedidos import PedidoRepository
+                from app.api.pedidos.models.model_pedido_unificado import StatusPedido
+                
+                pedido_repo = PedidoRepository(self.db)
+                pedido = pedido_repo.get_pedido(pedido_id)
+                
+                if pedido:
+                    # Verifica se o pedido pode ser cancelado (não pode estar entregue ou já cancelado)
+                    if pedido.status == StatusPedido.ENTREGUE.value:
+                        return False, "Este pedido já foi entregue e não pode ser cancelado."
+                    
+                    if pedido.status == StatusPedido.CANCELADO.value:
+                        return False, "Este pedido já está cancelado."
+                    
+                    # Salva o status anterior antes de cancelar
+                    status_anterior = pedido.status
+                    
+                    # Cancela o pedido
+                    pedido.status = StatusPedido.CANCELADO.value
+                    pedido_repo.db.commit()
+                    
+                    # Adiciona histórico
+                    from app.api.pedidos.models.model_pedido_historico_unificado import TipoOperacaoPedido
+                    pedido_repo.add_historico(
+                        pedido_id=pedido_id,
+                        tipo_operacao=TipoOperacaoPedido.STATUS_ALTERADO,
+                        status_anterior=status_anterior,
+                        status_novo=StatusPedido.CANCELADO.value,
+                        descricao=f"Pedido cancelado pelo cliente via WhatsApp",
+                        cliente_id=pedido.cliente_id
+                    )
+                    pedido_repo.db.commit()
+                    
+                    return True, f"Pedido #{pedido.numero_pedido} foi cancelado."
             
-            pedido_repo = PedidoRepository(self.db)
-            pedido = pedido_repo.get_pedido(pedido_id)
+            # CASO 2: Se não encontrou pedido no schema pedidos, verifica carrinho no schema chatbot
+            if user_id:
+                try:
+                    service = self._get_carrinho_service()
+                    carrinho = service.obter_carrinho(user_id, self.empresa_id)
+                    
+                    if carrinho and carrinho.itens and len(carrinho.itens) > 0:
+                        # Limpa o carrinho
+                        service.limpar_carrinho(user_id, self.empresa_id)
+                        return True, "Pedido em aberto (carrinho) foi cancelado."
+                except Exception as e:
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.error(f"Erro ao verificar/limpar carrinho: {e}", exc_info=True)
             
-            if not pedido:
+            # Se chegou aqui, não encontrou nem pedido nem carrinho
+            if pedido_id:
                 return False, "Pedido não encontrado."
-            
-            # Verifica se o pedido pode ser cancelado (não pode estar entregue ou já cancelado)
-            if pedido.status == StatusPedido.ENTREGUE.value:
-                return False, "Este pedido já foi entregue e não pode ser cancelado."
-            
-            if pedido.status == StatusPedido.CANCELADO.value:
-                return False, "Este pedido já está cancelado."
-            
-            # Salva o status anterior antes de cancelar
-            status_anterior = pedido.status
-            
-            # Cancela o pedido
-            pedido.status = StatusPedido.CANCELADO.value
-            pedido_repo.db.commit()
-            
-            # Adiciona histórico
-            from app.api.pedidos.models.model_pedido_historico_unificado import TipoOperacaoPedido
-            pedido_repo.add_historico(
-                pedido_id=pedido_id,
-                tipo_operacao=TipoOperacaoPedido.STATUS_ALTERADO,
-                status_anterior=status_anterior,
-                status_novo=StatusPedido.CANCELADO.value,
-                descricao=f"Pedido cancelado pelo cliente via WhatsApp",
-                cliente_id=pedido.cliente_id
-            )
-            pedido_repo.db.commit()
-            
-            return True, f"Pedido #{pedido.numero_pedido} foi cancelado."
+            elif user_id:
+                return False, "Não há pedido em aberto para cancelar."
+            else:
+                return False, "É necessário informar pedido_id ou user_id para cancelar."
             
         except Exception as e:
             import logging
             logger = logging.getLogger(__name__)
-            logger.error(f"Erro ao cancelar pedido {pedido_id}: {e}", exc_info=True)
+            logger.error(f"Erro ao cancelar pedido (pedido_id={pedido_id}, user_id={user_id}): {e}", exc_info=True)
             return False, f"Erro ao cancelar pedido: {str(e)}"
 
     def _detectar_negacao(self, mensagem: str) -> bool:
@@ -6810,77 +6837,58 @@ Responda de forma natural e curta:"""
                     except:
                         data_formatada = created_at
                 
-                # Monta mensagem no formato de cupom
-                mensagem_pedido = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                mensagem_pedido += "📦 *SEU PEDIDO*\n"
-                mensagem_pedido += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-                
-                mensagem_pedido += f"*Pedido:* #{numero_pedido}\n"
-                if data_formatada:
-                    mensagem_pedido += f"*Data:* {data_formatada}\n"
-                mensagem_pedido += f"*Status:* {status_texto}\n"
-                mensagem_pedido += f"*Tipo:* {tipo_entrega_texto}\n"
-                
+                # Monta mensagem no formato compacto
+                mensagem_pedido = f"📦 *Pedido #{numero_pedido}* | {status_texto} | {tipo_entrega_texto}"
                 if mesa_codigo:
-                    mensagem_pedido += f"*Mesa:* {mesa_codigo}\n"
-                
-                mensagem_pedido += "\n"
-                mensagem_pedido += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                mensagem_pedido += "*ITENS*\n"
-                mensagem_pedido += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                    mensagem_pedido += f" | Mesa: {mesa_codigo}"
+                if data_formatada:
+                    mensagem_pedido += f"\n📅 {data_formatada}"
+                mensagem_pedido += "\n\n*Itens:*\n"
                 
                 if itens:
                     for item in itens:
                         nome = item.get('nome', 'Item')
                         qtd = item.get('quantidade', 1)
                         preco_total = item.get('preco_total', 0.0)
-                        mensagem_pedido += f"{qtd}x {nome}\n"
-                        mensagem_pedido += f"   R$ {preco_total:.2f}\n\n"
+                        mensagem_pedido += f"• {qtd}x {nome} - R$ {preco_total:.2f}\n"
                 else:
-                    mensagem_pedido += "Nenhum item encontrado\n\n"
+                    mensagem_pedido += "Nenhum item encontrado\n"
                 
-                mensagem_pedido += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                mensagem_pedido += "*RESUMO*\n"
-                mensagem_pedido += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-                
-                mensagem_pedido += f"Subtotal: R$ {subtotal:.2f}\n"
-                
+                mensagem_pedido += f"\n*Resumo:* Subtotal: R$ {subtotal:.2f}"
                 if taxa_entrega > 0:
-                    mensagem_pedido += f"Taxa de entrega: R$ {taxa_entrega:.2f}\n"
-                
+                    mensagem_pedido += f" | Entrega: R$ {taxa_entrega:.2f}"
                 if desconto > 0:
-                    mensagem_pedido += f"Desconto: -R$ {desconto:.2f}\n"
-                
-                mensagem_pedido += f"\n*TOTAL: R$ {valor_total:.2f}*\n\n"
+                    mensagem_pedido += f" | Desconto: -R$ {desconto:.2f}"
+                mensagem_pedido += f"\n*TOTAL: R$ {valor_total:.2f}*"
                 
                 if endereco:
-                    mensagem_pedido += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                    mensagem_pedido += "*ENDEREÇO DE ENTREGA*\n"
-                    mensagem_pedido += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                    mensagem_pedido += "\n\n📍 *Entrega:*"
                     end_parts = []
                     if endereco.get('rua'):
                         end_parts.append(endereco['rua'])
                     if endereco.get('numero'):
                         end_parts.append(endereco['numero'])
                     if end_parts:
-                        mensagem_pedido += f"{', '.join(end_parts)}\n"
+                        mensagem_pedido += f"\n{', '.join(end_parts)}"
+                    endereco_line = []
                     if endereco.get('complemento'):
-                        mensagem_pedido += f"{endereco['complemento']}\n"
+                        endereco_line.append(endereco['complemento'])
                     if endereco.get('bairro'):
-                        mensagem_pedido += f"{endereco['bairro']}\n"
+                        endereco_line.append(endereco['bairro'])
+                    if endereco_line:
+                        mensagem_pedido += f"\n{', '.join(endereco_line)}"
+                    cidade_line = []
                     if endereco.get('cidade'):
-                        cidade_parts = [endereco['cidade']]
-                        if endereco.get('cep'):
-                            cidade_parts.append(f"CEP: {endereco['cep']}")
-                        mensagem_pedido += f"{' - '.join(cidade_parts)}\n"
-                    mensagem_pedido += "\n"
+                        cidade_line.append(endereco['cidade'])
+                    if endereco.get('cep'):
+                        cidade_line.append(f"CEP: {endereco['cep']}")
+                    if cidade_line:
+                        mensagem_pedido += f"\n{' - '.join(cidade_line)}"
                 
                 if meio_pagamento:
-                    mensagem_pedido += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                    mensagem_pedido += f"*Pagamento:* {meio_pagamento}\n"
-                    mensagem_pedido += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                    mensagem_pedido += f"\n\n💳 *Pagamento:* {meio_pagamento}"
                 
-                mensagem_pedido += "Como posso te ajudar com esse pedido? 😊"
+                mensagem_pedido += "\n\nComo posso te ajudar? 😊"
                 
                 # Retorna a mensagem sobre o pedido
                 return mensagem_pedido

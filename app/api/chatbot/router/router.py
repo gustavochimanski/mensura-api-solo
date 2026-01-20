@@ -3196,15 +3196,10 @@ async def send_order_summary(
             "MESA": "🪑 Mesa"
         }.get(tipo_entrega, tipo_entrega)
 
-        # Monta a mensagem
-        mensagem = f"""📋 *RESUMO DO PEDIDO #{numero_pedido}*
-
-{status_info['emoji']} *Status:* {status_info['name']}
-📦 *Tipo:* {tipo_formatado}
-📅 *Data:* {created_at.strftime('%d/%m/%Y %H:%M') if created_at else 'N/A'}
-
-*━━━ ITENS ━━━*
-"""
+        # Monta a mensagem compacta
+        mensagem = f"📋 *Pedido #{numero_pedido}* | {status_info['emoji']} {status_info['name']} | {tipo_formatado}\n"
+        mensagem += f"📅 {created_at.strftime('%d/%m/%Y %H:%M') if created_at else 'N/A'}\n\n"
+        mensagem += "*Itens:*\n"
 
         for item in itens:
             qtd = item[0]
@@ -3212,26 +3207,20 @@ async def send_order_summary(
             nome_item = item[4]
             obs_item = item[3]
 
-            mensagem += f"• {qtd}x {nome_item} - R$ {preco_total:.2f}\n"
+            mensagem += f"• {qtd}x {nome_item} - R$ {preco_total:.2f}"
             if obs_item:
-                mensagem += f"  _Obs: {obs_item}_\n"
+                mensagem += f" (_Obs: {obs_item}_)"
+            mensagem += "\n"
 
-        mensagem += f"""
-*━━━ VALORES ━━━*
-Subtotal: R$ {subtotal:.2f}
-"""
-
+        mensagem += f"\n*Valores:* Subtotal: R$ {subtotal:.2f}"
         if desconto > 0:
-            mensagem += f"Desconto: -R$ {desconto:.2f}\n"
-
+            mensagem += f" | Desconto: -R$ {desconto:.2f}"
         if taxa_entrega > 0:
-            mensagem += f"Taxa de entrega: R$ {taxa_entrega:.2f}\n"
-
-        mensagem += f"*Total: R$ {valor_total:.2f}*\n"
-        mensagem += f"💳 Pagamento: {'✅ Pago' if pago else '⏳ Pendente'}\n"
+            mensagem += f" | Entrega: R$ {taxa_entrega:.2f}"
+        mensagem += f"\n*Total: R$ {valor_total:.2f}* | 💳 {'✅ Pago' if pago else '⏳ Pendente'}"
 
         if observacoes:
-            mensagem += f"\n📝 _Obs: {observacoes}_\n"
+            mensagem += f"\n📝 _Obs: {observacoes}_"
 
         # Mensagem de status personalizada
         status_message = status_info["message"].format(numero_pedido=numero_pedido)
