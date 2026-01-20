@@ -375,14 +375,12 @@ Já sabe o que quer ou prefere uma sugestão? 😉"""
         if preview_data.get("erro"):
             return f"❌ {preview_data.get('mensagem', 'Erro ao processar pedido')}"
 
-        mensagem = "📋 *RESUMO DO PEDIDO*\n\n"
+        mensagem = "📋 *Resumo do Pedido*\n\n"
 
         # Itens
         mensagem += "*Itens:*\n"
         for item in preview_data.get("itens", []):
             mensagem += f"• {item['quantidade']}x {item['nome']} - R$ {item['subtotal']:.2f}\n"
-
-        mensagem += "\n"
 
         # Totais
         subtotal = preview_data.get("subtotal", 0)
@@ -390,20 +388,18 @@ Já sabe o que quer ou prefere uma sugestão? 😉"""
         desconto = preview_data.get("desconto", 0)
         total = preview_data.get("total", 0)
 
-        mensagem += f"Subtotal: R$ {subtotal:.2f}\n"
+        mensagem += f"\n*Valores:* Subtotal: R$ {subtotal:.2f}"
         if taxa_entrega > 0:
-            mensagem += f"Taxa de entrega: R$ {taxa_entrega:.2f}\n"
+            mensagem += f" | Entrega: R$ {taxa_entrega:.2f}"
         if desconto > 0:
-            mensagem += f"Desconto: -R$ {desconto:.2f}\n"
-
-        mensagem += f"\n*TOTAL: R$ {total:.2f}*\n\n"
+            mensagem += f" | Desconto: -R$ {desconto:.2f}"
+        mensagem += f"\n*TOTAL: R$ {total:.2f}*"
 
         # Previsão de entrega
         if preview_data.get("previsao_entrega"):
-            mensagem += f"🕒 Previsão de entrega: {preview_data['previsao_entrega']}\n\n"
+            mensagem += f"\n🕒 Previsão: {preview_data['previsao_entrega']}"
 
-        mensagem += "✅ Digite *OK* para confirmar o pedido\n"
-        mensagem += "❌ Ou *CANCELAR* para desistir"
+        mensagem += "\n\n✅ Digite *OK* para confirmar | ❌ *CANCELAR* para desistir"
 
         return mensagem
 
