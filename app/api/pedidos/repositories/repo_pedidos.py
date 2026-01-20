@@ -155,6 +155,7 @@ class PedidoRepository:
                 .joinedload(PedidoItemComplementoAdicionalModel.adicional),
                 joinedload(PedidoUnificadoModel.cliente).joinedload(ClienteModel.enderecos),
                 joinedload(PedidoUnificadoModel.endereco),
+                joinedload(PedidoUnificadoModel.mesa),
                 joinedload(PedidoUnificadoModel.meio_pagamento),
                 joinedload(PedidoUnificadoModel.transacao).joinedload(TransacaoPagamentoModel.meio_pagamento),
                 joinedload(PedidoUnificadoModel.transacoes).joinedload(TransacaoPagamentoModel.meio_pagamento),

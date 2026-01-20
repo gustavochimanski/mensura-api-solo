@@ -6680,6 +6680,15 @@ Responda de forma natural e curta:"""
                 numero_pedido = pedido_aberto.get('numero_pedido', 'N/A')
                 status = pedido_aberto.get('status', '')
                 valor_total = pedido_aberto.get('valor_total', 0.0)
+                subtotal = pedido_aberto.get('subtotal', 0.0)
+                taxa_entrega = pedido_aberto.get('taxa_entrega', 0.0)
+                desconto = pedido_aberto.get('desconto', 0.0)
+                tipo_entrega = pedido_aberto.get('tipo_entrega', '')
+                created_at = pedido_aberto.get('created_at')
+                itens = pedido_aberto.get('itens', [])
+                endereco = pedido_aberto.get('endereco')
+                meio_pagamento = pedido_aberto.get('meio_pagamento')
+                mesa_codigo = pedido_aberto.get('mesa_codigo')
                 
                 # Mapeia status para texto legível
                 status_texto = {
@@ -6692,11 +6701,94 @@ Responda de forma natural e curta:"""
                     'X': 'Em edição'
                 }.get(status, status)
                 
-                mensagem_pedido = f"📦 *Olá! Vi que você tem um pedido em aberto:*\n\n"
-                mensagem_pedido += f"• Pedido: #{numero_pedido}\n"
-                mensagem_pedido += f"• Status: {status_texto}\n"
-                mensagem_pedido += f"• Valor: R$ {valor_total:.2f}\n\n"
-                mensagem_pedido += f"Como posso te ajudar com esse pedido? 😊"
+                # Mapeia tipo de entrega
+                tipo_entrega_texto = {
+                    'DELIVERY': 'Delivery',
+                    'RETIRADA': 'Retirada',
+                    'BALCAO': 'Balcão',
+                    'MESA': 'Mesa'
+                }.get(tipo_entrega, tipo_entrega)
+                
+                # Formata data
+                data_formatada = ""
+                if created_at:
+                    try:
+                        dt = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                        data_formatada = dt.strftime("%d/%m/%Y %H:%M")
+                    except:
+                        data_formatada = created_at
+                
+                # Monta mensagem no formato de cupom
+                mensagem_pedido = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                mensagem_pedido += "📦 *SEU PEDIDO*\n"
+                mensagem_pedido += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                
+                mensagem_pedido += f"*Pedido:* #{numero_pedido}\n"
+                if data_formatada:
+                    mensagem_pedido += f"*Data:* {data_formatada}\n"
+                mensagem_pedido += f"*Status:* {status_texto}\n"
+                mensagem_pedido += f"*Tipo:* {tipo_entrega_texto}\n"
+                
+                if mesa_codigo:
+                    mensagem_pedido += f"*Mesa:* {mesa_codigo}\n"
+                
+                mensagem_pedido += "\n"
+                mensagem_pedido += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                mensagem_pedido += "*ITENS*\n"
+                mensagem_pedido += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                
+                if itens:
+                    for item in itens:
+                        nome = item.get('nome', 'Item')
+                        qtd = item.get('quantidade', 1)
+                        preco_total = item.get('preco_total', 0.0)
+                        mensagem_pedido += f"{qtd}x {nome}\n"
+                        mensagem_pedido += f"   R$ {preco_total:.2f}\n\n"
+                else:
+                    mensagem_pedido += "Nenhum item encontrado\n\n"
+                
+                mensagem_pedido += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                mensagem_pedido += "*RESUMO*\n"
+                mensagem_pedido += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                
+                mensagem_pedido += f"Subtotal: R$ {subtotal:.2f}\n"
+                
+                if taxa_entrega > 0:
+                    mensagem_pedido += f"Taxa de entrega: R$ {taxa_entrega:.2f}\n"
+                
+                if desconto > 0:
+                    mensagem_pedido += f"Desconto: -R$ {desconto:.2f}\n"
+                
+                mensagem_pedido += f"\n*TOTAL: R$ {valor_total:.2f}*\n\n"
+                
+                if endereco:
+                    mensagem_pedido += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    mensagem_pedido += "*ENDEREÇO DE ENTREGA*\n"
+                    mensagem_pedido += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                    end_parts = []
+                    if endereco.get('rua'):
+                        end_parts.append(endereco['rua'])
+                    if endereco.get('numero'):
+                        end_parts.append(endereco['numero'])
+                    if end_parts:
+                        mensagem_pedido += f"{', '.join(end_parts)}\n"
+                    if endereco.get('complemento'):
+                        mensagem_pedido += f"{endereco['complemento']}\n"
+                    if endereco.get('bairro'):
+                        mensagem_pedido += f"{endereco['bairro']}\n"
+                    if endereco.get('cidade'):
+                        cidade_parts = [endereco['cidade']]
+                        if endereco.get('cep'):
+                            cidade_parts.append(f"CEP: {endereco['cep']}")
+                        mensagem_pedido += f"{' - '.join(cidade_parts)}\n"
+                    mensagem_pedido += "\n"
+                
+                if meio_pagamento:
+                    mensagem_pedido += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                    mensagem_pedido += f"*Pagamento:* {meio_pagamento}\n"
+                    mensagem_pedido += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                
+                mensagem_pedido += "Como posso te ajudar com esse pedido? 😊"
                 
                 # Retorna a mensagem sobre o pedido
                 return mensagem_pedido

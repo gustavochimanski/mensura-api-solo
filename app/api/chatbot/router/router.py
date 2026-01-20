@@ -2202,12 +2202,70 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
             # Passa informações sobre pedido em aberto se houver
             pedido_aberto_info = None
             if pedido_aberto:
+                # Busca o pedido completo com itens para exibir na mensagem
+                from app.api.pedidos.repositories.repo_pedidos import PedidoRepository
+                pedido_repo = PedidoRepository(db)
+                pedido_completo = pedido_repo.get_pedido(pedido_aberto.id)
+                
+                # Formata itens do pedido
+                itens_formatados = []
+                if pedido_completo and pedido_completo.itens:
+                    for item in pedido_completo.itens:
+                        nome_item = item.nome_produto or item.produto_cod_barras or "Item"
+                        quantidade = item.quantidade or 1
+                        preco_unit = float(item.preco_unitario) if item.preco_unitario else 0.0
+                        itens_formatados.append({
+                            "nome": nome_item,
+                            "quantidade": quantidade,
+                            "preco_unitario": preco_unit,
+                            "preco_total": preco_unit * quantidade
+                        })
+                
+                # Formata endereço se for delivery
+                endereco_formatado = None
+                tipo_entrega_str = pedido_aberto.tipo_entrega.value if hasattr(pedido_aberto.tipo_entrega, 'value') else str(pedido_aberto.tipo_entrega)
+                if tipo_entrega_str == "DELIVERY":
+                    if pedido_completo and pedido_completo.endereco:
+                        end = pedido_completo.endereco
+                        endereco_formatado = {
+                            "rua": end.rua or "",
+                            "numero": end.numero or "",
+                            "complemento": end.complemento or "",
+                            "bairro": end.bairro or "",
+                            "cidade": end.cidade or "",
+                            "cep": end.cep or ""
+                        }
+                    elif pedido_completo and pedido_completo.endereco_snapshot:
+                        # Usa snapshot se endereço não estiver carregado
+                        snap = pedido_completo.endereco_snapshot
+                        endereco_formatado = {
+                            "rua": snap.get("rua", ""),
+                            "numero": snap.get("numero", ""),
+                            "complemento": snap.get("complemento", ""),
+                            "bairro": snap.get("bairro", ""),
+                            "cidade": snap.get("cidade", ""),
+                            "cep": snap.get("cep", "")
+                        }
+                
+                # Formata meio de pagamento
+                meio_pagamento_nome = None
+                if pedido_completo and pedido_completo.meio_pagamento:
+                    meio_pagamento_nome = pedido_completo.meio_pagamento.nome
+                
                 pedido_aberto_info = {
                     "pedido_id": pedido_aberto.id,
                     "numero_pedido": pedido_aberto.numero_pedido,
                     "status": pedido_aberto.status,
                     "valor_total": float(pedido_aberto.valor_total) if pedido_aberto.valor_total else 0.0,
-                    "tipo_entrega": pedido_aberto.tipo_entrega
+                    "subtotal": float(pedido_aberto.subtotal) if pedido_aberto.subtotal else 0.0,
+                    "taxa_entrega": float(pedido_aberto.taxa_entrega) if pedido_aberto.taxa_entrega else 0.0,
+                    "desconto": float(pedido_aberto.desconto) if pedido_aberto.desconto else 0.0,
+                    "tipo_entrega": tipo_entrega_str,
+                    "created_at": pedido_aberto.created_at.isoformat() if pedido_aberto.created_at else None,
+                    "itens": itens_formatados,
+                    "endereco": endereco_formatado,
+                    "meio_pagamento": meio_pagamento_nome,
+                    "mesa_codigo": pedido_completo.mesa.codigo if (pedido_completo and pedido_completo.mesa and hasattr(pedido_completo.mesa, 'codigo')) else None
                 }
             
             resposta = await processar_mensagem_groq(
