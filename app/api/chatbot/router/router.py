@@ -261,8 +261,12 @@ async def _enviar_notificacao_empresa(
 ):
     """
     Envia notificação para o WhatsApp da empresa quando cliente chama atendente.
+    Também envia notificação via WebSocket para o frontend.
     """
     try:
+        import logging
+        logger = logging.getLogger(__name__)
+        
         # Busca nome da empresa
         empresa_query = text("""
             SELECT nome
@@ -282,6 +286,42 @@ async def _enviar_notificacao_empresa(
             mensagem += f"👤 Nome: {cliente_nome}\n"
         mensagem += f"🏢 Empresa: {nome_empresa}\n\n"
         mensagem += f"💬 Entre em contato com o cliente para atendê-lo."
+        
+        # ===== ENVIA NOTIFICAÇÃO VIA WEBSOCKET PARA O FRONTEND =====
+        try:
+            from ..core.notifications import send_chatbot_websocket_notification
+            from datetime import datetime
+            
+            # Monta dados da notificação WebSocket
+            notification_data = {
+                "cliente_phone": cliente_phone,
+                "cliente_nome": cliente_nome,
+                "tipo": "chamar_atendente",
+                "timestamp": datetime.utcnow().isoformat()
+            }
+            
+            # Título e mensagem para o WebSocket
+            title = "🔔 Solicitação de Atendimento Humano"
+            message_ws = f"Cliente {cliente_nome or cliente_phone} está solicitando atendimento de um humano.\n\n📱 Telefone: {cliente_phone}"
+            if cliente_nome:
+                message_ws += f"\n👤 Nome: {cliente_nome}"
+            
+            # Envia notificação WebSocket
+            sent_count = await send_chatbot_websocket_notification(
+                empresa_id=empresa_id_int,
+                notification_type="chamar_atendente",
+                title=title,
+                message=message_ws,
+                data=notification_data
+            )
+            
+            if sent_count > 0:
+                logger.info(f"✅ Notificação WebSocket enviada para empresa {empresa_id} - {sent_count} conexão(ões) ativa(s) - Cliente: {cliente_phone}")
+            else:
+                logger.warning(f"⚠️ Nenhuma conexão WebSocket ativa para empresa {empresa_id} - Cliente: {cliente_phone}")
+        except Exception as e_ws:
+            logger.error(f"❌ Erro ao enviar notificação WebSocket: {e_ws}", exc_info=True)
+            # Continua mesmo se falhar o WebSocket, pois ainda pode enviar via WhatsApp
         
         # Envia notificação para o número da empresa (usando o mesmo sistema de envio)
         # O número da empresa é o display_phone_number da configuração do WhatsApp
@@ -304,20 +344,15 @@ async def _enviar_notificacao_empresa(
             result = await notifier.send_whatsapp_message(empresa_phone, mensagem, empresa_id=empresa_id)
             
             if result.get("success"):
-                import logging
-                logger = logging.getLogger(__name__)
-                logger.info(f"✅ Notificação enviada para empresa {empresa_id} - Cliente: {cliente_phone}")
+                logger.info(f"✅ Notificação WhatsApp enviada para empresa {empresa_id} - Cliente: {cliente_phone}")
                 return {"success": True, "message": "Notificação enviada com sucesso"}
             else:
-                import logging
-                logger = logging.getLogger(__name__)
-                logger.error(f"❌ Erro ao enviar notificação para empresa: {result.get('error')}")
+                logger.error(f"❌ Erro ao enviar notificação WhatsApp para empresa: {result.get('error')}")
                 return {"success": False, "error": result.get("error")}
         else:
-            import logging
-            logger = logging.getLogger(__name__)
             logger.warning(f"⚠️ Configuração do WhatsApp não encontrada para empresa {empresa_id}")
-            return {"success": False, "error": "Configuração do WhatsApp não encontrada"}
+            # Mesmo sem WhatsApp, a notificação WebSocket já foi enviada
+            return {"success": True, "message": "Notificação WebSocket enviada (WhatsApp não configurado)"}
             
     except Exception as e:
         import logging

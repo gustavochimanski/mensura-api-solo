@@ -1066,8 +1066,19 @@ class GroqSalesHandler:
                 return t.strip()
 
         def _obter_ultimo_produto_contexto() -> Optional[str]:
-            # Prioridade: pedido_contexto (último produto mencionado/consultado) → ultimo_produto_adicionado → carrinho
+            # Prioridade: ultimo_produto_mencionado → pedido_contexto → ultimo_produto_adicionado → carrinho
             if dados:
+                ultimo_mencionado = dados.get("ultimo_produto_mencionado")
+                if ultimo_mencionado:
+                    if isinstance(ultimo_mencionado, dict):
+                        nome = (ultimo_mencionado.get("nome") or "").strip()
+                        if nome:
+                            return nome
+                    else:
+                        nome = str(ultimo_mencionado).strip()
+                        if nome:
+                            return nome
+
                 pedido_contexto = dados.get("pedido_contexto") or []
                 if pedido_contexto and isinstance(pedido_contexto, list):
                     ultimo = pedido_contexto[-1] or {}
@@ -1235,6 +1246,26 @@ class GroqSalesHandler:
         itens_pedido = self._extrair_itens_pedido(mensagem)
         if len(itens_pedido) > 1:
             return {"funcao": "adicionar_produtos", "params": {"itens": itens_pedido}}
+
+        # Pedido só com QUANTIDADE (sem produto): usa o último produto do contexto
+        # Ex: "me vê dois", "quero 2", "manda duas então"
+        match_qtd_only = re.match(
+            r'^(?:(?:me\s+)?(?:ve|v[eê]|manda|traz)|(?:quero|qro)|(?:pode\s+ser|vou\s+querer))\s+'
+            r'(um|uma|duas?|dois|doise|tres|tr[eê]s|\d+)'
+            r'(?:\s*x)?'
+            r'(?:\s+(?:entao|ai|pf|pfv|por\s+favor))?\s*$',
+            msg,
+            re.IGNORECASE,
+        )
+        if match_qtd_only:
+            quantidade = _parse_quantidade_token(match_qtd_only.group(1))
+            ultimo = _obter_ultimo_produto_contexto()
+            if ultimo:
+                return {
+                    "funcao": "adicionar_produto",
+                    "params": {"produto_busca": ultimo, "quantidade": max(int(quantidade), 1)},
+                }
+            return {"funcao": "conversar", "params": {"tipo_conversa": "pergunta_vaga"}}
 
         # Adicionar produto (padrões: "quero X", "me ve X", "manda X", "X por favor")
         # IMPORTANTE: Verificar ANTES da personalização para capturar "quero X sem Y"
@@ -1749,6 +1780,15 @@ class GroqSalesHandler:
                     todos_produtos
                 )
                 if produto:
+                    # Memoriza o último produto mencionado/consultado para pedidos do tipo "me vê dois"
+                    try:
+                        dados["ultimo_produto_mencionado"] = {
+                            "nome": produto.get("nome"),
+                            "tipo": produto.get("tipo", "produto"),
+                            "id": produto.get("id"),
+                        }
+                    except Exception:
+                        pass
                     return await self._gerar_resposta_sobre_produto(user_id, produto, mensagem, dados)
                 return "Qual produto você quer saber o preço? Me fala o nome!"
 
@@ -2146,6 +2186,15 @@ class GroqSalesHandler:
                     pergunta = params.get("pergunta", "")
                     produto = self._buscar_produto_por_termo(produto_busca, todos_produtos)
                     if produto:
+                        # Memoriza o último produto mencionado/consultado
+                        try:
+                            dados["ultimo_produto_mencionado"] = {
+                                "nome": produto.get("nome"),
+                                "tipo": produto.get("tipo", "produto"),
+                                "id": produto.get("id"),
+                            }
+                        except Exception:
+                            pass
                         return await self._gerar_resposta_sobre_produto(user_id, produto, pergunta, dados)
                     else:
                         return f"❌ Não encontrei *{produto_busca}* no cardápio 😔\n\nQuer que eu mostre o que temos disponível? 😊"
@@ -3622,7 +3671,15 @@ REGRA PARA COMPLEMENTOS:
         # Se chegou aqui, não conseguiu entender
         # Se skip_desativar=True (IA não disponível), responde de forma genérica sem desativar
         if skip_desativar:
-            return "Desculpe, não consegui entender completamente sua mensagem. 😔\n\nVocê pode:\n• Ver nosso cardápio\n• Fazer um pedido\n• Tirar dúvidas sobre produtos\n\nO que você gostaria? 😊"
+            return (
+                "Desculpe, não consegui entender completamente sua mensagem. 😔\n\n"
+                "Você pode:\n"
+                "• Ver nosso cardápio\n"
+                "• Fazer um pedido\n"
+                "• Tirar dúvidas sobre produtos\n"
+                "• Chamar atendente\n\n"
+                "O que você gostaria? 😊"
+            )
         
         # Caso contrário, chama função de não entendimento (desativa chatbot)
         return await self._nao_entendeu_mensagem(user_id, mensagem, dados)
