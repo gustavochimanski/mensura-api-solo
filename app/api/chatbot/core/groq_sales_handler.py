@@ -50,7 +50,7 @@ AI_FUNCTIONS = [
         "type": "function",
         "function": {
             "name": "adicionar_produto",
-            "description": "Adiciona um produto ao carrinho. Use APENAS quando o cliente especifica um PRODUTO do cardápio. Exemplos: 'me ve uma coca', 'quero 2 pizzas', 'manda um x-bacon', 'quero um x bacon sem tomate' (use adicionar_produto mesmo com personalização - o sistema aplica automaticamente). NÃO use para frases genéricas como 'quero fazer pedido', 'quero pedir' - nesses casos use 'conversar' para perguntar o que ele quer.",
+            "description": "Adiciona um produto ao carrinho. Use APENAS quando o cliente especifica um PRODUTO do cardápio. Exemplos: 'me ve uma coca', 'quero 2 pizzas', 'manda um x-bacon', 'quero um x bacon sem tomate' (use adicionar_produto mesmo com personalização - o sistema aplica automaticamente). NÃO use para: 'fazer novo pedido', 'novo pedido', 'quero fazer pedido' (sem produto) - nesses casos use 'iniciar_novo_pedido'. NÃO use para frases genéricas como 'quero pedir' (sem produto) - nesses casos use 'iniciar_novo_pedido' ou 'conversar'.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -269,6 +269,18 @@ AI_FUNCTIONS = [
                 "required": []
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "iniciar_novo_pedido",
+            "description": "Cliente quer INICIAR/COMEÇAR um NOVO pedido do zero, limpando o carrinho atual. Use quando o cliente disser: 'fazer novo pedido', 'novo pedido', 'começar de novo', 'comecar de novo', 'iniciar novo pedido', 'quero fazer pedido', 'quero pedir' (quando não menciona produto específico). IMPORTANTE: NÃO use para quando o cliente menciona um produto específico (ex: 'quero fazer pedido de pizza' → use adicionar_produto).",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        }
     }
 ]
 
@@ -287,6 +299,10 @@ REGRA DE OURO: Na dúvida, use "conversar". É melhor conversar do que fazer aç
    - "me ve uma pizza sem cebola" → adicionar_produto(produto_busca="pizza") (o sistema aplica "sem cebola" automaticamente)
 
 ❌ NÃO use adicionar_produto para:
+   - "fazer novo pedido" → use iniciar_novo_pedido
+   - "novo pedido" → use iniciar_novo_pedido
+   - "quero fazer pedido" (sem produto) → use iniciar_novo_pedido
+   - "quero pedir" (sem produto) → use iniciar_novo_pedido
    - "o que tem?" → use conversar
    - "tem coca?" → use informar_sobre_produto (é pergunta, não pedido)
    - "quanto fica a coca?" → use informar_sobre_produto (é pergunta de PREÇO, não pedido)
@@ -362,6 +378,19 @@ REGRA DE OURO: Na dúvida, use "conversar". É melhor conversar do que fazer aç
    - "falar com atendente" → chamar_atendente()
    - "ligar atendente" → chamar_atendente()
    - "chama alguém para mim" → chamar_atendente()
+
+✅ iniciar_novo_pedido - Quando o cliente quer INICIAR um NOVO pedido do zero:
+   - "fazer novo pedido" → iniciar_novo_pedido()
+   - "novo pedido" → iniciar_novo_pedido()
+   - "começar de novo" → iniciar_novo_pedido()
+   - "quero fazer pedido" → iniciar_novo_pedido() (quando NÃO menciona produto)
+   - "quero pedir" → iniciar_novo_pedido() (quando NÃO menciona produto)
+   ⚠️ IMPORTANTE: Se menciona produto específico (ex: "quero fazer pedido de pizza"), use "adicionar_produto" em vez de "iniciar_novo_pedido"!
+
+❌ NÃO use adicionar_produto para:
+   - "fazer novo pedido" → use iniciar_novo_pedido
+   - "quero fazer pedido" (sem produto) → use iniciar_novo_pedido
+   - "quero pedir" (sem produto) → use iniciar_novo_pedido
 
 === PRODUTOS DISPONÍVEIS ===
 {produtos_lista}
@@ -1237,6 +1266,13 @@ class GroqSalesHandler:
             match = re.search(r'(tira|remove|cancela|retira)\s+(?:a|o)?\s*(.+)', msg)
             if match:
                 return {"funcao": "remover_produto", "params": {"produto_busca": match.group(2).strip()}}
+
+        # Iniciar novo pedido - DEVE vir ANTES da detecção de adicionar produto!
+        # Detecta: "fazer novo pedido", "novo pedido", "começar de novo", "quero fazer pedido", etc.
+        if re.search(r'(fazer\s+(novo\s+)?pedido|novo\s+pedido|come[cç]ar\s+(de\s+)?novo|comecar\s+(de\s+)?novo|iniciar\s+(novo\s+)?pedido|quero\s+fazer\s+pedido|quero\s+pedir)', msg, re.IGNORECASE):
+            print(f"🆕 [Regras] Detecção de iniciar novo pedido na mensagem: '{msg}'")
+            # Retorna uma função especial para limpar carrinho e iniciar novo pedido
+            return {"funcao": "iniciar_novo_pedido", "params": {}}
 
         # Ver adicionais
         if re.search(r'(adicionais|extras|o\s*que\s*posso\s*adicionar)', msg):
@@ -2305,6 +2341,24 @@ class GroqSalesHandler:
                         return msg
                     else:
                         return "Carrinho vazio ainda! O que vai ser hoje?"
+                elif funcao == "iniciar_novo_pedido":
+                    # Limpa o carrinho e reinicia o pedido
+                    dados['carrinho'] = []
+                    dados['pedido_contexto'] = []
+                    dados['ultimo_produto_adicionado'] = None
+                    dados['ultimo_produto_mencionado'] = None
+                    
+                    # Limpa o carrinho temporário do schema chatbot
+                    try:
+                        service = self._get_carrinho_service()
+                        service.limpar_carrinho(user_id, self.empresa_id)
+                    except Exception as e:
+                        import logging
+                        logger = logging.getLogger(__name__)
+                        logger.error(f"Erro ao limpar carrinho ao iniciar novo pedido: {e}", exc_info=True)
+                    
+                    self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
+                    return "✅ Perfeito! Vamos começar um novo pedido! 😊\n\nO que você gostaria de pedir hoje?"
                 elif funcao == "ver_combos":
                     return self.ingredientes_service.formatar_combos_para_chat()
                 elif funcao == "ver_adicionais":
@@ -2444,6 +2498,26 @@ class GroqSalesHandler:
                     
                     # Não há pedido para cancelar
                     return "Não há nenhum pedido em aberto para cancelar. 😊\n\nComo posso te ajudar?"
+                elif funcao == "iniciar_novo_pedido":
+                    # Limpa o carrinho e reinicia o pedido
+                    dados['carrinho'] = []
+                    dados['pedido_contexto'] = []
+                    dados['ultimo_produto_adicionado'] = None
+                    dados['ultimo_produto_mencionado'] = None
+                    dados.pop('pedido_aberto_id', None)
+                    dados.pop('pedido_aberto_tratado', None)
+                    
+                    # Limpa o carrinho temporário do schema chatbot
+                    try:
+                        service = self._get_carrinho_service()
+                        service.limpar_carrinho(user_id, self.empresa_id)
+                    except Exception as e:
+                        import logging
+                        logger = logging.getLogger(__name__)
+                        logger.error(f"Erro ao limpar carrinho ao iniciar novo pedido: {e}", exc_info=True)
+                    
+                    self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
+                    return "✅ Perfeito! Vamos começar um novo pedido! 😊\n\nO que você gostaria de pedir hoje?"
                 elif funcao == "chamar_atendente":
                     # Cliente quer chamar atendente humano
                     # Envia notificação para a empresa
@@ -7535,6 +7609,28 @@ Responda de forma natural e curta:"""
                     traceback.print_exc()
                 
                 return "✅ *Solicitação enviada!*\n\nNossa equipe foi notificada e entrará em contato com você em breve.\n\nEnquanto isso, posso te ajudar com alguma dúvida? 😊"
+
+            # INICIAR NOVO PEDIDO
+            elif funcao == "iniciar_novo_pedido":
+                # Limpa o carrinho e reinicia o pedido
+                dados['carrinho'] = []
+                dados['pedido_contexto'] = []
+                dados['ultimo_produto_adicionado'] = None
+                dados['ultimo_produto_mencionado'] = None
+                dados.pop('pedido_aberto_id', None)
+                dados.pop('pedido_aberto_tratado', None)
+                
+                # Limpa o carrinho temporário do schema chatbot
+                try:
+                    service = self._get_carrinho_service()
+                    service.limpar_carrinho(user_id, self.empresa_id)
+                except Exception as e:
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.error(f"Erro ao limpar carrinho ao iniciar novo pedido: {e}", exc_info=True)
+                
+                self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
+                return "✅ Perfeito! Vamos começar um novo pedido! 😊\n\nO que você gostaria de pedir hoje?"
 
             # INFORMAR SOBRE ESTABELECIMENTO
             elif funcao == "informar_sobre_estabelecimento":
