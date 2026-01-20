@@ -2172,14 +2172,23 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 itens_formatados = []
                 if pedido_completo and pedido_completo.itens:
                     for item in pedido_completo.itens:
-                        nome_item = item.nome_produto or item.produto_cod_barras or "Item"
+                        # Usa o método get_descricao_item() ou produto_descricao_snapshot
+                        nome_item = item.get_descricao_item() if hasattr(item, 'get_descricao_item') else (
+                            item.produto_descricao_snapshot or 
+                            (item.produto.descricao if hasattr(item, 'produto') and item.produto else None) or
+                            (item.receita.nome if hasattr(item, 'receita') and item.receita else None) or
+                            (item.combo.titulo if hasattr(item, 'combo') and item.combo else None) or
+                            item.produto_cod_barras or 
+                            "Item"
+                        )
                         quantidade = item.quantidade or 1
                         preco_unit = float(item.preco_unitario) if item.preco_unitario else 0.0
+                        preco_total = float(item.preco_total) if item.preco_total else (preco_unit * quantidade)
                         itens_formatados.append({
                             "nome": nome_item,
                             "quantidade": quantidade,
                             "preco_unitario": preco_unit,
-                            "preco_total": preco_unit * quantidade
+                            "preco_total": preco_total
                         })
                 
                 # Formata endereço se for delivery
@@ -2189,7 +2198,7 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                     if pedido_completo and pedido_completo.endereco:
                         end = pedido_completo.endereco
                         endereco_formatado = {
-                            "rua": end.rua or "",
+                            "rua": end.logradouro or "",
                             "numero": end.numero or "",
                             "complemento": end.complemento or "",
                             "bairro": end.bairro or "",
@@ -2199,14 +2208,16 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                     elif pedido_completo and pedido_completo.endereco_snapshot:
                         # Usa snapshot se endereço não estiver carregado
                         snap = pedido_completo.endereco_snapshot
-                        endereco_formatado = {
-                            "rua": snap.get("rua", ""),
-                            "numero": snap.get("numero", ""),
-                            "complemento": snap.get("complemento", ""),
-                            "bairro": snap.get("bairro", ""),
-                            "cidade": snap.get("cidade", ""),
-                            "cep": snap.get("cep", "")
-                        }
+                        if isinstance(snap, dict):
+                            # Tenta logradouro primeiro, depois rua (compatibilidade)
+                            endereco_formatado = {
+                                "rua": snap.get("logradouro") or snap.get("rua", ""),
+                                "numero": snap.get("numero", ""),
+                                "complemento": snap.get("complemento", ""),
+                                "bairro": snap.get("bairro", ""),
+                                "cidade": snap.get("cidade", ""),
+                                "cep": snap.get("cep", "")
+                            }
                 
                 # Formata meio de pagamento
                 meio_pagamento_nome = None

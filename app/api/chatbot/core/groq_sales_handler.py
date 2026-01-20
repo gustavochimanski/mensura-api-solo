@@ -2409,6 +2409,16 @@ class GroqSalesHandler:
                                 dados.pop('pedido_aberto_id', None)
                                 dados.pop('pedido_aberto_tratado', None)
                                 self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
+                                
+                                # Limpa o carrinho temporário do schema chatbot
+                                try:
+                                    service = self._get_carrinho_service()
+                                    service.limpar_carrinho(user_id, self.empresa_id)
+                                except Exception as e:
+                                    import logging
+                                    logger = logging.getLogger(__name__)
+                                    logger.error(f"Erro ao limpar carrinho após cancelamento: {e}", exc_info=True)
+                                
                                 return f"✅ {mensagem_resultado}\n\nComo posso te ajudar agora? 😊"
                             else:
                                 return f"❌ {mensagem_resultado}\n\nComo posso te ajudar? 😊"
@@ -2420,6 +2430,16 @@ class GroqSalesHandler:
                         dados['carrinho'] = []
                         dados['pedido_contexto'] = []
                         self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
+                        
+                        # Limpa o carrinho temporário do schema chatbot
+                        try:
+                            service = self._get_carrinho_service()
+                            service.limpar_carrinho(user_id, self.empresa_id)
+                        except Exception as e:
+                            import logging
+                            logger = logging.getLogger(__name__)
+                            logger.error(f"Erro ao limpar carrinho após cancelamento: {e}", exc_info=True)
+                        
                         return "✅ Pedido cancelado! Limpei o carrinho.\n\nComo posso te ajudar agora? 😊"
                     
                     # Não há pedido para cancelar
@@ -6880,6 +6900,15 @@ Responda de forma natural e curta:"""
                     if pedido_id:
                         sucesso, mensagem_resultado = await self._cancelar_pedido(pedido_id)
                         if sucesso:
+                            # Limpa o carrinho temporário do schema chatbot
+                            try:
+                                service = self._get_carrinho_service()
+                                service.limpar_carrinho(user_id, self.empresa_id)
+                            except Exception as e:
+                                import logging
+                                logger = logging.getLogger(__name__)
+                                logger.error(f"Erro ao limpar carrinho após cancelamento: {e}", exc_info=True)
+                            
                             return f"✅ Pedido cancelado com sucesso!\n\n{mensagem_resultado}\n\nComo posso te ajudar agora? 😊"
                         else:
                             return f"❌ Não foi possível cancelar o pedido. {mensagem_resultado}\n\nComo posso te ajudar? 😊"
