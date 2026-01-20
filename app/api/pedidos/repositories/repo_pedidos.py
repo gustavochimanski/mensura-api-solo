@@ -39,6 +39,20 @@ OPEN_STATUS_PEDIDO_BALCAO_MESA = [
     StatusPedido.AGUARDANDO_PAGAMENTO.value,
 ]
 
+# Status abertos para delivery (inclui "Saiu para entrega")
+OPEN_STATUS_PEDIDO_DELIVERY = [
+    StatusPedido.PENDENTE.value,
+    StatusPedido.IMPRESSAO.value,
+    StatusPedido.PREPARANDO.value,
+    StatusPedido.SAIU_PARA_ENTREGA.value,
+    StatusPedido.EDITADO.value,
+    StatusPedido.EM_EDICAO.value,
+    StatusPedido.AGUARDANDO_PAGAMENTO.value,
+]
+
+# Status abertos para todos os tipos de pedido
+OPEN_STATUS_PEDIDO_ALL = list(set(OPEN_STATUS_PEDIDO_BALCAO_MESA + OPEN_STATUS_PEDIDO_DELIVERY))
+
 
 class PedidoRepository:
     def __init__(self, db: Session, produto_contract: IProdutoContract | None = None):
@@ -1229,6 +1243,27 @@ class PedidoRepository:
             .order_by(PedidoUnificadoModel.created_at.desc())
             .offset(skip)
             .limit(limit)
+            .all()
+        )
+
+    def list_abertos_by_cliente_id(self, cliente_id: int, *, empresa_id: Optional[int] = None) -> list[PedidoUnificadoModel]:
+        """Lista pedidos em aberto de um cliente específico (todos os tipos)"""
+        query = (
+            self.db.query(PedidoUnificadoModel)
+            .options(
+                joinedload(PedidoUnificadoModel.cliente),
+                joinedload(PedidoUnificadoModel.mesa)
+            )
+            .filter(
+                PedidoUnificadoModel.cliente_id == cliente_id,
+                PedidoUnificadoModel.status.in_(OPEN_STATUS_PEDIDO_ALL)
+            )
+        )
+        if empresa_id is not None:
+            query = query.filter(PedidoUnificadoModel.empresa_id == empresa_id)
+        return (
+            query
+            .order_by(PedidoUnificadoModel.created_at.desc())
             .all()
         )
 

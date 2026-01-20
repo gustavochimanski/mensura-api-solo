@@ -1593,6 +1593,8 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
 
         # IDENTIFICA/CRIA CLIENTE pelo número de telefone (quem enviou a mensagem)
         empresa_id_int = int(empresa_id) if empresa_id else 1
+        cliente = None
+        cliente_id = None
         try:
             from ..core.address_service import ChatbotAddressService
             address_service = ChatbotAddressService(db, empresa_id_int)
@@ -1600,11 +1602,33 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 telefone=phone_number,
                 nome=contact_name or "Cliente WhatsApp"
             )
+            cliente_id = cliente.id if cliente else None
         except Exception as e:
             import logging
             logger = logging.getLogger(__name__)
             logger.error(f"Erro ao identificar/criar cliente: {e}", exc_info=True)
             # Continua processando mesmo se falhar a criação do cliente
+
+        # VERIFICA PEDIDOS EM ABERTO para este cliente
+        pedido_aberto = None
+        if cliente_id:
+            try:
+                from app.api.pedidos.repositories.repo_pedidos import PedidoRepository
+                pedido_repo = PedidoRepository(db)
+                pedidos_abertos = pedido_repo.list_abertos_by_cliente_id(
+                    cliente_id=cliente_id,
+                    empresa_id=empresa_id_int
+                )
+                if pedidos_abertos:
+                    # Pega o pedido mais recente
+                    pedido_aberto = pedidos_abertos[0]
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.info(f"📦 Pedido em aberto encontrado para cliente {cliente_id}: pedido_id={pedido_aberto.id}, numero_pedido={pedido_aberto.numero_pedido}, status={pedido_aberto.status}")
+            except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Erro ao verificar pedidos em aberto: {e}", exc_info=True)
 
         # VERIFICA DUPLICAÇÃO: Usa message_id do WhatsApp (único por mensagem) para detectar duplicatas reais
         # Se não tiver message_id, usa verificação por conteúdo apenas para mensagens longas (>3 chars)
@@ -2069,13 +2093,25 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 return  # Não processa mensagem quando loja está fechada
             
             # Processa com o sistema de vendas usando Groq/LLaMA
+            # Passa informações sobre pedido em aberto se houver
+            pedido_aberto_info = None
+            if pedido_aberto:
+                pedido_aberto_info = {
+                    "pedido_id": pedido_aberto.id,
+                    "numero_pedido": pedido_aberto.numero_pedido,
+                    "status": pedido_aberto.status,
+                    "valor_total": float(pedido_aberto.valor_total) if pedido_aberto.valor_total else 0.0,
+                    "tipo_entrega": pedido_aberto.tipo_entrega
+                }
+            
             resposta = await processar_mensagem_groq(
                 db=db,
                 user_id=phone_number,
                 mensagem=message_text,
                 empresa_id=int(empresa_id) if empresa_id else 1,
                 emit_welcome_message=is_saudacao,
-                prompt_key=prompt_key_sales
+                prompt_key=prompt_key_sales,
+                pedido_aberto=pedido_aberto_info
             )
             
             # Se vier vazio, tenta novamente permitindo boas-vindas (mantém "inteligência", sem fallback hardcoded).

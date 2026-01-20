@@ -614,7 +614,7 @@ class CarrinhoService:
                 )
         
         produtos = ProdutosPedidoRequest(
-            itens=itens if itens else None,
+            itens=itens,  # Sempre deve ser uma lista (mesmo que vazia)
             receitas=receitas if receitas else None,
             combos=combos if combos else None
         )

@@ -3794,6 +3794,112 @@ REGRA PARA COMPLEMENTOS:
 
         return False
 
+    def _detectar_nao_quer_falar_pedido(self, mensagem: str) -> bool:
+        """
+        Detecta se o cliente não quer falar sobre o pedido em aberto.
+        Exemplos: "não quero falar sobre isso", "não quero esse pedido", "cancela", "não quero mais"
+        """
+        msg = self._normalizar_mensagem(mensagem)
+        if not msg:
+            return False
+        
+        # Termos que indicam que não quer falar sobre o pedido
+        termos_negacao_pedido = [
+            'nao quero falar',
+            'nao quero esse pedido',
+            'nao quero mais',
+            'cancela',
+            'cancelar',
+            'nao quero',
+            'nao preciso',
+            'nao quero esse',
+            'esquece',
+            'esquecer',
+            'nao quero esse pedido',
+            'nao quero o pedido',
+            'nao quero mais esse pedido',
+            'nao quero mais o pedido'
+        ]
+        
+        # Verifica se contém algum termo de negação relacionado a pedido
+        for termo in termos_negacao_pedido:
+            if termo in msg:
+                return True
+        
+        return False
+
+    def _detectar_confirmacao_cancelamento(self, mensagem: str) -> Optional[bool]:
+        """
+        Detecta se o cliente confirmou ou negou o cancelamento do pedido.
+        Retorna True se confirmou, False se negou, None se não ficou claro.
+        """
+        msg = self._normalizar_mensagem(mensagem)
+        if not msg:
+            return None
+        
+        # Termos de confirmação
+        termos_confirmacao = ['sim', 'pode', 'pode cancelar', 'confirma', 'confirmo', 'quero cancelar', 'cancela sim']
+        # Termos de negação
+        termos_negacao = ['nao', 'nao quero', 'nao cancela', 'mantem', 'mantenha', 'nao cancelar']
+        
+        # Verifica confirmação
+        for termo in termos_confirmacao:
+            if termo in msg:
+                return True
+        
+        # Verifica negação
+        for termo in termos_negacao:
+            if termo in msg:
+                return False
+        
+        return None
+
+    async def _cancelar_pedido(self, pedido_id: int) -> Tuple[bool, str]:
+        """
+        Cancela um pedido.
+        Retorna (sucesso, mensagem)
+        """
+        try:
+            from app.api.pedidos.repositories.repo_pedidos import PedidoRepository
+            from app.api.pedidos.models.model_pedido_unificado import StatusPedido
+            
+            pedido_repo = PedidoRepository(self.db)
+            pedido = pedido_repo.get_pedido(pedido_id)
+            
+            if not pedido:
+                return False, "Pedido não encontrado."
+            
+            # Verifica se o pedido pode ser cancelado (não pode estar entregue ou já cancelado)
+            if pedido.status == StatusPedido.ENTREGUE.value:
+                return False, "Este pedido já foi entregue e não pode ser cancelado."
+            
+            if pedido.status == StatusPedido.CANCELADO.value:
+                return False, "Este pedido já está cancelado."
+            
+            # Cancela o pedido
+            pedido.status = StatusPedido.CANCELADO.value
+            pedido_repo.db.commit()
+            
+            # Adiciona histórico
+            from app.api.pedidos.models.model_pedido_historico_unificado import TipoOperacaoPedido
+            pedido_repo.add_historico(
+                pedido_id=pedido_id,
+                tipo_operacao=TipoOperacaoPedido.STATUS_ALTERADO,
+                status_anterior=pedido.status,
+                status_novo=StatusPedido.CANCELADO.value,
+                descricao=f"Pedido cancelado pelo cliente via WhatsApp",
+                cliente_id=pedido.cliente_id
+            )
+            pedido_repo.db.commit()
+            
+            return True, f"Pedido #{pedido.numero_pedido} foi cancelado."
+            
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Erro ao cancelar pedido {pedido_id}: {e}", exc_info=True)
+            return False, f"Erro ao cancelar pedido: {str(e)}"
+
     def _detectar_negacao(self, mensagem: str) -> bool:
         """Detecta se cliente disse não"""
         msg_lower = mensagem.lower().strip()
@@ -6415,7 +6521,7 @@ Responda de forma natural e curta:"""
 
     # ========== PROCESSAMENTO PRINCIPAL ==========
 
-    async def processar_mensagem(self, user_id: str, mensagem: str) -> str:
+    async def processar_mensagem(self, user_id: str, mensagem: str, pedido_aberto: Optional[Dict[str, Any]] = None) -> str:
         """
         Processa mensagem usando Groq API com fluxo de endereços integrado
         """
@@ -6425,6 +6531,51 @@ Responda de forma natural e curta:"""
             print(f"📊 Estado atual: {estado}")
             print(f"💬 Mensagem recebida (user_id={user_id}): {mensagem}")
             msg_lower = (mensagem or "").lower()
+            
+            # VERIFICA PEDIDO EM ABERTO (apenas na primeira mensagem da conversa ou se ainda não foi tratado)
+            if pedido_aberto and not dados.get('pedido_aberto_tratado'):
+                # Verifica se o cliente quer falar sobre o pedido ou não
+                nao_quer_falar_pedido = self._detectar_nao_quer_falar_pedido(mensagem)
+                
+                if nao_quer_falar_pedido:
+                    # Cliente não quer falar sobre o pedido - pergunta se pode cancelar
+                    dados['pedido_aberto_tratado'] = True
+                    dados['aguardando_confirmacao_cancelamento'] = True
+                    dados['pedido_aberto_id'] = pedido_aberto.get('pedido_id')
+                    self._salvar_estado_conversa(user_id, estado, dados)
+                    
+                    numero_pedido = pedido_aberto.get('numero_pedido', 'N/A')
+                    return f"Entendi! Você não quer falar sobre o pedido #{numero_pedido}.\n\n⚠️ Posso cancelar esse pedido para você? (Responda 'sim' para confirmar ou 'não' para manter o pedido)"
+                
+                # Cliente quer falar sobre o pedido ou não respondeu diretamente
+                # Informa sobre o pedido em aberto
+                dados['pedido_aberto_tratado'] = True
+                dados['pedido_aberto_id'] = pedido_aberto.get('pedido_id')
+                self._salvar_estado_conversa(user_id, estado, dados)
+                
+                numero_pedido = pedido_aberto.get('numero_pedido', 'N/A')
+                status = pedido_aberto.get('status', '')
+                valor_total = pedido_aberto.get('valor_total', 0.0)
+                
+                # Mapeia status para texto legível
+                status_texto = {
+                    'P': 'Pendente',
+                    'I': 'Em impressão',
+                    'R': 'Em preparo',
+                    'S': 'Saiu para entrega',
+                    'A': 'Aguardando pagamento',
+                    'D': 'Editado',
+                    'X': 'Em edição'
+                }.get(status, status)
+                
+                mensagem_pedido = f"📦 *Olá! Vi que você tem um pedido em aberto:*\n\n"
+                mensagem_pedido += f"• Pedido: #{numero_pedido}\n"
+                mensagem_pedido += f"• Status: {status_texto}\n"
+                mensagem_pedido += f"• Valor: R$ {valor_total:.2f}\n\n"
+                mensagem_pedido += f"Como posso te ajudar com esse pedido? 😊"
+                
+                # Retorna a mensagem sobre o pedido
+                return mensagem_pedido
 
             pendentes_adicao = dados.get("pendente_adicao_itens") or []
             if pendentes_adicao:
@@ -6497,6 +6648,36 @@ Responda de forma natural e curta:"""
                     print(f"💳 Pagamento detectado antecipadamente: {pagamento_detectado['nome']} (ID: {pagamento_detectado['id']})")
                     # Salva o estado atualizado com a forma de pagamento
                     self._salvar_estado_conversa(user_id, estado, dados)
+
+            # VERIFICA SE ESTÁ AGUARDANDO CONFIRMAÇÃO DE CANCELAMENTO DE PEDIDO
+            if dados.get('aguardando_confirmacao_cancelamento'):
+                pedido_id = dados.get('pedido_aberto_id')
+                confirmacao = self._detectar_confirmacao_cancelamento(mensagem)
+                
+                if confirmacao is True:
+                    # Cliente confirmou cancelamento
+                    dados.pop('aguardando_confirmacao_cancelamento', None)
+                    dados.pop('pedido_aberto_id', None)
+                    self._salvar_estado_conversa(user_id, estado, dados)
+                    
+                    if pedido_id:
+                        sucesso, mensagem_resultado = await self._cancelar_pedido(pedido_id)
+                        if sucesso:
+                            return f"✅ Pedido cancelado com sucesso!\n\n{mensagem_resultado}\n\nComo posso te ajudar agora? 😊"
+                        else:
+                            return f"❌ Não foi possível cancelar o pedido. {mensagem_resultado}\n\nComo posso te ajudar? 😊"
+                    else:
+                        return "❌ Não encontrei o pedido para cancelar. Como posso te ajudar? 😊"
+                
+                elif confirmacao is False:
+                    # Cliente não quer cancelar
+                    dados.pop('aguardando_confirmacao_cancelamento', None)
+                    self._salvar_estado_conversa(user_id, estado, dados)
+                    return "Entendido! O pedido foi mantido. Como posso te ajudar? 😊"
+                
+                else:
+                    # Resposta não clara, pede confirmação novamente
+                    return "Não entendi 😅 Você quer cancelar o pedido? (Responda 'sim' para confirmar ou 'não' para manter o pedido)"
 
             # VERIFICA SE ACEITA PEDIDOS PELO WHATSAPP
             config = self._get_chatbot_config()
@@ -7141,7 +7322,8 @@ async def processar_mensagem_groq(
     mensagem: str,
     empresa_id: int = 1,
     emit_welcome_message: bool = True,
-    prompt_key: str = DEFAULT_PROMPT_KEY
+    prompt_key: str = DEFAULT_PROMPT_KEY,
+    pedido_aberto: Optional[Dict[str, Any]] = None
 ) -> str:
     """
     Processa mensagem usando Groq API com LLaMA 3.1
@@ -7192,7 +7374,7 @@ async def processar_mensagem_groq(
 
     # 3. Processa mensagem com o handler
     handler = GroqSalesHandler(db, empresa_id, emit_welcome_message=emit_welcome_message, prompt_key=prompt_key)
-    resposta = await handler.processar_mensagem(user_id, mensagem)
+    resposta = await handler.processar_mensagem(user_id, mensagem, pedido_aberto=pedido_aberto)
 
     # 4. Salva resposta do bot no banco
     assistant_message_id = chatbot_db.create_message(db, conversation_id, "assistant", resposta)
