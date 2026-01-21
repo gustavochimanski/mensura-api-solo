@@ -126,8 +126,9 @@ class ComplementoService:
             ordens = [cfg.ordem if cfg.ordem is not None else idx for idx, cfg in enumerate(req.configuracoes)]
             obrigatorios = [cfg.obrigatorio for cfg in req.configuracoes]
             quantitativos = [cfg.quantitativo for cfg in req.configuracoes]
-            minimos_itens = [cfg.minimo_itens for cfg in req.configuracoes]
-            maximos_itens = [cfg.maximo_itens for cfg in req.configuracoes]
+            # Se quantitativo for False, minimo_itens e maximo_itens devem ser None
+            minimos_itens = [None if not cfg.quantitativo else cfg.minimo_itens for cfg in req.configuracoes]
+            maximos_itens = [None if not cfg.quantitativo else cfg.maximo_itens for cfg in req.configuracoes]
         else:
             # Formato simples: compatibilidade (usa valores padrão)
             if not req.complemento_ids:
@@ -208,8 +209,9 @@ class ComplementoService:
             ordens = [cfg.ordem if cfg.ordem is not None else idx for idx, cfg in enumerate(req.configuracoes)]
             obrigatorios = [cfg.obrigatorio for cfg in req.configuracoes]
             quantitativos = [cfg.quantitativo for cfg in req.configuracoes]
-            minimos_itens = [cfg.minimo_itens for cfg in req.configuracoes]
-            maximos_itens = [cfg.maximo_itens for cfg in req.configuracoes]
+            # Se quantitativo for False, minimo_itens e maximo_itens devem ser None
+            minimos_itens = [None if not cfg.quantitativo else cfg.minimo_itens for cfg in req.configuracoes]
+            maximos_itens = [None if not cfg.quantitativo else cfg.maximo_itens for cfg in req.configuracoes]
         else:
             # Formato simples: compatibilidade (usa valores padrão)
             if not req.complemento_ids:
@@ -290,8 +292,9 @@ class ComplementoService:
             ordens = [cfg.ordem if cfg.ordem is not None else idx for idx, cfg in enumerate(req.configuracoes)]
             obrigatorios = [cfg.obrigatorio for cfg in req.configuracoes]
             quantitativos = [cfg.quantitativo for cfg in req.configuracoes]
-            minimos_itens = [cfg.minimo_itens for cfg in req.configuracoes]
-            maximos_itens = [cfg.maximo_itens for cfg in req.configuracoes]
+            # Se quantitativo for False, minimo_itens e maximo_itens devem ser None
+            minimos_itens = [None if not cfg.quantitativo else cfg.minimo_itens for cfg in req.configuracoes]
+            maximos_itens = [None if not cfg.quantitativo else cfg.maximo_itens for cfg in req.configuracoes]
         else:
             # Formato simples: compatibilidade (usa valores padrão)
             # Lista vazia é permitida (remove todas as vinculações)

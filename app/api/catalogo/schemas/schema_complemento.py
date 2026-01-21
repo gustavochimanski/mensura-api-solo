@@ -156,6 +156,8 @@ class ConfiguracaoVinculacaoComplemento(BaseModel):
     """Configurações específicas de um complemento na vinculação.
     
     Todas as configurações são obrigatórias na vinculação.
+    
+    IMPORTANTE: Se quantitativo for False, minimo_itens e maximo_itens são automaticamente definidos como None.
     """
     complemento_id: int = Field(..., description="ID do complemento a vincular")
     ordem: Optional[int] = Field(None, description="Ordem do complemento (opcional, usa índice se não informado)")
@@ -163,6 +165,14 @@ class ConfiguracaoVinculacaoComplemento(BaseModel):
     quantitativo: bool = Field(..., description="Se permite quantidade (ex: 2x bacon) e múltipla escolha nesta vinculação")
     minimo_itens: Optional[int] = Field(None, ge=0, description="Quantidade mínima de itens nesta vinculação (None = sem mínimo)")
     maximo_itens: Optional[int] = Field(None, ge=0, description="Quantidade máxima de itens nesta vinculação (None = sem limite)")
+    
+    @model_validator(mode='after')
+    def validate_quantitativo(self):
+        """Se quantitativo for False, define minimo_itens e maximo_itens como None."""
+        if not self.quantitativo:
+            self.minimo_itens = None
+            self.maximo_itens = None
+        return self
 
 
 # ------ Vincular complementos a produtos ------
