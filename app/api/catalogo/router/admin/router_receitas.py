@@ -22,7 +22,9 @@ from app.api.catalogo.schemas.schema_receitas import (
 from app.api.catalogo.schemas.schema_complemento import (
     VincularComplementosReceitaRequest,
     VincularComplementosReceitaResponse,
+    ComplementoResponse,
 )
+from typing import List
 from app.core.admin_dependencies import get_current_user
 from app.database.db_connection import get_db
 from app.utils.logger import logger
@@ -259,14 +261,61 @@ def list_adicionais(
 
 
 # Complementos (vinculação a receitas)
+@router.get("/{receita_id}/complementos", response_model=List[ComplementoResponse])
+def listar_complementos_receita(
+    receita_id: int = Path(..., description="ID da receita"),
+    apenas_ativos: bool = Query(True, description="Retornar apenas complementos ativos"),
+    db: Session = Depends(get_db),
+):
+    """Lista todos os complementos de uma receita específica."""
+    logger.info(f"[Receitas] Listar complementos - receita={receita_id} apenas_ativos={apenas_ativos}")
+    service = ComplementoService(db)
+    return service.listar_complementos_receita(receita_id, apenas_ativos)
+
+
 @router.put("/{receita_id}/complementos", response_model=VincularComplementosReceitaResponse, status_code=status.HTTP_200_OK)
 def vincular_complementos_receita(
     receita_id: int = Path(..., description="ID da receita"),
     req: VincularComplementosReceitaRequest = Body(...),
     db: Session = Depends(get_db),
 ):
-    """Vincula múltiplos complementos a uma receita."""
+    """
+    Vincula múltiplos complementos a uma receita.
+    
+    **IMPORTANTE:** Para definir configurações (obrigatorio, quantitativo, minimo_itens, maximo_itens),
+    use o formato completo com o campo 'configuracoes'. O formato simples (complemento_ids) usa valores padrão.
+    
+    **Formato Completo (Recomendado):**
+    ```json
+    {
+      "configuracoes": [
+        {
+          "complemento_id": 1,
+          "ordem": 0,
+          "obrigatorio": true,
+          "quantitativo": false,
+          "minimo_itens": null,
+          "maximo_itens": null
+        }
+      ]
+    }
+    ```
+    
+    **Formato Simples (Compatibilidade - usa valores padrão):**
+    ```json
+    {
+      "complemento_ids": [1, 2],
+      "ordens": [0, 1]
+    }
+    ```
+    """
     logger.info(f"[Receitas] Vincular complementos - receita={receita_id} complementos={req.complemento_ids} configuracoes={req.configuracoes}")
+    
+    # Aviso se estiver usando formato simples
+    if req.configuracoes is None or len(req.configuracoes) == 0:
+        if req.complemento_ids:
+            logger.warning(f"[Receitas] Usando formato simples - configuracoes serão padrão (obrigatorio=False). Para definir obrigatorio, use 'configuracoes'")
+    
     service = ComplementoService(db)
     return service.vincular_complementos_receita(receita_id, req)
 

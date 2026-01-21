@@ -226,7 +226,8 @@ O sistema permite vincular **complementos** a **produtos**, **receitas** e **com
 
 ### 2. Listar Complementos de uma Receita
 
-**Endpoint:** `GET /api/catalogo/admin/complementos/receita/{receita_id}`
+**Endpoint:** `GET /api/catalogo/admin/complementos/receita/{receita_id}`  
+**Endpoint Alternativo:** `GET /api/catalogo/admin/receitas/{receita_id}/complementos`
 
 **Autenticação:** Requerida (Admin)
 
@@ -696,33 +697,49 @@ curl -X DELETE "https://api.exemplo.com/api/catalogo/admin/complementos/1/itens/
 
 ### Problema: Configurações não são aplicadas (obrigatorio, quantitativo, etc.)
 
-**Sintoma:** Ao enviar `configuracoes` com `obrigatorio: true`, o valor não é salvo e permanece como `false`.
+**Sintoma:** Ao tentar definir `obrigatorio: true`, o valor não é salvo e permanece como `false`.
 
-**Causa Identificada:** O código verificava apenas `if req.configuracoes is not None`, mas não verificava se a lista tinha elementos. Se o frontend enviava `configuracoes` como lista vazia `[]` ou se havia algum problema na validação do Pydantic, o código caía no formato simples que usa valores padrão (`obrigatorio = False`).
+**Causa Mais Comum:** O frontend está enviando o **formato simples** (`complemento_ids`) em vez do **formato completo** (`configuracoes`).
 
-**Solução Aplicada:**
-- Corrigido para verificar `if req.configuracoes is not None and len(req.configuracoes) > 0`
-- Agora o formato completo é usado apenas quando há configurações válidas
-- Corrigido em todos os métodos: `vincular_complementos_produto`, `vincular_complementos_receita`, `vincular_complementos_combo`
+**⚠️ IMPORTANTE:** O formato simples **NÃO PERMITE** definir configurações. Ele sempre usa valores padrão:
+- `obrigatorio = False`
+- `quantitativo = False`
+- `minimo_itens = None`
+- `maximo_itens = None`
 
-**Como Verificar:**
-- Certifique-se de enviar `configuracoes` como uma lista com pelo menos um elemento
-- Não envie `complemento_ids` junto com `configuracoes` (o código prioriza `configuracoes` se fornecido)
-- Verifique o formato do JSON enviado:
-  ```json
-  {
-    "configuracoes": [
-      {
-        "complemento_id": 1,
-        "ordem": 0,
-        "obrigatorio": true,  // ← Deve ser boolean, não string
-        "quantitativo": false,
-        "minimo_itens": null,
-        "maximo_itens": null
-      }
-    ]
-  }
-  ```
+**Solução:**
+
+1. **Use o formato completo** com o campo `configuracoes`:
+   ```json
+   {
+     "configuracoes": [
+       {
+         "complemento_id": 1,
+         "ordem": 0,
+         "obrigatorio": true,  // ← Funciona apenas no formato completo!
+         "quantitativo": false,
+         "minimo_itens": null,
+         "maximo_itens": null
+       }
+     ]
+   }
+   ```
+
+2. **NÃO envie** `complemento_ids` junto com `configuracoes`. O código prioriza `configuracoes` se fornecido, mas é melhor enviar apenas um formato.
+
+3. **Verifique os logs** - se você ver `configuracoes=None` nos logs, significa que o formato simples está sendo usado:
+   ```
+   [Receitas] Vincular complementos - receita=1 complementos=[2, 1] configuracoes=None
+   ```
+   
+   Isso significa que `obrigatorio` será `False` independente do que você tentar enviar.
+
+**Causa Técnica (já corrigida):** O código também tinha um bug onde verificava apenas `if req.configuracoes is not None`, mas não verificava se a lista tinha elementos. Isso foi corrigido para `if req.configuracoes is not None and len(req.configuracoes) > 0`.
+
+**Como Verificar se está funcionando:**
+1. Verifique os logs - deve mostrar `configuracoes=[...]` e não `configuracoes=None`
+2. Liste os complementos após vincular - o campo `obrigatorio` deve estar com o valor correto
+3. Se ainda não funcionar, verifique se está enviando `obrigatorio` como boolean (não string `"true"`)
 
 ---
 
@@ -765,9 +782,10 @@ curl -X DELETE "https://api.exemplo.com/api/catalogo/admin/complementos/1/itens/
 | POST | `/complementos/receita/{receita_id}/vincular` | Vincular complementos a receita | ✅ Funcionando |
 | PUT | `/receitas/{receita_id}/complementos` | Vincular complementos a receita (alternativo) | ✅ Funcionando (duplicado) |
 | GET | `/complementos/receita/{receita_id}` | Listar complementos de receita | ✅ Funcionando |
+| GET | `/receitas/{receita_id}/complementos` | Listar complementos de receita (alternativo) | ✅ **NOVO - ADICIONADO** |
 | DELETE | `/complementos/receita/{receita_id}/{complemento_id}` | Desvincular complemento de receita | ❌ **NÃO EXISTE** |
 | PUT | `/complementos/receita/{receita_id}/{complemento_id}` | Atualizar configuração de vinculação | ❌ **NÃO EXISTE** |
-| POST | `/complementos/combo/{combo_id}/vincular` | Vincular complementos a combo | ⚠️ **BUG: faltando quantitativos** |
+| POST | `/complementos/combo/{combo_id}/vincular` | Vincular complementos a combo | ✅ Funcionando |
 | GET | `/complementos/combo/{combo_id}` | Listar complementos de combo | ✅ Funcionando |
 | DELETE | `/complementos/combo/{combo_id}/{complemento_id}` | Desvincular complemento de combo | ❌ **NÃO EXISTE** |
 | PUT | `/complementos/combo/{combo_id}/{complemento_id}` | Atualizar configuração de vinculação | ❌ **NÃO EXISTE** |
