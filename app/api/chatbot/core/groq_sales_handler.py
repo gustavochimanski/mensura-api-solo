@@ -22,6 +22,13 @@ from .ingredientes_service import (
     detectar_pergunta_ingredientes
 )
 from .intention_agents import IntentionRouter
+from .domain.produto_service import ProdutoDomainService
+from .domain.carrinho_service import CarrinhoDomainService
+from .domain.pagamento_service import PagamentoDomainService
+from .application.conversacao_service import ConversacaoService
+from .infrastructure.pagamento_repository import PagamentoRepository
+from .utils.config_loader import ConfigLoader
+from .utils.mensagem_formatters import MensagemFormatters
 from app.api.chatbot.services.service_carrinho import CarrinhoService
 from app.api.chatbot.schemas.schema_carrinho import (
     AdicionarItemCarrinhoRequest,
@@ -430,13 +437,18 @@ class GroqSalesHandler:
         self.db = db
         self.empresa_id = empresa_id
         self.prompt_key = prompt_key
+        self.produto_service = ProdutoDomainService(db, empresa_id)
+        self.config_loader = ConfigLoader(db, empresa_id)
+        self.formatters = MensagemFormatters(db, empresa_id)
         # Quando True, o handler pode responder com a mensagem longa de boas-vindas.
         # No WhatsApp, preferimos enviar a boas-vindas com botões no router.py (mensagem interativa).
         self.emit_welcome_message = emit_welcome_message
         self.address_service = ChatbotAddressService(db, empresa_id)
         self.ingredientes_service = IngredientesService(db, empresa_id)
-        # Cache de meios de pagamento (carregado uma vez)
-        self._meios_pagamento_cache = None
+        self.carrinho_domain = CarrinhoDomainService(db, empresa_id, self.ingredientes_service)
+        self.conversacao_service = ConversacaoService(self.db, empresa_id=self.empresa_id, prompt_key=self.prompt_key)
+        self.pagamento_repo = PagamentoRepository(self.db)
+        self.pagamento_domain = PagamentoDomainService(empresa_id=self.empresa_id)
         # Carrega configurações do chatbot
         self._config_cache = None
         self._carrinho_service = None
@@ -445,77 +457,15 @@ class GroqSalesHandler:
         self._load_chatbot_config()
 
     def _buscar_meios_pagamento(self) -> List[Dict]:
-        """
-        Busca meios de pagamento ativos do banco de dados.
-        Usa cache para evitar consultas repetidas.
-        """
-        if self._meios_pagamento_cache is not None:
-            return self._meios_pagamento_cache
-
-        try:
-            result = self.db.execute(text("""
-                SELECT id, nome, tipo
-                FROM cadastros.meios_pagamento
-                WHERE ativo = true
-                ORDER BY id
-            """))
-            meios = []
-            for row in result.fetchall():
-                meios.append({
-                    'id': row[0],
-                    'nome': row[1],
-                    'tipo': row[2]
-                })
-
-            # Se não houver meios cadastrados, usar fallback
-            if not meios:
-                meios = [
-                    {'id': 1, 'nome': 'PIX', 'tipo': 'PIX_ENTREGA'},
-                    {'id': 2, 'nome': 'Dinheiro', 'tipo': 'DINHEIRO'},
-                    {'id': 3, 'nome': 'Cartão', 'tipo': 'CARTAO_ENTREGA'}
-                ]
-
-            self._meios_pagamento_cache = meios
-            print(f"💳 Meios de pagamento carregados: {[m['nome'] for m in meios]}")
-            return meios
-        except Exception as e:
-            print(f"❌ Erro ao buscar meios de pagamento: {e}")
-            # Fallback para meios padrão
-            return [
-                {'id': 1, 'nome': 'PIX', 'tipo': 'PIX_ENTREGA'},
-                {'id': 2, 'nome': 'Dinheiro', 'tipo': 'DINHEIRO'},
-                {'id': 3, 'nome': 'Cartão', 'tipo': 'CARTAO_ENTREGA'}
-            ]
+        """Busca meios de pagamento ativos do banco (delegado para `PagamentoRepository`)."""
+        return self.pagamento_repo.buscar_meios_pagamento_ativos()
 
     def _buscar_empresas_ativas(self) -> List[Dict]:
         """
         Busca todas as empresas ativas do banco de dados.
         Retorna lista de dicionários com informações das empresas.
         """
-        try:
-            result = self.db.execute(text("""
-                SELECT id, nome, bairro, cidade, estado, logradouro, numero, 
-                       complemento, horarios_funcionamento
-                FROM cadastros.empresas
-                ORDER BY nome
-            """))
-            empresas = []
-            for row in result.fetchall():
-                empresas.append({
-                    'id': row[0],
-                    'nome': row[1],
-                    'bairro': row[2],
-                    'cidade': row[3],
-                    'estado': row[4],
-                    'logradouro': row[5],
-                    'numero': row[6],
-                    'complemento': row[7],
-                    'horarios_funcionamento': row[8]
-                })
-            return empresas
-        except Exception as e:
-            print(f"❌ Erro ao buscar empresas: {e}")
-            return []
+        return self.formatters.buscar_empresas_ativas()
 
     def _formatar_horarios_funcionamento(self, horarios_funcionamento) -> str:
         """
@@ -523,57 +473,7 @@ class GroqSalesHandler:
         horarios_funcionamento é um JSONB com estrutura:
         [{"dia_semana": 0..6, "intervalos": [{"inicio":"HH:MM","fim":"HH:MM"}]}]
         """
-        if not horarios_funcionamento:
-            return "Horários de funcionamento não informados."
-        
-        try:
-            # Se já é uma lista, usa direto; se é string, faz parse
-            if isinstance(horarios_funcionamento, str):
-                horarios = json.loads(horarios_funcionamento)
-            else:
-                horarios = horarios_funcionamento
-            
-            if not horarios or not isinstance(horarios, list):
-                return "Horários de funcionamento não informados."
-            
-            # Mapeia dias da semana
-            dias_semana = {
-                0: "Domingo",
-                1: "Segunda-feira",
-                2: "Terça-feira",
-                3: "Quarta-feira",
-                4: "Quinta-feira",
-                5: "Sexta-feira",
-                6: "Sábado"
-            }
-            
-            # Agrupa por dia
-            horarios_formatados = []
-            for horario in horarios:
-                dia_num = horario.get('dia_semana')
-                intervalos = horario.get('intervalos', [])
-                
-                if dia_num is None or not intervalos:
-                    continue
-                
-                dia_nome = dias_semana.get(dia_num, f"Dia {dia_num}")
-                intervalos_str = []
-                for intervalo in intervalos:
-                    inicio = intervalo.get('inicio', '')
-                    fim = intervalo.get('fim', '')
-                    if inicio and fim:
-                        intervalos_str.append(f"{inicio} às {fim}")
-                
-                if intervalos_str:
-                    horarios_formatados.append(f"• {dia_nome}: {', '.join(intervalos_str)}")
-            
-            if horarios_formatados:
-                return "🕐 *Horário de Funcionamento:*\n\n" + "\n".join(horarios_formatados)
-            else:
-                return "Horários de funcionamento não informados."
-        except Exception as e:
-            print(f"❌ Erro ao formatar horários: {e}")
-            return "Horários de funcionamento não informados."
+        return self.formatters.formatar_horarios_funcionamento(horarios_funcionamento)
 
     def _formatar_localizacao_empresas(self, empresas: List[Dict], empresa_atual_id: int) -> str:
         """
@@ -581,74 +481,7 @@ class GroqSalesHandler:
         Se houver apenas 1 empresa, retorna informações dela.
         Se houver mais de 1, retorna informações da atual + lista das outras.
         """
-        if not empresas:
-            return "Informações de localização não disponíveis."
-        
-        # Filtra apenas empresas com endereço completo
-        empresas_com_endereco = [
-            emp for emp in empresas 
-            if emp.get('bairro') and emp.get('cidade') and emp.get('estado')
-        ]
-        
-        if not empresas_com_endereco:
-            return "Informações de localização não disponíveis."
-        
-        # Encontra a empresa atual
-        empresa_atual = None
-        outras_empresas = []
-        
-        for emp in empresas_com_endereco:
-            if emp['id'] == empresa_atual_id:
-                empresa_atual = emp
-            else:
-                outras_empresas.append(emp)
-        
-        resposta = ""
-        
-        # Se há apenas 1 empresa ou não encontrou a atual, mostra só ela
-        if len(empresas_com_endereco) == 1 or not empresa_atual:
-            emp = empresas_com_endereco[0]
-            resposta = "📍 *Nossa Localização:*\n\n"
-            
-            # Monta endereço completo
-            endereco_parts = []
-            if emp.get('logradouro'):
-                endereco_parts.append(emp['logradouro'])
-                if emp.get('numero'):
-                    endereco_parts.append(f", {emp['numero']}")
-            if emp.get('complemento'):
-                endereco_parts.append(f" - {emp['complemento']}")
-            
-            if endereco_parts:
-                resposta += "".join(endereco_parts) + "\n"
-            
-            resposta += f"{emp['bairro']} ({emp['cidade']}) / {emp['estado']}"
-        else:
-            # Há mais de 1 empresa - mostra a atual + lista das outras
-            resposta = "📍 *Nossa Localização:*\n\n"
-            
-            # Informações da empresa atual
-            resposta += f"*{empresa_atual['nome']}* (unidade atual):\n"
-            endereco_parts = []
-            if empresa_atual.get('logradouro'):
-                endereco_parts.append(empresa_atual['logradouro'])
-                if empresa_atual.get('numero'):
-                    endereco_parts.append(f", {empresa_atual['numero']}")
-            if empresa_atual.get('complemento'):
-                endereco_parts.append(f" - {empresa_atual['complemento']}")
-            
-            if endereco_parts:
-                resposta += "".join(endereco_parts) + "\n"
-            
-            resposta += f"{empresa_atual['bairro']} ({empresa_atual['cidade']}) / {empresa_atual['estado']}\n"
-            
-            # Lista outras unidades
-            if outras_empresas:
-                resposta += "\n*Outras unidades disponíveis:*\n"
-                for emp in outras_empresas:
-                    resposta += f"• {emp['nome']} - {emp['bairro']} ({emp['cidade']}) / {emp['estado']}\n"
-        
-        return resposta
+        return self.formatters.formatar_localizacao_empresas(empresas, empresa_atual_id)
 
     def _normalizar_mensagem(self, mensagem: str) -> str:
         """
@@ -1539,164 +1372,26 @@ class GroqSalesHandler:
         Se produtos for fornecido, também busca na lista como fallback.
         Usa busca fuzzy com correção de erros e suporte a variações.
         """
-        if not termo or len(termo.strip()) < 2:
-            return None
-        
-        termo = termo.strip()
-        
-        # PRIMEIRO: Tenta busca inteligente no banco (produtos + receitas + combos)
-        resultados_banco = self._buscar_produtos_inteligente(termo, limit=1)
-        
-        if resultados_banco:
-            produto_encontrado = resultados_banco[0]
-            print(f"✅ Produto encontrado no banco: {produto_encontrado['nome']} (tipo: {produto_encontrado.get('tipo', 'produto')})")
-            return produto_encontrado
-        
-        # FALLBACK: Se não encontrou no banco e tem lista de produtos, busca na lista
-        if produtos:
-            termo_lower = termo.lower().strip()
-
-            # Remove acentos
-            def remover_acentos(texto):
-                acentos = {'á': 'a', 'à': 'a', 'ã': 'a', 'â': 'a', 'é': 'e', 'ê': 'e',
-                           'í': 'i', 'ó': 'o', 'ô': 'o', 'õ': 'o', 'ú': 'u', 'ç': 'c'}
-                for acentuado, sem_acento in acentos.items():
-                    texto = texto.replace(acentuado, sem_acento)
-                return texto
-
-            # Normaliza removendo hífens, espaços e caracteres especiais
-            def normalizar(texto):
-                texto = remover_acentos(texto.lower())
-                return re.sub(r'[-\s_.]', '', texto)
-
-            termo_sem_acento = remover_acentos(termo_lower)
-            termo_normalizado = normalizar(termo_lower)
-
-            # 1. Match exato no nome
-            for produto in produtos:
-                nome_lower = produto['nome'].lower()
-                nome_sem_acento = remover_acentos(nome_lower)
-                if termo_lower == nome_lower or termo_sem_acento == nome_sem_acento:
-                    print(f"✅ Match exato na lista: {produto['nome']}")
-                    return produto
-
-            # 1.5 Match normalizado (xbacon = x-bacon, coca cola = cocacola)
-            for produto in produtos:
-                nome_normalizado = normalizar(produto['nome'])
-                if termo_normalizado == nome_normalizado:
-                    print(f"✅ Match normalizado na lista: {produto['nome']}")
-                    return produto
-
-            # 2. Nome contém o termo (também normalizado)
-            for produto in produtos:
-                nome_lower = produto['nome'].lower()
-                nome_sem_acento = remover_acentos(nome_lower)
-                nome_normalizado = normalizar(produto['nome'])
-                if termo_sem_acento in nome_sem_acento or termo_lower in nome_lower or termo_normalizado in nome_normalizado:
-                    print(f"✅ Match parcial na lista (termo no nome): {produto['nome']}")
-                    return produto
-
-            # 3. Termo contém o nome do produto
-            for produto in produtos:
-                nome_lower = produto['nome'].lower()
-                nome_sem_acento = remover_acentos(nome_lower)
-                # Busca cada palavra do nome no termo
-                palavras_nome = nome_sem_acento.split()
-                for palavra in palavras_nome:
-                    if len(palavra) > 3 and palavra in termo_sem_acento:
-                        print(f"✅ Match por palavra '{palavra}' na lista: {produto['nome']}")
-                        return produto
-
-            # 4. Match por palavras-chave comuns
-            mapeamento = {
-                'coca': ['coca-cola', 'coca cola', 'cocacola'],
-                'pepsi': ['pepsi'],
-                'guarana': ['guarana', 'guaraná'],
-                'pizza': ['pizza'],
-                'hamburguer': ['hamburguer', 'hamburger', 'burger', 'burguer'],
-                'x-': ['x-bacon', 'x-tudo', 'x-salada', 'x-burguer'],
-                'batata': ['batata', 'fritas'],
-                'calabresa': ['calabresa'],
-                'frango': ['frango'],
-                'bacon': ['bacon'],
-            }
-
-            for chave, variantes in mapeamento.items():
-                if chave in termo_sem_acento or any(v in termo_sem_acento for v in variantes):
-                    for produto in produtos:
-                        nome_sem_acento = remover_acentos(produto['nome'].lower())
-                        if chave in nome_sem_acento or any(v in nome_sem_acento for v in variantes):
-                            print(f"✅ Match por mapeamento '{chave}' na lista: {produto['nome']}")
-                            return produto
-
-        print(f"❌ Produto não encontrado para termo: {termo}")
-        return None
+        return self.produto_service.buscar_produto_por_termo(termo, produtos)
 
     def _gerar_mensagem_boas_vindas(self) -> str:
         """
         Gera mensagem de boas-vindas CURTA e NATURAL
         """
-        import random
-
-        # Busca alguns produtos para sugestão
-        produtos = self._buscar_promocoes()
-
-        # Mensagens variadas de boas-vindas
-        saudacoes = [
-            "E aí! 😊 Tudo bem?",
-            "Opa! Beleza?",
-            "Olá! Tudo certo?",
-            "E aí, tudo bem? 👋",
-        ]
-
-        saudacao = random.choice(saudacoes)
-
-        mensagem = f"{saudacao}\n\n"
-        mensagem += "Aqui é o atendimento do delivery!\n\n"
-
-        # Mostra apenas 2-3 sugestões rápidas
-        if produtos:
-            destaques = produtos[:3]
-            mensagem += "🔥 *Hoje tá saindo muito:*\n"
-            for p in destaques:
-                mensagem += f"• {p['nome']} - R$ {p['preco']:.2f}\n"
-            mensagem += "\n"
-
-        mensagem += "O que vai ser hoje? 😋"
-
-        return mensagem
+        return self.formatters.gerar_mensagem_boas_vindas(self._buscar_promocoes)
 
     def _load_chatbot_config(self):
         """Carrega configurações do chatbot para a empresa"""
-        try:
-            from app.api.chatbot.repositories.repo_chatbot_config import ChatbotConfigRepository
-            repo = ChatbotConfigRepository(self.db)
-            config = repo.get_by_empresa_id(self.empresa_id)
-            self._config_cache = config
-            if config:
-                print(f"✅ Configuração do chatbot carregada: {config.nome} (aceita_pedidos={config.aceita_pedidos_whatsapp})")
-        except Exception as e:
-            print(f"⚠️ Erro ao carregar configuração do chatbot: {e}")
-            self._config_cache = None
+        self.config_loader._load_chatbot_config()
+        self._config_cache = self.config_loader.get_chatbot_config()
 
     def _get_chatbot_config(self):
         """Retorna configuração do chatbot (com cache)"""
-        return self._config_cache
+        return self.config_loader.get_chatbot_config()
 
     def _obter_link_cardapio(self) -> str:
         """Obtém o link do cardápio da empresa"""
-        try:
-            empresa_query = text("""
-                SELECT cardapio_link
-                FROM cadastros.empresas
-                WHERE id = :empresa_id
-            """)
-            result = self.db.execute(empresa_query, {"empresa_id": self.empresa_id})
-            empresa = result.fetchone()
-            return empresa[0] if empresa and empresa[0] else LINK_CARDAPIO
-        except Exception as e:
-            print(f"⚠️ Erro ao buscar link do cardápio: {e}")
-            return LINK_CARDAPIO
+        return self.config_loader.obter_link_cardapio()
 
     def _obter_mensagem_final_pedido(self) -> str:
         """
@@ -1704,64 +1399,13 @@ class GroqSalesHandler:
         Se aceita pedidos: "Quer adicionar ao pedido? 😊"
         Se não aceita: mensagem com link do cardápio
         """
-        config = self._get_chatbot_config()
-        if config and not config.aceita_pedidos_whatsapp:
-            link_cardapio = self._obter_link_cardapio()
-            if config.mensagem_redirecionamento:
-                mensagem = config.mensagem_redirecionamento.replace("{link_cardapio}", link_cardapio)
-            else:
-                mensagem = f"📲 Para fazer seu pedido, acesse nosso cardápio completo pelo link:\n\n👉 {link_cardapio}\n\nDepois é só fazer seu pedido pelo site! 😊"
-            return mensagem
-        else:
-            return "Quer adicionar ao pedido? 😊"
+        return self.config_loader.obter_mensagem_final_pedido()
 
     def _gerar_mensagem_boas_vindas_conversacional(self) -> str:
         """Gera mensagem de boas-vindas para modo conversacional com botões"""
-        # Busca configuração do chatbot
-        config = self._get_chatbot_config()
-        
-        # Busca nome da empresa e link do cardápio do banco
-        try:
-            empresa_query = text("""
-                SELECT nome, cardapio_link
-                FROM cadastros.empresas
-                WHERE id = :empresa_id
-            """)
-            result = self.db.execute(empresa_query, {"empresa_id": self.empresa_id})
-            empresa = result.fetchone()
-            
-            nome_empresa = empresa[0] if empresa and empresa[0] else "[Nome da Empresa]"
-            link_cardapio = empresa[1] if empresa and empresa[1] else LINK_CARDAPIO
-        except Exception as e:
-            print(f"⚠️ Erro ao buscar dados da empresa: {e}")
-            nome_empresa = "[Nome da Empresa]"
-            link_cardapio = LINK_CARDAPIO
-
-        # Usa mensagem personalizada se configurada, senão usa padrão
-        if config and config.mensagem_boas_vindas:
-            mensagem = config.mensagem_boas_vindas
-            # Substitui placeholders se necessário
-            mensagem = mensagem.replace("{nome_empresa}", nome_empresa)
-            mensagem = mensagem.replace("{link_cardapio}", link_cardapio)
-        else:
-            mensagem = f"👋 Olá! Seja bem-vindo(a) à {nome_empresa}!\n"
-            mensagem += "É um prazer te atender 😊\n\n"
-            mensagem += f"📲 Para conferir nosso cardápio completo, é só acessar o link abaixo:\n"
-            mensagem += f"👉 {link_cardapio}\n\n"
-            
-            # Só mostra opção de pedir pelo WhatsApp se aceita pedidos
-            if config and not config.aceita_pedidos_whatsapp:
-                if config.mensagem_redirecionamento:
-                    mensagem += config.mensagem_redirecionamento + "\n\n"
-                else:
-                    mensagem += "Para fazer seu pedido, acesse nosso cardápio pelo link acima! 😊\n\n"
-            else:
-                mensagem += "🛒 Prefere pedir por aqui mesmo?\n"
-                mensagem += "Sem problemas! É só me dizer o que você gostaria que eu te ajudo a montar seu pedido passo a passo 😉\n\n"
-            
-            mensagem += "💬 Fico à disposição!"
-
-        return mensagem
+        return self.formatters.gerar_mensagem_boas_vindas_conversacional(
+            self._get_chatbot_config, self._obter_link_cardapio
+        )
 
     async def _processar_conversa_ia(self, user_id: str, mensagem: str, dados: dict) -> str:
         """
@@ -3870,33 +3514,7 @@ REGRA PARA COMPLEMENTOS:
 
     def _converter_contexto_para_carrinho(self, pedido_contexto: List[Dict]) -> List[Dict]:
         """Converte o contexto da conversa para formato de carrinho"""
-        carrinho = []
-        for item in pedido_contexto:
-            removidos = item.get("removidos", [])
-            adicionais = item.get("adicionais", [])  # Nomes para exibição
-            complementos_checkout = item.get("complementos_checkout", [])  # IDs para o endpoint
-
-            # Observação = APENAS os removidos (SEM: cebola, SEM: tomate)
-            observacao = None
-            if removidos:
-                observacao = f"SEM: {', '.join(removidos)}"
-
-            carrinho_item = {
-                "id": item.get("id", ""),
-                "nome": item["nome"],
-                "preco": item["preco"],
-                "quantidade": item.get("quantidade", 1),
-                "observacoes": observacao,  # Só os removidos vão aqui
-                "complementos": complementos_checkout,  # Estrutura com IDs para o endpoint
-                "personalizacoes": {
-                    "removidos": removidos,
-                    "adicionais": adicionais,  # Nomes para exibição
-                    "preco_adicionais": item.get("preco_adicionais", 0.0),
-                    "complemento_obrigatorio": item.get("complemento_obrigatorio", False)
-                }
-            }
-            carrinho.append(carrinho_item)
-        return carrinho
+        return self.carrinho_domain.converter_contexto_para_carrinho(pedido_contexto)
 
     def _eh_primeira_mensagem(self, mensagem: str) -> bool:
         """Detecta se é uma mensagem inicial/saudação"""
@@ -4109,60 +3727,7 @@ REGRA PARA COMPLEMENTOS:
 
     def _gerar_lista_produtos(self, produtos: List[Dict], carrinho: List[Dict] = None) -> str:
         """Gera uma lista formatada de produtos para mostrar ao cliente"""
-        if not produtos:
-            return "Ops, não encontrei produtos disponíveis no momento 😅"
-
-        # Agrupa produtos por categoria (baseado no nome)
-        pizzas = []
-        bebidas = []
-        lanches = []
-        outros = []
-
-        for p in produtos:
-            nome_lower = p['nome'].lower()
-            if 'pizza' in nome_lower:
-                pizzas.append(p)
-            elif any(x in nome_lower for x in ['coca', 'refri', 'suco', 'água', 'agua', 'cerveja', 'guarana', 'guaraná']):
-                bebidas.append(p)
-            elif any(x in nome_lower for x in ['x-', 'x ', 'burger', 'lanche', 'hamburguer', 'hambúrguer']):
-                lanches.append(p)
-            else:
-                outros.append(p)
-
-        mensagem = "📋 *Nosso Cardápio:*\n\n"
-
-        if pizzas:
-            mensagem += "🍕 *Pizzas:*\n"
-            for p in pizzas:
-                mensagem += f"• {p['nome']} - R$ {p['preco']:.2f}\n"
-            mensagem += "\n"
-
-        if lanches:
-            mensagem += "🍔 *Lanches:*\n"
-            for p in lanches:
-                mensagem += f"• {p['nome']} - R$ {p['preco']:.2f}\n"
-            mensagem += "\n"
-
-        if bebidas:
-            mensagem += "🥤 *Bebidas:*\n"
-            for p in bebidas:
-                mensagem += f"• {p['nome']} - R$ {p['preco']:.2f}\n"
-            mensagem += "\n"
-
-        if outros:
-            mensagem += "📦 *Outros:*\n"
-            for p in outros:
-                mensagem += f"• {p['nome']} - R$ {p['preco']:.2f}\n"
-            mensagem += "\n"
-
-        # Se tem carrinho, mostra o que já foi adicionado
-        if carrinho:
-            total = sum(item['preco'] * item.get('quantidade', 1) for item in carrinho)
-            mensagem += f"🛒 *Seu carrinho:* R$ {total:.2f}\n\n"
-
-        mensagem += "É só me dizer o que você quer! 😊"
-
-        return mensagem
+        return self.formatters.gerar_lista_produtos(produtos, carrinho)
 
     def _detectar_novo_endereco(self, mensagem: str) -> bool:
         """Detecta se cliente quer cadastrar novo endereço"""
@@ -4400,59 +3965,24 @@ REGRA PARA COMPLEMENTOS:
         return None
 
     def _get_carrinho_service(self) -> CarrinhoService:
-        if not self._carrinho_service:
-            self._carrinho_service = CarrinhoService(
-                db=self.db,
-                produto_contract=ProdutoAdapter(self.db),
-                complemento_contract=ComplementoAdapter(self.db),
-                receitas_contract=ReceitasAdapter(self.db),
-                combo_contract=ComboAdapter(self.db),
-            )
-        return self._carrinho_service
+        # Mantém a assinatura original, mas delega para o Domain Service
+        return self.carrinho_domain.get_carrinho_service()
 
     def _obter_carrinho_db(self, user_id: str):
-        service = self._get_carrinho_service()
-        return service.obter_carrinho(user_id=user_id, empresa_id=self.empresa_id)
+        return self.carrinho_domain.obter_carrinho_db(user_id)
 
     def _verificar_carrinho_aberto(self, user_id: str) -> Optional[Any]:
         """
         Verifica se existe um carrinho temporário em aberto para o usuário.
         Retorna o carrinho se existir, None caso contrário.
         """
-        try:
-            carrinho_resp = self._obter_carrinho_db(user_id)
-            if carrinho_resp and carrinho_resp.itens and len(carrinho_resp.itens) > 0:
-                return carrinho_resp
-            return None
-        except Exception as e:
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.error(f"Erro ao verificar carrinho aberto: {e}", exc_info=True)
-            return None
+        return self.carrinho_domain.verificar_carrinho_aberto(user_id)
 
     def _formatar_mensagem_carrinho_aberto(self, carrinho_resp) -> str:
         """
         Formata mensagem informando sobre o carrinho em aberto.
         """
-        if not carrinho_resp or not carrinho_resp.itens:
-            return ""
-        
-        mensagem = "🛒 *Você tem um pedido em aberto:*\n\n"
-        
-        # Lista os itens do carrinho
-        for item in carrinho_resp.itens:
-            qtd = int(item.quantidade or 1)
-            preco_item = float(item.preco_total or 0)
-            nome_item = item.produto_descricao_snapshot or "Item"
-            mensagem += f"• {qtd}x {nome_item} - R$ {preco_item:.2f}\n"
-        
-        # Mostra o total
-        total = float(carrinho_resp.valor_total or 0)
-        mensagem += f"\n💰 *Total: R$ {total:.2f}*\n\n"
-        mensagem += "💬 Quer continuar esse pedido ou cancelar para fazer um novo?\n"
-        mensagem += "(Digite 'continuar' para seguir com esse pedido ou 'cancelar' para fazer um novo)"
-        
-        return mensagem
+        return self.carrinho_domain.formatar_mensagem_carrinho_aberto(carrinho_resp)
 
     def _detectar_confirmacao_cancelamento_carrinho(self, mensagem: str) -> Optional[bool]:
         """
@@ -4485,51 +4015,13 @@ REGRA PARA COMPLEMENTOS:
         return None
 
     def _carrinho_response_para_lista(self, carrinho_resp) -> List[Dict]:
-        if not carrinho_resp or not carrinho_resp.itens:
-            return []
-
-        lista = []
-        for item in carrinho_resp.itens:
-            qtd = int(item.quantidade or 1)
-            preco_total = float(item.preco_total or 0)
-            preco_unit = preco_total / qtd if qtd else float(item.preco_unitario or 0)
-            item_id = item.produto_cod_barras
-            if not item_id and item.receita_id:
-                item_id = f"receita_{item.receita_id}"
-            if not item_id and item.combo_id:
-                item_id = f"combo_{item.combo_id}"
-
-            lista.append({
-                "id": item_id or item.id,
-                "nome": item.produto_descricao_snapshot or "Item",
-                "descricao": "",
-                "preco": preco_unit,
-                "quantidade": qtd,
-                "personalizacoes": {
-                    "removidos": [],
-                    "adicionais": [],
-                    "preco_adicionais": 0.0
-                }
-            })
-
-        return lista
+        return self.carrinho_domain.carrinho_response_para_lista(carrinho_resp)
 
     def _sincronizar_carrinho_dados(self, user_id: str, dados: Dict) -> Tuple[Optional[Any], List[Dict]]:
-        carrinho_resp = self._obter_carrinho_db(user_id)
-        carrinho_lista = self._carrinho_response_para_lista(carrinho_resp)
-        dados['carrinho'] = carrinho_lista
-        return carrinho_resp, carrinho_lista
+        return self.carrinho_domain.sincronizar_carrinho_dados(user_id, dados)
 
     def _montar_item_carrinho_request(self, produto: Dict, quantidade: int):
-        produto_id = str(produto.get("id", ""))
-        tipo = produto.get("tipo")
-        if tipo == "receita" or produto_id.startswith("receita_"):
-            receita_id = int(produto_id.replace("receita_", ""))
-            return {"receita": ReceitaCarrinhoRequest(receita_id=receita_id, quantidade=quantidade)}
-        if tipo == "combo" or produto_id.startswith("combo_"):
-            combo_id = int(produto_id.replace("combo_", ""))
-            return {"combo": ComboCarrinhoRequest(combo_id=combo_id, quantidade=quantidade)}
-        return {"item": ItemCarrinhoRequest(produto_cod_barras=produto_id, quantidade=quantidade)}
+        return self.carrinho_domain.montar_item_carrinho_request(produto, quantidade)
 
     def _detectar_confirmacao_adicao(self, mensagem: str) -> Optional[bool]:
         msg = self._normalizar_mensagem(mensagem)
@@ -4676,22 +4168,7 @@ REGRA PARA COMPLEMENTOS:
         """
         Adiciona um produto ao carrinho usando o banco de dados
         """
-        service = self._get_carrinho_service()
-        tipo_entrega = dados.get("tipo_entrega") or "DELIVERY"
-        service.obter_ou_criar_carrinho(
-            user_id=user_id,
-            empresa_id=self.empresa_id,
-            tipo_entrega=tipo_entrega
-        )
-
-        payload = self._montar_item_carrinho_request(produto, quantidade)
-        request = AdicionarItemCarrinhoRequest(user_id=user_id, **payload)
-        carrinho_resp = service.adicionar_item(request)
-
-        dados['ultimo_produto_adicionado'] = produto.get('nome') or dados.get('ultimo_produto_adicionado')
-        carrinho_resp, carrinho_lista = self._sincronizar_carrinho_dados(user_id, dados)
-        print(f"🛒 Produto adicionado no banco: {produto.get('nome', 'item')}")
-        return carrinho_resp, carrinho_lista
+        return self.carrinho_domain.adicionar_ao_carrinho(user_id, dados, produto, quantidade)
 
     def _personalizar_item_carrinho(
         self,
@@ -4713,138 +4190,7 @@ REGRA PARA COMPLEMENTOS:
         Returns:
             (sucesso, mensagem)
         """
-        carrinho = dados.get('carrinho', [])
-        pedido_contexto = dados.get('pedido_contexto', [])
-        
-        # No modo conversacional, usa pedido_contexto se carrinho estiver vazio
-        lista_itens = carrinho if carrinho else pedido_contexto
-        usando_contexto = not carrinho and pedido_contexto
-
-        if not lista_itens:
-            return (False, "Seu carrinho está vazio! Primeiro adicione um produto 😊")
-
-        # Encontra o produto na lista
-        produto_alvo = None
-        if produto_busca:
-            # Busca pelo nome
-            for item in lista_itens:
-                item_nome_check = item.get('nome', '')
-                if produto_busca.lower() in item_nome_check.lower():
-                    produto_alvo = item
-                    break
-        else:
-            # Usa o último adicionado
-            produto_alvo = lista_itens[-1]
-
-        if not produto_alvo:
-            return (False, f"Não encontrei '{produto_busca}' no seu carrinho 🤔")
-
-        # No modo conversacional, trabalha com pedido_contexto que tem estrutura diferente
-        if usando_contexto:
-            # Inicializa estruturas se não existirem
-            if 'removidos' not in produto_alvo:
-                produto_alvo['removidos'] = []
-            if 'adicionais' not in produto_alvo:
-                produto_alvo['adicionais'] = []
-            if 'preco_adicionais' not in produto_alvo:
-                produto_alvo['preco_adicionais'] = 0.0
-
-            if acao == "remover_ingrediente":
-                # Verifica se o ingrediente existe na receita
-                ingrediente = self.ingredientes_service.verificar_ingrediente_na_receita_por_nome(
-                    produto_alvo['nome'], item_nome
-                )
-
-                if ingrediente:
-                    if ingrediente['nome'] not in produto_alvo['removidos']:
-                        produto_alvo['removidos'].append(ingrediente['nome'])
-                        dados['pedido_contexto'] = pedido_contexto
-                        return (True, f"✅ Ok! *{produto_alvo['nome']}* SEM {ingrediente['nome']} 👍")
-                    else:
-                        return (True, f"Esse já tá sem {ingrediente['nome']}! 😊")
-                else:
-                    return (False, f"Hmm, {produto_alvo['nome']} não leva {item_nome} 🤔")
-
-            elif acao == "adicionar_extra":
-                # Busca o adicional
-                adicional = self.ingredientes_service.buscar_adicional_por_nome(item_nome)
-
-                if adicional:
-                    # Verifica se já foi adicionado (compara nomes)
-                    adicionais_nomes = [add if isinstance(add, str) else add.get('nome', '') for add in produto_alvo['adicionais']]
-                    if adicional['nome'].lower() not in [a.lower() for a in adicionais_nomes]:
-                        produto_alvo['adicionais'].append(adicional['nome'])
-                        produto_alvo['preco_adicionais'] += adicional['preco']
-                        dados['pedido_contexto'] = pedido_contexto
-                        return (True, f"✅ Adicionei *{adicional['nome']}* (+R$ {adicional['preco']:.2f}) no seu *{produto_alvo['nome']}* 👍")
-                    else:
-                        return (True, f"Já adicionei {adicional['nome']}! 😊")
-                else:
-                    # Lista os adicionais disponíveis
-                    todos_adicionais = self.ingredientes_service.buscar_todos_adicionais()
-                    if todos_adicionais:
-                        nomes = [a['nome'] for a in todos_adicionais[:5]]
-                        return (False, f"Não encontrei esse adicional 🤔\n\nTemos disponível: {', '.join(nomes)}")
-                    return (False, f"Não encontrei esse adicional 🤔")
-            
-            return (False, "Não entendi a personalização 😅")
-        
-        # Modo normal com carrinho (estrutura com personalizacoes)
-        # Inicializa personalizacoes se não existir
-        if 'personalizacoes' not in produto_alvo:
-            produto_alvo['personalizacoes'] = {
-                'removidos': [],
-                'adicionais': [],
-                'preco_adicionais': 0.0
-            }
-
-        personalizacoes = produto_alvo['personalizacoes']
-
-        if acao == "remover_ingrediente":
-            # Verifica se o ingrediente existe na receita
-            ingrediente = self.ingredientes_service.verificar_ingrediente_na_receita_por_nome(
-                produto_alvo['nome'], item_nome
-            )
-
-            if ingrediente:
-                if ingrediente['nome'] not in personalizacoes['removidos']:
-                    personalizacoes['removidos'].append(ingrediente['nome'])
-                    dados['carrinho'] = carrinho
-                    return (True, f"✅ Ok! *{produto_alvo['nome']}* SEM {ingrediente['nome']} 👍")
-                else:
-                    return (True, f"Esse já tá sem {ingrediente['nome']}! 😊")
-            else:
-                return (False, f"Hmm, {produto_alvo['nome']} não leva {item_nome} 🤔")
-
-        elif acao == "adicionar_extra":
-            # Busca o adicional
-            adicional = self.ingredientes_service.buscar_adicional_por_nome(item_nome)
-
-            if adicional:
-                # Verifica se já foi adicionado
-                for add in personalizacoes['adicionais']:
-                    if add['nome'].lower() == adicional['nome'].lower():
-                        return (True, f"Já adicionei {adicional['nome']}! 😊")
-
-                # Adiciona
-                personalizacoes['adicionais'].append({
-                    'id': adicional['id'],
-                    'nome': adicional['nome'],
-                    'preco': adicional['preco']
-                })
-                personalizacoes['preco_adicionais'] += adicional['preco']
-                dados['carrinho'] = carrinho
-
-                return (True, f"✅ Adicionei *{adicional['nome']}* (+R$ {adicional['preco']:.2f}) no seu *{produto_alvo['nome']}* 👍")
-            else:
-                # Lista os adicionais disponíveis
-                todos_adicionais = self.ingredientes_service.buscar_todos_adicionais()
-                if todos_adicionais:
-                    nomes = [a['nome'] for a in todos_adicionais[:5]]
-                    return (False, f"Não encontrei esse adicional 🤔\n\nTemos disponível: {', '.join(nomes)}")
-                return (False, f"Não encontrei esse adicional 🤔")
-
-        return (False, "Não entendi a personalização 😅")
+        return self.carrinho_domain.personalizar_item_carrinho(dados, acao, item_nome, produto_busca)
 
     def _detectar_remocao_produto(self, mensagem: str) -> bool:
         """Detecta se o cliente quer remover um produto do carrinho"""
@@ -4876,81 +4222,11 @@ REGRA PARA COMPLEMENTOS:
         Remove um produto do carrinho
         Returns: (sucesso, mensagem)
         """
-        service = self._get_carrinho_service()
-        carrinho_resp = self._obter_carrinho_db(user_id)
-        if not carrinho_resp or not carrinho_resp.itens:
-            return False, "Seu carrinho está vazio.", None, []
-
-        produto_id = str(produto.get("id", ""))
-        tipo = produto.get("tipo")
-        item_alvo = None
-
-        if tipo == "receita" or produto_id.startswith("receita_"):
-            receita_id = int(produto_id.replace("receita_", ""))
-            item_alvo = next((i for i in carrinho_resp.itens if i.receita_id == receita_id), None)
-        elif tipo == "combo" or produto_id.startswith("combo_"):
-            combo_id = int(produto_id.replace("combo_", ""))
-            item_alvo = next((i for i in carrinho_resp.itens if i.combo_id == combo_id), None)
-        else:
-            item_alvo = next((i for i in carrinho_resp.itens if i.produto_cod_barras == produto_id), None)
-
-        if not item_alvo:
-            carrinho_lista = self._carrinho_response_para_lista(carrinho_resp)
-            return False, f"Hmm, não encontrei *{produto.get('nome', produto_id)}* no seu carrinho 🤔", carrinho_resp, carrinho_lista
-
-        if quantidade is None or quantidade >= item_alvo.quantidade:
-            service.remover_item(user_id, RemoverItemCarrinhoRequest(item_id=item_alvo.id))
-            nome_removido = item_alvo.produto_descricao_snapshot or produto.get('nome', 'item')
-            carrinho_resp, carrinho_lista = self._sincronizar_carrinho_dados(user_id, dados)
-            print(f"🗑️ Produto removido no banco: {nome_removido}")
-            return True, f"✅ *{nome_removido}* removido do carrinho!", carrinho_resp, carrinho_lista
-
-        nova_qtd = max(int(item_alvo.quantidade or 1) - quantidade, 1)
-        service.atualizar_item(user_id, AtualizarItemCarrinhoRequest(item_id=item_alvo.id, quantidade=nova_qtd))
-        nome_item = item_alvo.produto_descricao_snapshot or produto.get('nome', 'item')
-        carrinho_resp, carrinho_lista = self._sincronizar_carrinho_dados(user_id, dados)
-        print(f"🛒 Quantidade reduzida no banco: {nome_item} x{nova_qtd}")
-        return True, f"✅ Reduzi para {nova_qtd}x *{nome_item}*", carrinho_resp, carrinho_lista
+        return self.carrinho_domain.remover_do_carrinho(user_id, dados, produto, quantidade)
 
     def _formatar_carrinho(self, carrinho: List[Dict]) -> str:
         """Formata o carrinho para exibição, incluindo personalizações"""
-        if not carrinho:
-            return "🛒 *Seu carrinho está vazio!*\n\nO que você gostaria de pedir hoje? 😊"
-
-        msg = "🛒 *SEU PEDIDO*\n"
-        msg += "━━━━━━━━━━━━━━━━━━━━\n\n"
-        
-        total = 0
-        for idx, item in enumerate(carrinho, 1):
-            qtd = item.get('quantidade', 1)
-            preco_base = item['preco']
-            preco_adicionais = item.get('personalizacoes', {}).get('preco_adicionais', 0.0)
-            subtotal = (preco_base + preco_adicionais) * qtd
-            total += subtotal
-
-            msg += f"*{idx}. {qtd}x {item['nome']}*\n"
-            msg += f"   R$ {subtotal:.2f}\n"
-
-            # Mostra personalizações se houver
-            personalizacoes = item.get('personalizacoes', {})
-            removidos = personalizacoes.get('removidos', [])
-            adicionais = personalizacoes.get('adicionais', [])
-
-            if removidos:
-                msg += f"   🚫 Sem: {', '.join(removidos)}\n"
-
-            if adicionais:
-                for add in adicionais:
-                    if isinstance(add, dict):
-                        msg += f"   ➕ {add.get('nome', add)} (+R$ {add.get('preco', 0):.2f})\n"
-                    else:
-                        msg += f"   ➕ {add}\n"
-            
-            msg += "\n"
-
-        msg += "━━━━━━━━━━━━━━━━━━━━\n"
-        msg += f"💰 *TOTAL: R$ {total:.2f}*\n"
-        return msg
+        return self.formatters.formatar_carrinho(carrinho)
 
     def _extrair_quantidade(self, mensagem: str) -> int:
         """Extrai quantidade da mensagem, padrão é 1"""
@@ -5048,374 +4324,43 @@ REGRA PARA COMPLEMENTOS:
 
     def _buscar_produtos(self, termo_busca: str = "") -> List[Dict[str, Any]]:
         """Busca produtos no banco de dados usando SQL direto"""
-        try:
-            from sqlalchemy import text
-
-            if termo_busca:
-                query = text("""
-                    SELECT p.cod_barras, p.descricao, pe.preco_venda
-                    FROM catalogo.produtos p
-                    JOIN catalogo.produtos_empresa pe ON p.cod_barras = pe.cod_barras
-                    WHERE pe.empresa_id = :empresa_id
-                    AND p.ativo = true
-                    AND pe.disponivel = true
-                    AND p.descricao ILIKE :termo
-                    ORDER BY p.descricao
-                    LIMIT 10
-                """)
-                result = self.db.execute(query, {"empresa_id": self.empresa_id, "termo": f"%{termo_busca}%"})
-            else:
-                query = text("""
-                    SELECT p.cod_barras, p.descricao, pe.preco_venda
-                    FROM catalogo.produtos p
-                    JOIN catalogo.produtos_empresa pe ON p.cod_barras = pe.cod_barras
-                    WHERE pe.empresa_id = :empresa_id
-                    AND p.ativo = true
-                    AND pe.disponivel = true
-                    ORDER BY p.descricao
-                    LIMIT 10
-                """)
-                result = self.db.execute(query, {"empresa_id": self.empresa_id})
-
-            return [
-                {
-                    "id": row[0],
-                    "nome": row[1],
-                    "preco": float(row[2])
-                }
-                for row in result.fetchall()
-            ]
-        except Exception as e:
-            print(f"Erro ao buscar produtos: {e}")
-            return []
+        return self.produto_service.buscar_produtos(termo_busca)
 
     def _buscar_promocoes(self) -> List[Dict[str, Any]]:
         """Busca produtos em promoção/destaque usando SQL direto (prioriza receitas)"""
-        try:
-            from sqlalchemy import text
-
-            produtos = []
-
-            # Primeiro busca receitas (pizzas, lanches) - são os destaques
-            query_receitas = text("""
-                SELECT id, nome, preco_venda
-                FROM catalogo.receitas
-                WHERE empresa_id = :empresa_id
-                AND ativo = true
-                AND disponivel = true
-                ORDER BY nome
-                LIMIT 3
-            """)
-            result_receitas = self.db.execute(query_receitas, {"empresa_id": self.empresa_id})
-
-            for row in result_receitas.fetchall():
-                produtos.append({
-                    "id": f"receita_{row[0]}",
-                    "nome": row[1],
-                    "preco": float(row[2]) if row[2] else 0.0
-                })
-
-            # Se não tiver receitas suficientes, busca produtos
-            if len(produtos) < 3:
-                query_produtos = text("""
-                    SELECT p.cod_barras, p.descricao, pe.preco_venda
-                    FROM catalogo.produtos p
-                    JOIN catalogo.produtos_empresa pe ON p.cod_barras = pe.cod_barras
-                    WHERE pe.empresa_id = :empresa_id
-                    AND p.ativo = true
-                    AND pe.disponivel = true
-                    ORDER BY p.descricao
-                    LIMIT :limit
-                """)
-                result_produtos = self.db.execute(query_produtos, {
-                    "empresa_id": self.empresa_id,
-                    "limit": 5 - len(produtos)
-                })
-
-                for row in result_produtos.fetchall():
-                    produtos.append({
-                        "id": row[0],
-                        "nome": row[1],
-                        "preco": float(row[2])
-                    })
-
-            return produtos[:5]
-        except Exception as e:
-            print(f"Erro ao buscar promoções: {e}")
-            return []
+        return self.produto_service.buscar_promocoes()
 
     def _obter_estado_conversa(self, user_id: str) -> Tuple[str, Dict[str, Any]]:
-        """Obtém estado salvo da conversa"""
-        try:
-            from sqlalchemy import text
-
-            query = text("""
-                SELECT id, metadata
-                FROM chatbot.conversations
-                WHERE user_id = :user_id AND empresa_id = :empresa_id
-                ORDER BY updated_at DESC
-                LIMIT 1
-            """)
-
-            result = self.db.execute(query, {
-                "user_id": user_id,
-                "empresa_id": self.empresa_id
-            }).fetchone()
-
-            conversation_id = None
-            estado = STATE_WELCOME
-            dados: Dict[str, Any] = {'carrinho': [], 'historico': []}
-
-            if result:
-                conversation_id = result[0]
-                metadata = result[1] or {}
-                if isinstance(metadata, str):
-                    try:
-                        metadata = json.loads(metadata)
-                    except Exception:
-                        metadata = {}
-
-                if isinstance(metadata, dict):
-                    estado = metadata.get('sales_state', STATE_WELCOME)
-                    dados = metadata.get('sales_data', {}) or {}
-
-            if not isinstance(dados, dict):
-                dados = {}
-
-            dados.setdefault('carrinho', [])
-            dados.setdefault('historico', [])
-
-            # Se não houver histórico no metadata, carrega do banco para dar contexto
-            if conversation_id and not dados.get('historico'):
-                try:
-                    from . import database as chatbot_db
-                    mensagens = chatbot_db.get_messages(self.db, conversation_id)
-                    if mensagens:
-                        dados['historico'] = [
-                            {"role": m.get("role", "user"), "content": m.get("content", "")}
-                            for m in mensagens[-10:]
-                        ]
-                except Exception as e:
-                    print(f"⚠️ Erro ao carregar histórico do banco: {e}")
-
-            return (estado, dados)
-        except Exception as e:
-            print(f"Erro ao obter estado: {e}")
-            return (STATE_WELCOME, {'carrinho': [], 'historico': []})
+        """Obtém estado salvo da conversa (delegado para `ConversacaoService`)."""
+        return self.conversacao_service.obter_estado(user_id)
 
     def _salvar_estado_conversa(self, user_id: str, estado: str, dados: Dict[str, Any]):
-        """Salva estado da conversa (cria se não existir)"""
-        try:
-            from sqlalchemy import text
-
-            dados_json = json.dumps(dados, ensure_ascii=False)
-
-            # Primeiro tenta atualizar registro existente
-            query_update = text("""
-                UPDATE chatbot.conversations
-                SET
-                    metadata = jsonb_build_object(
-                        'sales_state', CAST(:estado AS text),
-                        'sales_data', CAST(:dados AS jsonb)
-                    ),
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE user_id = :user_id AND empresa_id = :empresa_id
-                AND id = (
-                    SELECT id FROM chatbot.conversations
-                    WHERE user_id = :user_id AND empresa_id = :empresa_id
-                    ORDER BY updated_at DESC
-                    LIMIT 1
-                )
-                RETURNING id
-            """)
-
-            result = self.db.execute(query_update, {
-                "estado": estado,
-                "dados": dados_json,
-                "user_id": user_id,
-                "empresa_id": self.empresa_id
-            })
-
-            updated_row = result.fetchone()
-
-            # Se não atualizou nenhum registro, cria um novo
-            if not updated_row:
-                import uuid
-                session_id = str(uuid.uuid4())
-
-                query_insert = text("""
-                    INSERT INTO chatbot.conversations
-                    (session_id, user_id, empresa_id, model, prompt_key, metadata, created_at, updated_at)
-                    VALUES
-                    (:session_id, :user_id, :empresa_id, 'llama-3.1-8b-instant', :prompt_key,
-                     jsonb_build_object('sales_state', CAST(:estado AS text), 'sales_data', CAST(:dados AS jsonb)),
-                     CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                """)
-
-                self.db.execute(query_insert, {
-                    "session_id": session_id,
-                    "user_id": user_id,
-                    "empresa_id": self.empresa_id,
-                    "estado": estado,
-                    "dados": dados_json,
-                    "prompt_key": self.prompt_key
-                })
-                print(f"📝 Nova conversa criada para {user_id}")
-
-            self.db.commit()
-        except Exception as e:
-            print(f"Erro ao salvar estado: {e}")
-            import traceback
-            traceback.print_exc()
-            self.db.rollback()
+        """Salva estado da conversa (delegado para `ConversacaoService`)."""
+        self.conversacao_service.salvar_estado(user_id, estado, dados)
 
     def _buscar_todos_produtos(self) -> List[Dict[str, Any]]:
         """Busca TODOS os produtos disponíveis no banco usando SQL direto (produtos + receitas)"""
-        try:
-            from sqlalchemy import text
-
-            produtos = []
-
-            # 1. Busca produtos simples (bebidas, etc)
-            query_produtos = text("""
-                SELECT p.cod_barras, p.descricao, pe.preco_venda
-                FROM catalogo.produtos p
-                JOIN catalogo.produtos_empresa pe ON p.cod_barras = pe.cod_barras
-                WHERE pe.empresa_id = :empresa_id
-                AND p.ativo = true
-                AND pe.disponivel = true
-                ORDER BY p.descricao
-            """)
-            result_produtos = self.db.execute(query_produtos, {"empresa_id": self.empresa_id})
-
-            for row in result_produtos.fetchall():
-                produtos.append({
-                    "id": row[0],
-                    "nome": row[1],
-                    "descricao": "",  # Produtos simples não têm descrição detalhada
-                    "preco": float(row[2]),
-                    "tipo": "produto"
-                })
-
-            # 2. Busca receitas (pizzas, lanches, etc)
-            query_receitas = text("""
-                SELECT id, nome, preco_venda, descricao
-                FROM catalogo.receitas
-                WHERE empresa_id = :empresa_id
-                AND ativo = true
-                AND disponivel = true
-                ORDER BY nome
-            """)
-            result_receitas = self.db.execute(query_receitas, {"empresa_id": self.empresa_id})
-
-            for row in result_receitas.fetchall():
-                produtos.append({
-                    "id": f"receita_{row[0]}",  # Prefixo para diferenciar
-                    "nome": row[1],
-                    "preco": float(row[2]) if row[2] else 0.0,
-                    "descricao": row[3],
-                    "tipo": "receita"
-                })
-
-            return produtos
-        except Exception as e:
-            print(f"Erro ao buscar todos produtos: {e}")
-            import traceback
-            traceback.print_exc()
-            return []
+        return self.produto_service.buscar_todos_produtos()
 
     def _normalizar_termo_busca(self, termo: str) -> str:
         """
         Normaliza termo de busca removendo acentos, espaços extras e caracteres especiais.
         """
-        def remover_acentos(texto: str) -> str:
-            acentos = {
-                'á': 'a', 'à': 'a', 'ã': 'a', 'â': 'a', 'ä': 'a',
-                'é': 'e', 'ê': 'e', 'ë': 'e',
-                'í': 'i', 'î': 'i', 'ï': 'i',
-                'ó': 'o', 'ô': 'o', 'õ': 'o', 'ö': 'o',
-                'ú': 'u', 'û': 'u', 'ü': 'u',
-                'ç': 'c', 'ñ': 'n'
-            }
-            for acentuado, sem_acento in acentos.items():
-                texto = texto.replace(acentuado, sem_acento)
-                texto = texto.replace(acentuado.upper(), sem_acento.upper())
-            return texto
-        
-        # Remove acentos e converte para minúsculas
-        termo_normalizado = remover_acentos(termo.lower().strip())
-        # Remove espaços extras e caracteres especiais (mantém apenas letras e números)
-        termo_normalizado = re.sub(r'[^\w\s]', '', termo_normalizado)
-        termo_normalizado = re.sub(r'\s+', ' ', termo_normalizado).strip()
-        return termo_normalizado
+        return self.produto_service.normalizar_termo_busca(termo)
 
     def _corrigir_termo_busca(self, termo: str, lista_referencia: List[str], threshold: float = 0.6) -> str:
         """
         Corrige erros de digitação usando difflib.
         Exemplo: "te hmburg" -> "hamburg"
         """
-        if not termo or not lista_referencia:
-            return termo
-        
-        termo_normalizado = self._normalizar_termo_busca(termo)
-        
-        # Tenta encontrar correspondência mais próxima
-        matches = get_close_matches(
-            termo_normalizado,
-            [self._normalizar_termo_busca(ref) for ref in lista_referencia],
-            n=1,
-            cutoff=threshold
-        )
-        
-        if matches:
-            # Encontra o termo original correspondente
-            for ref in lista_referencia:
-                if self._normalizar_termo_busca(ref) == matches[0]:
-                    print(f"🔧 Correção: '{termo}' -> '{ref}'")
-                    return ref
-        
-        return termo
+        return self.produto_service.corrigir_termo_busca(termo, lista_referencia, threshold)
 
     def _expandir_sinonimos(self, termo: str) -> List[str]:
         """
         Expande termo com sinônimos e variações comuns.
         Exemplo: "hamburg" -> ["hamburg", "hamburger", "burger", "hamburguer"]
         """
-        # Dicionário de sinônimos e variações comuns
-        sinonimos = {
-            'hamburg': ['hamburger', 'burger', 'hamburguer', 'hambúrguer'],
-            'burger': ['hamburger', 'hamburg', 'hamburguer', 'hambúrguer'],
-            'hamburger': ['hamburg', 'burger', 'hamburguer', 'hambúrguer'],
-            'pizza': ['pizzas'],
-            'refri': ['refrigerante', 'refris'],
-            'refrigerante': ['refri', 'refris'],
-            'coca': ['coca cola', 'cocacola'],
-            'batata': ['batatas', 'fritas'],
-            'batata frita': ['batatas fritas', 'fritas'],
-            'x': ['x-', 'xis'],
-            'xis': ['x-', 'x'],
-        }
-        
-        termo_lower = termo.lower().strip()
-        termos_expandidos = [termo]
-        
-        # Adiciona sinônimos se encontrar
-        for chave, valores in sinonimos.items():
-            if chave in termo_lower:
-                termos_expandidos.extend(valores)
-                # Substitui a chave pelos sinônimos no termo
-                for valor in valores:
-                    termo_substituido = termo_lower.replace(chave, valor)
-                    if termo_substituido != termo_lower:
-                        termos_expandidos.append(termo_substituido)
-        
-        # Remove duplicatas mantendo ordem
-        termos_unicos = []
-        for t in termos_expandidos:
-            if t not in termos_unicos:
-                termos_unicos.append(t)
-        
-        return termos_unicos[:5]  # Limita a 5 variações para não sobrecarregar
+        return self.produto_service.expandir_sinonimos(termo)
 
     def _buscar_produtos_inteligente(self, termo_busca: str, limit: int = 5) -> List[Dict[str, Any]]:
         """
@@ -5432,206 +4377,7 @@ REGRA PARA COMPLEMENTOS:
         Returns:
             Lista de produtos encontrados (produtos + receitas + combos)
         """
-        if not termo_busca or len(termo_busca.strip()) < 2:
-            return []
-        
-        try:
-            from sqlalchemy import text
-            
-            termo_original = termo_busca.strip()
-            termo_normalizado = self._normalizar_termo_busca(termo_original)
-            
-            # Expande com sinônimos
-            termos_busca = self._expandir_sinonimos(termo_original)
-            termos_busca.append(termo_normalizado)  # Adiciona versão normalizada
-            
-            # Remove duplicatas
-            termos_busca = list(dict.fromkeys(termos_busca))[:3]  # Limita a 3 termos para performance
-            
-            resultados = []
-            
-            # Busca em produtos
-            for termo in termos_busca:
-                termo_sql = f"%{termo}%"
-                query_produtos = text("""
-                    SELECT p.cod_barras, p.descricao, pe.preco_venda, 'produto' as tipo
-                    FROM catalogo.produtos p
-                    JOIN catalogo.produtos_empresa pe ON p.cod_barras = pe.cod_barras
-                    WHERE pe.empresa_id = :empresa_id
-                    AND p.ativo = true
-                    AND pe.disponivel = true
-                    AND (
-                        LOWER(REPLACE(REPLACE(p.descricao, '-', ''), ' ', '')) LIKE LOWER(REPLACE(REPLACE(:termo, '-', ''), ' ', ''))
-                        OR LOWER(p.descricao) LIKE LOWER(:termo)
-                    )
-                    ORDER BY 
-                        CASE 
-                            WHEN LOWER(p.descricao) = LOWER(:termo_exato) THEN 1
-                            WHEN LOWER(p.descricao) LIKE LOWER(:termo_inicio) THEN 2
-                            ELSE 3
-                        END,
-                        p.descricao
-                    LIMIT :limit
-                """)
-                
-                result = self.db.execute(query_produtos, {
-                    "empresa_id": self.empresa_id,
-                    "termo": termo_sql,
-                    "termo_exato": termo,
-                    "termo_inicio": f"{termo}%",
-                    "limit": limit
-                })
-                
-                for row in result.fetchall():
-                    produto = {
-                        "id": row[0],
-                        "nome": row[1],
-                        "preco": float(row[2]),
-                        "tipo": row[3]
-                    }
-                    # Evita duplicatas
-                    if not any(r.get("id") == produto["id"] and r.get("tipo") == produto["tipo"] for r in resultados):
-                        resultados.append(produto)
-                
-                if len(resultados) >= limit:
-                    break
-            
-            # Se ainda não encontrou o suficiente, busca em receitas
-            if len(resultados) < limit:
-                for termo in termos_busca:
-                    termo_sql = f"%{termo}%"
-                    query_receitas = text("""
-                        SELECT id, nome, preco_venda, 'receita' as tipo
-                        FROM catalogo.receitas
-                        WHERE empresa_id = :empresa_id
-                        AND ativo = true
-                        AND disponivel = true
-                        AND (
-                            LOWER(REPLACE(REPLACE(nome, '-', ''), ' ', '')) LIKE LOWER(REPLACE(REPLACE(:termo, '-', ''), ' ', ''))
-                            OR LOWER(nome) LIKE LOWER(:termo)
-                            OR (descricao IS NOT NULL AND LOWER(descricao) LIKE LOWER(:termo))
-                        )
-                        ORDER BY 
-                            CASE 
-                                WHEN LOWER(nome) = LOWER(:termo_exato) THEN 1
-                                WHEN LOWER(nome) LIKE LOWER(:termo_inicio) THEN 2
-                                ELSE 3
-                            END,
-                            nome
-                        LIMIT :limit
-                    """)
-                    
-                    result = self.db.execute(query_receitas, {
-                        "empresa_id": self.empresa_id,
-                        "termo": termo_sql,
-                        "termo_exato": termo,
-                        "termo_inicio": f"{termo}%",
-                        "limit": limit - len(resultados)
-                    })
-                    
-                    for row in result.fetchall():
-                        receita = {
-                            "id": f"receita_{row[0]}",
-                            "nome": row[1],
-                            "preco": float(row[2]) if row[2] else 0.0,
-                            "tipo": row[3]
-                        }
-                        # Evita duplicatas
-                        if not any(r.get("id") == receita["id"] and r.get("tipo") == receita["tipo"] for r in resultados):
-                            resultados.append(receita)
-                    
-                    if len(resultados) >= limit:
-                        break
-            
-            # Se ainda não encontrou o suficiente, busca em combos
-            if len(resultados) < limit:
-                for termo in termos_busca:
-                    termo_sql = f"%{termo}%"
-                    query_combos = text("""
-                        SELECT id, titulo, preco_total, 'combo' as tipo
-                        FROM catalogo.combos
-                        WHERE empresa_id = :empresa_id
-                        AND ativo = true
-                        AND (
-                            (titulo IS NOT NULL AND (
-                                LOWER(REPLACE(REPLACE(titulo, '-', ''), ' ', '')) LIKE LOWER(REPLACE(REPLACE(:termo, '-', ''), ' ', ''))
-                                OR LOWER(titulo) LIKE LOWER(:termo)
-                            ))
-                            OR LOWER(descricao) LIKE LOWER(:termo)
-                        )
-                        ORDER BY 
-                            CASE 
-                                WHEN titulo IS NOT NULL AND LOWER(titulo) = LOWER(:termo_exato) THEN 1
-                                WHEN titulo IS NOT NULL AND LOWER(titulo) LIKE LOWER(:termo_inicio) THEN 2
-                                ELSE 3
-                            END,
-                            titulo
-                        LIMIT :limit
-                    """)
-                    
-                    result = self.db.execute(query_combos, {
-                        "empresa_id": self.empresa_id,
-                        "termo": termo_sql,
-                        "termo_exato": termo,
-                        "termo_inicio": f"{termo}%",
-                        "limit": limit - len(resultados)
-                    })
-                    
-                    for row in result.fetchall():
-                        combo = {
-                            "id": f"combo_{row[0]}",
-                            "nome": row[1] or f"Combo {row[0]}",
-                            "preco": float(row[2]) if row[2] else 0.0,
-                            "tipo": row[3]
-                        }
-                        # Evita duplicatas
-                        if not any(r.get("id") == combo["id"] and r.get("tipo") == combo["tipo"] for r in resultados):
-                            resultados.append(combo)
-                    
-                    if len(resultados) >= limit:
-                        break
-            
-            # Se não encontrou nada, tenta correção de erros usando lista de referência
-            if not resultados:
-                # Busca lista de referência (primeiros 100 nomes de produtos/receitas/combos)
-                query_referencia = text("""
-                    (
-                        SELECT descricao as nome FROM catalogo.produtos p
-                        JOIN catalogo.produtos_empresa pe ON p.cod_barras = pe.cod_barras
-                        WHERE pe.empresa_id = :empresa_id AND p.ativo = true AND pe.disponivel = true
-                        LIMIT 50
-                    )
-                    UNION
-                    (
-                        SELECT nome FROM catalogo.receitas
-                        WHERE empresa_id = :empresa_id AND ativo = true AND disponivel = true
-                        LIMIT 30
-                    )
-                    UNION
-                    (
-                        SELECT COALESCE(titulo, descricao) as nome FROM catalogo.combos
-                        WHERE empresa_id = :empresa_id AND ativo = true
-                        LIMIT 20
-                    )
-                """)
-                
-                result_ref = self.db.execute(query_referencia, {"empresa_id": self.empresa_id})
-                lista_referencia = [row[0] for row in result_ref.fetchall()]
-                
-                # Tenta corrigir o termo
-                termo_corrigido = self._corrigir_termo_busca(termo_original, lista_referencia)
-                
-                # Se corrigiu, busca novamente
-                if termo_corrigido != termo_original:
-                    return self._buscar_produtos_inteligente(termo_corrigido, limit)
-            
-            return resultados[:limit]  # Garante que não retorna mais que o limite
-            
-        except Exception as e:
-            print(f"❌ Erro ao buscar produtos inteligente: {e}")
-            import traceback
-            traceback.print_exc()
-            return []
+        return self.produto_service.buscar_produtos_inteligente(termo_busca, limit)
 
     def _montar_contexto(self, user_id: str, mensagem: str, estado: str, dados: Dict) -> Tuple[str, List[Dict]]:
         """
@@ -5944,31 +4690,7 @@ Sua única função é ajudar a ESCOLHER PRODUTOS. Nada mais!
     def _mensagem_formas_pagamento(self) -> str:
         """Retorna a mensagem de formas de pagamento baseada no banco de dados"""
         meios = self._buscar_meios_pagamento()
-
-        # Emojis por tipo de pagamento
-        emoji_por_tipo = {
-            'PIX_ENTREGA': '📱',
-            'PIX_ONLINE': '📱',
-            'DINHEIRO': '💵',
-            'CARTAO_ENTREGA': '💳',
-            'OUTROS': '💰'
-        }
-
-        # Números em emoji
-        numeros_emoji = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟']
-
-        mensagem = "💳 *FORMA DE PAGAMENTO*\n"
-        mensagem += "━━━━━━━━━━━━━━━━━━━━\n\n"
-        mensagem += "Como você prefere pagar?\n\n"
-
-        for i, meio in enumerate(meios):
-            emoji_num = numeros_emoji[i] if i < len(numeros_emoji) else f"{i+1}."
-            emoji_tipo = emoji_por_tipo.get(meio.get('tipo', 'OUTROS'), '💰')
-            mensagem += f"{emoji_num} {emoji_tipo} *{meio['nome']}*\n"
-
-        mensagem += "\n━━━━━━━━━━━━━━━━━━━━\n"
-        mensagem += "Digite o *número* ou o *nome* da forma de pagamento 😊"
-        return mensagem
+        return self.pagamento_domain.formatar_mensagem_formas_pagamento(meios)
 
     async def _ir_para_pagamento_ou_resumo(self, user_id: str, dados: Dict, mensagem_prefixo: str = "") -> str:
         """

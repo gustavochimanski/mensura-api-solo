@@ -8,9 +8,9 @@ Esta documentação descreve **como o frontend deve se conectar e reagir** ao We
 
 ### Endpoint (principal)
 
-- **WS**: `/api/notifications/ws/notifications?empresa_id={empresa_id}`
-- **Exemplo local**: `ws://localhost:8000/api/notifications/ws/notifications?empresa_id=1`
-- **Exemplo produção**: `wss://seu-host/api/notifications/ws/notifications?empresa_id=1`
+- **WS (admin)**: `/api/notifications/admin/ws/notifications?empresa_id={empresa_id}`
+- **Exemplo local**: `ws://localhost:8000/api/notifications/admin/ws/notifications?empresa_id=1`
+- **Exemplo produção**: `wss://seu-host/api/notifications/admin/ws/notifications?empresa_id=1`
 
 ### Observações importantes
 
@@ -22,11 +22,7 @@ Esta documentação descreve **como o frontend deve se conectar e reagir** ao We
 
 ### Endpoint legado (compatibilidade)
 
-Ainda existe (mas não confia no `user_id`):
-
-- **WS (LEGADO)**: `/api/notifications/ws/notifications/{user_id}?empresa_id={empresa_id}`
-
-Use **apenas** se algum cliente antigo precisar — para o frontend novo, use o endpoint principal.
+Não existe endpoint legado com `user_id` na URL.
 
 ---
 
@@ -230,32 +226,30 @@ Resposta (exemplo):
 {
   "empresa_id": 1,
   "empresa_nome": "Minha Empresa",
-  "websocket_url": "wss://seu-host/api/notifications/ws/notifications?empresa_id=1",
+  "websocket_url": "wss://seu-host/api/notifications/admin/ws/notifications?empresa_id=1",
   "protocol": "wss",
-  "endpoint": "/api/notifications/ws/notifications?empresa_id=1",
+  "endpoint": "/api/notifications/admin/ws/notifications?empresa_id=1",
   "note": "Envie Authorization Bearer via Sec-WebSocket-Protocol (browser)."
 }
 ```
 
 ### 6.2) Estatísticas de conexões
 
-- **GET** `/api/notifications/ws/connections/stats`
+- **GET (admin)** `/api/notifications/admin/ws/connections/stats`
 - Requer `Authorization: Bearer <token>` (HTTP normal)
 
 ### 6.3) Verificar conexões de uma empresa
 
-- **GET** `/api/notifications/ws/connections/check/{empresa_id}`
+- **GET (admin)** `/api/notifications/admin/ws/connections/check/{empresa_id}`
 - Requer `Authorization: Bearer <token>` (HTTP normal)
 
 ### 6.4) Enviar notificação para um usuário (admin/debug)
 
-- **POST** `/api/notifications/ws/notifications/send?user_id=...&title=...&message=...`
-- Requer `Authorization: Bearer <token>` (HTTP normal)
+Não implementado no backend atual.
 
 ### 6.5) Broadcast para empresa (admin/debug)
 
-- **POST** `/api/notifications/ws/notifications/broadcast?empresa_id=...&title=...&message=...`
-- Requer `Authorization: Bearer <token>` (HTTP normal)
+Não implementado no backend atual.
 
 ---
 

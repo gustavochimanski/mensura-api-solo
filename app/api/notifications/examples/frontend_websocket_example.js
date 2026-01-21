@@ -30,8 +30,10 @@ class NotificationWebSocket {
      */
     connect() {
         try {
-            const wsUrl = `${this.baseUrl}/api/notifications/ws/notifications/${this.userId}?empresa_id=${this.empresaId}`;
-            this.ws = new WebSocket(wsUrl);
+            // Endpoint admin (sem user_id na URL). Autenticação via Sec-WebSocket-Protocol (browser).
+            const wsUrl = `${this.baseUrl}/api/notifications/admin/ws/notifications?empresa_id=${this.empresaId}`;
+            const accessToken = localStorage.getItem('token');
+            this.ws = new WebSocket(wsUrl, ["mensura-bearer", accessToken]);
             
             this.ws.onopen = (event) => {
                 console.log('WebSocket conectado:', event);

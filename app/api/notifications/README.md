@@ -183,7 +183,7 @@ POST /api/notifications/pedidos/novo-pedido
 ### Estatísticas de Conexões
 
 ```bash
-GET /api/notifications/ws/connections/stats
+GET /api/notifications/admin/ws/connections/stats
 ```
 
 ### Logs de Notificações
@@ -230,7 +230,10 @@ async def publish_novo_evento(self, empresa_id, data):
 
 ```javascript
 // Conecta e testa
-const ws = new WebSocket('ws://localhost:8000/api/notifications/ws/notifications/user_123?empresa_id=empresa_456');
+const ws = new WebSocket(
+  'ws://localhost:8000/api/notifications/admin/ws/notifications?empresa_id=empresa_456',
+  ['mensura-bearer', localStorage.getItem('token')]
+);
 ws.onmessage = (event) => console.log('Mensagem:', JSON.parse(event.data));
 ```
 
