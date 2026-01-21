@@ -266,7 +266,7 @@ def vincular_complementos_receita(
     db: Session = Depends(get_db),
 ):
     """Vincula múltiplos complementos a uma receita."""
-    logger.info(f"[Receitas] Vincular complementos - receita={receita_id} complementos={req.complemento_ids}")
+    logger.info(f"[Receitas] Vincular complementos - receita={receita_id} complementos={req.complemento_ids} configuracoes={req.configuracoes}")
     service = ComplementoService(db)
     return service.vincular_complementos_receita(receita_id, req)
 

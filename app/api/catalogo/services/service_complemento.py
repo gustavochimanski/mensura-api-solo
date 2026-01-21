@@ -119,7 +119,8 @@ class ComplementoService:
             )
         
         # Processa formato completo ou simples
-        if req.configuracoes is not None:
+        # Prioriza configuracoes se fornecido e não vazio
+        if req.configuracoes is not None and len(req.configuracoes) > 0:
             # Formato completo: usa configurações detalhadas
             complemento_ids = [cfg.complemento_id for cfg in req.configuracoes]
             ordens = [cfg.ordem if cfg.ordem is not None else idx for idx, cfg in enumerate(req.configuracoes)]
@@ -200,7 +201,8 @@ class ComplementoService:
             )
         
         # Processa formato completo ou simples
-        if req.configuracoes is not None:
+        # Prioriza configuracoes se fornecido e não vazio
+        if req.configuracoes is not None and len(req.configuracoes) > 0:
             # Formato completo: usa configurações detalhadas
             complemento_ids = [cfg.complemento_id for cfg in req.configuracoes]
             ordens = [cfg.ordem if cfg.ordem is not None else idx for idx, cfg in enumerate(req.configuracoes)]
@@ -281,7 +283,8 @@ class ComplementoService:
             )
         
         # Processa formato completo ou simples
-        if req.configuracoes is not None:
+        # Prioriza configuracoes se fornecido e não vazio
+        if req.configuracoes is not None and len(req.configuracoes) > 0:
             # Formato completo: usa configurações detalhadas
             complemento_ids = [cfg.complemento_id for cfg in req.configuracoes]
             ordens = [cfg.ordem if cfg.ordem is not None else idx for idx, cfg in enumerate(req.configuracoes)]

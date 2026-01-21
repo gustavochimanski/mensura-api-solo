@@ -578,36 +578,33 @@ A ordem será definida pelo índice (0, 1, 2).
 
 ---
 
-### 4. ⚠️ Bug Potencial no Service de Combos
+### 4. ✅ Bug Corrigido - Parâmetro `quantitativos` Faltando
 
-**Problema:** No método `vincular_complementos_combo` do service (linha 326), o parâmetro `quantitativos` não está sendo passado para o repositório.
+**Problema:** No método `vincular_complementos_combo` do service, o parâmetro `quantitativos` não estava sendo passado para o repositório.
 
-**Código Atual:**
+**Status:** ✅ **CORRIGIDO**
+
+---
+
+### 5. ✅ Bug Corrigido - Validação de `configuracoes` Incompleta
+
+**Problema:** O código verificava apenas `if req.configuracoes is not None`, mas não verificava se a lista tinha elementos. Isso causava problemas quando:
+- O frontend enviava `configuracoes` como lista vazia `[]`
+- O frontend enviava ambos `complemento_ids` e `configuracoes` vazia
+
+**Código Antigo:**
 ```python
-self.repo.vincular_complementos_combo(
-    combo_id, 
-    complemento_ids, 
-    ordens, 
-    obrigatorios, 
-    minimos_itens,  # ❌ Faltando quantitativos
-    maximos_itens
-)
+if req.configuracoes is not None:
+    # Processa formato completo
 ```
 
-**Código Correto:**
+**Código Corrigido:**
 ```python
-self.repo.vincular_complementos_combo(
-    combo_id, 
-    complemento_ids, 
-    ordens, 
-    obrigatorios, 
-    quantitativos,  # ✅ Adicionar
-    minimos_itens, 
-    maximos_itens
-)
+if req.configuracoes is not None and len(req.configuracoes) > 0:
+    # Processa formato completo
 ```
 
-**Status:** ⚠️ **BUG IDENTIFICADO - CORREÇÃO NECESSÁRIA**
+**Status:** ✅ **CORRIGIDO** em todos os métodos (produto, receita, combo)
 
 ---
 
@@ -697,17 +694,35 @@ curl -X DELETE "https://api.exemplo.com/api/catalogo/admin/complementos/1/itens/
 
 ---
 
-### Problema: Configurações não são aplicadas
+### Problema: Configurações não são aplicadas (obrigatorio, quantitativo, etc.)
 
-**Possíveis Causas:**
-1. Usando formato simples em vez de formato completo
-2. Valores padrão sendo aplicados incorretamente
-3. Bug no service (verificar se `quantitativos` está sendo passado)
+**Sintoma:** Ao enviar `configuracoes` com `obrigatorio: true`, o valor não é salvo e permanece como `false`.
 
-**Solução:**
-- Usar formato completo (`configuracoes`) em vez de formato simples
-- Verificar se todos os campos obrigatórios estão sendo enviados
-- Verificar logs do servidor
+**Causa Identificada:** O código verificava apenas `if req.configuracoes is not None`, mas não verificava se a lista tinha elementos. Se o frontend enviava `configuracoes` como lista vazia `[]` ou se havia algum problema na validação do Pydantic, o código caía no formato simples que usa valores padrão (`obrigatorio = False`).
+
+**Solução Aplicada:**
+- Corrigido para verificar `if req.configuracoes is not None and len(req.configuracoes) > 0`
+- Agora o formato completo é usado apenas quando há configurações válidas
+- Corrigido em todos os métodos: `vincular_complementos_produto`, `vincular_complementos_receita`, `vincular_complementos_combo`
+
+**Como Verificar:**
+- Certifique-se de enviar `configuracoes` como uma lista com pelo menos um elemento
+- Não envie `complemento_ids` junto com `configuracoes` (o código prioriza `configuracoes` se fornecido)
+- Verifique o formato do JSON enviado:
+  ```json
+  {
+    "configuracoes": [
+      {
+        "complemento_id": 1,
+        "ordem": 0,
+        "obrigatorio": true,  // ← Deve ser boolean, não string
+        "quantitativo": false,
+        "minimo_itens": null,
+        "maximo_itens": null
+      }
+    ]
+  }
+  ```
 
 ---
 
