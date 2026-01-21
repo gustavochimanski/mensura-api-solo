@@ -57,6 +57,7 @@ receita_complemento_link = Table(
     Column("ordem", Integer, nullable=False, default=0),
     # Configurações específicas da vinculação (podem ser diferentes para cada receita)
     Column("obrigatorio", Boolean, nullable=False, default=False),
+    Column("quantitativo", Boolean, nullable=False, default=False),
     Column("minimo_itens", Integer, nullable=True),
     Column("maximo_itens", Integer, nullable=True),
     Column("created_at", DateTime(timezone=True), server_default=func.now(), nullable=False),
@@ -73,6 +74,7 @@ combo_complemento_link = Table(
     Column("ordem", Integer, nullable=False, default=0),
     # Configurações específicas da vinculação (podem ser diferentes para cada combo)
     Column("obrigatorio", Boolean, nullable=False, default=False),
+    Column("quantitativo", Boolean, nullable=False, default=False),
     Column("minimo_itens", Integer, nullable=True),
     Column("maximo_itens", Integer, nullable=True),
     Column("created_at", DateTime(timezone=True), server_default=func.now(), nullable=False),
