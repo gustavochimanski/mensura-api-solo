@@ -1,6 +1,6 @@
 from typing import Optional, List
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, Field, condecimal
+from pydantic import BaseModel, ConfigDict, Field, condecimal, model_validator
 
 
 # ------ Requests ------
@@ -141,23 +141,55 @@ class ComplementoResponse(BaseModel):
 
 
 class ComplementoResumidoResponse(BaseModel):
-    """Versão simplificada para uso em listagens"""
+    """Versão simplificada para uso em listagens
+    
+    Nota: obrigatorio, minimo_itens e maximo_itens agora vêm da vinculação,
+    não mais do complemento em si.
+    """
     id: int
     nome: str
-    obrigatorio: bool
-    quantitativo: bool
-    minimo_itens: Optional[int] = None
-    maximo_itens: Optional[int] = None
-    ordem: int
+    obrigatorio: bool  # Da vinculação
+    quantitativo: bool  # Do complemento (não muda por vinculação)
+    minimo_itens: Optional[int] = None  # Da vinculação
+    maximo_itens: Optional[int] = None  # Da vinculação
+    ordem: int  # Da vinculação
 
     model_config = ConfigDict(from_attributes=True)
 
 
+# ------ Configuração de vinculação de complemento ------
+class ConfiguracaoVinculacaoComplemento(BaseModel):
+    """Configurações específicas de um complemento na vinculação"""
+    complemento_id: int = Field(..., description="ID do complemento a vincular")
+    ordem: Optional[int] = Field(None, description="Ordem do complemento (opcional, usa índice se não informado)")
+    obrigatorio: Optional[bool] = Field(None, description="Se o complemento é obrigatório nesta vinculação (None = usa valor padrão do complemento)")
+    minimo_itens: Optional[int] = Field(None, ge=0, description="Quantidade mínima de itens nesta vinculação (None = usa valor padrão do complemento)")
+    maximo_itens: Optional[int] = Field(None, ge=0, description="Quantidade máxima de itens nesta vinculação (None = usa valor padrão do complemento)")
+
+
 # ------ Vincular complementos a produtos ------
 class VincularComplementosProdutoRequest(BaseModel):
-    """Request para vincular múltiplos complementos a um produto"""
-    complemento_ids: List[int] = Field(..., description="IDs dos complementos a vincular")
+    """Request para vincular múltiplos complementos a um produto
+    
+    Aceita dois formatos:
+    1. Formato simples: complemento_ids + ordens (mantém compatibilidade)
+    2. Formato completo: configuracoes (permite definir obrigatorio, minimo_itens, maximo_itens por complemento)
+    """
+    # Formato simples (compatibilidade)
+    complemento_ids: Optional[List[int]] = Field(None, description="IDs dos complementos a vincular (formato simples)")
     ordens: Optional[List[int]] = Field(None, description="Ordem de cada complemento (opcional, usa índice se não informado)")
+    
+    # Formato completo (novo)
+    configuracoes: Optional[List[ConfiguracaoVinculacaoComplemento]] = Field(
+        None, 
+        description="Configurações detalhadas por complemento (formato completo). Se fornecido, ignora complemento_ids e ordens."
+    )
+    
+    @model_validator(mode='after')
+    def validate_at_least_one_format(self):
+        if not self.configuracoes and not self.complemento_ids:
+            raise ValueError("Deve fornecer 'complemento_ids' ou 'configuracoes'")
+        return self
 
 
 class VincularComplementosProdutoResponse(BaseModel):
@@ -171,9 +203,27 @@ class VincularComplementosProdutoResponse(BaseModel):
 
 # ------ Vincular complementos a receitas ------
 class VincularComplementosReceitaRequest(BaseModel):
-    """Request para vincular múltiplos complementos a uma receita"""
-    complemento_ids: List[int] = Field(..., description="IDs dos complementos a vincular")
+    """Request para vincular múltiplos complementos a uma receita
+    
+    Aceita dois formatos:
+    1. Formato simples: complemento_ids + ordens (mantém compatibilidade)
+    2. Formato completo: configuracoes (permite definir obrigatorio, minimo_itens, maximo_itens por complemento)
+    """
+    # Formato simples (compatibilidade)
+    complemento_ids: Optional[List[int]] = Field(None, description="IDs dos complementos a vincular (formato simples)")
     ordens: Optional[List[int]] = Field(None, description="Ordem de cada complemento (opcional, usa índice se não informado)")
+    
+    # Formato completo (novo)
+    configuracoes: Optional[List[ConfiguracaoVinculacaoComplemento]] = Field(
+        None, 
+        description="Configurações detalhadas por complemento (formato completo). Se fornecido, ignora complemento_ids e ordens."
+    )
+    
+    @model_validator(mode='after')
+    def validate_at_least_one_format(self):
+        if not self.configuracoes and not self.complemento_ids:
+            raise ValueError("Deve fornecer 'complemento_ids' ou 'configuracoes'")
+        return self
 
 
 class VincularComplementosReceitaResponse(BaseModel):
@@ -187,9 +237,32 @@ class VincularComplementosReceitaResponse(BaseModel):
 
 # ------ Vincular complementos a combos ------
 class VincularComplementosComboRequest(BaseModel):
-    """Request para vincular múltiplos complementos a um combo"""
-    complemento_ids: List[int] = Field(..., description="IDs dos complementos a vincular")
+    """Request para vincular múltiplos complementos a um combo
+    
+    Aceita dois formatos:
+    1. Formato simples: complemento_ids + ordens (mantém compatibilidade)
+    2. Formato completo: configuracoes (permite definir obrigatorio, minimo_itens, maximo_itens por complemento)
+    
+    Nota: Para combos, complemento_ids pode ser uma lista vazia para remover todas as vinculações.
+    """
+    # Formato simples (compatibilidade)
+    complemento_ids: Optional[List[int]] = Field(None, description="IDs dos complementos a vincular (formato simples). Lista vazia remove todas as vinculações.")
     ordens: Optional[List[int]] = Field(None, description="Ordem de cada complemento (opcional, usa índice se não informado)")
+    
+    # Formato completo (novo)
+    configuracoes: Optional[List[ConfiguracaoVinculacaoComplemento]] = Field(
+        None, 
+        description="Configurações detalhadas por complemento (formato completo). Se fornecido, ignora complemento_ids e ordens."
+    )
+    
+    @model_validator(mode='after')
+    def validate_at_least_one_format(self):
+        # Para combos, lista vazia é permitida (remove todas as vinculações)
+        if self.complemento_ids is not None and len(self.complemento_ids) == 0:
+            return self
+        if not self.configuracoes and (not self.complemento_ids or len(self.complemento_ids) == 0):
+            raise ValueError("Deve fornecer 'complemento_ids' (não vazio) ou 'configuracoes'")
+        return self
 
 
 class VincularComplementosComboResponse(BaseModel):

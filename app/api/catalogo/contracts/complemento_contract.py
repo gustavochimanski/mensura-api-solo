@@ -17,13 +17,19 @@ class AdicionalDTO(BaseModel):
 
 
 class ComplementoDTO(BaseModel):
-    """DTO para complementos com seus adicionais."""
+    """DTO para complementos com seus adicionais.
+    
+    Nota: obrigatorio, minimo_itens e maximo_itens vêm da vinculação,
+    não mais do complemento em si.
+    """
     id: int
     nome: str
     descricao: Optional[str]
-    obrigatorio: bool
-    quantitativo: bool
-    ordem: int
+    obrigatorio: bool  # Da vinculação
+    quantitativo: bool  # Do complemento (não muda por vinculação)
+    minimo_itens: Optional[int] = None  # Da vinculação
+    maximo_itens: Optional[int] = None  # Da vinculação
+    ordem: int  # Da vinculação
     adicionais: List[AdicionalDTO]
 
 

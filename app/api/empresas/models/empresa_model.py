@@ -36,6 +36,10 @@ class EmpresaModel(Base):
     tempo_entrega_maximo = Column(Integer, nullable=False, default=60)  # minutos
     # pagina_unica = Column(Boolean, nullable=False, default=False)  # Comentado: coluna não existe no banco ainda
 
+    # Configurações de redirecionamento
+    redireciona_home = Column(Boolean, nullable=False, default=False)
+    redireciona_home_para = Column(String(255), nullable=True)
+
     cep = Column(String(10), nullable=True)
     logradouro = Column(String(120), nullable=True)
     numero = Column(String(20), nullable=True)

@@ -13,13 +13,26 @@ class ComplementoAdapter(IComplementoContract):
         self.repo = ComplementoRepository(db)
         self.repo_item = ComplementoItemRepository(db)
 
-    def _build_complemento_dto(self, complemento, ordem: int = None) -> ComplementoDTO:
+    def _build_complemento_dto(
+        self, 
+        complemento, 
+        ordem: int = None,
+        obrigatorio: bool = None,
+        minimo_itens: int = None,
+        maximo_itens: int = None
+    ) -> ComplementoDTO:
         """Monta o DTO de complemento garantindo ordem e preço aplicado por complemento.
         
         Args:
             complemento: Modelo do complemento
             ordem: Ordem do complemento no contexto (produto/receita/combo). 
                    Se None, usa a ordem do complemento em si.
+            obrigatorio: Se o complemento é obrigatório nesta vinculação. 
+                        Se None, usa o valor do complemento.
+            minimo_itens: Quantidade mínima de itens nesta vinculação. 
+                         Se None, usa o valor do complemento.
+            maximo_itens: Quantidade máxima de itens nesta vinculação. 
+                         Se None, usa o valor do complemento.
         """
         itens = self.repo_item.listar_itens_complemento(complemento.id, apenas_ativos=True)
         adicionais_dto = [
@@ -35,13 +48,20 @@ class ComplementoAdapter(IComplementoContract):
 
         # Usa a ordem fornecida (da tabela de associação) ou a ordem do complemento
         ordem_final = ordem if ordem is not None else complemento.ordem
+        
+        # Usa valores da vinculação se fornecidos, senão usa do complemento
+        obrigatorio_final = obrigatorio if obrigatorio is not None else complemento.obrigatorio
+        minimo_final = minimo_itens if minimo_itens is not None else complemento.minimo_itens
+        maximo_final = maximo_itens if maximo_itens is not None else complemento.maximo_itens
 
         return ComplementoDTO(
             id=complemento.id,
             nome=complemento.nome,
             descricao=complemento.descricao,
-            obrigatorio=complemento.obrigatorio,
-            quantitativo=complemento.quantitativo,
+            obrigatorio=obrigatorio_final,
+            quantitativo=complemento.quantitativo,  # Sempre do complemento
+            minimo_itens=minimo_final,
+            maximo_itens=maximo_final,
             ordem=ordem_final,
             adicionais=adicionais_dto,
         )
@@ -76,19 +96,25 @@ class ComplementoAdapter(IComplementoContract):
     
     def listar_por_receita(self, receita_id: int, apenas_ativos: bool = True) -> List[ComplementoDTO]:
         """Lista todos os complementos vinculados a uma receita."""
-        complementos_com_ordem = self.repo.listar_por_receita(
+        complementos_com_vinculacao = self.repo.listar_por_receita(
             receita_id,
             apenas_ativos=apenas_ativos,
             carregar_adicionais=False,
         )
-        return [self._build_complemento_dto(c, ordem=ordem) for c, ordem in complementos_com_ordem]
+        return [
+            self._build_complemento_dto(c, ordem=ordem, obrigatorio=obrigatorio, minimo_itens=minimo_itens, maximo_itens=maximo_itens)
+            for c, ordem, obrigatorio, minimo_itens, maximo_itens in complementos_com_vinculacao
+        ]
     
     def listar_por_combo(self, combo_id: int, apenas_ativos: bool = True) -> List[ComplementoDTO]:
         """Lista todos os complementos vinculados a um combo."""
-        complementos_com_ordem = self.repo.listar_por_combo(
+        complementos_com_vinculacao = self.repo.listar_por_combo(
             combo_id,
             apenas_ativos=apenas_ativos,
             carregar_adicionais=False,
         )
-        return [self._build_complemento_dto(c, ordem=ordem) for c, ordem in complementos_com_ordem]
+        return [
+            self._build_complemento_dto(c, ordem=ordem, obrigatorio=obrigatorio, minimo_itens=minimo_itens, maximo_itens=maximo_itens)
+            for c, ordem, obrigatorio, minimo_itens, maximo_itens in complementos_com_vinculacao
+        ]
 

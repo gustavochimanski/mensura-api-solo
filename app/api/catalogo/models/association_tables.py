@@ -23,6 +23,10 @@ produto_complemento_link = Table(
     Column("produto_cod_barras", String, ForeignKey("catalogo.produtos.cod_barras", ondelete="CASCADE"), primary_key=True),
     Column("complemento_id", Integer, ForeignKey("catalogo.complemento_produto.id", ondelete="CASCADE"), primary_key=True),
     Column("ordem", Integer, nullable=False, default=0),
+    # Configurações específicas da vinculação (podem ser diferentes para cada produto)
+    Column("obrigatorio", Boolean, nullable=False, default=False),
+    Column("minimo_itens", Integer, nullable=True),
+    Column("maximo_itens", Integer, nullable=True),
     Column("created_at", DateTime(timezone=True), server_default=func.now(), nullable=False),
     schema="catalogo",
     info={"description": "Tabela de relacionamento N:N entre produtos e complementos"}
@@ -50,6 +54,10 @@ receita_complemento_link = Table(
     Column("receita_id", Integer, ForeignKey("catalogo.receitas.id", ondelete="CASCADE"), primary_key=True),
     Column("complemento_id", Integer, ForeignKey("catalogo.complemento_produto.id", ondelete="CASCADE"), primary_key=True),
     Column("ordem", Integer, nullable=False, default=0),
+    # Configurações específicas da vinculação (podem ser diferentes para cada receita)
+    Column("obrigatorio", Boolean, nullable=False, default=False),
+    Column("minimo_itens", Integer, nullable=True),
+    Column("maximo_itens", Integer, nullable=True),
     Column("created_at", DateTime(timezone=True), server_default=func.now(), nullable=False),
     schema="catalogo",
     info={"description": "Tabela de relacionamento N:N entre receitas e complementos"}
@@ -62,6 +70,10 @@ combo_complemento_link = Table(
     Column("combo_id", Integer, ForeignKey("catalogo.combos.id", ondelete="CASCADE"), primary_key=True),
     Column("complemento_id", Integer, ForeignKey("catalogo.complemento_produto.id", ondelete="CASCADE"), primary_key=True),
     Column("ordem", Integer, nullable=False, default=0),
+    # Configurações específicas da vinculação (podem ser diferentes para cada combo)
+    Column("obrigatorio", Boolean, nullable=False, default=False),
+    Column("minimo_itens", Integer, nullable=True),
+    Column("maximo_itens", Integer, nullable=True),
     Column("created_at", DateTime(timezone=True), server_default=func.now(), nullable=False),
     schema="catalogo",
     info={"description": "Tabela de relacionamento N:N entre combos e complementos"}

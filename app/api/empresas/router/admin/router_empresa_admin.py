@@ -80,6 +80,8 @@ async def create_empresa(
     cardapio_tema: str | None = Form("padrao"),
     aceita_pedido_automatico: str | None = Form("false"),
     pagina_unica: str | None = Form("false"),
+    redireciona_home: str | None = Form("false"),
+    redireciona_home_para: str | None = Form(None),
     db: Session = Depends(get_db),
 ):
     try:
@@ -123,6 +125,8 @@ async def update_empresa(
     cardapio_tema: str | None = Form(None),
     aceita_pedido_automatico: str | None = Form(None),
     pagina_unica: str | None = Form(None),
+    redireciona_home: str | None = Form(None),
+    redireciona_home_para: str | None = Form(None),
     db: Session = Depends(get_db),
 ):
     slug = make_slug(nome) if nome else None
@@ -151,6 +155,8 @@ async def update_empresa(
         cardapio_tema=cardapio_tema,
         aceita_pedido_automatico = aceita_pedido_automatico.lower() == "true" if aceita_pedido_automatico else None,
         pagina_unica = pagina_unica.lower() == "true" if pagina_unica else None,
+        redireciona_home = redireciona_home.lower() == "true" if redireciona_home else None,
+        redireciona_home_para = redireciona_home_para if redireciona_home_para else None,
         **endereco_payload,
     )
     return EmpresaService(db).update_empresa(id=id, data=empresa_data, logo=logo)

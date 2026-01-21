@@ -88,6 +88,8 @@ class EmpresaService:
             cardapio_tema=data.cardapio_tema,
             aceita_pedido_automatico=bool(data.aceita_pedido_automatico),
             # pagina_unica=bool(data.pagina_unica),  # Comentado: coluna não existe no banco ainda
+            redireciona_home=bool(data.redireciona_home),
+            redireciona_home_para=data.redireciona_home_para,
             cep=data.cep,
             logradouro=data.logradouro,
             numero=data.numero,
@@ -171,6 +173,10 @@ class EmpresaService:
                 empresa.aceita_pedido_automatico = bool(value)
             # elif key == "pagina_unica" and value is not None:
             #     empresa.pagina_unica = bool(value)  # Comentado: coluna não existe no banco ainda
+            elif key == "redireciona_home" and value is not None:
+                empresa.redireciona_home = bool(value)
+            elif key == "redireciona_home_para" and value is not None:
+                empresa.redireciona_home_para = value
             elif key == "estado" and value is not None:
                 empresa.estado = value.upper()
             elif key == "timezone" and value is not None:

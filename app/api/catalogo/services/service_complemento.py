@@ -118,21 +118,50 @@ class ComplementoService:
                 detail=f"Produto {cod_barras} não encontrado."
             )
         
-        self.repo.vincular_complementos_produto(cod_barras, req.complemento_ids, req.ordens)
+        # Processa formato completo ou simples
+        if req.configuracoes is not None:
+            # Formato completo: usa configurações detalhadas
+            complemento_ids = [cfg.complemento_id for cfg in req.configuracoes]
+            ordens = [cfg.ordem if cfg.ordem is not None else idx for idx, cfg in enumerate(req.configuracoes)]
+            obrigatorios = [cfg.obrigatorio for cfg in req.configuracoes]
+            minimos_itens = [cfg.minimo_itens for cfg in req.configuracoes]
+            maximos_itens = [cfg.maximo_itens for cfg in req.configuracoes]
+        else:
+            # Formato simples: compatibilidade
+            if not req.complemento_ids:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Deve fornecer 'complemento_ids' ou 'configuracoes'"
+                )
+            complemento_ids = req.complemento_ids
+            ordens = req.ordens
+            obrigatorios = None
+            minimos_itens = None
+            maximos_itens = None
+        
+        self.repo.vincular_complementos_produto(
+            cod_barras, 
+            complemento_ids, 
+            ordens, 
+            obrigatorios, 
+            minimos_itens, 
+            maximos_itens
+        )
+        self.db.commit()
         
         # Busca os complementos vinculados para retornar
-        complementos_com_ordem = self.repo.listar_por_produto(cod_barras, apenas_ativos=True)
+        complementos_com_vinculacao = self.repo.listar_por_produto(cod_barras, apenas_ativos=True)
         complementos_vinculados = [
             ComplementoResumidoResponse(
                 id=c.id,
                 nome=c.nome,
-                obrigatorio=c.obrigatorio,
-                quantitativo=c.quantitativo,
-                minimo_itens=c.minimo_itens,
-                maximo_itens=c.maximo_itens,
+                obrigatorio=obrigatorio,  # Da vinculação
+                quantitativo=c.quantitativo,  # Do complemento
+                minimo_itens=minimo_itens,  # Da vinculação
+                maximo_itens=maximo_itens,  # Da vinculação
                 ordem=ordem,
             )
-            for c, ordem in complementos_com_ordem
+            for c, ordem, obrigatorio, minimo_itens, maximo_itens in complementos_com_vinculacao
         ]
         
         return VincularComplementosProdutoResponse(
@@ -142,8 +171,18 @@ class ComplementoService:
 
     def listar_complementos_produto(self, cod_barras: str, apenas_ativos: bool = True) -> List[ComplementoResponse]:
         """Lista todos os complementos de um produto específico."""
-        complementos_com_ordem = self.repo.listar_por_produto(cod_barras, apenas_ativos=apenas_ativos, carregar_adicionais=True)
-        return [self.complemento_to_response(c) for c, _ in complementos_com_ordem]
+        complementos_com_vinculacao = self.repo.listar_por_produto(cod_barras, apenas_ativos=apenas_ativos, carregar_adicionais=True)
+        # Cria responses usando configurações da vinculação
+        responses = []
+        for c, ordem, obrigatorio, minimo_itens, maximo_itens in complementos_com_vinculacao:
+            resp = self.complemento_to_response(c)
+            # Sobrescreve com valores da vinculação
+            resp.obrigatorio = obrigatorio
+            resp.minimo_itens = minimo_itens
+            resp.maximo_itens = maximo_itens
+            resp.ordem = ordem
+            responses.append(resp)
+        return responses
 
     def vincular_complementos_receita(self, receita_id: int, req: VincularComplementosReceitaRequest) -> VincularComplementosReceitaResponse:
         """Vincula múltiplos complementos a uma receita."""
@@ -156,22 +195,50 @@ class ComplementoService:
                 detail=f"Receita {receita_id} não encontrada."
             )
         
-        self.repo.vincular_complementos_receita(receita_id, req.complemento_ids, req.ordens)
+        # Processa formato completo ou simples
+        if req.configuracoes is not None:
+            # Formato completo: usa configurações detalhadas
+            complemento_ids = [cfg.complemento_id for cfg in req.configuracoes]
+            ordens = [cfg.ordem if cfg.ordem is not None else idx for idx, cfg in enumerate(req.configuracoes)]
+            obrigatorios = [cfg.obrigatorio for cfg in req.configuracoes]
+            minimos_itens = [cfg.minimo_itens for cfg in req.configuracoes]
+            maximos_itens = [cfg.maximo_itens for cfg in req.configuracoes]
+        else:
+            # Formato simples: compatibilidade
+            if not req.complemento_ids:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Deve fornecer 'complemento_ids' ou 'configuracoes'"
+                )
+            complemento_ids = req.complemento_ids
+            ordens = req.ordens
+            obrigatorios = None
+            minimos_itens = None
+            maximos_itens = None
+        
+        self.repo.vincular_complementos_receita(
+            receita_id, 
+            complemento_ids, 
+            ordens, 
+            obrigatorios, 
+            minimos_itens, 
+            maximos_itens
+        )
         self.db.commit()  # Garante que as vinculações sejam persistidas
         
         # Busca os complementos vinculados para retornar (sem filtro de ativos para garantir que retorne os vinculados)
-        complementos_com_ordem = self.repo.listar_por_receita(receita_id, apenas_ativos=False, carregar_adicionais=False)
+        complementos_com_vinculacao = self.repo.listar_por_receita(receita_id, apenas_ativos=False, carregar_adicionais=False)
         complementos_vinculados = [
             ComplementoResumidoResponse(
                 id=c.id,
                 nome=c.nome,
-                obrigatorio=c.obrigatorio,
-                quantitativo=c.quantitativo,
-                minimo_itens=c.minimo_itens,
-                maximo_itens=c.maximo_itens,
+                obrigatorio=obrigatorio,  # Da vinculação
+                quantitativo=c.quantitativo,  # Do complemento
+                minimo_itens=minimo_itens,  # Da vinculação
+                maximo_itens=maximo_itens,  # Da vinculação
                 ordem=ordem,
             )
-            for c, ordem in complementos_com_ordem
+            for c, ordem, obrigatorio, minimo_itens, maximo_itens in complementos_com_vinculacao
         ]
         
         return VincularComplementosReceitaResponse(
@@ -181,8 +248,18 @@ class ComplementoService:
 
     def listar_complementos_receita(self, receita_id: int, apenas_ativos: bool = True) -> List[ComplementoResponse]:
         """Lista todos os complementos de uma receita específica."""
-        complementos_com_ordem = self.repo.listar_por_receita(receita_id, apenas_ativos=apenas_ativos, carregar_adicionais=True)
-        return [self.complemento_to_response(c) for c, _ in complementos_com_ordem]
+        complementos_com_vinculacao = self.repo.listar_por_receita(receita_id, apenas_ativos=apenas_ativos, carregar_adicionais=True)
+        # Cria responses usando configurações da vinculação
+        responses = []
+        for c, ordem, obrigatorio, minimo_itens, maximo_itens in complementos_com_vinculacao:
+            resp = self.complemento_to_response(c)
+            # Sobrescreve com valores da vinculação
+            resp.obrigatorio = obrigatorio
+            resp.minimo_itens = minimo_itens
+            resp.maximo_itens = maximo_itens
+            resp.ordem = ordem
+            responses.append(resp)
+        return responses
 
     def vincular_complementos_combo(self, combo_id: int, req: VincularComplementosComboRequest) -> VincularComplementosComboResponse:
         """Vincula múltiplos complementos a um combo."""
@@ -195,17 +272,34 @@ class ComplementoService:
                 detail=f"Combo {combo_id} não encontrado."
             )
         
+        # Processa formato completo ou simples
+        if req.configuracoes is not None:
+            # Formato completo: usa configurações detalhadas
+            complemento_ids = [cfg.complemento_id for cfg in req.configuracoes]
+            ordens = [cfg.ordem if cfg.ordem is not None else idx for idx, cfg in enumerate(req.configuracoes)]
+            obrigatorios = [cfg.obrigatorio for cfg in req.configuracoes]
+            minimos_itens = [cfg.minimo_itens for cfg in req.configuracoes]
+            maximos_itens = [cfg.maximo_itens for cfg in req.configuracoes]
+        else:
+            # Formato simples: compatibilidade
+            # Lista vazia é permitida (remove todas as vinculações)
+            complemento_ids = req.complemento_ids if req.complemento_ids is not None else []
+            ordens = req.ordens
+            obrigatorios = None
+            minimos_itens = None
+            maximos_itens = None
+        
         # Valida se os complementos existem e pertencem à mesma empresa
-        if req.complemento_ids:
+        if complemento_ids:
             complementos_existentes = (
                 self.db.query(ComplementoModel)
-                .filter(ComplementoModel.id.in_(req.complemento_ids))
+                .filter(ComplementoModel.id.in_(complemento_ids))
                 .all()
             )
             
-            if len(complementos_existentes) != len(req.complemento_ids):
+            if len(complementos_existentes) != len(complemento_ids):
                 encontrados_ids = {c.id for c in complementos_existentes}
-                nao_encontrados = [cid for cid in req.complemento_ids if cid not in encontrados_ids]
+                nao_encontrados = [cid for cid in complemento_ids if cid not in encontrados_ids]
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail=f"Complementos não encontrados: {nao_encontrados}"
@@ -219,22 +313,29 @@ class ComplementoService:
                         detail=f"Complemento {complemento.id} pertence a empresa diferente do combo."
                     )
         
-        self.repo.vincular_complementos_combo(combo_id, req.complemento_ids, req.ordens)
+        self.repo.vincular_complementos_combo(
+            combo_id, 
+            complemento_ids, 
+            ordens, 
+            obrigatorios, 
+            minimos_itens, 
+            maximos_itens
+        )
         self.db.commit()  # Garante que as vinculações sejam persistidas
         
         # Busca os complementos vinculados para retornar (sem filtro de ativos para garantir que retorne os vinculados)
-        complementos_com_ordem = self.repo.listar_por_combo(combo_id, apenas_ativos=False, carregar_adicionais=False)
+        complementos_com_vinculacao = self.repo.listar_por_combo(combo_id, apenas_ativos=False, carregar_adicionais=False)
         complementos_vinculados = [
             ComplementoResumidoResponse(
                 id=c.id,
                 nome=c.nome,
-                obrigatorio=c.obrigatorio,
-                quantitativo=c.quantitativo,
-                minimo_itens=c.minimo_itens,
-                maximo_itens=c.maximo_itens,
+                obrigatorio=obrigatorio,  # Da vinculação
+                quantitativo=c.quantitativo,  # Do complemento
+                minimo_itens=minimo_itens,  # Da vinculação
+                maximo_itens=maximo_itens,  # Da vinculação
                 ordem=ordem,
             )
-            for c, ordem in complementos_com_ordem
+            for c, ordem, obrigatorio, minimo_itens, maximo_itens in complementos_com_vinculacao
         ]
         
         return VincularComplementosComboResponse(
@@ -244,8 +345,18 @@ class ComplementoService:
 
     def listar_complementos_combo(self, combo_id: int, apenas_ativos: bool = True) -> List[ComplementoResponse]:
         """Lista todos os complementos de um combo específico."""
-        complementos_com_ordem = self.repo.listar_por_combo(combo_id, apenas_ativos=apenas_ativos, carregar_adicionais=True)
-        return [self.complemento_to_response(c) for c, _ in complementos_com_ordem]
+        complementos_com_vinculacao = self.repo.listar_por_combo(combo_id, apenas_ativos=apenas_ativos, carregar_adicionais=True)
+        # Cria responses usando configurações da vinculação
+        responses = []
+        for c, ordem, obrigatorio, minimo_itens, maximo_itens in complementos_com_vinculacao:
+            resp = self.complemento_to_response(c)
+            # Sobrescreve com valores da vinculação
+            resp.obrigatorio = obrigatorio
+            resp.minimo_itens = minimo_itens
+            resp.maximo_itens = maximo_itens
+            resp.ordem = ordem
+            responses.append(resp)
+        return responses
 
     # ------ Adicionais dentro de complementos (DEPRECADO - usar criar_item + vincular) ------
     def criar_adicional(self, complemento_id: int, req: CriarAdicionalRequest) -> AdicionalResponse:

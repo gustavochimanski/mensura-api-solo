@@ -37,13 +37,19 @@ class ComplementoRepository:
         """Lista todos os complementos vinculados a um produto.
         
         Returns:
-            Lista de tuplas (complemento, ordem) ordenadas por ordem.
+            Lista de tuplas (complemento, ordem, obrigatorio, minimo_itens, maximo_itens) ordenadas por ordem.
         """
         from app.api.catalogo.models.association_tables import produto_complemento_link
         from sqlalchemy import select
         
         query = (
-            select(ComplementoModel, produto_complemento_link.c.ordem)
+            select(
+                ComplementoModel, 
+                produto_complemento_link.c.ordem,
+                produto_complemento_link.c.obrigatorio,
+                produto_complemento_link.c.minimo_itens,
+                produto_complemento_link.c.maximo_itens
+            )
             .join(produto_complemento_link, ComplementoModel.id == produto_complemento_link.c.complemento_id)
             .where(produto_complemento_link.c.produto_cod_barras == cod_barras)
         )
@@ -58,7 +64,8 @@ class ComplementoRepository:
         if carregar_adicionais:
             result = result.unique()
         results = result.all()
-        return [(complemento, ordem) for complemento, ordem in results]
+        return [(complemento, ordem, obrigatorio, minimo_itens, maximo_itens) 
+                for complemento, ordem, obrigatorio, minimo_itens, maximo_itens in results]
 
     def atualizar_complemento(self, complemento: ComplementoModel, **data) -> ComplementoModel:
         """Atualiza um complemento existente."""
@@ -73,13 +80,24 @@ class ComplementoRepository:
         self.db.delete(complemento)
         self.db.flush()
 
-    def vincular_complementos_produto(self, cod_barras: str, complemento_ids: List[int], ordens: Optional[List[int]] = None):
+    def vincular_complementos_produto(
+        self, 
+        cod_barras: str, 
+        complemento_ids: List[int], 
+        ordens: Optional[List[int]] = None,
+        obrigatorios: Optional[List[Optional[bool]]] = None,
+        minimos_itens: Optional[List[Optional[int]]] = None,
+        maximos_itens: Optional[List[Optional[int]]] = None
+    ):
         """Vincula múltiplos complementos a um produto.
         
         Args:
             cod_barras: Código de barras do produto
             complemento_ids: Lista de IDs dos complementos a vincular
             ordens: Lista opcional de ordens. Se não informado, usa o índice como ordem.
+            obrigatorios: Lista opcional de obrigatoriedade. Se None, usa valor do complemento.
+            minimos_itens: Lista opcional de mínimos. Se None, usa valor do complemento.
+            maximos_itens: Lista opcional de máximos. Se None, usa valor do complemento.
         """
         from app.api.catalogo.models.association_tables import produto_complemento_link
         
@@ -107,7 +125,7 @@ class ComplementoRepository:
             )
         )
         
-        # Adiciona novas vinculações com ordens
+        # Adiciona novas vinculações com ordens e configurações
         if ordens is None:
             ordens = list(range(len(complemento_ids)))
         
@@ -115,15 +133,31 @@ class ComplementoRepository:
         if len(ordens) != len(complemento_ids):
             ordens = list(range(len(complemento_ids)))
         
-        for complemento_id, ordem in zip(complemento_ids, ordens):
+        # Garante que as listas de configuração tenham o mesmo tamanho
+        if obrigatorios is None:
+            obrigatorios = [None] * len(complemento_ids)
+        if minimos_itens is None:
+            minimos_itens = [None] * len(complemento_ids)
+        if maximos_itens is None:
+            maximos_itens = [None] * len(complemento_ids)
+        
+        for idx, complemento_id in enumerate(complemento_ids):
             # Encontra o complemento correspondente
             complemento = next((c for c in complementos if c.id == complemento_id), None)
             if complemento:
+                # Usa valores da vinculação se fornecidos, senão usa do complemento
+                obrigatorio = obrigatorios[idx] if obrigatorios[idx] is not None else complemento.obrigatorio
+                minimo = minimos_itens[idx] if minimos_itens[idx] is not None else complemento.minimo_itens
+                maximo = maximos_itens[idx] if maximos_itens[idx] is not None else complemento.maximo_itens
+                
                 self.db.execute(
                     produto_complemento_link.insert().values(
                         produto_cod_barras=cod_barras,
                         complemento_id=complemento.id,
-                        ordem=ordem
+                        ordem=ordens[idx],
+                        obrigatorio=obrigatorio,
+                        minimo_itens=minimo,
+                        maximo_itens=maximo
                     )
                 )
         
@@ -145,13 +179,19 @@ class ComplementoRepository:
         """Lista todos os complementos vinculados a uma receita.
         
         Returns:
-            Lista de tuplas (complemento, ordem) ordenadas por ordem.
+            Lista de tuplas (complemento, ordem, obrigatorio, minimo_itens, maximo_itens) ordenadas por ordem.
         """
         from app.api.catalogo.models.association_tables import receita_complemento_link
         from sqlalchemy import select
         
         query = (
-            select(ComplementoModel, receita_complemento_link.c.ordem)
+            select(
+                ComplementoModel, 
+                receita_complemento_link.c.ordem,
+                receita_complemento_link.c.obrigatorio,
+                receita_complemento_link.c.minimo_itens,
+                receita_complemento_link.c.maximo_itens
+            )
             .join(receita_complemento_link, ComplementoModel.id == receita_complemento_link.c.complemento_id)
             .where(receita_complemento_link.c.receita_id == receita_id)
         )
@@ -166,15 +206,27 @@ class ComplementoRepository:
         if carregar_adicionais:
             result = result.unique()
         results = result.all()
-        return [(complemento, ordem) for complemento, ordem in results]
+        return [(complemento, ordem, obrigatorio, minimo_itens, maximo_itens) 
+                for complemento, ordem, obrigatorio, minimo_itens, maximo_itens in results]
 
-    def vincular_complementos_receita(self, receita_id: int, complemento_ids: List[int], ordens: Optional[List[int]] = None):
+    def vincular_complementos_receita(
+        self, 
+        receita_id: int, 
+        complemento_ids: List[int], 
+        ordens: Optional[List[int]] = None,
+        obrigatorios: Optional[List[Optional[bool]]] = None,
+        minimos_itens: Optional[List[Optional[int]]] = None,
+        maximos_itens: Optional[List[Optional[int]]] = None
+    ):
         """Vincula múltiplos complementos a uma receita.
         
         Args:
             receita_id: ID da receita
             complemento_ids: Lista de IDs dos complementos a vincular
             ordens: Lista opcional de ordens. Se não informado, usa o índice como ordem.
+            obrigatorios: Lista opcional de obrigatoriedade. Se None, usa valor do complemento.
+            minimos_itens: Lista opcional de mínimos. Se None, usa valor do complemento.
+            maximos_itens: Lista opcional de máximos. Se None, usa valor do complemento.
         """
         from app.api.catalogo.models.association_tables import receita_complemento_link
         from app.api.catalogo.models.model_receita import ReceitaModel
@@ -203,7 +255,7 @@ class ComplementoRepository:
             )
         )
         
-        # Adiciona novas vinculações com ordens
+        # Adiciona novas vinculações com ordens e configurações
         if ordens is None:
             ordens = list(range(len(complemento_ids)))
         
@@ -211,15 +263,31 @@ class ComplementoRepository:
         if len(ordens) != len(complemento_ids):
             ordens = list(range(len(complemento_ids)))
         
-        for complemento_id, ordem in zip(complemento_ids, ordens):
+        # Garante que as listas de configuração tenham o mesmo tamanho
+        if obrigatorios is None:
+            obrigatorios = [None] * len(complemento_ids)
+        if minimos_itens is None:
+            minimos_itens = [None] * len(complemento_ids)
+        if maximos_itens is None:
+            maximos_itens = [None] * len(complemento_ids)
+        
+        for idx, complemento_id in enumerate(complemento_ids):
             # Encontra o complemento correspondente
             complemento = next((c for c in complementos if c.id == complemento_id), None)
             if complemento:
+                # Usa valores da vinculação se fornecidos, senão usa do complemento
+                obrigatorio = obrigatorios[idx] if obrigatorios[idx] is not None else complemento.obrigatorio
+                minimo = minimos_itens[idx] if minimos_itens[idx] is not None else complemento.minimo_itens
+                maximo = maximos_itens[idx] if maximos_itens[idx] is not None else complemento.maximo_itens
+                
                 self.db.execute(
                     receita_complemento_link.insert().values(
                         receita_id=receita_id,
                         complemento_id=complemento.id,
-                        ordem=ordem
+                        ordem=ordens[idx],
+                        obrigatorio=obrigatorio,
+                        minimo_itens=minimo,
+                        maximo_itens=maximo
                     )
                 )
         
@@ -241,13 +309,19 @@ class ComplementoRepository:
         """Lista todos os complementos vinculados a um combo.
         
         Returns:
-            Lista de tuplas (complemento, ordem) ordenadas por ordem.
+            Lista de tuplas (complemento, ordem, obrigatorio, minimo_itens, maximo_itens) ordenadas por ordem.
         """
         from app.api.catalogo.models.association_tables import combo_complemento_link
         from sqlalchemy import select
         
         query = (
-            select(ComplementoModel, combo_complemento_link.c.ordem)
+            select(
+                ComplementoModel, 
+                combo_complemento_link.c.ordem,
+                combo_complemento_link.c.obrigatorio,
+                combo_complemento_link.c.minimo_itens,
+                combo_complemento_link.c.maximo_itens
+            )
             .join(combo_complemento_link, ComplementoModel.id == combo_complemento_link.c.complemento_id)
             .where(combo_complemento_link.c.combo_id == combo_id)
         )
@@ -262,15 +336,27 @@ class ComplementoRepository:
         if carregar_adicionais:
             result = result.unique()
         results = result.all()
-        return [(complemento, ordem) for complemento, ordem in results]
+        return [(complemento, ordem, obrigatorio, minimo_itens, maximo_itens) 
+                for complemento, ordem, obrigatorio, minimo_itens, maximo_itens in results]
 
-    def vincular_complementos_combo(self, combo_id: int, complemento_ids: List[int], ordens: Optional[List[int]] = None):
+    def vincular_complementos_combo(
+        self, 
+        combo_id: int, 
+        complemento_ids: List[int], 
+        ordens: Optional[List[int]] = None,
+        obrigatorios: Optional[List[Optional[bool]]] = None,
+        minimos_itens: Optional[List[Optional[int]]] = None,
+        maximos_itens: Optional[List[Optional[int]]] = None
+    ):
         """Vincula múltiplos complementos a um combo.
         
         Args:
             combo_id: ID do combo
             complemento_ids: Lista de IDs dos complementos a vincular
             ordens: Lista opcional de ordens. Se não informado, usa o índice como ordem.
+            obrigatorios: Lista opcional de obrigatoriedade. Se None, usa valor do complemento.
+            minimos_itens: Lista opcional de mínimos. Se None, usa valor do complemento.
+            maximos_itens: Lista opcional de máximos. Se None, usa valor do complemento.
         """
         from app.api.catalogo.models.association_tables import combo_complemento_link
         from app.api.catalogo.models.model_combo import ComboModel
@@ -308,7 +394,7 @@ class ComplementoRepository:
             )
         )
         
-        # Adiciona novas vinculações com ordens
+        # Adiciona novas vinculações com ordens e configurações
         if ordens is None:
             ordens = list(range(len(complemento_ids)))
         
@@ -316,15 +402,31 @@ class ComplementoRepository:
         if len(ordens) != len(complemento_ids):
             ordens = list(range(len(complemento_ids)))
         
-        for complemento_id, ordem in zip(complemento_ids, ordens):
+        # Garante que as listas de configuração tenham o mesmo tamanho
+        if obrigatorios is None:
+            obrigatorios = [None] * len(complemento_ids)
+        if minimos_itens is None:
+            minimos_itens = [None] * len(complemento_ids)
+        if maximos_itens is None:
+            maximos_itens = [None] * len(complemento_ids)
+        
+        for idx, complemento_id in enumerate(complemento_ids):
             # Encontra o complemento correspondente
             complemento = next((c for c in complementos if c.id == complemento_id), None)
             if complemento:
+                # Usa valores da vinculação se fornecidos, senão usa do complemento
+                obrigatorio = obrigatorios[idx] if obrigatorios[idx] is not None else complemento.obrigatorio
+                minimo = minimos_itens[idx] if minimos_itens[idx] is not None else complemento.minimo_itens
+                maximo = maximos_itens[idx] if maximos_itens[idx] is not None else complemento.maximo_itens
+                
                 self.db.execute(
                     combo_complemento_link.insert().values(
                         combo_id=combo_id,
                         complemento_id=complemento.id,
-                        ordem=ordem
+                        ordem=ordens[idx],
+                        obrigatorio=obrigatorio,
+                        minimo_itens=minimo,
+                        maximo_itens=maximo
                     )
                 )
         
