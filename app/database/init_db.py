@@ -766,6 +766,26 @@ def criar_tabelas(postgis_disponivel: bool = True):
                 exc_info=True,
             )
 
+        # Garante colunas de redirecionamento de home em cadastros.empresas
+        try:
+            with engine.begin() as conn:
+                conn.execute(
+                    text(
+                        """
+                        ALTER TABLE cadastros.empresas
+                        ADD COLUMN IF NOT EXISTS redireciona_home boolean NOT NULL DEFAULT false,
+                        ADD COLUMN IF NOT EXISTS redireciona_home_para varchar(255)
+                        """
+                    )
+                )
+            logger.info("✅ Colunas redireciona_home/redireciona_home_para em cadastros.empresas criadas/verificadas com sucesso")
+        except Exception as e:
+            logger.error(
+                "❌ Erro ao garantir colunas redireciona_home/redireciona_home_para em cadastros.empresas: %s",
+                e,
+                exc_info=True,
+            )
+
         logger.info("✅ Processo de criação de tabelas concluído.")
     except Exception as e:
         logger.error(f"❌ Erro geral ao criar tabelas: {e}", exc_info=True)

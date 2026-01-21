@@ -70,12 +70,12 @@ def listar_complementos_unificado(
     try:
         if tipo == TipoProdutoEnum.PRODUTO:
             # Para produtos, o identificador é o código de barras (string)
-            complementos = service.repo.listar_por_produto(
+            # Usa o método do service que já retorna com configurações da vinculação
+            result = service.listar_complementos_produto(
                 identificador, 
-                apenas_ativos=apenas_ativos, 
-                carregar_adicionais=True
+                apenas_ativos=apenas_ativos
             )
-            logger.info(f"[Complementos Public] Encontrados {len(complementos)} complementos para produto {identificador}")
+            logger.info(f"[Complementos Public] Encontrados {len(result)} complementos para produto {identificador}")
             
         elif tipo == TipoProdutoEnum.COMBO:
             # Para combos, o identificador é um ID (int)
@@ -95,12 +95,12 @@ def listar_complementos_unificado(
                     detail=f"Combo {combo_id} não encontrado ou inativo"
                 )
             
-            complementos = service.repo.listar_por_combo(
+            # Usa o método do service que já retorna com configurações da vinculação
+            result = service.listar_complementos_combo(
                 combo_id, 
-                apenas_ativos=apenas_ativos, 
-                carregar_adicionais=True
+                apenas_ativos=apenas_ativos
             )
-            logger.info(f"[Complementos Public] Encontrados {len(complementos)} complementos para combo {combo_id}")
+            logger.info(f"[Complementos Public] Encontrados {len(result)} complementos para combo {combo_id}")
             
         elif tipo == TipoProdutoEnum.RECEITA:
             # Para receitas, o identificador é um ID (int)
@@ -120,22 +120,18 @@ def listar_complementos_unificado(
                     detail=f"Receita {receita_id} não encontrada ou inativa"
                 )
             
-            complementos = service.repo.listar_por_receita(
+            # Usa o método do service que já retorna com configurações da vinculação
+            result = service.listar_complementos_receita(
                 receita_id, 
-                apenas_ativos=apenas_ativos, 
-                carregar_adicionais=True
+                apenas_ativos=apenas_ativos
             )
-            logger.info(f"[Complementos Public] Encontrados {len(complementos)} complementos para receita {receita_id}")
+            logger.info(f"[Complementos Public] Encontrados {len(result)} complementos para receita {receita_id}")
         
         else:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Tipo inválido: {tipo}. Use 'produto', 'combo' ou 'receita'"
             )
-        
-        # Converte para response
-        # Os métodos listar_por_* retornam tuplas (complemento, ordem), então extraímos apenas o complemento
-        result = [service.complemento_to_response(c) for c, _ in complementos]
         
         if not result:
             logger.warning(f"[Complementos Public] Nenhum complemento encontrado para {tipo.value}={identificador} (apenas_ativos={apenas_ativos}, tipo_pedido={tipo_pedido.value})")
