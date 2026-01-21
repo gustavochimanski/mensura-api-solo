@@ -2,20 +2,21 @@
 
 ## 📋 Visão Geral
 
-A partir desta atualização, as configurações `obrigatorio`, `minimo_itens` e `maximo_itens` são definidas **na vinculação** entre complemento e item/receita/combo, e não mais no CRUD do complemento.
+A partir desta atualização, **TODAS** as configurações (`obrigatorio`, `quantitativo`, `minimo_itens` e `maximo_itens`) são definidas **na vinculação** entre complemento e item/receita/combo, e não mais no CRUD do complemento.
 
 Isso permite que o mesmo complemento tenha comportamentos diferentes dependendo de onde está sendo usado.
 
 ## 🔄 Mudanças Principais
 
 ### Antes
-- As configurações eram definidas no CRUD do complemento
+- As configurações (`obrigatorio`, `quantitativo`, `minimo_itens`, `maximo_itens`) eram definidas no CRUD do complemento
 - Todos os produtos/receitas/combos que usavam o mesmo complemento tinham as mesmas regras
 
 ### Agora
-- As configurações são definidas ao vincular o complemento a um produto/receita/combo
+- **TODAS** as configurações são definidas ao vincular o complemento a um produto/receita/combo
 - Cada vinculação pode ter suas próprias regras
 - O mesmo complemento pode ser obrigatório em um produto e opcional em outro
+- O mesmo complemento pode ser quantitativo em um produto e não quantitativo em outro
 
 ## 📡 Endpoints Afetados
 
@@ -63,9 +64,10 @@ Isso permite que o mesmo complemento tenha comportamentos diferentes dependendo 
 **Campos:**
 - `complemento_id` (obrigatório): ID do complemento a vincular
 - `ordem` (opcional): Ordem de exibição. Se não informado, usa o índice
-- `obrigatorio` (opcional): Se o complemento é obrigatório nesta vinculação. Se `null`, usa o valor padrão do complemento
-- `minimo_itens` (opcional): Quantidade mínima de itens. Se `null`, usa o valor padrão do complemento
-- `maximo_itens` (opcional): Quantidade máxima de itens. Se `null`, usa o valor padrão do complemento
+- `obrigatorio` (obrigatório): Se o complemento é obrigatório nesta vinculação
+- `quantitativo` (obrigatório): Se permite quantidade (ex: 2x bacon) e múltipla escolha nesta vinculação
+- `minimo_itens` (opcional): Quantidade mínima de itens. Se `null`, sem mínimo
+- `maximo_itens` (opcional): Quantidade máxima de itens. Se `null`, sem limite
 
 ### 2. Vincular Complementos a Receita
 
@@ -102,7 +104,7 @@ Mesma estrutura do endpoint de produtos.
 }
 ```
 
-**Importante:** Os campos `obrigatorio`, `minimo_itens`, `maximo_itens` e `ordem` agora vêm da **vinculação**, não mais do complemento em si.
+**Importante:** Os campos `obrigatorio`, `quantitativo`, `minimo_itens`, `maximo_itens` e `ordem` agora vêm da **vinculação**, não mais do complemento em si.
 
 ## 🎯 Exemplos de Uso
 
@@ -146,6 +148,7 @@ await vincularComplementosProduto('HAMB001', {
       complemento_id: 2, // Adicionais
       ordem: 0,
       obrigatorio: false,
+      quantitativo: true,
       minimo_itens: 0,
       maximo_itens: 3  // ← Limite de 3
     }
@@ -159,6 +162,7 @@ await vincularComplementosProduto('HAMB002', {
       complemento_id: 2, // Mesmo complemento de adicionais
       ordem: 0,
       obrigatorio: false,
+      quantitativo: true,
       minimo_itens: 0,
       maximo_itens: 5  // ← Limite de 5
     }
@@ -189,7 +193,8 @@ const vincularComplementos = async (itemId, configuracoes) => {
     configuracoes: configuracoes.map((cfg, idx) => ({
       complemento_id: cfg.id,
       ordem: cfg.ordem ?? idx,
-      obrigatorio: cfg.obrigatorio ?? null,
+      obrigatorio: cfg.obrigatorio ?? false,  // Obrigatório na vinculação
+      quantitativo: cfg.quantitativo ?? false,  // Obrigatório na vinculação
       minimo_itens: cfg.minimo_itens ?? null,
       maximo_itens: cfg.maximo_itens ?? null
     }))
@@ -258,13 +263,13 @@ Quando usar o formato simples, os valores padrão do complemento serão usados.
 
 ## 📝 Notas Importantes
 
-1. **Campo `quantitativo`**: Este campo continua vindo do complemento e não muda por vinculação. Ele indica se o complemento permite quantidades (ex: "2x bacon").
+1. **Todas as configurações na vinculação**: `obrigatorio`, `quantitativo`, `minimo_itens` e `maximo_itens` são **obrigatórias** na vinculação e não existem mais no CRUD do complemento.
 
-2. **Valores `null`**: Quando `obrigatorio`, `minimo_itens` ou `maximo_itens` são `null` na vinculação, os valores padrão do complemento são usados.
+2. **Valores `null`**: Apenas `minimo_itens` e `maximo_itens` podem ser `null` (sem mínimo/máximo). `obrigatorio` e `quantitativo` são sempre booleanos.
 
 3. **Ordem**: A ordem também vem da vinculação, permitindo ordenar complementos de forma diferente em cada produto/receita/combo.
 
-4. **CRUD do Complemento**: O CRUD do complemento ainda existe, mas as configurações lá são apenas valores padrão. As configurações reais vêm da vinculação.
+4. **CRUD do Complemento**: O CRUD do complemento ainda existe, mas apenas para gerenciar nome, descrição e ativo. As configurações de comportamento são definidas na vinculação.
 
 ## 🐛 Troubleshooting
 

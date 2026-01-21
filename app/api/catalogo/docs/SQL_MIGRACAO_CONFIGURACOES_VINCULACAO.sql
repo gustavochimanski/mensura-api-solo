@@ -2,14 +2,18 @@
 -- MIGRAÇÃO: Configurações de Complemento na Vinculação
 -- ============================================================
 -- 
--- Esta migração move as configurações obrigatorio, minimo_itens e maximo_itens
--- da tabela complemento_produto para as tabelas de vinculação:
+-- Esta migração move TODAS as configurações (obrigatorio, quantitativo, 
+-- minimo_itens e maximo_itens) da tabela complemento_produto para as 
+-- tabelas de vinculação:
 -- - produto_complemento_link
 -- - receita_complemento_link  
 -- - combo_complemento_link
 --
 -- Isso permite que o mesmo complemento tenha comportamentos diferentes
 -- dependendo do item, receita ou combo ao qual está vinculado.
+--
+-- IMPORTANTE: Após esta migração, essas configurações NÃO existem mais
+-- na tabela complemento_produto e DEVEM ser definidas na vinculação.
 --
 -- Data: 2024
 -- ============================================================
@@ -23,18 +27,21 @@ BEGIN;
 -- Adiciona colunas na tabela produto_complemento_link
 ALTER TABLE catalogo.produto_complemento_link
 ADD COLUMN IF NOT EXISTS obrigatorio BOOLEAN NOT NULL DEFAULT FALSE,
+ADD COLUMN IF NOT EXISTS quantitativo BOOLEAN NOT NULL DEFAULT FALSE,
 ADD COLUMN IF NOT EXISTS minimo_itens INTEGER,
 ADD COLUMN IF NOT EXISTS maximo_itens INTEGER;
 
 -- Adiciona colunas na tabela receita_complemento_link
 ALTER TABLE catalogo.receita_complemento_link
 ADD COLUMN IF NOT EXISTS obrigatorio BOOLEAN NOT NULL DEFAULT FALSE,
+ADD COLUMN IF NOT EXISTS quantitativo BOOLEAN NOT NULL DEFAULT FALSE,
 ADD COLUMN IF NOT EXISTS minimo_itens INTEGER,
 ADD COLUMN IF NOT EXISTS maximo_itens INTEGER;
 
 -- Adiciona colunas na tabela combo_complemento_link
 ALTER TABLE catalogo.combo_complemento_link
 ADD COLUMN IF NOT EXISTS obrigatorio BOOLEAN NOT NULL DEFAULT FALSE,
+ADD COLUMN IF NOT EXISTS quantitativo BOOLEAN NOT NULL DEFAULT FALSE,
 ADD COLUMN IF NOT EXISTS minimo_itens INTEGER,
 ADD COLUMN IF NOT EXISTS maximo_itens INTEGER;
 
@@ -46,6 +53,7 @@ ADD COLUMN IF NOT EXISTS maximo_itens INTEGER;
 UPDATE catalogo.produto_complemento_link pcl
 SET 
     obrigatorio = COALESCE(cp.obrigatorio, FALSE),
+    quantitativo = COALESCE(cp.quantitativo, FALSE),
     minimo_itens = cp.minimo_itens,
     maximo_itens = cp.maximo_itens
 FROM catalogo.complemento_produto cp
@@ -56,6 +64,7 @@ WHERE pcl.complemento_id = cp.id
 UPDATE catalogo.receita_complemento_link rcl
 SET 
     obrigatorio = COALESCE(cp.obrigatorio, FALSE),
+    quantitativo = COALESCE(cp.quantitativo, FALSE),
     minimo_itens = cp.minimo_itens,
     maximo_itens = cp.maximo_itens
 FROM catalogo.complemento_produto cp
@@ -66,6 +75,7 @@ WHERE rcl.complemento_id = cp.id
 UPDATE catalogo.combo_complemento_link ccl
 SET 
     obrigatorio = COALESCE(cp.obrigatorio, FALSE),
+    quantitativo = COALESCE(cp.quantitativo, FALSE),
     minimo_itens = cp.minimo_itens,
     maximo_itens = cp.maximo_itens
 FROM catalogo.complemento_produto cp
@@ -77,50 +87,60 @@ WHERE ccl.complemento_id = cp.id
 -- ============================================================
 
 COMMENT ON COLUMN catalogo.produto_complemento_link.obrigatorio IS 
-    'Se o complemento é obrigatório para este produto específico (pode diferir do valor padrão do complemento)';
+    'Se o complemento é obrigatório para este produto específico';
+
+COMMENT ON COLUMN catalogo.produto_complemento_link.quantitativo IS 
+    'Se permite quantidade (ex: 2x bacon) e múltipla escolha para este produto específico';
 
 COMMENT ON COLUMN catalogo.produto_complemento_link.minimo_itens IS 
-    'Quantidade mínima de itens para este produto específico (pode diferir do valor padrão do complemento)';
+    'Quantidade mínima de itens para este produto específico';
 
 COMMENT ON COLUMN catalogo.produto_complemento_link.maximo_itens IS 
-    'Quantidade máxima de itens para este produto específico (pode diferir do valor padrão do complemento)';
+    'Quantidade máxima de itens para este produto específico';
 
 COMMENT ON COLUMN catalogo.receita_complemento_link.obrigatorio IS 
-    'Se o complemento é obrigatório para esta receita específica (pode diferir do valor padrão do complemento)';
+    'Se o complemento é obrigatório para esta receita específica';
+
+COMMENT ON COLUMN catalogo.receita_complemento_link.quantitativo IS 
+    'Se permite quantidade (ex: 2x bacon) e múltipla escolha para esta receita específica';
 
 COMMENT ON COLUMN catalogo.receita_complemento_link.minimo_itens IS 
-    'Quantidade mínima de itens para esta receita específica (pode diferir do valor padrão do complemento)';
+    'Quantidade mínima de itens para esta receita específica';
 
 COMMENT ON COLUMN catalogo.receita_complemento_link.maximo_itens IS 
-    'Quantidade máxima de itens para esta receita específica (pode diferir do valor padrão do complemento)';
+    'Quantidade máxima de itens para esta receita específica';
 
 COMMENT ON COLUMN catalogo.combo_complemento_link.obrigatorio IS 
-    'Se o complemento é obrigatório para este combo específico (pode diferir do valor padrão do complemento)';
+    'Se o complemento é obrigatório para este combo específico';
+
+COMMENT ON COLUMN catalogo.combo_complemento_link.quantitativo IS 
+    'Se permite quantidade (ex: 2x bacon) e múltipla escolha para este combo específico';
 
 COMMENT ON COLUMN catalogo.combo_complemento_link.minimo_itens IS 
-    'Quantidade mínima de itens para este combo específico (pode diferir do valor padrão do complemento)';
+    'Quantidade mínima de itens para este combo específico';
 
 COMMENT ON COLUMN catalogo.combo_complemento_link.maximo_itens IS 
-    'Quantidade máxima de itens para este combo específico (pode diferir do valor padrão do complemento)';
+    'Quantidade máxima de itens para este combo específico';
 
 -- ============================================================
--- 4. NOTA SOBRE COLUNAS NA TABELA COMPLEMENTO_PRODUTO
+-- 4. REMOVER COLUNAS DA TABELA COMPLEMENTO_PRODUTO
 -- ============================================================
 -- 
--- As colunas obrigatorio, minimo_itens e maximo_itens na tabela
--- complemento_produto podem ser mantidas como valores padrão
--- ou removidas no futuro. Por enquanto, são mantidas para
--- compatibilidade e como valores padrão quando não especificados
--- na vinculação.
+-- Remove as colunas obrigatorio, quantitativo, minimo_itens e maximo_itens
+-- da tabela complemento_produto, pois agora essas configurações existem
+-- APENAS nas tabelas de vinculação.
 --
--- Se desejar remover essas colunas no futuro, execute:
---
--- ALTER TABLE catalogo.complemento_produto
--- DROP COLUMN IF EXISTS obrigatorio,
--- DROP COLUMN IF EXISTS minimo_itens,
--- DROP COLUMN IF EXISTS maximo_itens;
+-- IMPORTANTE: Execute esta parte APÓS migrar os dados e verificar que
+-- tudo está funcionando corretamente.
 --
 -- ============================================================
+
+-- Remove as colunas da tabela complemento_produto
+ALTER TABLE catalogo.complemento_produto
+DROP COLUMN IF EXISTS obrigatorio,
+DROP COLUMN IF EXISTS quantitativo,
+DROP COLUMN IF EXISTS minimo_itens,
+DROP COLUMN IF EXISTS maximo_itens;
 
 COMMIT;
 
@@ -130,19 +150,28 @@ COMMIT;
 -- 
 -- Execute estas queries para verificar se a migração foi bem-sucedida:
 --
--- -- Verifica se as colunas foram criadas
+-- -- Verifica se as colunas foram criadas nas tabelas de vinculação
 -- SELECT column_name, data_type, is_nullable, column_default
 -- FROM information_schema.columns
 -- WHERE table_schema = 'catalogo'
 --   AND table_name IN ('produto_complemento_link', 'receita_complemento_link', 'combo_complemento_link')
---   AND column_name IN ('obrigatorio', 'minimo_itens', 'maximo_itens')
+--   AND column_name IN ('obrigatorio', 'quantitativo', 'minimo_itens', 'maximo_itens')
 -- ORDER BY table_name, column_name;
+--
+-- -- Verifica se as colunas foram removidas da tabela complemento_produto
+-- SELECT column_name
+-- FROM information_schema.columns
+-- WHERE table_schema = 'catalogo'
+--   AND table_name = 'complemento_produto'
+--   AND column_name IN ('obrigatorio', 'quantitativo', 'minimo_itens', 'maximo_itens');
+-- -- Deve retornar 0 linhas
 --
 -- -- Verifica se os dados foram migrados
 -- SELECT 
 --     'produto_complemento_link' as tabela,
 --     COUNT(*) as total,
 --     COUNT(obrigatorio) as com_obrigatorio,
+--     COUNT(quantitativo) as com_quantitativo,
 --     COUNT(minimo_itens) as com_minimo,
 --     COUNT(maximo_itens) as com_maximo
 -- FROM catalogo.produto_complemento_link
@@ -151,6 +180,7 @@ COMMIT;
 --     'receita_complemento_link' as tabela,
 --     COUNT(*) as total,
 --     COUNT(obrigatorio) as com_obrigatorio,
+--     COUNT(quantitativo) as com_quantitativo,
 --     COUNT(minimo_itens) as com_minimo,
 --     COUNT(maximo_itens) as com_maximo
 -- FROM catalogo.receita_complemento_link
@@ -159,6 +189,7 @@ COMMIT;
 --     'combo_complemento_link' as tabela,
 --     COUNT(*) as total,
 --     COUNT(obrigatorio) as com_obrigatorio,
+--     COUNT(quantitativo) as com_quantitativo,
 --     COUNT(minimo_itens) as com_minimo,
 --     COUNT(maximo_itens) as com_maximo
 -- FROM catalogo.combo_complemento_link;

@@ -54,17 +54,17 @@ class ComplementoService:
         return empresa
 
     def criar_complemento(self, req: CriarComplementoRequest) -> ComplementoResponse:
-        """Cria um novo complemento."""
+        """Cria um novo complemento.
+        
+        NOTA: obrigatorio, quantitativo, minimo_itens e maximo_itens não são mais
+        definidos aqui. Essas configurações são definidas na vinculação.
+        """
         self._empresa_or_404(req.empresa_id)
         
         complemento = self.repo.criar_complemento(
             empresa_id=req.empresa_id,
             nome=req.nome,
             descricao=req.descricao,
-            obrigatorio=req.obrigatorio,
-            quantitativo=req.quantitativo,
-            minimo_itens=req.minimo_itens,
-            maximo_itens=req.maximo_itens,
             ordem=req.ordem,
         )
         
@@ -124,10 +124,11 @@ class ComplementoService:
             complemento_ids = [cfg.complemento_id for cfg in req.configuracoes]
             ordens = [cfg.ordem if cfg.ordem is not None else idx for idx, cfg in enumerate(req.configuracoes)]
             obrigatorios = [cfg.obrigatorio for cfg in req.configuracoes]
+            quantitativos = [cfg.quantitativo for cfg in req.configuracoes]
             minimos_itens = [cfg.minimo_itens for cfg in req.configuracoes]
             maximos_itens = [cfg.maximo_itens for cfg in req.configuracoes]
         else:
-            # Formato simples: compatibilidade
+            # Formato simples: compatibilidade (usa valores padrão)
             if not req.complemento_ids:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -135,7 +136,8 @@ class ComplementoService:
                 )
             complemento_ids = req.complemento_ids
             ordens = req.ordens
-            obrigatorios = None
+            obrigatorios = None  # Usa False como padrão no repositório
+            quantitativos = None  # Usa False como padrão no repositório
             minimos_itens = None
             maximos_itens = None
         
@@ -144,6 +146,7 @@ class ComplementoService:
             complemento_ids, 
             ordens, 
             obrigatorios, 
+            quantitativos,
             minimos_itens, 
             maximos_itens
         )
@@ -156,12 +159,12 @@ class ComplementoService:
                 id=c.id,
                 nome=c.nome,
                 obrigatorio=obrigatorio,  # Da vinculação
-                quantitativo=c.quantitativo,  # Do complemento
+                quantitativo=quantitativo,  # Da vinculação
                 minimo_itens=minimo_itens,  # Da vinculação
                 maximo_itens=maximo_itens,  # Da vinculação
                 ordem=ordem,
             )
-            for c, ordem, obrigatorio, minimo_itens, maximo_itens in complementos_com_vinculacao
+            for c, ordem, obrigatorio, quantitativo, minimo_itens, maximo_itens in complementos_com_vinculacao
         ]
         
         return VincularComplementosProdutoResponse(
@@ -174,10 +177,11 @@ class ComplementoService:
         complementos_com_vinculacao = self.repo.listar_por_produto(cod_barras, apenas_ativos=apenas_ativos, carregar_adicionais=True)
         # Cria responses usando configurações da vinculação
         responses = []
-        for c, ordem, obrigatorio, minimo_itens, maximo_itens in complementos_com_vinculacao:
+        for c, ordem, obrigatorio, quantitativo, minimo_itens, maximo_itens in complementos_com_vinculacao:
             resp = self.complemento_to_response(c)
             # Sobrescreve com valores da vinculação
             resp.obrigatorio = obrigatorio
+            resp.quantitativo = quantitativo
             resp.minimo_itens = minimo_itens
             resp.maximo_itens = maximo_itens
             resp.ordem = ordem
@@ -201,10 +205,11 @@ class ComplementoService:
             complemento_ids = [cfg.complemento_id for cfg in req.configuracoes]
             ordens = [cfg.ordem if cfg.ordem is not None else idx for idx, cfg in enumerate(req.configuracoes)]
             obrigatorios = [cfg.obrigatorio for cfg in req.configuracoes]
+            quantitativos = [cfg.quantitativo for cfg in req.configuracoes]
             minimos_itens = [cfg.minimo_itens for cfg in req.configuracoes]
             maximos_itens = [cfg.maximo_itens for cfg in req.configuracoes]
         else:
-            # Formato simples: compatibilidade
+            # Formato simples: compatibilidade (usa valores padrão)
             if not req.complemento_ids:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
@@ -212,7 +217,8 @@ class ComplementoService:
                 )
             complemento_ids = req.complemento_ids
             ordens = req.ordens
-            obrigatorios = None
+            obrigatorios = None  # Usa False como padrão no repositório
+            quantitativos = None  # Usa False como padrão no repositório
             minimos_itens = None
             maximos_itens = None
         
@@ -221,6 +227,7 @@ class ComplementoService:
             complemento_ids, 
             ordens, 
             obrigatorios, 
+            quantitativos,
             minimos_itens, 
             maximos_itens
         )
@@ -233,12 +240,12 @@ class ComplementoService:
                 id=c.id,
                 nome=c.nome,
                 obrigatorio=obrigatorio,  # Da vinculação
-                quantitativo=c.quantitativo,  # Do complemento
+                quantitativo=quantitativo,  # Da vinculação
                 minimo_itens=minimo_itens,  # Da vinculação
                 maximo_itens=maximo_itens,  # Da vinculação
                 ordem=ordem,
             )
-            for c, ordem, obrigatorio, minimo_itens, maximo_itens in complementos_com_vinculacao
+            for c, ordem, obrigatorio, quantitativo, minimo_itens, maximo_itens in complementos_com_vinculacao
         ]
         
         return VincularComplementosReceitaResponse(
@@ -251,10 +258,11 @@ class ComplementoService:
         complementos_com_vinculacao = self.repo.listar_por_receita(receita_id, apenas_ativos=apenas_ativos, carregar_adicionais=True)
         # Cria responses usando configurações da vinculação
         responses = []
-        for c, ordem, obrigatorio, minimo_itens, maximo_itens in complementos_com_vinculacao:
+        for c, ordem, obrigatorio, quantitativo, minimo_itens, maximo_itens in complementos_com_vinculacao:
             resp = self.complemento_to_response(c)
             # Sobrescreve com valores da vinculação
             resp.obrigatorio = obrigatorio
+            resp.quantitativo = quantitativo
             resp.minimo_itens = minimo_itens
             resp.maximo_itens = maximo_itens
             resp.ordem = ordem
@@ -278,14 +286,16 @@ class ComplementoService:
             complemento_ids = [cfg.complemento_id for cfg in req.configuracoes]
             ordens = [cfg.ordem if cfg.ordem is not None else idx for idx, cfg in enumerate(req.configuracoes)]
             obrigatorios = [cfg.obrigatorio for cfg in req.configuracoes]
+            quantitativos = [cfg.quantitativo for cfg in req.configuracoes]
             minimos_itens = [cfg.minimo_itens for cfg in req.configuracoes]
             maximos_itens = [cfg.maximo_itens for cfg in req.configuracoes]
         else:
-            # Formato simples: compatibilidade
+            # Formato simples: compatibilidade (usa valores padrão)
             # Lista vazia é permitida (remove todas as vinculações)
             complemento_ids = req.complemento_ids if req.complemento_ids is not None else []
             ordens = req.ordens
-            obrigatorios = None
+            obrigatorios = None  # Usa False como padrão no repositório
+            quantitativos = None  # Usa False como padrão no repositório
             minimos_itens = None
             maximos_itens = None
         
@@ -330,12 +340,12 @@ class ComplementoService:
                 id=c.id,
                 nome=c.nome,
                 obrigatorio=obrigatorio,  # Da vinculação
-                quantitativo=c.quantitativo,  # Do complemento
+                quantitativo=quantitativo,  # Da vinculação
                 minimo_itens=minimo_itens,  # Da vinculação
                 maximo_itens=maximo_itens,  # Da vinculação
                 ordem=ordem,
             )
-            for c, ordem, obrigatorio, minimo_itens, maximo_itens in complementos_com_vinculacao
+            for c, ordem, obrigatorio, quantitativo, minimo_itens, maximo_itens in complementos_com_vinculacao
         ]
         
         return VincularComplementosComboResponse(
@@ -348,10 +358,11 @@ class ComplementoService:
         complementos_com_vinculacao = self.repo.listar_por_combo(combo_id, apenas_ativos=apenas_ativos, carregar_adicionais=True)
         # Cria responses usando configurações da vinculação
         responses = []
-        for c, ordem, obrigatorio, minimo_itens, maximo_itens in complementos_com_vinculacao:
+        for c, ordem, obrigatorio, quantitativo, minimo_itens, maximo_itens in complementos_com_vinculacao:
             resp = self.complemento_to_response(c)
             # Sobrescreve com valores da vinculação
             resp.obrigatorio = obrigatorio
+            resp.quantitativo = quantitativo
             resp.minimo_itens = minimo_itens
             resp.maximo_itens = maximo_itens
             resp.ordem = ordem
@@ -741,7 +752,12 @@ class ComplementoService:
 
     # ------ Helpers ------
     def complemento_to_response(self, complemento: ComplementoModel) -> ComplementoResponse:
-        """Converte ComplementoModel para ComplementoResponse."""
+        """Converte ComplementoModel para ComplementoResponse.
+        
+        NOTA: Quando usado sem vinculação (CRUD direto), os campos obrigatorio,
+        quantitativo, minimo_itens e maximo_itens serão None, pois não existem
+        mais no complemento. Esses valores só existem na vinculação.
+        """
         # Busca os itens vinculados via relacionamento N:N (retorna tuplas (item, ordem))
         itens_com_ordem = self.repo_item.listar_itens_complemento(complemento.id, apenas_ativos=False)
 
@@ -755,10 +771,10 @@ class ComplementoService:
             empresa_id=complemento.empresa_id,
             nome=complemento.nome,
             descricao=complemento.descricao,
-            obrigatorio=complemento.obrigatorio,
-            quantitativo=complemento.quantitativo,
-            minimo_itens=complemento.minimo_itens,
-            maximo_itens=complemento.maximo_itens,
+            obrigatorio=None,  # Não existe mais no complemento, só na vinculação
+            quantitativo=None,  # Não existe mais no complemento, só na vinculação
+            minimo_itens=None,  # Não existe mais no complemento, só na vinculação
+            maximo_itens=None,  # Não existe mais no complemento, só na vinculação
             ordem=complemento.ordem,
             ativo=complemento.ativo,
             adicionais=adicionais,

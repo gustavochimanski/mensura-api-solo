@@ -5,41 +5,29 @@ from pydantic import BaseModel, ConfigDict, Field, condecimal, model_validator
 
 # ------ Requests ------
 class CriarComplementoRequest(BaseModel):
+    """Request para criar um complemento.
+    
+    NOTA: obrigatorio, quantitativo, minimo_itens e maximo_itens não são mais
+    definidos aqui. Essas configurações são definidas na vinculação do complemento
+    a produtos, receitas ou combos.
+    """
     empresa_id: int
     nome: str = Field(..., min_length=1, max_length=100)
     descricao: Optional[str] = Field(None, max_length=255)
-    obrigatorio: bool = False
-    quantitativo: bool = False
-    minimo_itens: Optional[int] = Field(
-        None,
-        ge=0,
-        description="Quantidade mínima de itens que o cliente deve escolher neste complemento (None = sem mínimo específico).",
-    )
-    maximo_itens: Optional[int] = Field(
-        None,
-        ge=0,
-        description="Quantidade máxima de itens que o cliente pode escolher neste complemento (None = sem limite explícito).",
-    )
     ordem: int = 0
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class AtualizarComplementoRequest(BaseModel):
+    """Request para atualizar um complemento.
+    
+    NOTA: obrigatorio, quantitativo, minimo_itens e maximo_itens não podem mais
+    ser atualizados aqui. Essas configurações são atualizadas na vinculação
+    do complemento a produtos, receitas ou combos.
+    """
     nome: Optional[str] = Field(None, min_length=1, max_length=100)
     descricao: Optional[str] = Field(None, max_length=255)
-    obrigatorio: Optional[bool] = None
-    quantitativo: Optional[bool] = None
-    minimo_itens: Optional[int] = Field(
-        None,
-        ge=0,
-        description="Quantidade mínima de itens que o cliente deve escolher neste complemento (None = não alterar).",
-    )
-    maximo_itens: Optional[int] = Field(
-        None,
-        ge=0,
-        description="Quantidade máxima de itens que o cliente pode escolher neste complemento (None = não alterar).",
-    )
     ativo: Optional[bool] = None
     ordem: Optional[int] = None
 
@@ -116,22 +104,29 @@ class AdicionalResponse(BaseModel):
 
 
 class ComplementoResponse(BaseModel):
-    """Response para complemento com seus adicionais"""
+    """Response para complemento com seus adicionais.
+    
+    NOTA: Quando retornado de uma vinculação (produto/receita/combo),
+    os campos obrigatorio, quantitativo, minimo_itens, maximo_itens e ordem
+    vêm da vinculação, não do complemento em si.
+    
+    Quando retornado do CRUD direto (sem vinculação), esses campos não existem.
+    """
     id: int
     empresa_id: int
     nome: str
     descricao: Optional[str] = None
-    obrigatorio: bool
-    quantitativo: bool
+    obrigatorio: Optional[bool] = None  # Da vinculação (None quando não vinculado)
+    quantitativo: Optional[bool] = None  # Da vinculação (None quando não vinculado)
     minimo_itens: Optional[int] = Field(
         None,
-        description="Mínimo de itens que o cliente deve escolher neste complemento (aplicado só quando > 0).",
+        description="Mínimo de itens da vinculação (None quando não vinculado ou sem mínimo).",
     )
     maximo_itens: Optional[int] = Field(
         None,
-        description="Máximo de itens que o cliente pode escolher neste complemento (aplicado só quando não nulo).",
+        description="Máximo de itens da vinculação (None quando não vinculado ou sem limite).",
     )
-    ordem: int
+    ordem: int  # Da vinculação ou do complemento
     ativo: bool
     adicionais: List[AdicionalResponse] = Field(default_factory=list)
     created_at: datetime
@@ -141,15 +136,14 @@ class ComplementoResponse(BaseModel):
 
 
 class ComplementoResumidoResponse(BaseModel):
-    """Versão simplificada para uso em listagens
+    """Versão simplificada para uso em listagens.
     
-    Nota: obrigatorio, minimo_itens e maximo_itens agora vêm da vinculação,
-    não mais do complemento em si.
+    Todos os campos de configuração vêm da vinculação.
     """
     id: int
     nome: str
     obrigatorio: bool  # Da vinculação
-    quantitativo: bool  # Do complemento (não muda por vinculação)
+    quantitativo: bool  # Da vinculação
     minimo_itens: Optional[int] = None  # Da vinculação
     maximo_itens: Optional[int] = None  # Da vinculação
     ordem: int  # Da vinculação
@@ -159,12 +153,16 @@ class ComplementoResumidoResponse(BaseModel):
 
 # ------ Configuração de vinculação de complemento ------
 class ConfiguracaoVinculacaoComplemento(BaseModel):
-    """Configurações específicas de um complemento na vinculação"""
+    """Configurações específicas de um complemento na vinculação.
+    
+    Todas as configurações são obrigatórias na vinculação.
+    """
     complemento_id: int = Field(..., description="ID do complemento a vincular")
     ordem: Optional[int] = Field(None, description="Ordem do complemento (opcional, usa índice se não informado)")
-    obrigatorio: Optional[bool] = Field(None, description="Se o complemento é obrigatório nesta vinculação (None = usa valor padrão do complemento)")
-    minimo_itens: Optional[int] = Field(None, ge=0, description="Quantidade mínima de itens nesta vinculação (None = usa valor padrão do complemento)")
-    maximo_itens: Optional[int] = Field(None, ge=0, description="Quantidade máxima de itens nesta vinculação (None = usa valor padrão do complemento)")
+    obrigatorio: bool = Field(..., description="Se o complemento é obrigatório nesta vinculação")
+    quantitativo: bool = Field(..., description="Se permite quantidade (ex: 2x bacon) e múltipla escolha nesta vinculação")
+    minimo_itens: Optional[int] = Field(None, ge=0, description="Quantidade mínima de itens nesta vinculação (None = sem mínimo)")
+    maximo_itens: Optional[int] = Field(None, ge=0, description="Quantidade máxima de itens nesta vinculação (None = sem limite)")
 
 
 # ------ Vincular complementos a produtos ------

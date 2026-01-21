@@ -20,16 +20,12 @@ class ComplementoModel(Base):
     
     # Configurações do complemento
     ativo = Column(Boolean, nullable=False, default=True)
-    obrigatorio = Column(Boolean, nullable=False, default=False)  # Se o complemento é obrigatório
-    quantitativo = Column(Boolean, nullable=False, default=False)  # Se permite quantidade (ex: 2x bacon) e múltipla escolha
-
-    # Limites de seleção de itens pelo cliente
-    # Exemplo: minimo_itens=1, maximo_itens=3 -> cliente deve escolher entre 1 e 3 itens
-    minimo_itens = Column(Integer, nullable=True)
-    maximo_itens = Column(Integer, nullable=True)
     
-    # Ordem de exibição
+    # Ordem de exibição (padrão, pode ser sobrescrita na vinculação)
     ordem = Column(Integer, nullable=False, default=0)
+    
+    # NOTA: obrigatorio, quantitativo, minimo_itens e maximo_itens foram movidos
+    # para as tabelas de vinculação (produto_complemento_link, receita_complemento_link, combo_complemento_link)
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
