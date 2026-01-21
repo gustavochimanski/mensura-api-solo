@@ -328,6 +328,7 @@ class ComplementoService:
             complemento_ids, 
             ordens, 
             obrigatorios, 
+            quantitativos,
             minimos_itens, 
             maximos_itens
         )
