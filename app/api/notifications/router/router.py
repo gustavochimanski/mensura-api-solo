@@ -10,14 +10,12 @@ router = APIRouter(
     tags=["API - Notifications"]
 )
 
-# Rotas ADMIN (inclui WebSocket)
-# Mantemos o WebSocket exclusivamente sob /admin para evitar exposição em rotas públicas.
+# Rotas ADMIN (histórico e configurações)
 admin_router = APIRouter(prefix="/admin", tags=["API - Notifications (Admin)"])
-admin_router.include_router(websocket_router)
 admin_router.include_router(historico_router)
 admin_router.include_router(whatsapp_config_router)
 
-# Rotas não-admin (se existirem) podem ficar no nível raiz.
-# OBS: `message_dispatch_router` usa autenticação, mas não é WebSocket.
+# Rotas públicas/autenticadas
+router.include_router(websocket_router)
 router.include_router(message_dispatch_router)
 router.include_router(admin_router)

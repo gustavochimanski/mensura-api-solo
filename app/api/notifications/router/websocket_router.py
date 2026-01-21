@@ -134,8 +134,8 @@ async def websocket_notifications(
     `empresa_id` pode ser usado para selecionar o escopo, mas é validado no banco.
     
     Nota: O frontend precisa se conectar a este endpoint. Funciona tanto localmente quanto na nuvem.
-    - Local: ws://localhost:8000/api/notifications/admin/ws/notifications?empresa_id={empresa_id}
-    - Nuvem: wss://api.seudominio.com/api/notifications/admin/ws/notifications?empresa_id={empresa_id}
+    - Local: ws://localhost:8000/api/notifications/ws/notifications?empresa_id={empresa_id}
+    - Nuvem: wss://api.seudominio.com/api/notifications/ws/notifications?empresa_id={empresa_id}
     """
     user_id = "unknown"
     try:
@@ -180,15 +180,6 @@ async def websocket_notifications(
             return
         
         logger.info(f"[WS_ROUTER] Usuário encontrado: {user_id_int}")
-
-        # 1.1) Restringe WebSocket somente para admin
-        user_type = getattr(user, "type_user", None)
-        if user_type != "admin":
-            logger.warning(
-                f"[WS_ROUTER] Acesso negado ao WebSocket. type_user={user_type} user_id={user_id_int}"
-            )
-            await _close_ws_policy(websocket, "WebSocket disponível apenas para usuários admin")
-            return
 
         # 2) Resolve/valida empresa_id (não confiamos cegamente na URL)
         logger.info(f"[WS_ROUTER] Obtendo empresas do usuário...")
@@ -456,8 +447,8 @@ async def get_connection_stats(current_user=Depends(require_admin)):
             **stats,
             "message": "Use estas informações para verificar se há conexões WebSocket ativas",
             "how_to_connect": {
-                "endpoint": "/api/notifications/admin/ws/notifications?empresa_id={empresa_id}",
-                "example": f"/api/notifications/admin/ws/notifications?empresa_id=1",
+                "endpoint": "/api/notifications/ws/notifications?empresa_id={empresa_id}",
+                "example": f"/api/notifications/ws/notifications?empresa_id=1",
                 "protocol": "WebSocket (ws:// ou wss://)",
                 "note": "A conexão exige Authorization: Bearer <token>. user_id é derivado do JWT."
             }
@@ -497,11 +488,11 @@ async def check_empresa_connections(
             "all_connected_empresas": stats["empresas_with_connections"],
             "total_connections": stats["total_connections"],
             "empresas_details": stats.get("empresas_details", {}),
-            "message": "Conecte-se ao WebSocket em /api/notifications/admin/ws/notifications?empresa_id={empresa_id} para receber notificações (Authorization Bearer obrigatório)",
+            "message": "Conecte-se ao WebSocket em /api/notifications/ws/notifications?empresa_id={empresa_id} para receber notificações (Authorization Bearer obrigatório)",
             "how_to_connect": {
-                "endpoint": f"/api/notifications/admin/ws/notifications?empresa_id={empresa_id}",
+                "endpoint": f"/api/notifications/ws/notifications?empresa_id={empresa_id}",
                 "protocol": "WebSocket (ws:// ou wss://)",
-                "example_url": f"ws://localhost:8000/api/notifications/admin/ws/notifications?empresa_id={empresa_id}",
+                "example_url": f"ws://localhost:8000/api/notifications/ws/notifications?empresa_id={empresa_id}",
                 "note": "Envie Authorization: Bearer <token>. user_id é derivado do JWT."
             }
         }

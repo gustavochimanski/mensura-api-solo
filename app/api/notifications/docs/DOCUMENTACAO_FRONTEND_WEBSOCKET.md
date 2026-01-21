@@ -8,9 +8,9 @@ Esta documentação descreve **como o frontend deve se conectar e reagir** ao We
 
 ### Endpoint (principal)
 
-- **WS (admin)**: `/api/notifications/admin/ws/notifications?empresa_id={empresa_id}`
-- **Exemplo local**: `ws://localhost:8000/api/notifications/admin/ws/notifications?empresa_id=1`
-- **Exemplo produção**: `wss://seu-host/api/notifications/admin/ws/notifications?empresa_id=1`
+- **WS**: `/api/notifications/ws/notifications?empresa_id={empresa_id}`
+- **Exemplo local**: `ws://localhost:8000/api/notifications/ws/notifications?empresa_id=1`
+- **Exemplo produção**: `wss://seu-host/api/notifications/ws/notifications?empresa_id=1`
 
 ### Observações importantes
 
@@ -226,21 +226,21 @@ Resposta (exemplo):
 {
   "empresa_id": 1,
   "empresa_nome": "Minha Empresa",
-  "websocket_url": "wss://seu-host/api/notifications/admin/ws/notifications?empresa_id=1",
+  "websocket_url": "wss://seu-host/api/notifications/ws/notifications?empresa_id=1",
   "protocol": "wss",
-  "endpoint": "/api/notifications/admin/ws/notifications?empresa_id=1",
+  "endpoint": "/api/notifications/ws/notifications?empresa_id=1",
   "note": "Envie Authorization Bearer via Sec-WebSocket-Protocol (browser)."
 }
 ```
 
 ### 6.2) Estatísticas de conexões
 
-- **GET (admin)** `/api/notifications/admin/ws/connections/stats`
+- **GET (admin)** `/api/notifications/ws/connections/stats`
 - Requer `Authorization: Bearer <token>` (HTTP normal)
 
 ### 6.3) Verificar conexões de uma empresa
 
-- **GET (admin)** `/api/notifications/admin/ws/connections/check/{empresa_id}`
+- **GET (admin)** `/api/notifications/ws/connections/check/{empresa_id}`
 - Requer `Authorization: Bearer <token>` (HTTP normal)
 
 ### 6.4) Enviar notificação para um usuário (admin/debug)
