@@ -370,7 +370,9 @@ router = APIRouter(
 
 # Incluir router de configurações do chatbot
 from .router_chatbot_config import router as router_chatbot_config
+from .router_gestor_admin import router as router_gestor_admin
 router.include_router(router_chatbot_config)
+router.include_router(router_gestor_admin)
 
 # Incluir router do carrinho
 from .router_carrinho import router as router_carrinho
@@ -3378,9 +3380,10 @@ async def send_order_summary(
         created_at = pedido[10]
         cliente_nome = pedido[11]
 
-        # Busca os itens do pedido (query simplificada)
+        # Busca os itens do pedido com seus IDs
         itens_query = text("""
             SELECT
+                pi.id,
                 pi.quantidade,
                 pi.preco_unitario,
                 pi.preco_total,
@@ -3393,10 +3396,57 @@ async def send_order_summary(
                 ) as nome_item
             FROM pedidos.pedidos_itens pi
             WHERE pi.pedido_id = :pedido_id
+            ORDER BY pi.id
         """)
 
         itens_result = db.execute(itens_query, {"pedido_id": pedido_id})
         itens = itens_result.fetchall()
+
+        # Busca complementos e adicionais para cada item
+        complementos_query = text("""
+            SELECT
+                pic.pedido_item_id,
+                cp.nome as complemento_nome,
+                pic.total as complemento_total,
+                pica.quantidade as adicional_quantidade,
+                pica.preco_unitario as adicional_preco_unitario,
+                pica.total as adicional_total,
+                COALESCE(
+                    (SELECT p.descricao FROM catalogo.produtos p WHERE p.cod_barras = cvi.produto_cod_barras),
+                    (SELECT r.nome FROM catalogo.receitas r WHERE r.id = cvi.receita_id),
+                    (SELECT c.descricao FROM catalogo.combos c WHERE c.id = cvi.combo_id),
+                    'Adicional'
+                ) as adicional_nome
+            FROM pedidos.pedidos_itens_complementos pic
+            INNER JOIN catalogo.complemento_produto cp ON pic.complemento_id = cp.id
+            LEFT JOIN pedidos.pedidos_itens_complementos_adicionais pica ON pic.id = pica.item_complemento_id
+            LEFT JOIN catalogo.complemento_vinculo_item cvi ON pica.adicional_id = cvi.id
+            LEFT JOIN catalogo.produtos p ON cvi.produto_cod_barras = p.cod_barras
+            LEFT JOIN catalogo.receitas r ON cvi.receita_id = r.id
+            LEFT JOIN catalogo.combos c ON cvi.combo_id = c.id
+            WHERE pic.pedido_item_id IN (
+                SELECT id FROM pedidos.pedidos_itens WHERE pedido_id = :pedido_id
+            )
+            ORDER BY pic.pedido_item_id, pic.id, pica.id
+        """)
+
+        complementos_result = db.execute(complementos_query, {"pedido_id": pedido_id})
+        complementos_data = complementos_result.fetchall()
+
+        # Organiza complementos por item
+        complementos_por_item = {}
+        for comp_row in complementos_data:
+            item_id = comp_row[0]
+            if item_id not in complementos_por_item:
+                complementos_por_item[item_id] = []
+            complementos_por_item[item_id].append({
+                'complemento_nome': comp_row[1],
+                'complemento_total': float(comp_row[2]) if comp_row[2] else 0,
+                'adicional_quantidade': comp_row[3],
+                'adicional_preco_unitario': float(comp_row[4]) if comp_row[4] else 0,
+                'adicional_total': float(comp_row[5]) if comp_row[5] else 0,
+                'adicional_nome': comp_row[6]
+            })
 
         # Monta a mensagem
         status_info = ORDER_STATUS_TEMPLATES.get(status_code, {
@@ -3419,15 +3469,48 @@ async def send_order_summary(
         mensagem += "*Itens:*\n"
 
         for item in itens:
-            qtd = item[0]
-            preco_total = float(item[2]) if item[2] else 0
-            nome_item = item[4]
-            obs_item = item[3]
+            item_id = item[0]
+            qtd = item[1]
+            preco_total = float(item[3]) if item[3] else 0
+            nome_item = item[5]
+            obs_item = item[4]
 
             mensagem += f"• {qtd}x {nome_item} - R$ {preco_total:.2f}"
             if obs_item:
                 mensagem += f" (_Obs: {obs_item}_)"
             mensagem += "\n"
+
+            # Adiciona complementos e adicionais do item
+            if item_id in complementos_por_item:
+                # Agrupa adicionais por complemento
+                complementos_agrupados = {}
+                for comp in complementos_por_item[item_id]:
+                    comp_nome = comp['complemento_nome']
+                    if comp_nome not in complementos_agrupados:
+                        complementos_agrupados[comp_nome] = {
+                            'total': 0,
+                            'adicionais': []
+                        }
+                    if comp['adicional_nome']:
+                        complementos_agrupados[comp_nome]['adicionais'].append({
+                            'nome': comp['adicional_nome'],
+                            'quantidade': comp['adicional_quantidade'],
+                            'preco': comp['adicional_total']
+                        })
+                        complementos_agrupados[comp_nome]['total'] += comp['adicional_total']
+
+                # Formata complementos na mensagem
+                for comp_nome, comp_data in complementos_agrupados.items():
+                    if comp_data['adicionais']:
+                        mensagem += f"  📦 {comp_nome}:\n"
+                        for add in comp_data['adicionais']:
+                            qtd_add = add['quantidade'] or 1
+                            preco_add = add['preco']
+                            nome_add = add['nome']
+                            if qtd_add > 1:
+                                mensagem += f"    ➕ {qtd_add}x {nome_add} (+R$ {preco_add:.2f})\n"
+                            else:
+                                mensagem += f"    ➕ {nome_add} (+R$ {preco_add:.2f})\n"
 
         mensagem += f"\n*Valores:* Subtotal: R$ {subtotal:.2f}"
         if desconto > 0:

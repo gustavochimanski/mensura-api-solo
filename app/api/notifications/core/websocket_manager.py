@@ -54,9 +54,32 @@ class ConnectionManager:
         self.websocket_to_route.pop(websocket, None)
         self.websocket_to_connected_at.pop(websocket, None)
 
+    def _is_websocket_active(self, websocket: WebSocket) -> bool:
+        """Verifica se um WebSocket ainda está ativo/aberto"""
+        try:
+            # Verifica o estado do cliente
+            client_state = getattr(websocket, 'client_state', None)
+            if client_state:
+                state_name = getattr(client_state, 'name', None)
+                # CONNECTED significa que está aberto e ativo
+                if state_name == "CONNECTED":
+                    return True
+                # DISCONNECTED ou outros estados significam que está fechado
+                return False
+            # Se não tem client_state, assume que pode estar ativo (fallback)
+            return True
+        except Exception as e:
+            logger.debug(f"[CONNECT] Erro ao verificar estado do WebSocket: {e}")
+            # Em caso de erro, assume que não está ativo para evitar problemas
+            return False
+    
     async def _best_effort_close(self, websocket: WebSocket, code: int, reason: str) -> None:
         """Tenta fechar um websocket sem deixar exceção vazar."""
         try:
+            # Verifica se ainda está ativo antes de tentar fechar
+            if not self._is_websocket_active(websocket):
+                logger.debug(f"[CONNECT] WebSocket já está fechado, pulando close()")
+                return
             await websocket.close(code=code, reason=reason)
         except Exception:
             # Pode falhar se já estiver fechado / estado inválido; é ok.
@@ -89,24 +112,42 @@ class ConnectionManager:
                 ]
 
                 if existing_same_empresa:
-                    # Ordena por tempo de conexão (mais antigas primeiro)
-                    existing_same_empresa.sort(
-                        key=lambda ws: self.websocket_to_connected_at.get(ws, datetime.min)
-                    )
+                    # Filtra apenas conexões que ainda estão ativas
+                    active_existing = [ws for ws in existing_same_empresa if self._is_websocket_active(ws)]
+                    
+                    # Remove conexões inativas do estado (cleanup)
+                    inactive_existing = [ws for ws in existing_same_empresa if not self._is_websocket_active(ws)]
+                    for ws in inactive_existing:
+                        logger.debug(f"[CONNECT] Removendo conexão inativa do estado - websocket_id={id(ws)}")
+                        self._remove_connection_no_lock(ws)
+                    
+                    # Se ainda há conexões ativas após o cleanup, verifica o limite
+                    if active_existing:
+                        # Ordena por tempo de conexão (mais antigas primeiro)
+                        active_existing.sort(
+                            key=lambda ws: self.websocket_to_connected_at.get(ws, datetime.min)
+                        )
 
-                    allowed_existing = max(0, self.max_connections_per_user_empresa - 1)
-                    evict_count = max(0, len(existing_same_empresa) - allowed_existing)
-                    if evict_count > 0:
-                        websockets_to_evict = existing_same_empresa[:evict_count]
+                        allowed_existing = max(0, self.max_connections_per_user_empresa - 1)
+                        evict_count = max(0, len(active_existing) - allowed_existing)
+                        if evict_count > 0:
+                            websockets_to_evict = active_existing[:evict_count]
 
-                        # Remove do estado imediatamente (mesmo que o close falhe)
-                        for ws in websockets_to_evict:
-                            self._remove_connection_no_lock(ws)
+                            # Remove do estado imediatamente (mesmo que o close falhe)
+                            for ws in websockets_to_evict:
+                                self._remove_connection_no_lock(ws)
 
-                        logger.warning(
-                            f"[CONNECT] Limite atingido para user_id={user_id}, empresa_id={empresa_id}. "
-                            f"Fechando {len(websockets_to_evict)} conexão(ões) antiga(s) para aceitar a nova. "
-                            f"max_connections_per_user_empresa={self.max_connections_per_user_empresa}"
+                            logger.warning(
+                                f"[CONNECT] Limite atingido para user_id={user_id}, empresa_id={empresa_id}. "
+                                f"Fechando {len(websockets_to_evict)} conexão(ões) antiga(s) ativa(s) para aceitar a nova. "
+                                f"Total encontradas: {len(existing_same_empresa)}, Ativas: {len(active_existing)}, "
+                                f"Inativas removidas: {len(inactive_existing)}, max_connections_per_user_empresa={self.max_connections_per_user_empresa}"
+                            )
+                    else:
+                        logger.debug(
+                            f"[CONNECT] Todas as conexões existentes para user_id={user_id}, empresa_id={empresa_id} "
+                            f"já estão inativas. Total encontradas: {len(existing_same_empresa)}, "
+                            f"Inativas removidas: {len(inactive_existing)}"
                         )
 
             # Adiciona a nova conexão ao estado
