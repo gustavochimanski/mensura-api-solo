@@ -15,7 +15,7 @@ import re
 
 from app.database.db_connection import get_db
 from ..core import database as chatbot_db
-from ..core.notifications import OrderNotification
+from ..core.notifications import OrderNotification, ORDER_STATUS_TEMPLATES
 from ..core.groq_sales_handler import GroqSalesHandler, GROQ_API_URL, GROQ_API_KEY, MODEL_NAME
 from app.api.notifications.repositories.whatsapp_config_repository import WhatsAppConfigRepository
 from app.api.empresas.repositories.empresa_repo import EmpresaRepository
@@ -3090,55 +3090,6 @@ async def simulate_chatbot_message(
 
 # ==================== PEDIDOS DO CLIENTE ====================
 
-# Templates de mensagem por status do pedido
-ORDER_STATUS_TEMPLATES = {
-    "P": {
-        "name": "Pendente",
-        "emoji": "🕐",
-        "message": "Seu pedido #{numero_pedido} foi recebido e está aguardando confirmação."
-    },
-    "I": {
-        "name": "Em Impressão",
-        "emoji": "🖨️",
-        "message": "Seu pedido #{numero_pedido} está sendo processado!"
-    },
-    "R": {
-        "name": "Preparando",
-        "emoji": "👨‍🍳",
-        "message": "Boa notícia! Seu pedido #{numero_pedido} está sendo preparado com todo carinho!"
-    },
-    "S": {
-        "name": "Saiu para Entrega",
-        "emoji": "🛵",
-        "message": "Seu pedido #{numero_pedido} saiu para entrega! Em breve estará com você!"
-    },
-    "E": {
-        "name": "Entregue",
-        "emoji": "✅",
-        "message": "Seu pedido #{numero_pedido} foi entregue! Obrigado pela preferência!"
-    },
-    "C": {
-        "name": "Cancelado",
-        "emoji": "❌",
-        "message": "Seu pedido #{numero_pedido} foi cancelado."
-    },
-    "A": {
-        "name": "Aguardando Pagamento",
-        "emoji": "💳",
-        "message": "Seu pedido #{numero_pedido} está aguardando confirmação do pagamento."
-    },
-    "D": {
-        "name": "Editado",
-        "emoji": "📝",
-        "message": "Seu pedido #{numero_pedido} foi atualizado."
-    },
-    "X": {
-        "name": "Em Edição",
-        "emoji": "✏️",
-        "message": "Seu pedido #{numero_pedido} está sendo editado."
-    }
-}
-
 
 @router.get("/pedidos-debug")
 async def debug_orders(db: Session = Depends(get_db)):
@@ -3339,209 +3290,20 @@ async def send_order_summary(
     A mensagem inclui os itens, valores e o status atual do pedido.
     """
     try:
-        from sqlalchemy import text
-
-        # Busca o pedido
-        pedido_query = text("""
-            SELECT
-                p.id,
-                p.numero_pedido,
-                p.tipo_entrega,
-                p.status,
-                p.subtotal,
-                p.desconto,
-                p.taxa_entrega,
-                p.valor_total,
-                p.observacoes,
-                p.pago,
-                p.created_at,
-                c.nome as cliente_nome
-            FROM pedidos.pedidos p
-            LEFT JOIN cadastros.clientes c ON p.cliente_id = c.id
-            WHERE p.id = :pedido_id
-        """)
-
-        result = db.execute(pedido_query, {"pedido_id": pedido_id})
-        pedido = result.fetchone()
-
-        if not pedido:
-            raise HTTPException(status_code=404, detail="Pedido não encontrado")
-
-        # Extrai dados do pedido
-        numero_pedido = pedido[1]
-        tipo_entrega = pedido[2]
-        status_code = pedido[3]
-        subtotal = float(pedido[4]) if pedido[4] else 0
-        desconto = float(pedido[5]) if pedido[5] else 0
-        taxa_entrega = float(pedido[6]) if pedido[6] else 0
-        valor_total = float(pedido[7]) if pedido[7] else 0
-        observacoes = pedido[8]
-        pago = pedido[9]
-        created_at = pedido[10]
-        cliente_nome = pedido[11]
-
-        # Busca os itens do pedido com seus IDs
-        itens_query = text("""
-            SELECT
-                pi.id,
-                pi.quantidade,
-                pi.preco_unitario,
-                pi.preco_total,
-                pi.observacao,
-                COALESCE(
-                    (SELECT p.descricao FROM catalogo.produtos p WHERE p.cod_barras = pi.produto_cod_barras),
-                    (SELECT r.nome FROM catalogo.receitas r WHERE r.id = pi.receita_id),
-                    (SELECT c.descricao FROM catalogo.combos c WHERE c.id = pi.combo_id),
-                    'Item'
-                ) as nome_item
-            FROM pedidos.pedidos_itens pi
-            WHERE pi.pedido_id = :pedido_id
-            ORDER BY pi.id
-        """)
-
-        itens_result = db.execute(itens_query, {"pedido_id": pedido_id})
-        itens = itens_result.fetchall()
-
-        # Busca complementos e adicionais para cada item
-        complementos_query = text("""
-            SELECT
-                pic.pedido_item_id,
-                cp.nome as complemento_nome,
-                pic.total as complemento_total,
-                pica.quantidade as adicional_quantidade,
-                pica.preco_unitario as adicional_preco_unitario,
-                pica.total as adicional_total,
-                COALESCE(
-                    (SELECT p.descricao FROM catalogo.produtos p WHERE p.cod_barras = cvi.produto_cod_barras),
-                    (SELECT r.nome FROM catalogo.receitas r WHERE r.id = cvi.receita_id),
-                    (SELECT c.descricao FROM catalogo.combos c WHERE c.id = cvi.combo_id),
-                    'Adicional'
-                ) as adicional_nome
-            FROM pedidos.pedidos_itens_complementos pic
-            INNER JOIN catalogo.complemento_produto cp ON pic.complemento_id = cp.id
-            LEFT JOIN pedidos.pedidos_itens_complementos_adicionais pica ON pic.id = pica.item_complemento_id
-            LEFT JOIN catalogo.complemento_vinculo_item cvi ON pica.adicional_id = cvi.id
-            LEFT JOIN catalogo.produtos p ON cvi.produto_cod_barras = p.cod_barras
-            LEFT JOIN catalogo.receitas r ON cvi.receita_id = r.id
-            LEFT JOIN catalogo.combos c ON cvi.combo_id = c.id
-            WHERE pic.pedido_item_id IN (
-                SELECT id FROM pedidos.pedidos_itens WHERE pedido_id = :pedido_id
-            )
-            ORDER BY pic.pedido_item_id, pic.id, pica.id
-        """)
-
-        complementos_result = db.execute(complementos_query, {"pedido_id": pedido_id})
-        complementos_data = complementos_result.fetchall()
-
-        # Organiza complementos por item
-        complementos_por_item = {}
-        for comp_row in complementos_data:
-            item_id = comp_row[0]
-            if item_id not in complementos_por_item:
-                complementos_por_item[item_id] = []
-            complementos_por_item[item_id].append({
-                'complemento_nome': comp_row[1],
-                'complemento_total': float(comp_row[2]) if comp_row[2] else 0,
-                'adicional_quantidade': comp_row[3],
-                'adicional_preco_unitario': float(comp_row[4]) if comp_row[4] else 0,
-                'adicional_total': float(comp_row[5]) if comp_row[5] else 0,
-                'adicional_nome': comp_row[6]
-            })
-
-        # Monta a mensagem
-        status_info = ORDER_STATUS_TEMPLATES.get(status_code, {
-            "name": "Desconhecido",
-            "emoji": "❓",
-            "message": "Status atualizado."
-        })
-
-        # Tipo de entrega formatado
-        tipo_formatado = {
-            "DELIVERY": "🛵 Delivery",
-            "RETIRADA": "🏪 Retirada",
-            "BALCAO": "🍽️ Balcão",
-            "MESA": "🪑 Mesa"
-        }.get(tipo_entrega, tipo_entrega)
-
-        # Monta a mensagem compacta
-        mensagem = f"📋 *Pedido #{numero_pedido}* | {status_info['emoji']} {status_info['name']} | {tipo_formatado}\n"
-        mensagem += f"📅 {created_at.strftime('%d/%m/%Y %H:%M') if created_at else 'N/A'}\n\n"
-        mensagem += "*Itens:*\n"
-
-        for item in itens:
-            item_id = item[0]
-            qtd = item[1]
-            preco_total = float(item[3]) if item[3] else 0
-            nome_item = item[5]
-            obs_item = item[4]
-
-            mensagem += f"• {qtd}x {nome_item} - R$ {preco_total:.2f}"
-            if obs_item:
-                mensagem += f" (_Obs: {obs_item}_)"
-            mensagem += "\n"
-
-            # Adiciona complementos e adicionais do item
-            if item_id in complementos_por_item:
-                # Agrupa adicionais por complemento
-                complementos_agrupados = {}
-                for comp in complementos_por_item[item_id]:
-                    comp_nome = comp['complemento_nome']
-                    if comp_nome not in complementos_agrupados:
-                        complementos_agrupados[comp_nome] = {
-                            'total': 0,
-                            'adicionais': []
-                        }
-                    if comp['adicional_nome']:
-                        complementos_agrupados[comp_nome]['adicionais'].append({
-                            'nome': comp['adicional_nome'],
-                            'quantidade': comp['adicional_quantidade'],
-                            'preco': comp['adicional_total']
-                        })
-                        complementos_agrupados[comp_nome]['total'] += comp['adicional_total']
-
-                # Formata complementos na mensagem
-                for comp_nome, comp_data in complementos_agrupados.items():
-                    if comp_data['adicionais']:
-                        mensagem += f"  📦 {comp_nome}:\n"
-                        for add in comp_data['adicionais']:
-                            qtd_add = add['quantidade'] or 1
-                            preco_add = add['preco']
-                            nome_add = add['nome']
-                            if qtd_add > 1:
-                                mensagem += f"    ➕ {qtd_add}x {nome_add} (+R$ {preco_add:.2f})\n"
-                            else:
-                                mensagem += f"    ➕ {nome_add} (+R$ {preco_add:.2f})\n"
-
-        mensagem += f"\n*Valores:* Subtotal: R$ {subtotal:.2f}"
-        if desconto > 0:
-            mensagem += f" | Desconto: -R$ {desconto:.2f}"
-        if taxa_entrega > 0:
-            mensagem += f" | Entrega: R$ {taxa_entrega:.2f}"
-        mensagem += f"\n*Total: R$ {valor_total:.2f}* | 💳 {'✅ Pago' if pago else '⏳ Pendente'}"
-
-        if observacoes:
-            mensagem += f"\n📝 _Obs: {observacoes}_"
-
-        # Mensagem de status personalizada
-        status_message = status_info["message"].format(numero_pedido=numero_pedido)
-        mensagem += f"\n{status_info['emoji']} *{status_message}*"
-
-        # Envia via WhatsApp
-        notifier = OrderNotification()
-        result = await notifier.send_whatsapp_message(phone_number, mensagem)
-
+        from ..core.notifications import enviar_resumo_pedido_whatsapp
+        
+        result = await enviar_resumo_pedido_whatsapp(
+            db=db,
+            pedido_id=pedido_id,
+            phone_number=phone_number
+        )
+        
         if result.get("success"):
-            return {
-                "success": True,
-                "message": "Resumo do pedido enviado com sucesso!",
-                "pedido_id": pedido_id,
-                "numero_pedido": numero_pedido,
-                "status": status_info["name"]
-            }
+            return result
         else:
             raise HTTPException(
                 status_code=400,
-                detail=f"Erro ao enviar mensagem: {result.get('error')}"
+                detail=result.get("error", "Erro ao enviar resumo")
             )
 
     except HTTPException:

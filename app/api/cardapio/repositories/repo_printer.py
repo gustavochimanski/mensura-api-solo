@@ -123,6 +123,38 @@ class PrinterRepository:
                 self.db.commit()
                 logger.info(f"[PrinterRepository] Pedido delivery {pedido_id} marcado como impresso")
                 
+                # Envia resumo do pedido para o cliente via WhatsApp
+                try:
+                    import asyncio
+                    from app.api.chatbot.core.notifications import enviar_resumo_pedido_whatsapp
+                    
+                    # Recarrega pedido com cliente para obter telefone
+                    pedido_com_cliente = (
+                        self.db.query(PedidoUnificadoModel)
+                        .options(
+                            joinedload(PedidoUnificadoModel.cliente),
+                            joinedload(PedidoUnificadoModel.empresa),
+                        )
+                        .filter(PedidoUnificadoModel.id == pedido_id)
+                        .first()
+                    )
+                    
+                    if pedido_com_cliente and pedido_com_cliente.cliente and pedido_com_cliente.cliente.telefone:
+                        empresa_id_str = str(pedido_com_cliente.empresa_id) if pedido_com_cliente.empresa_id else None
+                        asyncio.create_task(
+                            enviar_resumo_pedido_whatsapp(
+                                db=self.db,
+                                pedido_id=pedido_id,
+                                phone_number=pedido_com_cliente.cliente.telefone,
+                                empresa_id=empresa_id_str
+                            )
+                        )
+                        logger.info(f"[PrinterRepository] Agendado envio de resumo do pedido {pedido_id} para o cliente")
+                    else:
+                        logger.warning(f"[PrinterRepository] Pedido {pedido_id} não tem cliente ou telefone, não será enviado resumo")
+                except Exception as e:
+                    logger.error(f"Erro ao agendar envio de resumo para pedido impresso {pedido_id}: {e}", exc_info=True)
+                
                 # Notifica kanban após marcar como impresso
                 try:
                     import asyncio
@@ -169,6 +201,38 @@ class PrinterRepository:
                 pedido_repo.atualizar_status(pedido_id, StatusPedido.PREPARANDO.value)
                 self.db.commit()
                 logger.info(f"[PrinterRepository] Pedido mesa {pedido_id} marcado como impresso → PREPARANDO")
+                
+                # Envia resumo do pedido para o cliente via WhatsApp
+                try:
+                    import asyncio
+                    from app.api.chatbot.core.notifications import enviar_resumo_pedido_whatsapp
+                    
+                    # Recarrega pedido com cliente para obter telefone
+                    pedido_com_cliente = (
+                        self.db.query(PedidoUnificadoModel)
+                        .options(
+                            joinedload(PedidoUnificadoModel.cliente),
+                            joinedload(PedidoUnificadoModel.empresa),
+                        )
+                        .filter(PedidoUnificadoModel.id == pedido_id)
+                        .first()
+                    )
+                    
+                    if pedido_com_cliente and pedido_com_cliente.cliente and pedido_com_cliente.cliente.telefone:
+                        empresa_id_str = str(pedido_com_cliente.empresa_id) if pedido_com_cliente.empresa_id else None
+                        asyncio.create_task(
+                            enviar_resumo_pedido_whatsapp(
+                                db=self.db,
+                                pedido_id=pedido_id,
+                                phone_number=pedido_com_cliente.cliente.telefone,
+                                empresa_id=empresa_id_str
+                            )
+                        )
+                        logger.info(f"[PrinterRepository] Agendado envio de resumo do pedido {pedido_id} para o cliente")
+                    else:
+                        logger.warning(f"[PrinterRepository] Pedido {pedido_id} não tem cliente ou telefone, não será enviado resumo")
+                except Exception as e:
+                    logger.error(f"Erro ao agendar envio de resumo para pedido impresso {pedido_id}: {e}", exc_info=True)
                 
                 # Notifica kanban após marcar como impresso
                 try:
@@ -226,6 +290,38 @@ class PrinterRepository:
                 )
                 pedido_repo.commit()
                 logger.info(f"[PrinterRepository] Pedido balcão {pedido_id} marcado como impresso → PREPARANDO")
+                
+                # Envia resumo do pedido para o cliente via WhatsApp
+                try:
+                    import asyncio
+                    from app.api.chatbot.core.notifications import enviar_resumo_pedido_whatsapp
+                    
+                    # Recarrega pedido com cliente para obter telefone
+                    pedido_com_cliente = (
+                        self.db.query(PedidoUnificadoModel)
+                        .options(
+                            joinedload(PedidoUnificadoModel.cliente),
+                            joinedload(PedidoUnificadoModel.empresa),
+                        )
+                        .filter(PedidoUnificadoModel.id == pedido_id)
+                        .first()
+                    )
+                    
+                    if pedido_com_cliente and pedido_com_cliente.cliente and pedido_com_cliente.cliente.telefone:
+                        empresa_id_str = str(pedido_com_cliente.empresa_id) if pedido_com_cliente.empresa_id else None
+                        asyncio.create_task(
+                            enviar_resumo_pedido_whatsapp(
+                                db=self.db,
+                                pedido_id=pedido_id,
+                                phone_number=pedido_com_cliente.cliente.telefone,
+                                empresa_id=empresa_id_str
+                            )
+                        )
+                        logger.info(f"[PrinterRepository] Agendado envio de resumo do pedido {pedido_id} para o cliente")
+                    else:
+                        logger.warning(f"[PrinterRepository] Pedido {pedido_id} não tem cliente ou telefone, não será enviado resumo")
+                except Exception as e:
+                    logger.error(f"Erro ao agendar envio de resumo para pedido impresso {pedido_id}: {e}", exc_info=True)
                 
                 # Notifica kanban após marcar como impresso
                 try:

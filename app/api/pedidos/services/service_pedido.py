@@ -1190,6 +1190,19 @@ class PedidoService:
                 entregador_id=int(pedido.entregador_id),
                 pedido_id=int(pedido.id),
             )
+        
+        # Envia notificação ao cliente quando pedido sai para entrega
+        if novo_status == PedidoStatusEnum.S:
+            try:
+                # Executa notificação em thread separada para não bloquear
+                threading.Thread(
+                    target=lambda: asyncio.run(self._notificar_cliente_pedido_em_rota(pedido)),
+                    daemon=True
+                ).start()
+            except Exception as e:
+                # Loga erro mas não quebra o fluxo
+                logger.error(f"Erro ao agendar notificação de pedido em rota {pedido.id}: {e}")
+        
         return self._pedido_to_response(pedido)
 
     def editar_pedido_parcial(self, pedido_id: int, payload: EditarPedidoRequest) -> PedidoResponse:
@@ -1825,6 +1838,101 @@ class PedidoService:
                 "[Pedidos] Falha ao notificar entregador %s: %s",
                 getattr(pedido, "entregador_id", None),
                 exc,
+            )
+
+    async def _notificar_cliente_pedido_em_rota(self, pedido: PedidoUnificadoModel) -> None:
+        """
+        Notifica o cliente quando o pedido sai para entrega.
+        
+        Args:
+            pedido: Pedido que mudou para status "Saiu para entrega"
+        """
+        try:
+            # Verifica se é um pedido de delivery
+            if not pedido.is_delivery():
+                return
+            
+            # Verifica se o pedido tem cliente
+            if not pedido.cliente:
+                logger.warning(
+                    "[Pedidos] Pedido %s sem cliente para notificação de entrega",
+                    pedido.id
+                )
+                return
+            
+            # Verifica se o cliente tem telefone
+            telefone_raw = getattr(pedido.cliente, "telefone", None)
+            if not telefone_raw:
+                logger.warning(
+                    "[Pedidos] Cliente %s do pedido %s sem telefone para notificação",
+                    pedido.cliente.id,
+                    pedido.id
+                )
+                return
+            
+            telefone_original = str(telefone_raw).strip()
+            if not telefone_original:
+                logger.warning(
+                    "[Pedidos] Telefone do cliente %s do pedido %s está vazio",
+                    pedido.cliente.id,
+                    pedido.id
+                )
+                return
+            
+            # Formata o telefone
+            telefone = format_phone_number(telefone_original)
+            
+            # Obtém o nome do cliente
+            cliente_nome = getattr(pedido.cliente, "nome", "Cliente")
+            
+            # Formata a mensagem
+            mensagem = f"""🛵 *Seu pedido está a caminho!*
+
+Olá *{cliente_nome}*! 👋
+
+Seu pedido *#{pedido.numero_pedido}* já saiu para entrega e está a caminho do endereço informado.
+
+Em breve estará com você! 🚚
+
+_Qualquer dúvida, entre em contato conosco._"""
+            
+            # Envia via WhatsApp
+            empresa_id_str = str(pedido.empresa_id) if pedido.empresa_id else None
+            whatsapp_result = await OrderNotification.send_whatsapp_message(
+                telefone,
+                mensagem,
+                empresa_id=empresa_id_str
+            )
+            
+            # Salva no chat interno também
+            order_type = "delivery"
+            chat_result = await OrderNotification.send_notification_async(
+                self.db,
+                telefone,
+                mensagem,
+                order_type
+            )
+            
+            if whatsapp_result.get("success"):
+                logger.info(
+                    "[Pedidos] Notificação de entrega enviada ao cliente %s (pedido %s) via WhatsApp",
+                    pedido.cliente.id,
+                    pedido.id
+                )
+            else:
+                logger.warning(
+                    "[Pedidos] Erro ao enviar WhatsApp ao cliente %s (pedido %s): %s. Mensagem salva no chat interno.",
+                    pedido.cliente.id,
+                    pedido.id,
+                    whatsapp_result.get("error", "erro desconhecido")
+                )
+            
+        except Exception as exc:
+            logger.error(
+                "[Pedidos] Falha ao notificar cliente sobre pedido em rota %s: %s",
+                getattr(pedido, "id", None),
+                exc,
+                exc_info=True
             )
 
     def testar_busca_regiao(self, distancia_km: float, empresa_id: int) -> dict:

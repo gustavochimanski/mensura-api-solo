@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import re
 
 from sqlalchemy import func, case
 from sqlalchemy.orm import Session
@@ -27,6 +28,25 @@ class ClienteService:
     def __init__(self, db: Session):
         self.db = db
         self.repo = ClienteRepository(db)
+    
+    def _normalizar_telefone(self, telefone: str) -> str:
+        """
+        Normaliza o número de telefone removendo caracteres especiais
+        e garantindo que tenha o prefixo do país (55) quando necessário
+        """
+        telefone_limpo = re.sub(r'[^\d]', '', telefone)
+        
+        # Se o telefone não começar com 55, adiciona o prefixo
+        # Considera números brasileiros (10 ou 11 dígitos sem o 55)
+        if telefone_limpo and not telefone_limpo.startswith("55"):
+            # Se tem 10 ou 11 dígitos (formato brasileiro sem código do país)
+            if len(telefone_limpo) == 10 or len(telefone_limpo) == 11:
+                telefone_limpo = "55" + telefone_limpo
+            # Se tem menos de 10 dígitos, pode ser um número incompleto, mas adiciona 55 mesmo assim
+            elif len(telefone_limpo) < 10:
+                telefone_limpo = "55" + telefone_limpo
+        
+        return telefone_limpo
 
     def get_current(self, token: str):
         cli = self.repo.get_by_token(token)
@@ -35,6 +55,13 @@ class ClienteService:
         return cli
 
     def create(self, data: ClienteCreate):
+        # Normaliza telefone (adiciona prefixo 55 se necessário)
+        telefone_normalizado = self._normalizar_telefone(data.telefone) if data.telefone else None
+        
+        # Atualiza o telefone no data antes de verificar duplicado
+        if telefone_normalizado:
+            data.telefone = telefone_normalizado
+        
         # verifica telefone duplicado
         if data.telefone and self.repo.get_by_telefone(data.telefone):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Telefone já cadastrado")
@@ -55,6 +82,12 @@ class ClienteService:
         db_obj = self.repo.get_by_token(token)
         if not db_obj:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Cliente não existe")
+        
+        # Normaliza telefone se estiver sendo atualizado
+        if data.telefone:
+            telefone_normalizado = self._normalizar_telefone(data.telefone)
+            data.telefone = telefone_normalizado
+        
         try:
             return self.repo.update(db_obj, **data.model_dump(exclude_none=True))
         except IntegrityError as err:

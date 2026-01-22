@@ -4667,7 +4667,24 @@ REGRA PARA COMPLEMENTOS:
             if dados.get('carrinho') or dados.get('tipo_entrega'):
                 return self._perguntar_entrega_ou_retirada(user_id, dados)
             
-            # Caso contrário, volta para o estado de conversação normal
+            # Verifica se aceita pedidos pelo WhatsApp
+            config = self._get_chatbot_config()
+            if config and not config.aceita_pedidos_whatsapp:
+                # Não aceita pedidos - envia link do cardápio
+                link_cardapio = self._obter_link_cardapio()
+                if config.mensagem_redirecionamento:
+                    mensagem_boas_vindas = config.mensagem_redirecionamento.replace("{link_cardapio}", link_cardapio)
+                else:
+                    mensagem_boas_vindas = f"✅ *Perfeito, {nome}!*\n\n"
+                    mensagem_boas_vindas += "📲 Para fazer seu pedido, acesse nosso cardápio completo pelo link:\n\n"
+                    mensagem_boas_vindas += f"👉 {link_cardapio}\n\n"
+                    mensagem_boas_vindas += "Depois é só fazer seu pedido pelo site! 😊"
+                
+                # Volta para o estado de conversação normal
+                self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
+                return mensagem_boas_vindas
+            
+            # Caso contrário, volta para o estado de conversação normal e pergunta sobre pedidos
             self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
             
             mensagem_boas_vindas = f"✅ *Perfeito, {nome}!*\n\n"

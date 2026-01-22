@@ -430,9 +430,22 @@ class ChatbotAddressService:
     def _normalizar_telefone(self, telefone: str) -> str:
         """
         Normaliza o número de telefone removendo caracteres especiais
+        e garantindo que tenha o prefixo do país (55) quando necessário
         """
         import re
-        return re.sub(r'[^\d]', '', telefone)
+        telefone_limpo = re.sub(r'[^\d]', '', telefone)
+        
+        # Se o telefone não começar com 55, adiciona o prefixo
+        # Considera números brasileiros (10 ou 11 dígitos sem o 55)
+        if telefone_limpo and not telefone_limpo.startswith("55"):
+            # Se tem 10 ou 11 dígitos (formato brasileiro sem código do país)
+            if len(telefone_limpo) == 10 or len(telefone_limpo) == 11:
+                telefone_limpo = "55" + telefone_limpo
+            # Se tem menos de 10 dígitos, pode ser um número incompleto, mas adiciona 55 mesmo assim
+            elif len(telefone_limpo) < 10:
+                telefone_limpo = "55" + telefone_limpo
+        
+        return telefone_limpo
 
     def formatar_lista_enderecos_para_chat(self, enderecos: List[Dict[str, Any]]) -> str:
         """
