@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import List
 from sqlalchemy.orm import Session
 
@@ -22,28 +23,23 @@ class ComplementoAdapter(IComplementoContract):
         minimo_itens: int = None,
         maximo_itens: int = None
     ) -> ComplementoDTO:
-        """Monta o DTO de complemento garantindo ordem e preço aplicado por complemento.
-        
-        Args:
-            complemento: Modelo do complemento
-            ordem: Ordem do complemento no contexto (produto/receita/combo). 
-                   Se None, usa a ordem do complemento em si.
-            obrigatorio: Se o complemento é obrigatório nesta vinculação (obrigatório).
-            quantitativo: Se permite quantidade nesta vinculação (obrigatório).
-            minimo_itens: Quantidade mínima de itens nesta vinculação.
-            maximo_itens: Quantidade máxima de itens nesta vinculação.
-        """
-        itens = self.repo_item.listar_itens_complemento(complemento.id, apenas_ativos=True)
-        adicionais_dto = [
-            AdicionalDTO(
-                id=item.id,
-                nome=item.nome,
-                preco=getattr(item, "preco_aplicado", item.preco),
-                ordem=ordem_item,
-                imagem=getattr(item, "imagem", None),
+        """Monta o DTO de complemento. Itens vêm de complemento_vinculo_item (produto/receita/combo), expostos como adicionais."""
+        itens = self.repo_item.listar_itens_complemento(
+            complemento.id, apenas_ativos=True, empresa_id=complemento.empresa_id
+        )
+        empresa_id = complemento.empresa_id
+        adicionais_dto: List[AdicionalDTO] = []
+        for v, ordem_item in itens:
+            preco, _ = self.repo_item.preco_e_custo_vinculo(v, empresa_id)
+            adicionais_dto.append(
+                AdicionalDTO(
+                    id=v.id,
+                    nome=v.nome or "",
+                    preco=preco,
+                    ordem=ordem_item,
+                    imagem=v.imagem,
+                )
             )
-            for item, ordem_item in itens
-        ]
 
         # Usa a ordem fornecida (da tabela de associação) ou a ordem do complemento
         ordem_final = ordem if ordem is not None else complemento.ordem

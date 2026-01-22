@@ -1,248 +1,265 @@
-from typing import List, Optional
+"""Repository para vínculos de itens (produto/receita/combo) dentro de complementos."""
+
+from __future__ import annotations
+
 from decimal import Decimal
-from sqlalchemy.orm import Session
-from app.api.catalogo.models.model_adicional import AdicionalModel
-from app.api.catalogo.models.association_tables import complemento_item_link
+from typing import List, Optional, Tuple
+
+from sqlalchemy.orm import Session, joinedload
+
+from app.api.catalogo.models.model_complemento import ComplementoModel
+from app.api.catalogo.models.model_complemento_vinculo_item import ComplementoVinculoItemModel
+from app.api.catalogo.models.model_produto_emp import ProdutoEmpModel
 
 
 class ComplementoItemRepository:
-    """Repository para operações CRUD de itens de complemento (independentes)."""
+    """Operações CRUD sobre complemento_vinculo_item (itens = produto/receita/combo)."""
 
     def __init__(self, db: Session):
         self.db = db
 
-    def criar_item(self, **data) -> AdicionalModel:
-        """Cria um novo item de complemento (independente)."""
-        obj = AdicionalModel(**data)
-        self.db.add(obj)
-        self.db.flush()
-        return obj
-
-    def buscar_por_id(self, item_id: int, carregar_complementos: bool = False) -> Optional[AdicionalModel]:
-        """Busca um item por ID."""
-        query = self.db.query(AdicionalModel).filter_by(id=item_id)
-        if carregar_complementos:
-            query = query.options(
-                # Carrega os complementos via tabela de associação
+    def buscar_por_id(
+        self,
+        vinculo_id: int,
+        carregar_entidades: bool = True,
+    ) -> Optional[ComplementoVinculoItemModel]:
+        """Busca um vínculo por ID."""
+        q = self.db.query(ComplementoVinculoItemModel).filter_by(id=vinculo_id)
+        if carregar_entidades:
+            q = q.options(
+                joinedload(ComplementoVinculoItemModel.produto),
+                joinedload(ComplementoVinculoItemModel.receita),
+                joinedload(ComplementoVinculoItemModel.combo),
+                joinedload(ComplementoVinculoItemModel.complemento),
             )
-        return query.first()
+        return q.first()
 
-    def listar_por_empresa(self, empresa_id: int, apenas_ativos: bool = True) -> List[AdicionalModel]:
-        """Lista todos os itens de uma empresa."""
-        query = self.db.query(AdicionalModel).filter_by(empresa_id=empresa_id)
-        if apenas_ativos:
-            query = query.filter_by(ativo=True)
-        return query.order_by(AdicionalModel.nome).all()
+    def listar_itens_complemento(
+        self,
+        complemento_id: int,
+        apenas_ativos: bool = True,
+        empresa_id: Optional[int] = None,
+    ) -> List[Tuple[ComplementoVinculoItemModel, int]]:
+        """
+        Lista os vínculos (itens) de um complemento.
 
-    def buscar_por_termo(self, empresa_id: int, termo: str, apenas_ativos: bool = True) -> List[AdicionalModel]:
-        """Busca itens por termo (nome ou descrição)."""
-        from sqlalchemy import or_
-
-        termo_lower = f"%{termo.lower()}%"
-        query = self.db.query(AdicionalModel).filter_by(empresa_id=empresa_id)
-
-        if apenas_ativos:
-            query = query.filter_by(ativo=True)
-
-        query = query.filter(
-            or_(
-                AdicionalModel.nome.ilike(termo_lower),
-                AdicionalModel.descricao.ilike(termo_lower)
+        Returns:
+            Lista de (vinculo, ordem). Ordem vem do próprio vinculo.ordem.
+        """
+        q = (
+            self.db.query(ComplementoVinculoItemModel)
+            .filter(ComplementoVinculoItemModel.complemento_id == complemento_id)
+            .options(
+                joinedload(ComplementoVinculoItemModel.produto),
+                joinedload(ComplementoVinculoItemModel.receita),
+                joinedload(ComplementoVinculoItemModel.combo),
             )
         )
+        rows = q.order_by(ComplementoVinculoItemModel.ordem, ComplementoVinculoItemModel.id).all()
 
-        return query.order_by(AdicionalModel.nome).all()
+        out: List[Tuple[ComplementoVinculoItemModel, int]] = []
+        for v in rows:
+            if apenas_ativos and not self._ativo(v, empresa_id):
+                continue
+            out.append((v, int(v.ordem)))
+        return out
 
-    def atualizar_item(self, item: AdicionalModel, **data) -> AdicionalModel:
-        """Atualiza um item existente."""
-        for key, value in data.items():
-            if value is not None:
-                setattr(item, key, value)
-        self.db.flush()
-        return item
-
-    def deletar_item(self, item: AdicionalModel):
-        """Deleta um item (remove automaticamente os vínculos com complementos via CASCADE)."""
-        self.db.delete(item)
-        self.db.flush()
+    def _ativo(self, v: ComplementoVinculoItemModel, _empresa_id: Optional[int]) -> bool:
+        return bool(getattr(v, "ativo", True))
 
     def vincular_itens_complemento(
         self,
         complemento_id: int,
-        item_ids: List[int],
+        items: List[dict],
         ordens: Optional[List[int]] = None,
-        precos: Optional[List] = None,
-    ):
-        """Vincula múltiplos itens a um complemento.
-
-        Se `precos` for informado, aplica um preço específico por item apenas neste complemento.
+        precos: Optional[List[Optional[Decimal]]] = None,
+    ) -> None:
         """
-        # Remove vinculações existentes do complemento
-        self.db.execute(
-            complemento_item_link.delete().where(
-                complemento_item_link.c.complemento_id == complemento_id
+        Substitui os itens do complemento pelos fornecidos.
+
+        Cada item em `items` deve ter exatamente um de:
+        produto_cod_barras, receita_id, combo_id.
+        """
+        comp = self.db.query(ComplementoModel).filter_by(id=complemento_id).first()
+        if not comp:
+            raise ValueError(f"Complemento {complemento_id} não encontrado")
+
+        # Remove vínculos existentes
+        self.db.query(ComplementoVinculoItemModel).filter(
+            ComplementoVinculoItemModel.complemento_id == complemento_id
+        ).delete(synchronize_session="fetch")
+        self.db.flush()
+
+        for i, it in enumerate(items):
+            pid = it.get("produto_cod_barras")
+            rid = it.get("receita_id")
+            cid = it.get("combo_id")
+            n = sum(1 for x in (pid, rid, cid) if x is not None)
+            if n != 1:
+                raise ValueError("Cada item deve ter exatamente um de: produto_cod_barras, receita_id, combo_id")
+
+            ordem = (ordens[i] if ordens and i < len(ordens) else i)
+            # Garante que o preço do adicional seja definido no vínculo
+            preco = precos[i] if precos and i < len(precos) else None
+
+            vinculo = ComplementoVinculoItemModel(
+                complemento_id=complemento_id,
+                produto_cod_barras=pid,
+                receita_id=rid,
+                combo_id=cid,
+                ordem=ordem,
+                preco_complemento=preco,  # Preço específico do adicional neste complemento
             )
-        )
+            self.db.add(vinculo)
+            # Flush dentro do loop para garantir persistência individual e detecção de erros mais cedo
+            self.db.flush()
 
-        # Adiciona novas vinculações
-        for i, item_id in enumerate(item_ids):
-            ordem = ordens[i] if ordens and i < len(ordens) else i
-            preco_complemento = None
-            if precos and i < len(precos):
-                preco_complemento = precos[i]
+    def vincular_item_complemento(
+        self,
+        complemento_id: int,
+        *,
+        produto_cod_barras: Optional[str] = None,
+        receita_id: Optional[int] = None,
+        combo_id: Optional[int] = None,
+        ordem: Optional[int] = None,
+        preco_complemento: Optional[Decimal] = None,
+    ) -> ComplementoVinculoItemModel:
+        """Adiciona um único item ao complemento (ou atualiza se já existir)."""
+        n = sum(1 for x in (produto_cod_barras, receita_id, combo_id) if x is not None)
+        if n != 1:
+            raise ValueError("Informe exatamente um de: produto_cod_barras, receita_id, combo_id")
 
-            values = {
-                "complemento_id": complemento_id,
-                "item_id": item_id,
-                "ordem": ordem,
-            }
+        if produto_cod_barras is not None:
+            existing = (
+                self.db.query(ComplementoVinculoItemModel)
+                .filter(
+                    ComplementoVinculoItemModel.complemento_id == complemento_id,
+                    ComplementoVinculoItemModel.produto_cod_barras == produto_cod_barras,
+                )
+                .first()
+            )
+        elif receita_id is not None:
+            existing = (
+                self.db.query(ComplementoVinculoItemModel)
+                .filter(
+                    ComplementoVinculoItemModel.complemento_id == complemento_id,
+                    ComplementoVinculoItemModel.receita_id == receita_id,
+                )
+                .first()
+            )
+        else:
+            existing = (
+                self.db.query(ComplementoVinculoItemModel)
+                .filter(
+                    ComplementoVinculoItemModel.complemento_id == complemento_id,
+                    ComplementoVinculoItemModel.combo_id == combo_id,
+                )
+                .first()
+            )
+
+        if existing:
+            if ordem is not None:
+                existing.ordem = ordem
             if preco_complemento is not None:
-                values["preco_complemento"] = preco_complemento
+                existing.preco_complemento = preco_complemento
+            self.db.flush()
+            return existing
 
-            self.db.execute(complemento_item_link.insert().values(**values))
+        if ordem is None:
+            r = (
+                self.db.query(ComplementoVinculoItemModel.ordem)
+                .filter(ComplementoVinculoItemModel.complemento_id == complemento_id)
+                .order_by(ComplementoVinculoItemModel.ordem.desc())
+                .limit(1)
+                .scalar()
+            )
+            ordem = (r + 1) if r is not None else 0
 
+        v = ComplementoVinculoItemModel(
+            complemento_id=complemento_id,
+            produto_cod_barras=produto_cod_barras,
+            receita_id=receita_id,
+            combo_id=combo_id,
+            ordem=ordem,
+            preco_complemento=preco_complemento,
+        )
+        self.db.add(v)
+        self.db.flush()
+        return v
+
+    def desvincular_item_complemento(self, complemento_id: int, vinculo_id: int) -> None:
+        """Remove o vínculo (por id do vinculo)."""
+        self.db.query(ComplementoVinculoItemModel).filter(
+            ComplementoVinculoItemModel.complemento_id == complemento_id,
+            ComplementoVinculoItemModel.id == vinculo_id,
+        ).delete(synchronize_session="fetch")
         self.db.flush()
 
     def atualizar_preco_item_complemento(
         self,
         complemento_id: int,
-        item_id: int,
-        preco_complemento,
-    ):
-        """Atualiza o preço específico de um item em um complemento."""
-        self.db.execute(
-            complemento_item_link.update()
-            .where(
-                complemento_item_link.c.complemento_id == complemento_id,
-                complemento_item_link.c.item_id == item_id,
+        vinculo_id: int,
+        preco_complemento: Decimal,
+    ) -> None:
+        """Atualiza o preço do item dentro do complemento."""
+        v = (
+            self.db.query(ComplementoVinculoItemModel)
+            .filter(
+                ComplementoVinculoItemModel.complemento_id == complemento_id,
+                ComplementoVinculoItemModel.id == vinculo_id,
             )
-            .values(preco_complemento=preco_complemento)
+            .first()
         )
+        if not v:
+            raise ValueError(f"Vínculo {vinculo_id} não encontrado no complemento {complemento_id}")
+        v.preco_complemento = preco_complemento
         self.db.flush()
 
-    def vincular_item_complemento(
+    def atualizar_ordem_itens(self, complemento_id: int, item_ordens: List[dict]) -> None:
+        """Atualiza a ordem dos itens. item_ordens: [{'item_id': vinculo_id, 'ordem': int}, ...]."""
+        for io in item_ordens:
+            vid = io.get("item_id")
+            ordem = io.get("ordem")
+            if vid is None or ordem is None:
+                continue
+            self.db.query(ComplementoVinculoItemModel).filter(
+                ComplementoVinculoItemModel.complemento_id == complemento_id,
+                ComplementoVinculoItemModel.id == vid,
+            ).update({"ordem": ordem}, synchronize_session="fetch")
+        self.db.flush()
+
+    def preco_e_custo_vinculo(
         self,
-        complemento_id: int,
-        item_id: int,
-        ordem: Optional[int] = None,
-        preco_complemento: Optional[Decimal] = None,
-    ):
-        """Vincula um único item a um complemento (sem remover vinculações existentes).
-        
-        Se o item já estiver vinculado ao complemento, atualiza a ordem e/ou preço.
-        """
-        from sqlalchemy import select
-        
-        # Verifica se já existe vinculação
-        existing = self.db.execute(
-            select(complemento_item_link)
-            .where(
-                complemento_item_link.c.complemento_id == complemento_id,
-                complemento_item_link.c.item_id == item_id
-            )
-        ).first()
-        
-        if existing:
-            # Atualiza vinculação existente
-            update_values = {}
-            if ordem is not None:
-                update_values["ordem"] = ordem
-            if preco_complemento is not None:
-                update_values["preco_complemento"] = preco_complemento
-            
-            if update_values:
-                self.db.execute(
-                    complemento_item_link.update()
-                    .where(
-                        complemento_item_link.c.complemento_id == complemento_id,
-                        complemento_item_link.c.item_id == item_id
-                    )
-                    .values(**update_values)
+        v: ComplementoVinculoItemModel,
+        empresa_id: int,
+    ) -> Tuple[Decimal, Decimal]:
+        """Retorna (preco, custo) para o vínculo. Preco usa preco_complemento se definido."""
+        preco = v.preco_complemento
+        custo = Decimal("0")
+
+        if v.produto_cod_barras and v.produto:
+            pe = (
+                self.db.query(ProdutoEmpModel)
+                .filter(
+                    ProdutoEmpModel.empresa_id == empresa_id,
+                    ProdutoEmpModel.cod_barras == v.produto_cod_barras,
                 )
-        else:
-            # Cria nova vinculação
-            # Se ordem não fornecida, busca a maior ordem existente + 1
-            if ordem is None:
-                max_ordem = self.db.execute(
-                    select(complemento_item_link.c.ordem)
-                    .where(complemento_item_link.c.complemento_id == complemento_id)
-                    .order_by(complemento_item_link.c.ordem.desc())
-                    .limit(1)
-                ).scalar()
-                ordem = (max_ordem + 1) if max_ordem is not None else 0
-            
-            values = {
-                "complemento_id": complemento_id,
-                "item_id": item_id,
-                "ordem": ordem,
-            }
-            if preco_complemento is not None:
-                values["preco_complemento"] = preco_complemento
-            
-            self.db.execute(complemento_item_link.insert().values(**values))
-        
-        self.db.flush()
-
-    def desvincular_item_complemento(self, complemento_id: int, item_id: int):
-        """Remove a vinculação de um item com um complemento."""
-        self.db.execute(
-            complemento_item_link.delete().where(
-                complemento_item_link.c.complemento_id == complemento_id,
-                complemento_item_link.c.item_id == item_id
+                .first()
             )
-        )
-        self.db.flush()
+            if pe:
+                if preco is None:
+                    preco = pe.preco_venda
+                custo = pe.custo or Decimal("0")
+        elif v.receita_id and v.receita:
+            r = v.receita
+            if preco is None:
+                preco = r.preco_venda
+        elif v.combo_id and v.combo:
+            c = v.combo
+            if preco is None:
+                preco = c.preco_total
+            custo = c.custo_total or Decimal("0")
 
-    def listar_itens_complemento(self, complemento_id: int, apenas_ativos: bool = True) -> List[tuple]:
-        """Lista todos os itens vinculados a um complemento.
-
-        Returns:
-            Lista de tuplas (item, ordem) ordenadas por ordem.
-            Se existir preço específico por complemento, ele é exposto via atributo
-            `item.preco_aplicado` (sem alterar o preço base do adicional).
-        """
-        from sqlalchemy import select
-
-        query = (
-            select(
-                AdicionalModel,
-                complemento_item_link.c.ordem,
-                complemento_item_link.c.preco_complemento,
-            )
-            .join(complemento_item_link, AdicionalModel.id == complemento_item_link.c.item_id)
-            .where(complemento_item_link.c.complemento_id == complemento_id)
-        )
-        if apenas_ativos:
-            query = query.where(AdicionalModel.ativo == True)
-        query = query.order_by(complemento_item_link.c.ordem, AdicionalModel.nome)
-
-        results = self.db.execute(query).all()
-        itens: List[tuple] = []
-        for item, ordem, preco_complemento in results:
-            if preco_complemento is not None:
-                # Anexa o preço aplicado apenas neste complemento, sem sobrescrever o preço base
-                setattr(item, "preco_aplicado", preco_complemento)
-            itens.append((item, ordem))
-        return itens
-
-    def atualizar_ordem_itens(self, complemento_id: int, item_ordens: List[dict]):
-        """Atualiza a ordem dos itens em um complemento.
-
-        Args:
-            complemento_id: ID do complemento
-            item_ordens: Lista de dicts com {'item_id': int, 'ordem': int}
-        """
-        for item_ordem in item_ordens:
-            item_id = item_ordem.get('item_id')
-            ordem = item_ordem.get('ordem')
-            if item_id and ordem is not None:
-                self.db.execute(
-                    complemento_item_link.update()
-                    .where(
-                        complemento_item_link.c.complemento_id == complemento_id,
-                        complemento_item_link.c.item_id == item_id
-                    )
-                    .values(ordem=ordem)
-                )
-        self.db.flush()
-
+        if preco is None:
+            preco = Decimal("0")
+        return (preco, custo)

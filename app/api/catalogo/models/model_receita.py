@@ -29,8 +29,6 @@ class ReceitaModel(Base):
         back_populates="receita",
         cascade="all, delete-orphan"
     )
-    # DEPRECATED: Usar complementos ao invés de adicionais diretos
-    adicionais = relationship("ReceitaAdicionalModel", back_populates="receita", cascade="all, delete-orphan")
     # NOVO: Complementos que contêm adicionais
     complementos = relationship(
         "ComplementoModel",
@@ -72,23 +70,4 @@ class ReceitaIngredienteModel(Base):
     produto = relationship("ProdutoModel", foreign_keys=[produto_cod_barras])
     combo = relationship("ComboModel", foreign_keys=[combo_id])
 
-
-class ReceitaAdicionalModel(Base):
-    """
-    Modelo de Adicional de Receita
-    
-    DEPRECATED: Este modelo está obsoleto. 
-    Agora receitas devem usar complementos que contêm adicionais.
-    Use receita_complemento_link para vincular complementos a receitas.
-    Mantido apenas para compatibilidade com dados legados.
-    """
-    __tablename__ = "receita_adicional"
-    __table_args__ = ({"schema": "catalogo"},)
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    receita_id = Column(Integer, ForeignKey("catalogo.receitas.id", ondelete="CASCADE"), nullable=False)
-    adicional_id = Column(Integer, ForeignKey("catalogo.adicionais.id", ondelete="RESTRICT"), nullable=False)
-
-    receita = relationship("ReceitaModel", back_populates="adicionais")
-    adicional = relationship("AdicionalModel", foreign_keys=[adicional_id])
 

@@ -323,7 +323,7 @@ def importar_models():
     from app.api.catalogo.models.model_produto_emp import ProdutoEmpModel
     from app.api.catalogo.models.model_combo import ComboModel
     # Receitas (tabela receitas no schema catalogo)
-    from app.api.catalogo.models.model_receita import ReceitaModel, ReceitaIngredienteModel, ReceitaAdicionalModel
+    from app.api.catalogo.models.model_receita import ReceitaModel, ReceitaIngredienteModel
     from app.api.financeiro.models.model_caixa_conferencia import CaixaConferenciaModel
     from app.api.caixas.models.model_caixa import CaixaModel
     from app.api.caixas.models.model_caixa_abertura import CaixaAberturaModel
@@ -350,8 +350,8 @@ def importar_models():
     from app.api.cadastros.models.model_meio_pagamento import MeioPagamentoModel
     from app.api.cadastros.models.model_parceiros import ParceiroModel, BannerParceiroModel
     from app.api.cadastros.models.model_regiao_entrega import RegiaoEntregaModel
-    from app.api.catalogo.models.model_adicional import AdicionalModel
     from app.api.catalogo.models.model_complemento import ComplementoModel
+    from app.api.catalogo.models.model_complemento_vinculo_item import ComplementoVinculoItemModel
     # ─── Models Notifications ───────────────────────────────────────────
     from app.api.notifications.models.notification import Notification, NotificationLog
     from app.api.notifications.models.event import Event
@@ -706,25 +706,6 @@ def criar_tabelas(postgis_disponivel: bool = True):
                 logger.error(f"❌ Erro ao criar tabelas do cardapio: {e}", exc_info=True)
         else:
             logger.info("✅ Todas as tabelas do schema cardapio já existem")
-
-        # Garante coluna de preço específico por complemento na tabela de associação
-        try:
-            with engine.begin() as conn:
-                conn.execute(
-                    text(
-                        """
-                        ALTER TABLE catalogo.complemento_item_link
-                        ADD COLUMN IF NOT EXISTS preco_complemento numeric(18,2)
-                        """
-                    )
-                )
-            logger.info("✅ Coluna catalogo.complemento_item_link.preco_complemento criada/verificada com sucesso")
-        except Exception as e:
-            logger.error(
-                "❌ Erro ao garantir coluna catalogo.complemento_item_link.preco_complemento: %s",
-                e,
-                exc_info=True,
-            )
 
         # Garante colunas de mínimo/máximo de itens em complementos
         try:

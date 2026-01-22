@@ -6,6 +6,7 @@ import os
 import httpx
 import json
 import re
+import time
 import unicodedata
 from typing import Dict, Any, List, Tuple, Optional
 from sqlalchemy.orm import Session
@@ -42,6 +43,8 @@ from app.api.catalogo.adapters.produto_adapter import ProdutoAdapter
 from app.api.catalogo.adapters.complemento_adapter import ComplementoAdapter
 from app.api.catalogo.adapters.receitas_adapter import ReceitasAdapter
 from app.api.catalogo.adapters.combo_adapter import ComboAdapter
+from app.api.catalogo.services.service_busca_global import BuscaGlobalService
+from .observability import ChatbotObservability
 
 # Configuração do Groq - API Key deve ser configurada via variável de ambiente
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
@@ -454,6 +457,8 @@ class GroqSalesHandler:
         self._carrinho_service = None
         # Router de intenções com múltiplos agentes especializados
         self.intention_router = IntentionRouter()
+        # FASE 4: Observabilidade (inicializado por user_id quando disponível)
+        self.observability: Optional[ChatbotObservability] = None
         self._load_chatbot_config()
 
     def _buscar_meios_pagamento(self) -> List[Dict]:
@@ -1271,11 +1276,12 @@ class GroqSalesHandler:
         {"funcao": "finalizar_pedido", "params": {}}
         {"funcao": "responder_conversa", "params": {"resposta": "Olá! Como posso ajudar?"}}
         """
-        # PRIMEIRO: Tenta interpretação por regras (mais rápido e não precisa de API)
-        resultado_regras = self._interpretar_intencao_regras(mensagem, produtos, carrinho)
-        if resultado_regras:
-            print(f"🎯 Regras interpretaram: {resultado_regras['funcao']}({resultado_regras['params']})")
-            return resultado_regras
+        # FASE 1: IA como roteador principal.
+        # Antes da IA, aplicamos apenas GUARDRAILS mínimos (proteções críticas).
+        guardrail = self._interpretar_intencao_guardrails(mensagem)
+        if guardrail:
+            print(f"🛡️ Guardrail interpretou: {guardrail['funcao']}({guardrail.get('params', {})})")
+            return guardrail
 
         # SE GROQ_API_KEY não estiver configurado ou estiver vazio, usa fallback
         if not GROQ_API_KEY or not GROQ_API_KEY.strip():
@@ -1300,6 +1306,17 @@ class GroqSalesHandler:
             produtos_lista=produtos_lista,
             carrinho_atual=carrinho_atual
         )
+
+        # FASE 2 (RAG): injeta contexto do catálogo baseado na mensagem para melhorar entendimento
+        contexto_catalogo = self._buscar_contexto_catalogo_rag(mensagem, limit=8)
+        contexto_rag_usado = bool(contexto_catalogo)
+        if contexto_catalogo:
+            prompt_sistema += (
+                "\n\n=== CONTEXTO DO CATÁLOGO (RAG) ===\n"
+                f"{contexto_catalogo}\n\n"
+                "Use este contexto para entender ingredientes/descrições e para escolher o produto correto.\n"
+                "Se precisar, use o NOME mais próximo do catálogo para preencher produto_busca.\n"
+            )
 
         try:
             async with httpx.AsyncClient(timeout=15.0) as client:
@@ -1326,7 +1343,9 @@ class GroqSalesHandler:
                 }
 
                 print(f"🧠 IA interpretando: '{mensagem}'")
+                inicio = time.time()
                 response = await client.post(GROQ_API_URL, json=payload, headers=headers)
+                tempo_resposta_ms = (time.time() - inicio) * 1000
 
                 if response.status_code == 200:
                     result = response.json()
@@ -1345,6 +1364,17 @@ class GroqSalesHandler:
                             params = {}
 
                         print(f"🎯 IA decidiu: {funcao}({params})")
+                        
+                        # FASE 4: Log de decisão da IA
+                        if self.observability:
+                            self.observability.log_decisao_ia(
+                                mensagem=mensagem,
+                                funcao_escolhida=funcao,
+                                params=params,
+                                tempo_resposta_ms=tempo_resposta_ms,
+                                contexto_rag_usado=contexto_rag_usado,
+                            )
+                        
                         return {"funcao": funcao, "params": params}
 
                     # Se não tem tool_calls, trata como conversa
@@ -1357,14 +1387,275 @@ class GroqSalesHandler:
                     # Ainda assim tenta conversar
                     return {"funcao": "conversar", "params": {"tipo_conversa": "resposta_generica"}}
 
+        except httpx.TimeoutException as e:
+            # FASE 4: Log de timeout
+            if self.observability:
+                self.observability.log_timeout(mensagem, timeout_segundos=15.0)
+            print(f"⏰ Timeout ao interpretar intenção: {e}")
+            # Tenta usar regras como fallback quando a IA falha
+            resultado_fallback = self._interpretar_intencao_regras(mensagem, produtos, carrinho)
+            if resultado_fallback:
+                if self.observability:
+                    self.observability.log_fallback(mensagem, "timeout", resultado_fallback.get("funcao", "conversar"))
+                print(f"🔄 Usando regras como fallback após timeout da IA")
+                return resultado_fallback
+            return {"funcao": "conversar", "params": {"tipo_conversa": "resposta_generica"}}
         except Exception as e:
+            # FASE 4: Log de erro
+            if self.observability:
+                self.observability.log_erro(mensagem, e, {"empresa_id": self.empresa_id})
             print(f"❌ Erro ao interpretar intenção: {e}")
             # Tenta usar regras como fallback quando a IA falha
             resultado_fallback = self._interpretar_intencao_regras(mensagem, produtos, carrinho)
             if resultado_fallback:
+                if self.observability:
+                    self.observability.log_fallback(mensagem, f"erro: {type(e).__name__}", resultado_fallback.get("funcao", "conversar"))
                 print(f"🔄 Usando regras como fallback após erro da IA")
                 return resultado_fallback
             return {"funcao": "conversar", "params": {"tipo_conversa": "resposta_generica"}}
+
+    def _buscar_contexto_catalogo_rag(self, texto: str, limit: int = 8) -> str:
+        """
+        RAG simples (fase 2): busca itens relevantes no catálogo (produtos/receitas/combos)
+        e retorna um texto curto para injetar em prompts.
+        """
+        try:
+            termo = (texto or "").strip()
+            if not termo:
+                return ""
+
+            # Busca global já consulta nome/descrição de produtos/receitas/combos
+            res = BuscaGlobalService(self.db).buscar(
+                empresa_id=int(self.empresa_id),
+                termo=termo,
+                apenas_disponiveis=True,
+                apenas_ativos=True,
+                limit=10,
+                page=1,
+            )
+
+            itens: List[Any] = []
+            try:
+                itens.extend(res.produtos or [])
+                itens.extend(res.receitas or [])
+                itens.extend(res.combos or [])
+            except Exception:
+                # fallback defensivo
+                pass
+
+            if not itens:
+                return ""
+
+            def _truncate(s: Optional[str], n: int = 220) -> str:
+                if not s:
+                    return ""
+                s = " ".join(str(s).split())
+                return s if len(s) <= n else (s[: n - 1] + "…")
+
+            linhas: List[str] = []
+            for item in itens[: max(int(limit), 1)]:
+                nome = getattr(item, "nome", None) or (item.get("nome") if isinstance(item, dict) else "")
+                tipo = getattr(item, "tipo", None) or (item.get("tipo") if isinstance(item, dict) else "")
+                preco = getattr(item, "preco", None) if not isinstance(item, dict) else item.get("preco")
+                descricao = getattr(item, "descricao", None) if not isinstance(item, dict) else item.get("descricao")
+
+                nome = str(nome or "").strip()
+                if not nome:
+                    continue
+
+                preco_str = ""
+                try:
+                    if preco is not None:
+                        preco_str = f" — R$ {float(preco):.2f}"
+                except Exception:
+                    preco_str = ""
+
+                desc_str = _truncate(descricao)
+                if desc_str:
+                    linhas.append(f"- [{tipo}] {nome}{preco_str}\n  {desc_str}")
+                else:
+                    linhas.append(f"- [{tipo}] {nome}{preco_str}")
+
+            return "\n".join(linhas).strip()
+        except Exception as e:
+            print(f"⚠️ Erro no RAG do catálogo: {e}")
+            return ""
+
+    def _resumir_historico_para_ia(self, historico: List[Dict], max_mensagens: int = 8) -> List[Dict]:
+        """
+        FASE 3: Resumir histórico quando muito longo, mantendo contexto relevante.
+        Prioriza mensagens recentes e remove redundâncias.
+        """
+        if not historico or len(historico) <= max_mensagens:
+            return historico[-max_mensagens:] if historico else []
+        
+        # Pega últimas N mensagens (mais recentes são mais relevantes)
+        recentes = historico[-max_mensagens:]
+        
+        # Se histórico é muito longo, tenta resumir mantendo início (contexto) e fim (recente)
+        if len(historico) > max_mensagens * 2:
+            # Mantém primeira mensagem (contexto inicial) + últimas N
+            if len(historico) > 1:
+                return [historico[0]] + recentes[1:]
+        
+        return recentes
+
+    def _resolver_referencias_na_mensagem(
+        self, 
+        mensagem: str, 
+        pedido_contexto: List[Dict], 
+        carrinho: List[Dict],
+        dados: Dict
+    ) -> str:
+        """
+        FASE 3: Resolve referências como "esse", "o último", "o de frango" na mensagem.
+        Retorna mensagem com referências substituídas por nomes concretos.
+        """
+        import re
+        
+        msg = mensagem
+        if not msg or not msg.strip():
+            return msg
+        
+        msg_lower = msg.lower()
+        
+        # Resolve "esse", "esse aí", "esse último"
+        if re.search(r'\b(esse|essa|isso|esse\s+a[ií]|esse\s+último|último)\b', msg_lower):
+            # Busca último item mencionado/adicionado
+            ultimo_item = None
+            
+            # Prioridade: último do pedido_contexto > último do carrinho > último mencionado
+            if pedido_contexto:
+                ultimo_item = pedido_contexto[-1].get('nome', '')
+            elif carrinho:
+                ultimo_item = carrinho[-1].get('nome', '')
+            else:
+                ultimo_mencionado = dados.get('ultimo_produto_mencionado')
+                if isinstance(ultimo_mencionado, dict):
+                    ultimo_item = ultimo_mencionado.get('nome', '')
+                elif isinstance(ultimo_mencionado, str):
+                    ultimo_item = ultimo_mencionado
+            
+            if ultimo_item:
+                # Substitui referências pelo nome do produto
+                msg = re.sub(
+                    r'\b(esse|essa|isso|esse\s+a[ií]|esse\s+último|último)\b',
+                    ultimo_item,
+                    msg,
+                    flags=re.IGNORECASE,
+                    count=1  # Substitui apenas a primeira ocorrência
+                )
+                print(f"🔗 Referência resolvida: '{mensagem}' → '{msg}' (produto: {ultimo_item})")
+        
+        # Resolve "o de [ingrediente]" ou "a de [ingrediente]" (ex: "o de frango", "a de calabresa")
+        match_ingrediente = re.search(r'\b(o|a)\s+de\s+(\w+)', msg_lower)
+        if match_ingrediente:
+            ingrediente = match_ingrediente.group(2)
+            
+            # Busca produtos que contenham esse ingrediente no nome ou descrição
+            todos_produtos = self._buscar_todos_produtos()
+            for produto in todos_produtos:
+                nome_prod = str(produto.get('nome', '')).lower()
+                desc_prod = str(produto.get('descricao', '')).lower()
+                
+                if ingrediente in nome_prod or ingrediente in desc_prod:
+                    # Substitui "o de X" pelo nome do produto
+                    msg = re.sub(
+                        rf'\b(o|a)\s+de\s+{re.escape(ingrediente)}\b',
+                        produto.get('nome', ''),
+                        msg,
+                        flags=re.IGNORECASE,
+                        count=1
+                    )
+                    print(f"🔗 Referência por ingrediente resolvida: '{mensagem}' → '{msg}' (produto: {produto.get('nome')})")
+                    break
+        
+        return msg
+
+    def _resumir_contexto_pedido(
+        self, 
+        pedido_contexto: List[Dict], 
+        carrinho: List[Dict]
+    ) -> str:
+        """
+        FASE 3: Resume contexto do pedido de forma mais inteligente e compacta.
+        """
+        itens = pedido_contexto if pedido_contexto else (carrinho if carrinho else [])
+        
+        if not itens:
+            return "\n📝 PEDIDO: Nenhum item anotado ainda.\n"
+        
+        # Resumo compacto
+        linhas = ["\n📝 PEDIDO ATUAL:"]
+        total = 0
+        
+        for item in itens:
+            qtd = item.get('quantidade', 1)
+            nome = item.get('nome', '')
+            preco_unit = item.get('preco', 0)
+            preco_item = preco_unit * qtd
+            total += preco_item
+            
+            # Formato compacto: "2x Nome - R$ X.XX"
+            linha = f"  • {qtd}x {nome} - R$ {preco_item:.2f}"
+            
+            # Adiciona personalizações de forma compacta
+            removidos = item.get('removidos', [])
+            adicionais = item.get('adicionais', [])
+            if removidos:
+                linha += f" (sem: {', '.join(removidos[:2])})"  # Limita a 2 para não ficar muito longo
+            if adicionais:
+                adic_str = ', '.join([str(a.get('nome', a) if isinstance(a, dict) else a) for a in adicionais[:2]])
+                linha += f" (+{adic_str})"
+            
+            linhas.append(linha)
+        
+        linhas.append(f"💰 Total: R$ {total:.2f}\n")
+        
+        return "\n".join(linhas)
+
+    def _interpretar_intencao_guardrails(self, mensagem: str) -> Optional[Dict[str, Any]]:
+        """
+        Guardrails mínimos (proteções críticas) executados ANTES da IA.
+        Importante: aqui NÃO pode entrar lógica ampla de roteamento (para não virar "regex first").
+        """
+        import re
+
+        msg = self._normalizar_mensagem(mensagem or "")
+        if not msg:
+            return None
+
+        # 1) Chamar atendente humano (sempre prioriza)
+        if re.search(
+            r'(chamar\s+atendente|quero\s+falar\s+com\s+(algu[eé]m|atendente|humano)|preciso\s+de\s+(um\s+)?(humano|atendente)|atendente\s+humano|quero\s+atendimento\s+humano|falar\s+com\s+atendente|ligar\s+atendente|chama\s+(algu[eé]m|atendente)\s+para\s+mi)',
+            msg,
+            re.IGNORECASE,
+        ):
+            return {"funcao": "chamar_atendente", "params": {}}
+
+        # 2) Taxa de entrega / frete (prioriza para evitar confusão com "quanto custa")
+        if re.search(
+            r'(taxa\s*(de\s*)?(entrega|delivery)|frete|valor\s*(da\s*)?(entrega|delivery)|pre[cç]o\s*(do\s*)?(frete|entrega|delivery))',
+            msg,
+            re.IGNORECASE,
+        ):
+            return {"funcao": "calcular_taxa_entrega", "params": {"mensagem_original": mensagem}}
+
+        if re.search(
+            r'quanto\s+(que\s+)?(fica|custa|é|e)\s+(pra|para|o\s*)?(entregar|entrega|delivery|frete)',
+            msg,
+            re.IGNORECASE,
+        ):
+            return {"funcao": "calcular_taxa_entrega", "params": {"mensagem_original": mensagem}}
+
+        if re.search(
+            r'(voc[eê]s?\s+entregam|entregam\s+(em|na|no|para|pra)|fazem\s+entrega|faz\s+entrega|tem\s+entrega|fazem\s+delivery|faz\s+delivery)',
+            msg,
+            re.IGNORECASE,
+        ):
+            return {"funcao": "calcular_taxa_entrega", "params": {"mensagem_original": mensagem}}
+
+        return None
 
     def _buscar_produto_por_termo(self, termo: str, produtos: List[Dict] = None) -> Optional[Dict]:
         """
@@ -2217,6 +2508,7 @@ class GroqSalesHandler:
 
         # Busca dados do cardápio
         pedido_contexto = dados.get('pedido_contexto', [])
+        carrinho = dados.get('carrinho', [])
 
         # Verifica se cliente está pedindo cardápio - responde direto sem IA
         msg_lower = mensagem.lower().strip()
@@ -2274,6 +2566,18 @@ class GroqSalesHandler:
             complementos_texto += "\nSe o cliente escolher complementos, use acao 'selecionar_complementos' com os nomes EXATOS dos itens escolhidos."
             complementos_texto += "\nSe o cliente não quiser nenhum, use acao 'pular_complementos'."
 
+        # FASE 2 (RAG): Contexto curto do catálogo baseado na mensagem (para dúvidas abertas)
+        contexto_rag = self._buscar_contexto_catalogo_rag(mensagem, limit=10)
+        contexto_rag_txt = ""
+        if contexto_rag:
+            contexto_rag_txt = f"\n\nITENS RELEVANTES DO CATÁLOGO (RAG):\n{contexto_rag}\n"
+
+        # FASE 3: Resolver referências na mensagem ("esse", "o último", "o de frango")
+        mensagem_resolvida = self._resolver_referencias_na_mensagem(mensagem, pedido_contexto, carrinho, dados)
+        
+        # FASE 3: Memória curta resumida - contexto do pedido de forma mais inteligente
+        contexto_pedido_resumido = self._resumir_contexto_pedido(pedido_contexto, carrinho)
+
         # Prompt do sistema para IA conversacional
         system_prompt = f"""Você é um atendente de delivery simpático e prestativo. Seu nome é Assistente Virtual.
 
@@ -2285,8 +2589,9 @@ SUAS RESPONSABILIDADES:
 
 CARDÁPIO COMPLETO:
 {cardapio_texto}
+{contexto_rag_txt}
 
-{pedido_atual}
+{contexto_pedido_resumido}
 {complementos_texto}
 
 REGRAS IMPORTANTES:
@@ -2351,12 +2656,23 @@ REGRA PARA COMPLEMENTOS:
 - complementos_selecionados deve SEMPRE ter os nomes EXATOS como aparecem na lista de COMPLEMENTOS DISPONÍVEIS
 - IMPORTANTE: Se o cliente especificar QUANTIDADE (ex: "2 maionese", "3 queijo extra"), inclua a quantidade no formato "Nx Nome" (ex: "2x Maionese 30 ml")"""
 
+        # FASE 3: Memória curta resumida - resumir histórico quando muito longo
+        historico_resumido = self._resumir_historico_para_ia(historico, max_mensagens=8)
+        
         # Monta mensagens para a API
         messages = [{"role": "system", "content": system_prompt}]
 
-        # Adiciona últimas mensagens do histórico (máximo 10)
-        for msg in historico[-10:]:
+        # Adiciona histórico resumido
+        for msg in historico_resumido:
             messages.append(msg)
+        
+        # FASE 3: Adiciona mensagem resolvida (com referências resolvidas) como última mensagem
+        # Se a última mensagem do histórico já é a mensagem atual, substitui pela resolvida
+        if messages and messages[-1].get("role") == "user" and messages[-1].get("content") == mensagem:
+            messages[-1]["content"] = mensagem_resolvida
+        else:
+            # Se não está no histórico, adiciona
+            messages.append({"role": "user", "content": mensagem_resolvida})
 
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
@@ -2377,7 +2693,7 @@ REGRA PARA COMPLEMENTOS:
                     "Authorization": f"Bearer {GROQ_API_KEY.strip()}",
                     "Content-Type": "application/json"
                 }
-
+                
                 response = await client.post(GROQ_API_URL, json=payload, headers=headers)
 
                 if response.status_code == 200:
@@ -5599,6 +5915,10 @@ Responda de forma natural e curta:"""
         """
         Processa mensagem usando Groq API com fluxo de endereços integrado
         """
+        # FASE 4: Inicializa observabilidade para este user_id
+        if not self.observability or self.observability.user_id != user_id:
+            self.observability = ChatbotObservability(self.empresa_id, user_id)
+        
         try:
             # Obtém estado atual
             estado, dados = self._obter_estado_conversa(user_id)
@@ -6423,6 +6743,13 @@ Responda de forma natural e curta:"""
                     # Gera resposta contextual sobre o produto com ingredientes reais
                     return await self._gerar_resposta_sobre_produto(user_id, produto, pergunta, dados)
                 else:
+                    sugestoes = self._buscar_contexto_catalogo_rag(produto_busca or pergunta or mensagem, limit=6)
+                    if sugestoes:
+                        return (
+                            "Não achei esse produto com esse nome. Você quis dizer algum desses?\n\n"
+                            f"{sugestoes}\n\n"
+                            "Me diga o nome exato que eu te explico. 😊"
+                        )
                     return "Qual produto você quer saber mais? Me fala o nome!"
             elif funcao == "informar_sobre_produtos":
                 itens = params.get("itens", [])

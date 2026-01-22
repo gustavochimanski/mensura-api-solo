@@ -55,21 +55,14 @@ class ComplementoModel(Base):
         viewonly=True,  # Leitura apenas, pois a relação real é no link
     )
     
-    # Relacionamento N:N com itens de complemento (via tabela de associação)
-    # Um complemento pode ter vários itens e um item pode pertencer a vários complementos
-    itens = relationship(
-        "AdicionalModel",
-        secondary="catalogo.complemento_item_link",
-        back_populates="complementos",
-        viewonly=True,
-    )
-    
-    # Mantido para compatibilidade (alias para itens)
-    adicionais = relationship(
-        "AdicionalModel",
-        secondary="catalogo.complemento_item_link",
-        back_populates="complementos",
-        viewonly=True,
+    # Vínculos de itens (produto/receita/combo) dentro do complemento.
+    # Exposto como `adicionais` para o front (via service/adapter), mas no banco não existe mais
+    # a entidade `catalogo.adicionais`.
+    vinculos_itens = relationship(
+        "ComplementoVinculoItemModel",
+        back_populates="complemento",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
     
     model_config = ConfigDict(from_attributes=True)

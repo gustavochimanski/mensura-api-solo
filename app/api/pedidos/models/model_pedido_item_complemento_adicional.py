@@ -29,10 +29,10 @@ class PedidoItemComplementoAdicionalModel(Base):
 
     adicional_id = Column(
         Integer,
-        ForeignKey("catalogo.adicionais.id", ondelete="RESTRICT"),
+        ForeignKey("catalogo.complemento_vinculo_item.id", ondelete="RESTRICT"),
         nullable=False,
     )
-    adicional = relationship("AdicionalModel", lazy="select")
+    adicional = relationship("ComplementoVinculoItemModel", lazy="select")
 
     quantidade = Column(Integer, nullable=False, default=1)
     preco_unitario = Column(Numeric(18, 2), nullable=False, default=0)

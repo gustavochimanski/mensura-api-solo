@@ -1,4 +1,4 @@
-from typing import Optional, List
+from typing import Optional, List, Literal
 from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field, condecimal, model_validator
 
@@ -28,48 +28,6 @@ class AtualizarComplementoRequest(BaseModel):
     """
     nome: Optional[str] = Field(None, min_length=1, max_length=100)
     descricao: Optional[str] = Field(None, max_length=255)
-    ativo: Optional[bool] = None
-    ordem: Optional[int] = None
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class CriarItemRequest(BaseModel):
-    """Request para criar um item de complemento (independente)"""
-    empresa_id: int
-    nome: str = Field(..., min_length=1, max_length=100)
-    descricao: Optional[str] = Field(None, max_length=255)
-    imagem: Optional[str] = Field(None, max_length=255, description="URL pública da imagem do adicional (opcional)")
-    preco: condecimal(max_digits=18, decimal_places=2) = Field(default=0)
-    custo: condecimal(max_digits=18, decimal_places=2) = Field(default=0)
-    ativo: bool = True
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class CriarAdicionalRequest(BaseModel):
-    """Request para criar um adicional dentro de um complemento (DEPRECADO - usar CriarItemRequest)"""
-    nome: str = Field(..., min_length=1, max_length=100)
-    descricao: Optional[str] = Field(None, max_length=255)
-    preco: condecimal(max_digits=18, decimal_places=2) = Field(default=0)
-    custo: condecimal(max_digits=18, decimal_places=2) = Field(default=0)
-    ativo: bool = True
-    ordem: int = 0
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class AtualizarAdicionalRequest(BaseModel):
-    """Request para atualizar um adicional (item) genérico.
-
-    Atenção: para atualizar apenas o preço dentro de um complemento específico,
-    use o endpoint dedicado de preço por complemento.
-    """
-    nome: Optional[str] = Field(None, min_length=1, max_length=100)
-    descricao: Optional[str] = Field(None, max_length=255)
-    imagem: Optional[str] = Field(None, max_length=255, description="URL pública da imagem do adicional (opcional)")
-    preco: Optional[condecimal(max_digits=18, decimal_places=2)] = None
-    custo: Optional[condecimal(max_digits=18, decimal_places=2)] = None
     ativo: Optional[bool] = None
     ordem: Optional[int] = None
 
@@ -290,43 +248,73 @@ class VincularComplementosComboResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-# ------ Vincular itens a complementos (N:N) ------
+# ------ Vincular itens (produto/receita/combo) a complementos ------
+class ItemVinculoInput(BaseModel):
+    """Um item a vincular: produto, receita ou combo. Exatamente um dos três deve ser informado."""
+    tipo: Literal["produto", "receita", "combo"] = Field(..., description="Tipo do item")
+    produto_cod_barras: Optional[str] = Field(None, description="Código de barras do produto (se tipo=produto)")
+    receita_id: Optional[int] = Field(None, description="ID da receita (se tipo=receita)")
+    combo_id: Optional[int] = Field(None, description="ID do combo (se tipo=combo)")
+    ordem: Optional[int] = Field(None, description="Ordem no complemento (opcional)")
+    preco_complemento: Optional[condecimal(max_digits=18, decimal_places=2)] = Field(
+        None, description="Preço específico neste complemento (opcional)"
+    )
+
+    @model_validator(mode="after")
+    def check_exactly_one(self):
+        got = sum(1 for x in (self.produto_cod_barras, self.receita_id, self.combo_id) if x is not None)
+        if got != 1:
+            raise ValueError("Informe exatamente um de: produto_cod_barras, receita_id, combo_id")
+        if self.tipo == "produto" and not self.produto_cod_barras:
+            raise ValueError("Para tipo=produto informe produto_cod_barras")
+        if self.tipo == "receita" and self.receita_id is None:
+            raise ValueError("Para tipo=receita informe receita_id")
+        if self.tipo == "combo" and self.combo_id is None:
+            raise ValueError("Para tipo=combo informe combo_id")
+        return self
+
+
 class VincularItensComplementoRequest(BaseModel):
-    """Request para vincular múltiplos itens a um complemento"""
-    item_ids: List[int] = Field(..., description="IDs dos itens a vincular")
-    ordens: Optional[List[int]] = Field(None, description="Ordem de cada item (opcional, usa índice se não informado)")
-    precos: Optional[List[condecimal(max_digits=18, decimal_places=2)]] = Field(
-        None,
-        description=(
-            "Preços específicos por item neste complemento (alinhados por índice com item_ids). "
-            "Se não informado ou posição nula, usa o preço padrão do item."
-        ),
+    """Request para vincular múltiplos itens (produto/receita/combo) a um complemento."""
+    items: List[ItemVinculoInput] = Field(..., description="Itens a vincular (produto, receita ou combo)")
+    ordens: Optional[List[int]] = Field(None, description="Ordem de cada item (opcional, usa índice)")
+    precos: Optional[List[Optional[condecimal(max_digits=18, decimal_places=2)]]] = Field(
+        None, description="Preço por item neste complemento (opcional, alinhado por índice)"
     )
 
 
 class VincularItensComplementoResponse(BaseModel):
-    """Response após vincular itens a um complemento"""
+    """Response após vincular itens a um complemento. Itens expostos como adicionais."""
     complemento_id: int
-    itens_vinculados: List[AdicionalResponse]
+    adicionais: List[AdicionalResponse] = Field(default_factory=list)
     message: str = "Itens vinculados com sucesso"
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class VincularItemComplementoRequest(BaseModel):
-    """Request para vincular um único item adicional a um complemento"""
-    item_id: int = Field(..., description="ID do item adicional a vincular")
-    ordem: Optional[int] = Field(None, description="Ordem do item no complemento (opcional)")
+    """Request para vincular um único item (produto, receita ou combo) a um complemento."""
+    tipo: Literal["produto", "receita", "combo"] = Field(..., description="Tipo do item")
+    produto_cod_barras: Optional[str] = Field(None, description="Código de barras (se tipo=produto)")
+    receita_id: Optional[int] = Field(None, description="ID da receita (se tipo=receita)")
+    combo_id: Optional[int] = Field(None, description="ID do combo (se tipo=combo)")
+    ordem: Optional[int] = Field(None, description="Ordem no complemento (opcional)")
     preco_complemento: Optional[condecimal(max_digits=18, decimal_places=2)] = Field(
-        None, 
-        description="Preço específico do item neste complemento (opcional, sobrescreve o preço padrão)"
+        None, description="Preço específico neste complemento (opcional)"
     )
+
+    @model_validator(mode="after")
+    def check_exactly_one(self):
+        got = sum(1 for x in (self.produto_cod_barras, self.receita_id, self.combo_id) if x is not None)
+        if got != 1:
+            raise ValueError("Informe exatamente um de: produto_cod_barras, receita_id, combo_id")
+        return self
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class VincularItemComplementoResponse(BaseModel):
-    """Response após vincular um item adicional a um complemento"""
+    """Response após vincular um item a um complemento. Item exposto como adicional."""
     complemento_id: int
     item_vinculado: AdicionalResponse
     message: str = "Item vinculado com sucesso"

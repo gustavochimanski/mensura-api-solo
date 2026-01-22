@@ -1,5 +1,5 @@
 from typing import List, Optional
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session
 from app.api.catalogo.models.model_complemento import ComplementoModel
 from app.api.catalogo.models.model_produto import ProdutoModel
 
@@ -18,19 +18,14 @@ class ComplementoRepository:
         return obj
 
     def buscar_por_id(self, complemento_id: int, carregar_adicionais: bool = False) -> Optional[ComplementoModel]:
-        """Busca um complemento por ID."""
-        query = self.db.query(ComplementoModel).filter_by(id=complemento_id)
-        if carregar_adicionais:
-            query = query.options(joinedload(ComplementoModel.adicionais))
-        return query.first()
+        """Busca um complemento por ID. carregar_adicionais ignorado (itens vêm de complemento_vinculo_item)."""
+        return self.db.query(ComplementoModel).filter_by(id=complemento_id).first()
 
     def listar_por_empresa(self, empresa_id: int, apenas_ativos: bool = True, carregar_adicionais: bool = False) -> List[ComplementoModel]:
         """Lista todos os complementos de uma empresa."""
         query = self.db.query(ComplementoModel).filter_by(empresa_id=empresa_id)
         if apenas_ativos:
             query = query.filter_by(ativo=True)
-        if carregar_adicionais:
-            query = query.options(joinedload(ComplementoModel.adicionais))
         return query.order_by(ComplementoModel.ordem, ComplementoModel.nome).all()
 
     def listar_por_produto(self, cod_barras: str, apenas_ativos: bool = True, carregar_adicionais: bool = False) -> List[tuple]:
@@ -56,14 +51,8 @@ class ComplementoRepository:
         )
         if apenas_ativos:
             query = query.where(ComplementoModel.ativo == True)
-        if carregar_adicionais:
-            query = query.options(joinedload(ComplementoModel.adicionais))
         query = query.order_by(produto_complemento_link.c.ordem, ComplementoModel.nome)
-        
-        # Quando usamos joinedload com relacionamentos de coleção, precisamos usar .unique()
         result = self.db.execute(query)
-        if carregar_adicionais:
-            result = result.unique()
         results = result.all()
         return [(complemento, ordem, obrigatorio, quantitativo, minimo_itens, maximo_itens) 
                 for complemento, ordem, obrigatorio, quantitativo, minimo_itens, maximo_itens in results]
@@ -199,14 +188,8 @@ class ComplementoRepository:
         )
         if apenas_ativos:
             query = query.where(ComplementoModel.ativo == True)
-        if carregar_adicionais:
-            query = query.options(joinedload(ComplementoModel.adicionais))
         query = query.order_by(receita_complemento_link.c.ordem, ComplementoModel.nome)
-        
-        # Quando usamos joinedload com relacionamentos de coleção, precisamos usar .unique()
         result = self.db.execute(query)
-        if carregar_adicionais:
-            result = result.unique()
         results = result.all()
         return [(complemento, ordem, obrigatorio, quantitativo, minimo_itens, maximo_itens) 
                 for complemento, ordem, obrigatorio, quantitativo, minimo_itens, maximo_itens in results]
@@ -330,14 +313,8 @@ class ComplementoRepository:
         )
         if apenas_ativos:
             query = query.where(ComplementoModel.ativo == True)
-        if carregar_adicionais:
-            query = query.options(joinedload(ComplementoModel.adicionais))
         query = query.order_by(combo_complemento_link.c.ordem, ComplementoModel.nome)
-        
-        # Quando usamos joinedload com relacionamentos de coleção, precisamos usar .unique()
         result = self.db.execute(query)
-        if carregar_adicionais:
-            result = result.unique()
         results = result.all()
         return [(complemento, ordem, obrigatorio, quantitativo, minimo_itens, maximo_itens) 
                 for complemento, ordem, obrigatorio, quantitativo, minimo_itens, maximo_itens in results]
