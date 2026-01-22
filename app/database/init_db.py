@@ -545,29 +545,6 @@ def criar_tabela_pedidos_sem_postgis():
 
 def criar_tabelas(postgis_disponivel: bool = True):
     try:
-        # Remove tabela adicionais ANTES de importar models (se existir)
-        # Isso evita que o SQLAlchemy tente criar a tabela mesmo que o modelo esteja registrado
-        try:
-            with engine.begin() as conn:
-                result = conn.execute(
-                    text("""
-                        SELECT 1 FROM information_schema.tables 
-                        WHERE table_schema = 'catalogo' 
-                        AND table_name = 'adicionais'
-                    """)
-                )
-                if result.scalar():
-                    logger.info("⚠️ Tabela catalogo.adicionais encontrada no banco. Removendo (não é mais usada)...")
-                    conn.execute(
-                        text("DROP TABLE IF EXISTS catalogo.adicionais CASCADE")
-                    )
-                    logger.info("✅ Tabela catalogo.adicionais removida do banco")
-        except Exception as e:
-            logger.warning(
-                "⚠️ Erro ao remover tabela catalogo.adicionais (pode não existir): %s",
-                e,
-            )
-
         importar_models()  # importa só os seus models de mensura e cardapio
 
         # Nota: Se PostGIS não estiver disponível, tabelas com colunas Geography falharão na criação
@@ -776,51 +753,6 @@ def criar_tabelas(postgis_disponivel: bool = True):
                 "❌ Erro ao garantir colunas timezone/horarios_funcionamento em cadastros.empresas: %s",
                 e,
                 exc_info=True,
-            )
-
-        # Remove coluna pagina_unica se existir (não é mais usada)
-        try:
-            with engine.begin() as conn:
-                # Verifica se a coluna existe antes de tentar remover
-                result = conn.execute(
-                    text("""
-                        SELECT 1 FROM information_schema.columns 
-                        WHERE table_schema = 'cadastros' 
-                        AND table_name = 'empresas' 
-                        AND column_name = 'pagina_unica'
-                    """)
-                )
-                if result.scalar():
-                    conn.execute(
-                        text("ALTER TABLE cadastros.empresas DROP COLUMN IF EXISTS pagina_unica")
-                    )
-                    logger.info("✅ Coluna pagina_unica removida de cadastros.empresas (não é mais usada)")
-        except Exception as e:
-            logger.warning(
-                "⚠️ Erro ao remover coluna pagina_unica de cadastros.empresas (pode não existir): %s",
-                e,
-            )
-
-        # Remove tabela adicionais se existir (não é mais usada)
-        try:
-            with engine.begin() as conn:
-                # Verifica se a tabela existe antes de tentar remover
-                result = conn.execute(
-                    text("""
-                        SELECT 1 FROM information_schema.tables 
-                        WHERE table_schema = 'catalogo' 
-                        AND table_name = 'adicionais'
-                    """)
-                )
-                if result.scalar():
-                    conn.execute(
-                        text("DROP TABLE IF EXISTS catalogo.adicionais CASCADE")
-                    )
-                    logger.info("✅ Tabela catalogo.adicionais removida do banco (não é mais usada)")
-        except Exception as e:
-            logger.warning(
-                "⚠️ Erro ao remover tabela catalogo.adicionais (pode não existir ou ter dependências): %s",
-                e,
             )
 
         # Garante colunas de redirecionamento de home em cadastros.empresas
