@@ -579,6 +579,16 @@ def criar_tabelas(postgis_disponivel: bool = True):
 
         # Usa a ordenação topológica nativa do SQLAlchemy (respeita FKs)
         ordered_tables = [t for t in Base.metadata.sorted_tables if t.schema in SCHEMAS]
+        
+        # Exclui a tabela adicionais que não é mais usada
+        # Adicionais agora são vínculos de produtos/receitas/combos em complementos (complemento_vinculo_item)
+        # Remove a tabela do metadata caso esteja registrada
+        if "catalogo.adicionais" in Base.metadata.tables:
+            logger.info("⚠️ Tabela catalogo.adicionais encontrada no metadata. Removendo (não é mais usada)...")
+            del Base.metadata.tables["catalogo.adicionais"]
+        
+        # Filtra a tabela da lista de tabelas a criar
+        ordered_tables = [t for t in ordered_tables if not (t.schema == "catalogo" and t.name == "adicionais")]
 
         logger.info("🔧 Criando tabelas na ordem correta:")
         for i, table in enumerate(ordered_tables, 1):
