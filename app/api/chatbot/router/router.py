@@ -946,17 +946,17 @@ async def send_notification(request: Request, db: Session = Depends(get_db)):
             
             pause_result = chatbot_db.set_bot_status(
                 db=db,
-                phone_number=phone,
+                phone_number=phone_normalized,
                 is_active=False,
                 paused_by="atendente_respondeu",
                 empresa_id=empresa_id,
                 paused_until=paused_until
             )
-            
-                    if pause_result.get("success"):
-                        logger.info(f"⏸️ Chatbot pausado por 24h para cliente {phone_to_pause} (atendente respondeu) - paused_until: {paused_until}")
-                    else:
-                        logger.error(f"❌ Falha ao pausar chatbot: {pause_result.get('error')}")
+
+            if pause_result.get("success"):
+                logger.info(f"⏸️ Chatbot pausado por 24h para cliente {phone_normalized} (atendente respondeu) - paused_until: {paused_until}")
+            else:
+                logger.error(f"❌ Falha ao pausar chatbot: {pause_result.get('error')}")
         except Exception as e:
             logger.error(f"❌ Erro ao pausar chatbot após resposta do atendente: {e}", exc_info=True)
 
@@ -1622,6 +1622,38 @@ async def process_webhook_background(body: dict, headers_info: Optional[dict] = 
                     if statuses:
                         for status in statuses:
                             status_type = status.get("status")  # sent, delivered, read, failed
+                            recipient_id = status.get("recipient_id")  # Número do destinatário (cliente)
+                            
+                            # Quando status é "sent", significa que a empresa enviou mensagem para o cliente
+                            # PAUSA O CHATBOT POR 24 HORAS quando empresa envia mensagem
+                            if status_type == "sent" and recipient_id:
+                                try:
+                                    from datetime import datetime, timedelta
+                                    import logging
+                                    logger = logging.getLogger(__name__)
+                                    
+                                    paused_until = datetime.now() + timedelta(hours=24)
+                                    empresa_id_int = int(empresa_id) if empresa_id else None
+                                    
+                                    logger.info(f"🔄 Detectado envio de mensagem pela empresa - recipient: {recipient_id}, empresa_id: {empresa_id_int}, paused_until: {paused_until}")
+                                    
+                                    pause_result = chatbot_db.set_bot_status(
+                                        db=db,
+                                        phone_number=recipient_id,
+                                        is_active=False,
+                                        paused_by="atendente_respondeu",
+                                        empresa_id=empresa_id_int,
+                                        paused_until=paused_until
+                                    )
+                                    
+                                    if pause_result.get("success"):
+                                        logger.info(f"⏸️ Chatbot pausado por 24h para cliente {recipient_id} (empresa enviou mensagem via WhatsApp) - paused_until: {paused_until}")
+                                    else:
+                                        logger.error(f"❌ Falha ao pausar chatbot após envio pela empresa: {pause_result.get('error')}")
+                                except Exception as e:
+                                    import logging
+                                    logger = logging.getLogger(__name__)
+                                    logger.error(f"❌ Erro ao pausar chatbot após envio pela empresa: {e}", exc_info=True)
                             
                             # Loga apenas erros de falha
                             if status_type == "failed":
