@@ -1625,35 +1625,72 @@ async def process_webhook_background(body: dict, headers_info: Optional[dict] = 
                             recipient_id = status.get("recipient_id")  # Número do destinatário (cliente)
                             
                             # Quando status é "sent", significa que a empresa enviou mensagem para o cliente
-                            # PAUSA O CHATBOT POR 24 HORAS quando empresa envia mensagem
+                            # IMPORTANTE: Só pausa se foi um HUMANO que enviou, não o chatbot
+                            # Verifica se o message_id do status corresponde a uma mensagem do assistente (chatbot)
                             if status_type == "sent" and recipient_id:
                                 try:
                                     from datetime import datetime, timedelta
+                                    from sqlalchemy import text
                                     import logging
                                     logger = logging.getLogger(__name__)
                                     
-                                    paused_until = datetime.now() + timedelta(hours=24)
-                                    empresa_id_int = int(empresa_id) if empresa_id else None
+                                    # Pega o message_id do status (é o mesmo retornado quando enviamos a mensagem)
+                                    status_message_id = status.get("id")
                                     
-                                    logger.info(f"🔄 Detectado envio de mensagem pela empresa - recipient: {recipient_id}, empresa_id: {empresa_id_int}, paused_until: {paused_until}")
+                                    # Verifica se esse message_id corresponde a uma mensagem do assistente (chatbot)
+                                    foi_chatbot = False
+                                    if status_message_id:
+                                        try:
+                                            # Busca no banco se existe uma mensagem do assistente com esse message_id
+                                            query_check_bot = text("""
+                                                SELECT m.id, m.role, m.created_at
+                                                FROM chatbot.messages m
+                                                JOIN chatbot.conversations c ON m.conversation_id = c.id
+                                                WHERE m.metadata->>'whatsapp_message_id' = :message_id
+                                                AND m.role = 'assistant'
+                                                AND c.user_id = :recipient_id
+                                                ORDER BY m.created_at DESC
+                                                LIMIT 1
+                                            """)
+                                            result = db.execute(query_check_bot, {
+                                                "message_id": status_message_id,
+                                                "recipient_id": recipient_id
+                                            })
+                                            mensagem_assistente = result.fetchone()
+                                            
+                                            if mensagem_assistente:
+                                                # Encontrou mensagem do assistente com esse message_id = foi o chatbot
+                                                foi_chatbot = True
+                                                logger.info(f"🤖 Mensagem enviada pelo CHATBOT (message_id: {status_message_id}) - NÃO pausando")
+                                            else:
+                                                logger.info(f"👤 Mensagem enviada por HUMANO (message_id: {status_message_id} não encontrado nas mensagens do assistente) - pausando")
+                                        except Exception as e:
+                                            logger.warning(f"⚠️ Erro ao verificar se foi chatbot pelo message_id: {e}")
                                     
-                                    pause_result = chatbot_db.set_bot_status(
-                                        db=db,
-                                        phone_number=recipient_id,
-                                        is_active=False,
-                                        paused_by="atendente_respondeu",
-                                        empresa_id=empresa_id_int,
-                                        paused_until=paused_until
-                                    )
-                                    
-                                    if pause_result.get("success"):
-                                        logger.info(f"⏸️ Chatbot pausado por 24h para cliente {recipient_id} (empresa enviou mensagem via WhatsApp) - paused_until: {paused_until}")
-                                    else:
-                                        logger.error(f"❌ Falha ao pausar chatbot após envio pela empresa: {pause_result.get('error')}")
+                                    # Só pausa se NÃO foi o chatbot que enviou
+                                    if not foi_chatbot:
+                                        paused_until = datetime.now() + timedelta(hours=24)
+                                        empresa_id_int = int(empresa_id) if empresa_id else None
+                                        
+                                        logger.info(f"🔄 Detectado envio de mensagem por HUMANO - recipient: {recipient_id}, empresa_id: {empresa_id_int}, paused_until: {paused_until}")
+                                        
+                                        pause_result = chatbot_db.set_bot_status(
+                                            db=db,
+                                            phone_number=recipient_id,
+                                            is_active=False,
+                                            paused_by="atendente_respondeu",
+                                            empresa_id=empresa_id_int,
+                                            paused_until=paused_until
+                                        )
+                                        
+                                        if pause_result.get("success"):
+                                            logger.info(f"⏸️ Chatbot pausado por 24h para cliente {recipient_id} (humano enviou mensagem via WhatsApp) - paused_until: {paused_until}")
+                                        else:
+                                            logger.error(f"❌ Falha ao pausar chatbot após envio pelo humano: {pause_result.get('error')}")
                                 except Exception as e:
                                     import logging
                                     logger = logging.getLogger(__name__)
-                                    logger.error(f"❌ Erro ao pausar chatbot após envio pela empresa: {e}", exc_info=True)
+                                    logger.error(f"❌ Erro ao processar status 'sent': {e}", exc_info=True)
                             
                             # Loga apenas erros de falha
                             if status_type == "failed":
@@ -2185,7 +2222,9 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 )
                 
                 if isinstance(result, dict) and result.get("success"):
-                    chatbot_db.create_message(db, conversation_id, "assistant", mensagem_boas_vindas)
+                    # Salva o message_id retornado pelo WhatsApp na mensagem do assistente
+                    whatsapp_message_id = result.get("message_id")
+                    chatbot_db.create_message(db, conversation_id, "assistant", mensagem_boas_vindas, whatsapp_message_id=whatsapp_message_id)
                     return  # Não processa a mensagem do usuário ainda, aguarda clique no botão
                 else:
                     import logging
@@ -2299,7 +2338,9 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                             empresa_id=empresa_id_int
                         )
                     chatbot_db.create_message(db, conversation_id, "user", message_text, whatsapp_message_id=message_id)
-                    chatbot_db.create_message(db, conversation_id, "assistant", resposta)
+                    # Salva o message_id retornado pelo WhatsApp na mensagem do assistente
+                    whatsapp_response_message_id = result.get("message_id")
+                    chatbot_db.create_message(db, conversation_id, "assistant", resposta, whatsapp_message_id=whatsapp_response_message_id)
                 
                 # Se foi "pedir pelo whatsapp", continua o fluxo normalmente na próxima mensagem
                 return
