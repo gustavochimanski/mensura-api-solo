@@ -63,19 +63,14 @@ class ReceitasRepository:
     ) -> List[ReceitaModel]:
         """
         Lista receitas com filtros opcionais e suporte a busca textual em nome/descrição.
-        
-        Nota: Quando ativo=False, não aplica filtro (retorna todos, ativos e inativos).
-        Quando ativo=True, retorna apenas receitas ativas.
-        Quando ativo=None, retorna todos.
         """
         query = self.db.query(ReceitaModel)
         
         if empresa_id is not None:
             query = query.filter_by(empresa_id=empresa_id)
         
-        # Aplica filtro apenas se ativo=True. Se ativo=False ou None, retorna todos
-        if ativo is True:
-            query = query.filter_by(ativo=True)
+        if ativo is not None:
+            query = query.filter_by(ativo=ativo)
 
         if search and search.strip():
             termo = f"%{search.lower()}%"
@@ -94,13 +89,7 @@ class ReceitasRepository:
         ativo: Optional[bool] = None,
         search: Optional[str] = None,
     ) -> List[ReceitaModel]:
-        """
-        Lista receitas com seus ingredientes carregados e suporte a busca textual.
-        
-        Nota: Quando ativo=False, não aplica filtro (retorna todos, ativos e inativos).
-        Quando ativo=True, retorna apenas receitas ativas.
-        Quando ativo=None, retorna todos.
-        """
+        """Lista receitas com seus ingredientes carregados e suporte a busca textual."""
         query = (
             self.db.query(ReceitaModel)
             .options(
@@ -108,13 +97,13 @@ class ReceitasRepository:
                 joinedload(ReceitaModel.ingredientes).joinedload(ReceitaIngredienteModel.produto),
                 joinedload(ReceitaModel.ingredientes).joinedload(ReceitaIngredienteModel.combo),
             )
+        )
         
         if empresa_id is not None:
             query = query.filter_by(empresa_id=empresa_id)
         
-        # Aplica filtro apenas se ativo=True. Se ativo=False ou None, retorna todos
-        if ativo is True:
-            query = query.filter_by(ativo=True)
+        if ativo is not None:
+            query = query.filter_by(ativo=ativo)
 
         if search and search.strip():
             termo = f"%{search.lower()}%"
