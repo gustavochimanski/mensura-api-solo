@@ -30,13 +30,14 @@ class AdicionalModel(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     
-    # Relacionamento N:N com complementos (via tabela de associação)
-    complementos = relationship(
-        "ComplementoModel",
-        secondary="catalogo.complemento_item_link",
-        back_populates="itens",
-        viewonly=True,
-    )
+    # DEPRECADO: Relacionamento N:N com complementos foi removido
+    # complemento_item_link não existe mais - adicionais agora são vínculos de produtos/receitas/combos em complementos
+    # complementos = relationship(
+    #     "ComplementoModel",
+    #     secondary="catalogo.complemento_item_link",
+    #     back_populates="itens",
+    #     viewonly=True,
+    # )
     
     model_config = ConfigDict(from_attributes=True)
 

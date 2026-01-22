@@ -162,31 +162,13 @@ class IngredientesService:
 
     def buscar_todos_adicionais(self) -> List[Dict[str, Any]]:
         """
-        Busca todos os adicionais disponíveis da empresa
+        DEPRECADO: Este método foi desabilitado.
+        A tabela catalogo.adicionais foi removida.
+        Adicionais agora são vínculos de produtos/receitas/combos em complementos.
+        Retorna lista vazia para não quebrar código que ainda chama este método.
         """
-        try:
-            query = text("""
-                SELECT id, nome, descricao, preco
-                FROM catalogo.adicionais
-                WHERE empresa_id = :empresa_id AND ativo = true
-                ORDER BY preco
-            """)
-
-            result = self.db.execute(query, {"empresa_id": self.empresa_id})
-
-            return [
-                {
-                    "id": row[0],
-                    "nome": row[1],
-                    "descricao": row[2],
-                    "preco": float(row[3]) if row[3] else 0
-                }
-                for row in result.fetchall()
-            ]
-
-        except Exception as e:
-            print(f"Erro ao buscar todos adicionais: {e}")
-            return []
+        # TODO: Refatorar código que chama este método para usar complementos/vínculos
+        return []
 
     def verificar_ingrediente_na_receita(self, receita_id: int, nome_ingrediente: str) -> Optional[Dict[str, Any]]:
         """
@@ -550,24 +532,46 @@ class IngredientesService:
             complementos = []
             for row in result.fetchall():
                 comp_id = row[0]
-                # Busca adicionais do complemento
+                # Busca adicionais do complemento (agora via complemento_vinculo_item)
                 query_add = text("""
-                    SELECT a.id, a.nome, a.descricao, a.preco, a.ativo, cil.ordem
-                    FROM catalogo.adicionais a
-                    JOIN catalogo.complemento_item_link cil ON cil.item_id = a.id
-                    WHERE cil.complemento_id = :comp_id AND a.ativo = true
-                    ORDER BY cil.ordem
+                    SELECT 
+                        cvi.id,
+                        COALESCE(p.descricao, r.nome, c.titulo, '') as nome,
+                        COALESCE(p.descricao, r.descricao, c.descricao, '') as descricao,
+                        COALESCE(
+                            cvi.preco_complemento,
+                            CASE 
+                                WHEN cvi.produto_cod_barras IS NOT NULL THEN pe.preco_venda
+                                WHEN cvi.receita_id IS NOT NULL THEN r.preco_venda
+                                WHEN cvi.combo_id IS NOT NULL THEN c.preco_total
+                                ELSE 0
+                            END
+                        ) as preco,
+                        COALESCE(
+                            CASE WHEN cvi.produto_cod_barras IS NOT NULL THEN pe.ativo ELSE NULL END,
+                            CASE WHEN cvi.receita_id IS NOT NULL THEN r.ativo ELSE NULL END,
+                            CASE WHEN cvi.combo_id IS NOT NULL THEN c.ativo ELSE NULL END,
+                            true
+                        ) as ativo,
+                        cvi.ordem
+                    FROM catalogo.complemento_vinculo_item cvi
+                    LEFT JOIN catalogo.produtos p ON cvi.produto_cod_barras = p.cod_barras
+                    LEFT JOIN catalogo.produto_emp pe ON cvi.produto_cod_barras = pe.cod_barras AND pe.empresa_id = :empresa_id
+                    LEFT JOIN catalogo.receitas r ON cvi.receita_id = r.id
+                    LEFT JOIN catalogo.combos c ON cvi.combo_id = c.id
+                    WHERE cvi.complemento_id = :comp_id
+                    ORDER BY cvi.ordem
                 """)
-                result_add = self.db.execute(query_add, {"comp_id": comp_id})
+                result_add = self.db.execute(query_add, {"comp_id": comp_id, "empresa_id": self.empresa_id})
 
                 adicionais = []
                 for add_row in result_add.fetchall():
                     adicionais.append({
-                        "id": add_row[0],
-                        "nome": add_row[1],
-                        "descricao": add_row[2],
+                        "id": add_row[0],  # ID do vínculo
+                        "nome": add_row[1] or "",
+                        "descricao": add_row[2] or "",
                         "preco": float(add_row[3]) if add_row[3] else 0.0,
-                        "ativo": add_row[4],
+                        "ativo": bool(add_row[4]) if add_row[4] is not None else True,
                         "ordem": add_row[5] or 0
                     })
 
