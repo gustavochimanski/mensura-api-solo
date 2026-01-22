@@ -1637,6 +1637,44 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
         empresa_id_int = int(empresa_id) if empresa_id else 1
         user_id = phone_number
         
+        # VERIFICA SE É MENSAGEM DE ENTREGADOR/MOTOBOY - IGNORA
+        # Quando motoboy envia mensagem para o estabelecimento, o chatbot deve ignorar
+        try:
+            from sqlalchemy import text
+            # Normaliza o telefone para busca (remove caracteres não numéricos)
+            phone_clean = ''.join(filter(str.isdigit, phone_number))
+            # Tenta diferentes formatos de telefone
+            phone_patterns = [
+                phone_clean,
+                phone_clean[2:] if len(phone_clean) > 11 and phone_clean.startswith('55') else None,  # Remove código do país
+                f"%{phone_clean[-9:]}" if len(phone_clean) >= 9 else None,  # Últimos 9 dígitos
+                f"%{phone_clean[-8:]}" if len(phone_clean) >= 8 else None,  # Últimos 8 dígitos
+            ]
+            phone_patterns = [p for p in phone_patterns if p]
+            
+            for pattern in phone_patterns:
+                entregador_query = text("""
+                    SELECT id, nome, telefone
+                    FROM cadastros.entregadores_dv
+                    WHERE telefone LIKE :pattern
+                    LIMIT 1
+                """)
+                result = db.execute(entregador_query, {"pattern": pattern})
+                entregador = result.fetchone()
+                
+                if entregador:
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.info(f"🚫 Mensagem de entregador ignorada - ID: {entregador[0]}, Nome: {entregador[1]}, Telefone: {entregador[2]}")
+                    # Ignora a mensagem - não processa
+                    return
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Erro ao verificar se é entregador: {e}", exc_info=True)
+            # Em caso de erro, continua o processamento normal (não bloqueia)
+        
+        
         # VERIFICA SE CLIENTE JÁ ESTÁ CADASTRADO (primeira coisa a fazer)
         from ..core.address_service import ChatbotAddressService
         address_service = ChatbotAddressService(db, empresa_id_int)
