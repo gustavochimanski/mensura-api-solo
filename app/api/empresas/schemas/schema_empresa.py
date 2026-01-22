@@ -37,7 +37,6 @@ class EmpresaBase(BaseModel):
     cardapio_link: Optional[str] = None
     cardapio_tema: Optional[str] = "padrao"
     aceita_pedido_automatico: bool = False
-    pagina_unica: bool = False
     redireciona_home: bool = False
     redireciona_home_para: Optional[str] = None
 
@@ -64,7 +63,6 @@ class EmpresaUpdate(BaseModel):
     horarios_funcionamento: Optional[List[HorarioDia]] = None
     cardapio_link: Optional[str] = None
     cardapio_tema: Optional[str] = None
-    pagina_unica: Optional[bool] = None
     redireciona_home: Optional[bool] = None
     redireciona_home_para: Optional[str] = None
 
@@ -83,14 +81,6 @@ class EmpresaResponse(EmpresaBase):
     id: int
 
     model_config = ConfigDict(from_attributes=True)
-    
-    @field_validator("pagina_unica", mode="before")
-    @classmethod
-    def garantir_pagina_unica_booleano(cls, v):
-        """Garante que pagina_unica seja sempre booleano, mesmo se o modelo não tiver a coluna."""
-        if v is None:
-            return False
-        return bool(v)
 
 
 class EmpresaCardapioLinkResponse(BaseModel):

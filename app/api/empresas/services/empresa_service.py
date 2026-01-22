@@ -87,7 +87,6 @@ class EmpresaService:
             horarios_funcionamento=data.horarios_funcionamento,
             cardapio_tema=data.cardapio_tema,
             aceita_pedido_automatico=bool(data.aceita_pedido_automatico),
-            # pagina_unica=bool(data.pagina_unica),  # Comentado: coluna não existe no banco ainda
             redireciona_home=bool(data.redireciona_home),
             redireciona_home_para=data.redireciona_home_para,
             cep=data.cep,
@@ -171,8 +170,6 @@ class EmpresaService:
         for key, value in update_data.items():
             if key == "aceita_pedido_automatico" and value is not None:
                 empresa.aceita_pedido_automatico = bool(value)
-            # elif key == "pagina_unica" and value is not None:
-            #     empresa.pagina_unica = bool(value)  # Comentado: coluna não existe no banco ainda
             elif key == "redireciona_home" and value is not None:
                 empresa.redireciona_home = bool(value)
             elif key == "redireciona_home_para" and value is not None:
