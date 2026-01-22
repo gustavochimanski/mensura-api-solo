@@ -29,17 +29,13 @@ class AdicionalRepository:
         return query.order_by(AdicionalModel.ordem, AdicionalModel.nome).all()
 
     def listar_por_produto(self, cod_barras: str, apenas_ativos: bool = True) -> List[AdicionalModel]:
-        """Lista todos os adicionais vinculados a um produto."""
-        from app.api.catalogo.models.association_tables import produto_adicional_link
-        
-        query = (
-            self.db.query(AdicionalModel)
-            .join(produto_adicional_link, AdicionalModel.id == produto_adicional_link.c.adicional_id)
-            .filter(produto_adicional_link.c.produto_cod_barras == cod_barras)
-        )
-        if apenas_ativos:
-            query = query.filter(AdicionalModel.ativo == True)
-        return query.order_by(produto_adicional_link.c.ordem, AdicionalModel.nome).all()
+        """
+        DEPRECADO: Este método foi desabilitado.
+        produto_adicional_link foi removido - adicionais agora são vínculos de produtos/receitas/combos em complementos.
+        Retorna lista vazia para não quebrar código que ainda chama este método.
+        """
+        # TODO: Refatorar código que chama este método para usar complementos/vínculos
+        return []
 
     def atualizar_adicional(self, adicional: AdicionalModel, **data) -> AdicionalModel:
         """Atualiza um adicional existente."""
@@ -55,48 +51,26 @@ class AdicionalRepository:
         self.db.flush()
 
     def vincular_adicionais_produto(self, cod_barras: str, adicional_ids: List[int]):
-        """Vincula múltiplos adicionais a um produto."""
-        from app.api.catalogo.models.association_tables import produto_adicional_link
-        
-        produto = self.db.query(ProdutoModel).filter_by(cod_barras=cod_barras).first()
-        if not produto:
-            raise ValueError(f"Produto {cod_barras} não encontrado")
-        
-        # Busca os adicionais
-        adicionais = (
-            self.db.query(AdicionalModel)
-            .filter(AdicionalModel.id.in_(adicional_ids))
-            .all()
+        """
+        DEPRECADO: Este método foi desabilitado.
+        produto_adicional_link foi removido - adicionais agora são vínculos de produtos/receitas/combos em complementos.
+        Use os endpoints de complementos para vincular itens a produtos.
+        """
+        raise ValueError(
+            "Este método foi removido. produto_adicional_link não existe mais. "
+            "Adicionais agora são vínculos de produtos/receitas/combos em complementos. "
+            "Use os endpoints de complementos para vincular itens a produtos."
         )
-        
-        # Remove vinculações existentes
-        self.db.execute(
-            produto_adicional_link.delete().where(
-                produto_adicional_link.c.produto_cod_barras == cod_barras
-            )
-        )
-        
-        # Adiciona novas vinculações
-        for i, adicional in enumerate(adicionais):
-            self.db.execute(
-                produto_adicional_link.insert().values(
-                    produto_cod_barras=cod_barras,
-                    adicional_id=adicional.id,
-                    ordem=i
-                )
-            )
-        
-        self.db.flush()
 
     def desvincular_adicional_produto(self, cod_barras: str, adicional_id: int):
-        """Remove a vinculação de um adicional com um produto."""
-        from app.api.catalogo.models.association_tables import produto_adicional_link
-        
-        self.db.execute(
-            produto_adicional_link.delete().where(
-                produto_adicional_link.c.produto_cod_barras == cod_barras,
-                produto_adicional_link.c.adicional_id == adicional_id
-            )
+        """
+        DEPRECADO: Este método foi desabilitado.
+        produto_adicional_link foi removido - adicionais agora são vínculos de produtos/receitas/combos em complementos.
+        Use os endpoints de complementos para desvincular itens de produtos.
+        """
+        raise ValueError(
+            "Este método foi removido. produto_adicional_link não existe mais. "
+            "Adicionais agora são vínculos de produtos/receitas/combos em complementos. "
+            "Use os endpoints de complementos para desvincular itens de produtos."
         )
-        self.db.flush()
 
