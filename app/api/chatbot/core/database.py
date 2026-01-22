@@ -787,7 +787,7 @@ def set_bot_status(db: Session, phone_number: str, is_active: bool, paused_by: s
                 UPDATE {CHATBOT_SCHEMA}.bot_status
                 SET is_active = :is_active,
                     paused_at = CASE WHEN :is_active = false THEN CURRENT_TIMESTAMP ELSE NULL END,
-                    paused_until = CASE WHEN :is_active = false THEN :paused_until ELSE NULL END,
+                    paused_until = CASE WHEN :is_active = false AND :paused_until IS NOT NULL THEN CAST(:paused_until AS TIMESTAMP) ELSE NULL END,
                     paused_by = CASE WHEN :is_active = false THEN :paused_by ELSE NULL END,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE phone_number = :phone
@@ -801,7 +801,7 @@ def set_bot_status(db: Session, phone_number: str, is_active: bool, paused_by: s
                     :phone,
                     :is_active,
                     CASE WHEN :is_active = false THEN CURRENT_TIMESTAMP ELSE NULL END,
-                    CASE WHEN :is_active = false THEN :paused_until ELSE NULL END,
+                    CASE WHEN :is_active = false AND :paused_until IS NOT NULL THEN CAST(:paused_until AS TIMESTAMP) ELSE NULL END,
                     CASE WHEN :is_active = false THEN :paused_by ELSE NULL END,
                     :empresa_id
                 )
