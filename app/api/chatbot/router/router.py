@@ -2290,7 +2290,7 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                     ]
 
             # Envia resposta via WhatsApp
-            # Garante que OrderNotification está disponível no escopo
+            # Garante que OrderNotificatio está disponível no escopo
             notifier = OrderNotification()
             if buttons:
                 result = await notifier.send_whatsapp_message_with_buttons(
