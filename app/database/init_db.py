@@ -757,6 +757,29 @@ def criar_tabelas(postgis_disponivel: bool = True):
                 exc_info=True,
             )
 
+        # Remove coluna pagina_unica se existir (não é mais usada)
+        try:
+            with engine.begin() as conn:
+                # Verifica se a coluna existe antes de tentar remover
+                result = conn.execute(
+                    text("""
+                        SELECT 1 FROM information_schema.columns 
+                        WHERE table_schema = 'cadastros' 
+                        AND table_name = 'empresas' 
+                        AND column_name = 'pagina_unica'
+                    """)
+                )
+                if result.scalar():
+                    conn.execute(
+                        text("ALTER TABLE cadastros.empresas DROP COLUMN IF EXISTS pagina_unica")
+                    )
+                    logger.info("✅ Coluna pagina_unica removida de cadastros.empresas (não é mais usada)")
+        except Exception as e:
+            logger.warning(
+                "⚠️ Erro ao remover coluna pagina_unica de cadastros.empresas (pode não existir): %s",
+                e,
+            )
+
         # Garante colunas de redirecionamento de home em cadastros.empresas
         try:
             with engine.begin() as conn:
