@@ -2,8 +2,7 @@
 from sqlalchemy import Table, Column, Integer, ForeignKey, UniqueConstraint, Index, DateTime, func, \
     PrimaryKeyConstraint, String, Boolean, ForeignKeyConstraint
 from app.database.db_connection import Base
-# Importa a tabela de associação Produto-Adicional do módulo catalogo para evitar duplicação
-from app.api.catalogo.models.association_tables import produto_adicional_link
+# Nota: produto_adicional_link foi removido - adicionais agora são vínculos de produtos/receitas/combos em complementos
 
 # Tabela de associação entregador-empresa
 entregador_empresa = Table(
@@ -75,7 +74,6 @@ class VitrineProdutoLink(Base):
 
 
 # Classe de associação Vitrine-Combo
-# Nota: produto_adicional_link é importado do módulo catalogo no topo do arquivo
 class VitrineComboLink(Base):
     """
     Liga Combos a vitrines (N:N) com ordenação.
