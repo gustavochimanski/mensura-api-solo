@@ -246,7 +246,9 @@ async def _send_whatsapp_and_log(
                 empresa_id=empresa_id_int
             )
         chatbot_db.create_message(db, conversation_id, "user", user_message, whatsapp_message_id=message_id)
-        chatbot_db.create_message(db, conversation_id, "assistant", response_message)
+        # Salva o message_id retornado pelo WhatsApp na mensagem do assistente (para identificar que foi o chatbot que enviou)
+        whatsapp_response_message_id = result.get("message_id")
+        chatbot_db.create_message(db, conversation_id, "assistant", response_message, whatsapp_message_id=whatsapp_response_message_id)
 
     return result
 
@@ -1642,13 +1644,15 @@ async def process_webhook_background(body: dict, headers_info: Optional[dict] = 
                                     if status_message_id:
                                         try:
                                             # Busca no banco se existe uma mensagem do assistente com esse message_id
+                                            # Considera uma janela de tempo de 30 segundos para lidar com possíveis delays
                                             query_check_bot = text("""
-                                                SELECT m.id, m.role, m.created_at
+                                                SELECT m.id, m.role, m.created_at, m.metadata
                                                 FROM chatbot.messages m
                                                 JOIN chatbot.conversations c ON m.conversation_id = c.id
                                                 WHERE m.metadata->>'whatsapp_message_id' = :message_id
                                                 AND m.role = 'assistant'
                                                 AND c.user_id = :recipient_id
+                                                AND m.created_at > NOW() - INTERVAL '30 seconds'
                                                 ORDER BY m.created_at DESC
                                                 LIMIT 1
                                             """)
@@ -1663,9 +1667,28 @@ async def process_webhook_background(body: dict, headers_info: Optional[dict] = 
                                                 foi_chatbot = True
                                                 logger.info(f"🤖 Mensagem enviada pelo CHATBOT (message_id: {status_message_id}) - NÃO pausando")
                                             else:
+                                                # Log mais detalhado para debug
+                                                logger.info(f"👤 Verificando mensagem - message_id: {status_message_id}, recipient: {recipient_id}")
+                                                # Verifica se existe alguma mensagem do assistente recente para esse recipient (para debug)
+                                                query_debug = text("""
+                                                    SELECT m.id, m.role, m.created_at, m.metadata->>'whatsapp_message_id' as msg_id
+                                                    FROM chatbot.messages m
+                                                    JOIN chatbot.conversations c ON m.conversation_id = c.id
+                                                    WHERE m.role = 'assistant'
+                                                    AND c.user_id = :recipient_id
+                                                    AND m.created_at > NOW() - INTERVAL '60 seconds'
+                                                    ORDER BY m.created_at DESC
+                                                    LIMIT 5
+                                                """)
+                                                debug_result = db.execute(query_debug, {"recipient_id": recipient_id})
+                                                debug_messages = debug_result.fetchall()
+                                                if debug_messages:
+                                                    logger.info(f"🔍 Mensagens do assistente recentes encontradas: {len(debug_messages)}")
+                                                    for msg in debug_messages:
+                                                        logger.info(f"   - msg_id no banco: {msg[3]}, buscando: {status_message_id}")
                                                 logger.info(f"👤 Mensagem enviada por HUMANO (message_id: {status_message_id} não encontrado nas mensagens do assistente) - pausando")
                                         except Exception as e:
-                                            logger.warning(f"⚠️ Erro ao verificar se foi chatbot pelo message_id: {e}")
+                                            logger.warning(f"⚠️ Erro ao verificar se foi chatbot pelo message_id: {e}", exc_info=True)
                                     
                                     # Só pausa se NÃO foi o chatbot que enviou
                                     if not foi_chatbot:
@@ -1849,13 +1872,17 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 else:
                     conversation_id = conversations[0]['id']
                 
-                # Salva mensagem do usuário e resposta do bot
+                # Salva mensagem do usuário
                 chatbot_db.create_message(db, conversation_id, "user", message_text)
-                chatbot_db.create_message(db, conversation_id, "assistant", mensagem_cadastro)
                 
                 # Envia mensagem via WhatsApp
                 notifier = OrderNotification()
-                await notifier.send_whatsapp_message(phone_number, mensagem_cadastro, empresa_id=empresa_id)
+                result = await notifier.send_whatsapp_message(phone_number, mensagem_cadastro, empresa_id=empresa_id)
+                
+                # Salva a mensagem do assistente com o message_id retornado pelo WhatsApp
+                if isinstance(result, dict) and result.get("success"):
+                    whatsapp_message_id = result.get("message_id")
+                    chatbot_db.create_message(db, conversation_id, "assistant", mensagem_cadastro, whatsapp_message_id=whatsapp_message_id)
                 
                 return
 
