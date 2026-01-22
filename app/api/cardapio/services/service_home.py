@@ -23,7 +23,6 @@ class HomeService:
     def __init__(self, db: Session, vitrine_contract: IVitrineContract | None = None):
         self.db = db
         self.repo = HomeRepository(db)
-        self.repo_adicional = AdicionalRepository(db)
         self.vitrine_contract = vitrine_contract
 
     def _produto_emp_to_dto(self, prod_emp: ProdutoEmpModel) -> ProdutoEmpMiniDTO:
