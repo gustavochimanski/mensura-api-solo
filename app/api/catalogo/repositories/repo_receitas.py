@@ -7,7 +7,8 @@ from decimal import Decimal
 from app.api.catalogo.models.model_produto import ProdutoModel
 from app.api.catalogo.models.model_produto_emp import ProdutoEmpModel
 from app.api.catalogo.models.model_adicional import AdicionalModel
-from app.api.catalogo.models.model_receita import ReceitaIngredienteModel, ReceitaAdicionalModel, ReceitaModel
+from app.api.catalogo.models.model_receita import ReceitaIngredienteModel, ReceitaModel
+# Nota: ReceitaAdicionalModel foi removido - adicionais agora são vínculos de produtos/receitas/combos em complementos
 from app.api.catalogo.models.model_combo import ComboModel
 from app.api.catalogo.schemas.schema_receitas import (
     ReceitaIngredienteIn,
@@ -351,85 +352,56 @@ class ReceitasRepository:
         self.db.delete(obj)
         self.db.commit()
 
-    # Adicionais - Usa ReceitaAdicionalModel (receita_adicional)
-    def add_adicional(self, data: AdicionalIn) -> ReceitaAdicionalModel:
-        # Verifica se a receita existe
-        receita = self.get_receita_by_id(data.receita_id)
-        if not receita:
-            raise HTTPException(
-                status.HTTP_404_NOT_FOUND, 
-                f"Receita não encontrada com ID: {data.receita_id}. "
-                f"Verifique se o receita_id está correto e se a receita existe no banco de dados."
-            )
-        
-        # Verifica se o adicional existe na tabela de adicionais
-        adicional = self.db.query(AdicionalModel).filter_by(id=data.adicional_id).first()
-        if not adicional:
-            raise HTTPException(
-                status.HTTP_404_NOT_FOUND, 
-                f"Adicional não encontrado com ID: {data.adicional_id}. "
-                f"O adicional deve estar cadastrado na tabela de adicionais (catalogo.adicionais) antes de ser vinculado à receita."
-            )
-        
-        # Verifica se o adicional pertence à mesma empresa da receita
-        if adicional.empresa_id != receita.empresa_id:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                f"O adicional pertence a uma empresa diferente da receita. "
-                f"Adicional empresa_id: {adicional.empresa_id}, Receita empresa_id: {receita.empresa_id}"
-            )
-
-        # Verifica se já existe
-        exists = (
-            self.db.query(ReceitaAdicionalModel)
-            .filter_by(receita_id=data.receita_id, adicional_id=data.adicional_id)
-            .first()
-        )
-        if exists:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Adicional já cadastrado nesta receita")
-
-        # Cria o adicional (preço não é mais armazenado, sempre busca do cadastro)
-        obj = ReceitaAdicionalModel(
-            receita_id=data.receita_id,
-            adicional_id=data.adicional_id,
-        )
-        self.db.add(obj)
-        self.db.commit()
-        self.db.refresh(obj)
-        return obj
-
-    def list_adicionais(self, receita_id: int) -> List[ReceitaAdicionalModel]:
-        # Verifica se a receita existe
-        receita = self.get_receita_by_id(receita_id)
-        if not receita:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Receita não encontrada")
-        
-        return (
-            self.db.query(ReceitaAdicionalModel)
-            .filter(ReceitaAdicionalModel.receita_id == receita_id)
-            .all()
-        )
-
-    def update_adicional(self, adicional_id: int) -> ReceitaAdicionalModel:
+    # Adicionais - DEPRECADO: ReceitaAdicionalModel foi removido
+    # Adicionais agora são vínculos de produtos/receitas/combos em complementos
+    # Use complementos para vincular itens a receitas
+    def add_adicional(self, data: AdicionalIn):
         """
-        Atualiza um adicional de uma receita.
-        Nota: O preço não é mais armazenado, sempre busca do cadastro em tempo de execução.
-        Este método existe apenas para compatibilidade com a API.
+        DEPRECADO: Este método foi desabilitado.
+        ReceitaAdicionalModel foi removido - adicionais agora são vínculos de produtos/receitas/combos em complementos.
+        Use complementos para vincular itens a receitas.
         """
-        obj = self.db.query(ReceitaAdicionalModel).filter_by(id=adicional_id).first()
-        if not obj:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Adicional não encontrado")
-        
-        # Não precisa fazer nada, o preço sempre é buscado dinamicamente
-        self.db.refresh(obj)
-        return obj
+        raise HTTPException(
+            status.HTTP_410_GONE,
+            "Este endpoint foi removido. Adicionais agora são vínculos de produtos/receitas/combos em complementos. "
+            "Use os endpoints de complementos para vincular itens a receitas."
+        )
+
+    def list_adicionais(self, receita_id: int):
+        """
+        DEPRECADO: Este método foi desabilitado.
+        ReceitaAdicionalModel foi removido - adicionais agora são vínculos de produtos/receitas/combos em complementos.
+        Use complementos para listar itens vinculados a receitas.
+        """
+        raise HTTPException(
+            status.HTTP_410_GONE,
+            "Este endpoint foi removido. Adicionais agora são vínculos de produtos/receitas/combos em complementos. "
+            "Use os endpoints de complementos para listar itens vinculados a receitas."
+        )
+
+    def update_adicional(self, adicional_id: int):
+        """
+        DEPRECADO: Este método foi desabilitado.
+        ReceitaAdicionalModel foi removido - adicionais agora são vínculos de produtos/receitas/combos em complementos.
+        Use complementos para atualizar vínculos de itens a receitas.
+        """
+        raise HTTPException(
+            status.HTTP_410_GONE,
+            "Este endpoint foi removido. Adicionais agora são vínculos de produtos/receitas/combos em complementos. "
+            "Use os endpoints de complementos para atualizar vínculos de itens a receitas."
+        )
 
     def remove_adicional(self, adicional_id: int) -> None:
-        obj = self.db.query(ReceitaAdicionalModel).filter_by(id=adicional_id).first()
-        if not obj:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Adicional não encontrado")
-        self.db.delete(obj)
-        self.db.commit()
+        """
+        DEPRECADO: Este método foi desabilitado.
+        ReceitaAdicionalModel foi removido - adicionais agora são vínculos de produtos/receitas/combos em complementos.
+        Use complementos para desvincular itens de receitas.
+        """
+        raise HTTPException(
+            status.HTTP_410_GONE,
+            "Este endpoint foi removido. Adicionais agora são vínculos de produtos/receitas/combos em complementos. "
+            "Use os endpoints de complementos para desvincular itens de receitas."
+        )
 
     def receita_tem_ingredientes(self, receita_id: int) -> bool:
         """Verifica se uma receita possui ingredientes cadastrados"""
