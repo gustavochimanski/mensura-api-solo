@@ -5361,14 +5361,14 @@ Responda de forma natural e curta:"""
     ) -> str:
         """
         Gera resposta sobre um produto específico.
-        Usa ingredientes REAIS do banco de dados!
+        Usa a descrição da receita que contém os ingredientes!
         """
         try:
             nome_produto = produto.get('nome', '')
             tipo_produto = produto.get('tipo', 'produto')
             produto_id = produto.get('id', '')
             
-            print(f"🔍 Buscando ingredientes para: '{nome_produto}' (tipo: {tipo_produto}, id: {produto_id})")
+            print(f"🔍 Buscando descrição para: '{nome_produto}' (tipo: {tipo_produto}, id: {produto_id})")
             
             # Se for uma receita (tem prefixo "receita_"), extrai o ID
             receita_id = None
@@ -5378,61 +5378,8 @@ Responda de forma natural e curta:"""
                     print(f"   📝 É uma receita, ID extraído: {receita_id} (produto_id original: {produto_id})")
                 except Exception as e:
                     print(f"   ⚠️ Erro ao extrair ID da receita: {e} (produto_id: {produto_id})")
-                    # Tenta buscar pelo nome se não conseguiu extrair o ID
                     receita_id = None
             
-            ingredientes = []
-            adicionais = []
-            
-            # Busca ingredientes
-            if receita_id:
-                # Busca direto pelo ID da receita (mais preciso)
-                ingredientes = self.ingredientes_service.buscar_ingredientes_receita(receita_id)
-                adicionais = self.ingredientes_service.buscar_adicionais_receita(receita_id)
-                print(f"   ✅ Encontrados {len(ingredientes)} ingredientes e {len(adicionais)} adicionais (busca por ID: {receita_id})")
-            else:
-                # Se não tem receita_id mas é tipo receita, tenta extrair do ID
-                if tipo_produto == 'receita' and isinstance(produto_id, str) and 'receita_' in produto_id:
-                    try:
-                        receita_id_from_str = int(produto_id.replace('receita_', ''))
-                        ingredientes = self.ingredientes_service.buscar_ingredientes_receita(receita_id_from_str)
-                        adicionais = self.ingredientes_service.buscar_adicionais_receita(receita_id_from_str)
-                        print(f"   ✅ Encontrados {len(ingredientes)} ingredientes e {len(adicionais)} adicionais (busca por ID extraído: {receita_id_from_str})")
-                    except Exception as e:
-                        print(f"   ⚠️ Erro ao extrair ID da receita: {e}")
-                
-                # Se ainda não encontrou, tenta buscar pelo nome (pode ser receita ou produto)
-                if not ingredientes:
-                    ingredientes = self.ingredientes_service.buscar_ingredientes_por_nome_receita(nome_produto)
-                    adicionais = self.ingredientes_service.buscar_adicionais_por_nome_receita(nome_produto)
-                    print(f"   ✅ Encontrados {len(ingredientes)} ingredientes e {len(adicionais)} adicionais (busca por nome: '{nome_produto}')")
-                
-                # Se não encontrou e é um produto simples, tenta buscar receita associada
-                if not ingredientes and tipo_produto == 'produto':
-                    # Para produtos simples, busca complementos se disponíveis
-                    try:
-                        from sqlalchemy import text
-                        # Verifica se o produto tem receita associada
-                        query = text("""
-                            SELECT r.id 
-                            FROM catalogo.receitas r
-                            WHERE r.nome ILIKE :nome 
-                            AND r.empresa_id = :empresa_id
-                            LIMIT 1
-                        """)
-                        result = self.db.execute(query, {
-                            "nome": f"%{nome_produto}%",
-                            "empresa_id": self.empresa_id
-                        }).fetchone()
-                        
-                        if result:
-                            receita_id_found = result[0]
-                            ingredientes = self.ingredientes_service.buscar_ingredientes_receita(receita_id_found)
-                            adicionais = self.ingredientes_service.buscar_adicionais_receita(receita_id_found)
-                            print(f"   ✅ Encontrada receita associada (ID: {receita_id_found}) com {len(ingredientes)} ingredientes")
-                    except Exception as e:
-                        print(f"   ⚠️ Erro ao buscar receita associada: {e}")
-
             # Detecta se a pergunta original era sobre ingredientes ou preço
             pergunta_lower = pergunta.lower() if pergunta else ""
             eh_pergunta_ingredientes = any(palavra in pergunta_lower for palavra in [
@@ -5443,96 +5390,104 @@ Responda de forma natural e curta:"""
                 'qual o preço', 'qual preço', 'quanto é', 'preço', 'valor'
             ])
             
-            # Se encontrou ingredientes, usa dados reais
-            if ingredientes:
-                # Se foi pergunta sobre PREÇO, responde diretamente sem mostrar ingredientes
-                if eh_pergunta_preco:
-                    quantidade = self._extrair_quantidade_pergunta(pergunta, nome_produto)
-                    if quantidade > 1:
-                        total = produto['preco'] * quantidade
-                        msg = f"💰 *{nome_produto}* - {quantidade}x R$ {produto['preco']:.2f} = R$ {total:.2f}\n\n"
-                    else:
-                        msg = f"💰 *{nome_produto}* - R$ {produto['preco']:.2f}\n\n"
-                    msg += self._obter_mensagem_final_pedido()
-                    return msg
-                
-                # Monta resposta com ingredientes reais
-                msg = f"*{nome_produto}* - R$ {produto['preco']:.2f}\n\n"
-                msg += "📋 *Ingredientes:*\n"
-                for ing in ingredientes:
-                    msg += f"• {ing['nome']}\n"
-
-                if adicionais:
-                    msg += "\n➕ *Adicionais disponíveis:*\n"
-                    for add in adicionais[:4]:  # Mostra até 4 adicionais
-                        msg += f"• {add['nome']} (+R$ {add['preco']:.2f})\n"
-
-                msg += "\n" + self._obter_mensagem_final_pedido()
+            # Se foi pergunta sobre PREÇO, responde diretamente
+            if eh_pergunta_preco:
+                quantidade = self._extrair_quantidade_pergunta(pergunta, nome_produto)
+                if quantidade > 1:
+                    total = produto['preco'] * quantidade
+                    msg = f"💰 *{nome_produto}* - {quantidade}x R$ {produto['preco']:.2f} = R$ {total:.2f}\n\n"
+                else:
+                    msg = f"💰 *{nome_produto}* - R$ {produto['preco']:.2f}\n\n"
+                msg += self._obter_mensagem_final_pedido()
                 return msg
-            else:
-                # Se não encontrou ingredientes, tenta buscar descrição da receita no banco
-                print(f"   ⚠️ Nenhum ingrediente encontrado para '{nome_produto}'")
+            
+            # PRIMEIRO: Busca a descrição da receita (que contém os ingredientes)
+            descricao_receita = None
+            receita_id_para_busca = receita_id
+            
+            # Se não tem receita_id, tenta buscar pelo nome ou extrair do produto_id
+            if not receita_id_para_busca:
+                if tipo_produto == 'receita' and isinstance(produto_id, str) and 'receita_' in produto_id:
+                    try:
+                        receita_id_para_busca = int(produto_id.replace('receita_', ''))
+                    except Exception as e:
+                        print(f"   ⚠️ Erro ao extrair ID da receita: {e}")
                 
-                descricao_receita = None
-                if receita_id or (tipo_produto == 'receita'):
+                # Se ainda não tem receita_id, tenta buscar pelo nome
+                if not receita_id_para_busca:
                     try:
                         from sqlalchemy import text
                         query = text("""
-                            SELECT descricao 
+                            SELECT id, descricao 
                             FROM catalogo.receitas
-                            WHERE id = :receita_id AND empresa_id = :empresa_id
+                            WHERE nome ILIKE :nome 
+                            AND empresa_id = :empresa_id
                             LIMIT 1
                         """)
-                        receita_id_para_busca = receita_id if receita_id else (
-                            int(produto_id.replace('receita_', '')) if isinstance(produto_id, str) and 'receita_' in produto_id else None
-                        )
+                        result = self.db.execute(query, {
+                            "nome": f"%{nome_produto}%",
+                            "empresa_id": self.empresa_id
+                        }).fetchone()
                         
-                        if receita_id_para_busca:
-                            result = self.db.execute(query, {
-                                "receita_id": receita_id_para_busca,
-                                "empresa_id": self.empresa_id
-                            }).fetchone()
-                            if result and result[0]:
-                                descricao_receita = result[0]
-                                print(f"   📝 Descrição encontrada no banco: {descricao_receita[:50]}...")
+                        if result:
+                            receita_id_para_busca = result[0]
+                            descricao_receita = result[1]
+                            print(f"   ✅ Receita encontrada pelo nome (ID: {receita_id_para_busca})")
                     except Exception as e:
-                        print(f"   ⚠️ Erro ao buscar descrição da receita: {e}")
-                
-                # Monta resposta apropriada
-                # Se foi pergunta sobre PREÇO, responde diretamente
-                if eh_pergunta_preco:
-                    quantidade = self._extrair_quantidade_pergunta(pergunta, nome_produto)
-                    if quantidade > 1:
-                        total = produto['preco'] * quantidade
-                        msg = f"💰 *{nome_produto}* - {quantidade}x R$ {produto['preco']:.2f} = R$ {total:.2f}\n\n"
-                    else:
-                        msg = f"💰 *{nome_produto}* - R$ {produto['preco']:.2f}\n\n"
-                    msg += self._obter_mensagem_final_pedido()
-                    return msg
-                
-                msg = f"*{nome_produto}* - R$ {produto['preco']:.2f}\n\n"
-                
-                # Se foi pergunta sobre ingredientes e não encontrou, informa claramente
+                        print(f"   ⚠️ Erro ao buscar receita pelo nome: {e}")
+            
+            # Busca descrição pelo ID da receita
+            if receita_id_para_busca and not descricao_receita:
+                try:
+                    from sqlalchemy import text
+                    query = text("""
+                        SELECT descricao 
+                        FROM catalogo.receitas
+                        WHERE id = :receita_id AND empresa_id = :empresa_id
+                        LIMIT 1
+                    """)
+                    result = self.db.execute(query, {
+                        "receita_id": receita_id_para_busca,
+                        "empresa_id": self.empresa_id
+                    }).fetchone()
+                    if result and result[0]:
+                        descricao_receita = result[0]
+                        print(f"   📝 Descrição encontrada no banco: {descricao_receita[:50]}...")
+                except Exception as e:
+                    print(f"   ⚠️ Erro ao buscar descrição da receita: {e}")
+            
+            # Monta resposta usando a descrição
+            msg = f"*{nome_produto}* - R$ {produto['preco']:.2f}\n\n"
+            
+            if descricao_receita:
+                # Usa a descrição que contém os ingredientes
+                msg += f"{descricao_receita}\n\n"
+                print(f"   ✅ Resposta gerada usando descrição da receita")
+            elif produto.get('descricao'):
+                # Fallback: usa descrição do produto se disponível
+                msg += f"{produto['descricao']}\n\n"
+                print(f"   ✅ Resposta gerada usando descrição do produto")
+            else:
+                # Se não encontrou descrição, informa
                 if eh_pergunta_ingredientes:
-                    if descricao_receita:
-                        msg += f"{descricao_receita}\n\n"
-                    else:
-                        msg += "😅 No momento não tenho os ingredientes cadastrados no sistema para este produto.\n\n"
-                    
-                    # Tenta usar descrição do produto se disponível
-                    if not descricao_receita and produto.get('descricao'):
-                        msg += f"{produto['descricao']}\n\n"
-                    
-                    msg += self._obter_mensagem_final_pedido()
+                    msg += "😅 No momento não tenho informações sobre os ingredientes deste produto.\n\n"
                 else:
-                    # Se não foi pergunta específica sobre ingredientes, usa descrição se disponível
-                    if descricao_receita:
-                        msg += f"{descricao_receita}\n\n"
-                    elif produto.get('descricao'):
-                        msg += f"{produto['descricao']}\n\n"
-                    msg += self._obter_mensagem_final_pedido()
-                
-                return msg
+                    msg += "😊 Este produto está disponível! Quer saber mais alguma coisa?\n\n"
+            
+            # Adiciona adicionais disponíveis se houver receita_id
+            if receita_id_para_busca:
+                try:
+                    adicionais = self.ingredientes_service.buscar_adicionais_receita(receita_id_para_busca)
+                    if adicionais:
+                        msg += "➕ *Adicionais disponíveis:*\n"
+                        for add in adicionais[:4]:  # Mostra até 4 adicionais
+                            msg += f"• {add['nome']} (+R$ {add['preco']:.2f})\n"
+                        msg += "\n"
+                except Exception as e:
+                    print(f"   ⚠️ Erro ao buscar adicionais: {e}")
+            
+            msg += self._obter_mensagem_final_pedido()
+            return msg
         except Exception as e:
             print(f"❌ Erro ao buscar ingredientes de {produto.get('nome', 'produto')}: {e}")
             import traceback
