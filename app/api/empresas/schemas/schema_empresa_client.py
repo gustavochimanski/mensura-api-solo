@@ -46,6 +46,8 @@ class EmpresaPublicListItem(BaseModel):
     estado: Optional[str] = None
     distancia_km: Optional[float] = None
     tema: Optional[str] = None
+    redireciona_home: bool = False
+    redireciona_home_para: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
