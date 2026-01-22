@@ -83,6 +83,14 @@ class EmpresaResponse(EmpresaBase):
     id: int
 
     model_config = ConfigDict(from_attributes=True)
+    
+    @field_validator("pagina_unica", mode="before")
+    @classmethod
+    def garantir_pagina_unica_booleano(cls, v):
+        """Garante que pagina_unica seja sempre booleano, mesmo se o modelo não tiver a coluna."""
+        if v is None:
+            return False
+        return bool(v)
 
 
 class EmpresaCardapioLinkResponse(BaseModel):
