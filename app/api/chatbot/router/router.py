@@ -897,47 +897,68 @@ async def send_notification(request: Request, db: Session = Depends(get_db)):
             detail="Telefone e mensagem são obrigatórios"
         )
 
+    # Normaliza o telefone (remove caracteres não numéricos para garantir consistência)
+    phone_normalized = ''.join(filter(str.isdigit, phone))
+
     # Envia via WhatsApp
     notifier = OrderNotification()
     result = await notifier.send_whatsapp_message(phone, message)
 
     if result.get("success"):
         # Salva a mensagem enviada no histórico da conversa
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        # PAUSA O CHATBOT POR 24 HORAS quando atendente responde
+        # IMPORTANTE: Pausa SEMPRE, mesmo se não houver conversa no histórico
         try:
-            conversations = chatbot_db.get_conversations_by_user(db, phone)
-            if conversations:
-                chatbot_db.create_message(
-                    db=db,
-                    conversation_id=conversations[0]['id'],
-                    role="assistant",
-                    content=message
-                )
+            from datetime import datetime, timedelta
+            paused_until = datetime.now() + timedelta(hours=24)
+            
+            # Tenta obter empresa_id da conversa, mas não é obrigatório
+            empresa_id = None
+            try:
+                # Tenta buscar conversa com telefone normalizado e original
+                phone_to_search = phone_normalized if 'phone_normalized' in locals() else phone
+                conversations = chatbot_db.get_conversations_by_user(db, phone_to_search)
                 
-                # PAUSA O CHATBOT POR 24 HORAS quando atendente responde
-                try:
-                    from datetime import datetime, timedelta
-                    empresa_id = conversations[0].get('empresa_id')
-                    paused_until = datetime.now() + timedelta(hours=24)
+                # Se não encontrou, tenta com o telefone original também
+                if not conversations:
+                    conversations = chatbot_db.get_conversations_by_user(db, phone)
+                
+                if conversations:
+                    conversation = conversations[0]
+                    conversation_id = conversation.get('id')
+                    empresa_id = conversation.get('empresa_id')
                     
-                    chatbot_db.set_bot_status(
+                    # Salva mensagem no histórico
+                    chatbot_db.create_message(
                         db=db,
-                        phone_number=phone,
-                        is_active=False,
-                        paused_by="atendente_respondeu",
-                        empresa_id=empresa_id,
-                        paused_until=paused_until
+                        conversation_id=conversation_id,
+                        role="assistant",
+                        content=message
                     )
-                    import logging
-                    logger = logging.getLogger(__name__)
-                    logger.info(f"⏸️ Chatbot pausado por 24h para cliente {phone} (atendente respondeu)")
-                except Exception as e:
-                    import logging
-                    logger = logging.getLogger(__name__)
-                    logger.error(f"❌ Erro ao pausar chatbot após resposta do atendente: {e}", exc_info=True)
+            except Exception as e:
+                logger.warning(f"⚠️ Erro ao buscar/salvar conversa: {e}")
+            
+            # PAUSA O CHATBOT (sempre, mesmo sem conversa)
+            logger.info(f"🔄 Tentando pausar chatbot - phone: {phone}, empresa_id: {empresa_id}, paused_until: {paused_until}")
+            
+            pause_result = chatbot_db.set_bot_status(
+                db=db,
+                phone_number=phone,
+                is_active=False,
+                paused_by="atendente_respondeu",
+                empresa_id=empresa_id,
+                paused_until=paused_until
+            )
+            
+                    if pause_result.get("success"):
+                        logger.info(f"⏸️ Chatbot pausado por 24h para cliente {phone_to_pause} (atendente respondeu) - paused_until: {paused_until}")
+                    else:
+                        logger.error(f"❌ Falha ao pausar chatbot: {pause_result.get('error')}")
         except Exception as e:
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.error(f"Erro ao salvar mensagem no histórico: {e}")
+            logger.error(f"❌ Erro ao pausar chatbot após resposta do atendente: {e}", exc_info=True)
 
         return {
             "success": True,
@@ -1028,48 +1049,60 @@ async def send_media(request: Request, db: Session = Depends(get_db)):
 
             if response.status_code == 200:
                 # Salva a mensagem enviada no histórico da conversa
+                import logging
+                logger = logging.getLogger(__name__)
+                
+                # PAUSA O CHATBOT POR 24 HORAS quando atendente envia mídia
+                # IMPORTANTE: Pausa SEMPRE, mesmo se não houver conversa no histórico
                 try:
-                    conversations = chatbot_db.get_conversations_by_user(db, phone)
-                    if conversations:
-                        # Salva como JSON para o frontend poder renderizar a mídia
-                        media_content = json.dumps({
-                            "type": "media",
-                            "media_type": media_type,
-                            "media_url": media_url,
-                            "caption": caption or ""
-                        })
-                        chatbot_db.create_message(
-                            db=db,
-                            conversation_id=conversations[0]['id'],
-                            role="assistant",
-                            content=media_content
-                        )
-                        
-                        # PAUSA O CHATBOT POR 24 HORAS quando atendente envia mídia
-                        try:
-                            from datetime import datetime, timedelta
-                            empresa_id = conversations[0].get('empresa_id')
-                            paused_until = datetime.now() + timedelta(hours=24)
+                    from datetime import datetime, timedelta
+                    paused_until = datetime.now() + timedelta(hours=24)
+                    
+                    # Tenta obter empresa_id da conversa, mas não é obrigatório
+                    empresa_id = None
+                    try:
+                        conversations = chatbot_db.get_conversations_by_user(db, phone)
+                        if conversations:
+                            conversation = conversations[0]
+                            conversation_id = conversation.get('id')
+                            empresa_id = conversation.get('empresa_id')
                             
-                            chatbot_db.set_bot_status(
+                            # Salva como JSON para o frontend poder renderizar a mídia
+                            media_content = json.dumps({
+                                "type": "media",
+                                "media_type": media_type,
+                                "media_url": media_url,
+                                "caption": caption or ""
+                            })
+                            chatbot_db.create_message(
                                 db=db,
-                                phone_number=phone,
-                                is_active=False,
-                                paused_by="atendente_respondeu",
-                                empresa_id=empresa_id,
-                                paused_until=paused_until
+                                conversation_id=conversation_id,
+                                role="assistant",
+                                content=media_content
                             )
-                            import logging
-                            logger = logging.getLogger(__name__)
-                            logger.info(f"⏸️ Chatbot pausado por 24h para cliente {phone} (atendente enviou mídia)")
-                        except Exception as e:
-                            import logging
-                            logger = logging.getLogger(__name__)
-                            logger.error(f"❌ Erro ao pausar chatbot após envio de mídia pelo atendente: {e}", exc_info=True)
-                except Exception as save_error:
-                    import logging
-                    logger = logging.getLogger(__name__)
-                    logger.error(f"Erro ao salvar mídia no histórico: {save_error}")
+                    except Exception as e:
+                        logger.warning(f"⚠️ Erro ao buscar/salvar conversa: {e}")
+                    
+                    # PAUSA O CHATBOT (sempre, mesmo sem conversa)
+                    # Usa telefone normalizado para garantir consistência
+                    phone_clean_media = ''.join(filter(str.isdigit, phone))
+                    logger.info(f"🔄 Tentando pausar chatbot após mídia - phone: {phone_clean_media}, empresa_id: {empresa_id}, paused_until: {paused_until}")
+                    
+                    pause_result = chatbot_db.set_bot_status(
+                        db=db,
+                        phone_number=phone_clean_media,
+                        is_active=False,
+                        paused_by="atendente_respondeu",
+                        empresa_id=empresa_id,
+                        paused_until=paused_until
+                    )
+                    
+                    if pause_result.get("success"):
+                        logger.info(f"⏸️ Chatbot pausado por 24h para cliente {phone_clean_media} (atendente enviou mídia) - paused_until: {paused_until}")
+                    else:
+                        logger.error(f"❌ Falha ao pausar chatbot após mídia: {pause_result.get('error')}")
+                except Exception as e:
+                    logger.error(f"❌ Erro ao pausar chatbot após envio de mídia pelo atendente: {e}", exc_info=True)
 
                 return {
                     "success": True,

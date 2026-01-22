@@ -6391,32 +6391,192 @@ Responda de forma natural e curta:"""
 
             # Estado: Perguntando se é entrega ou retirada
             if estado == STATE_PERGUNTANDO_ENTREGA_RETIRADA:
+                # VERIFICA SE ACEITA PEDIDOS ANTES DE CONTINUAR FLUXO
+                config = self._get_chatbot_config()
+                if config and not config.aceita_pedidos_whatsapp:
+                    # Limpa carrinho e redireciona
+                    dados['carrinho'] = []
+                    self._salvar_estado_conversa(user_id, STATE_WELCOME, dados)
+                    try:
+                        empresa_query = text("""
+                            SELECT nome, cardapio_link
+                            FROM cadastros.empresas
+                            WHERE id = :empresa_id
+                        """)
+                        result = self.db.execute(empresa_query, {"empresa_id": self.empresa_id})
+                        empresa = result.fetchone()
+                        link_cardapio = empresa[1] if empresa and empresa[1] else LINK_CARDAPIO
+                    except Exception as e:
+                        print(f"⚠️ Erro ao buscar link do cardápio: {e}")
+                        link_cardapio = LINK_CARDAPIO
+                    
+                    if config.mensagem_redirecionamento:
+                        return config.mensagem_redirecionamento.replace("{link_cardapio}", link_cardapio)
+                    else:
+                        return f"📲 Para fazer seu pedido, acesse nosso cardápio completo pelo link:\n\n👉 {link_cardapio}\n\nDepois é só fazer seu pedido pelo site! 😊"
+                
                 return await self._processar_entrega_ou_retirada(user_id, mensagem, dados)
 
             # ========== FLUXO DE ENDEREÇOS ==========
 
             # Estado: Listando endereços salvos (cliente escolhe número ou "NOVO")
             if estado == STATE_LISTANDO_ENDERECOS:
+                # VERIFICA SE ACEITA PEDIDOS
+                config = self._get_chatbot_config()
+                if config and not config.aceita_pedidos_whatsapp:
+                    dados['carrinho'] = []
+                    self._salvar_estado_conversa(user_id, STATE_WELCOME, dados)
+                    try:
+                        empresa_query = text("""
+                            SELECT nome, cardapio_link
+                            FROM cadastros.empresas
+                            WHERE id = :empresa_id
+                        """)
+                        result = self.db.execute(empresa_query, {"empresa_id": self.empresa_id})
+                        empresa = result.fetchone()
+                        link_cardapio = empresa[1] if empresa and empresa[1] else LINK_CARDAPIO
+                    except Exception as e:
+                        link_cardapio = LINK_CARDAPIO
+                    
+                    if config.mensagem_redirecionamento:
+                        return config.mensagem_redirecionamento.replace("{link_cardapio}", link_cardapio)
+                    else:
+                        return f"📲 Para fazer seu pedido, acesse nosso cardápio completo pelo link:\n\n👉 {link_cardapio}\n\nDepois é só fazer seu pedido pelo site! 😊"
+                
                 return await self._processar_selecao_endereco_salvo(user_id, mensagem, dados)
 
             # Estado: Buscando endereço no Google Maps
             if estado == STATE_BUSCANDO_ENDERECO_GOOGLE:
+                config = self._get_chatbot_config()
+                if config and not config.aceita_pedidos_whatsapp:
+                    dados['carrinho'] = []
+                    self._salvar_estado_conversa(user_id, STATE_WELCOME, dados)
+                    try:
+                        empresa_query = text("""
+                            SELECT nome, cardapio_link
+                            FROM cadastros.empresas
+                            WHERE id = :empresa_id
+                        """)
+                        result = self.db.execute(empresa_query, {"empresa_id": self.empresa_id})
+                        empresa = result.fetchone()
+                        link_cardapio = empresa[1] if empresa and empresa[1] else LINK_CARDAPIO
+                    except Exception as e:
+                        link_cardapio = LINK_CARDAPIO
+                    
+                    if config.mensagem_redirecionamento:
+                        return config.mensagem_redirecionamento.replace("{link_cardapio}", link_cardapio)
+                    else:
+                        return f"📲 Para fazer seu pedido, acesse nosso cardápio completo pelo link:\n\n👉 {link_cardapio}\n\nDepois é só fazer seu pedido pelo site! 😊"
+                
                 return await self._processar_busca_endereco_google(user_id, mensagem, dados)
 
             # Estado: Selecionando endereço do Google
             if estado == STATE_SELECIONANDO_ENDERECO_GOOGLE:
+                config = self._get_chatbot_config()
+                if config and not config.aceita_pedidos_whatsapp:
+                    dados['carrinho'] = []
+                    self._salvar_estado_conversa(user_id, STATE_WELCOME, dados)
+                    try:
+                        empresa_query = text("""
+                            SELECT nome, cardapio_link
+                            FROM cadastros.empresas
+                            WHERE id = :empresa_id
+                        """)
+                        result = self.db.execute(empresa_query, {"empresa_id": self.empresa_id})
+                        empresa = result.fetchone()
+                        link_cardapio = empresa[1] if empresa and empresa[1] else LINK_CARDAPIO
+                    except Exception as e:
+                        link_cardapio = LINK_CARDAPIO
+                    
+                    if config.mensagem_redirecionamento:
+                        return config.mensagem_redirecionamento.replace("{link_cardapio}", link_cardapio)
+                    else:
+                        return f"📲 Para fazer seu pedido, acesse nosso cardápio completo pelo link:\n\n👉 {link_cardapio}\n\nDepois é só fazer seu pedido pelo site! 😊"
+                
                 return await self._processar_selecao_endereco_google(user_id, mensagem, dados)
 
             # Estado: Coletando complemento
             if estado == STATE_COLETANDO_COMPLEMENTO:
+                config = self._get_chatbot_config()
+                if config and not config.aceita_pedidos_whatsapp:
+                    dados['carrinho'] = []
+                    self._salvar_estado_conversa(user_id, STATE_WELCOME, dados)
+                    try:
+                        empresa_query = text("""
+                            SELECT nome, cardapio_link
+                            FROM cadastros.empresas
+                            WHERE id = :empresa_id
+                        """)
+                        result = self.db.execute(empresa_query, {"empresa_id": self.empresa_id})
+                        empresa = result.fetchone()
+                        link_cardapio = empresa[1] if empresa and empresa[1] else LINK_CARDAPIO
+                    except Exception as e:
+                        link_cardapio = LINK_CARDAPIO
+                    
+                    if config.mensagem_redirecionamento:
+                        return config.mensagem_redirecionamento.replace("{link_cardapio}", link_cardapio)
+                    else:
+                        return f"📲 Para fazer seu pedido, acesse nosso cardápio completo pelo link:\n\n👉 {link_cardapio}\n\nDepois é só fazer seu pedido pelo site! 😊"
+                
                 return await self._processar_complemento(user_id, mensagem, dados)
 
             # Estado: Coletando pagamento
             if estado == STATE_COLETANDO_PAGAMENTO:
+                config = self._get_chatbot_config()
+                if config and not config.aceita_pedidos_whatsapp:
+                    dados['carrinho'] = []
+                    self._salvar_estado_conversa(user_id, STATE_WELCOME, dados)
+                    try:
+                        empresa_query = text("""
+                            SELECT nome, cardapio_link
+                            FROM cadastros.empresas
+                            WHERE id = :empresa_id
+                        """)
+                        result = self.db.execute(empresa_query, {"empresa_id": self.empresa_id})
+                        empresa = result.fetchone()
+                        link_cardapio = empresa[1] if empresa and empresa[1] else LINK_CARDAPIO
+                    except Exception as e:
+                        link_cardapio = LINK_CARDAPIO
+                    
+                    if config.mensagem_redirecionamento:
+                        return config.mensagem_redirecionamento.replace("{link_cardapio}", link_cardapio)
+                    else:
+                        return f"📲 Para fazer seu pedido, acesse nosso cardápio completo pelo link:\n\n👉 {link_cardapio}\n\nDepois é só fazer seu pedido pelo site! 😊"
+                
                 return await self._processar_pagamento(user_id, mensagem, dados)
 
             # Estado: Confirmando pedido
             if estado == STATE_CONFIRMANDO_PEDIDO:
+                # VERIFICA SE ACEITA PEDIDOS ANTES DE CONFIRMAR
+                config = self._get_chatbot_config()
+                if config and not config.aceita_pedidos_whatsapp:
+                    # Não aceita pedidos - cancela o pedido e redireciona
+                    dados['carrinho'] = []
+                    dados.pop('carrinho_aberto_tratado', None)
+                    dados.pop('carrinho_aberto_continuado', None)
+                    dados.pop('aguardando_confirmacao_cancelamento_carrinho', None)
+                    self._salvar_estado_conversa(user_id, STATE_WELCOME, dados)
+                    
+                    try:
+                        empresa_query = text("""
+                            SELECT nome, cardapio_link
+                            FROM cadastros.empresas
+                            WHERE id = :empresa_id
+                        """)
+                        result = self.db.execute(empresa_query, {"empresa_id": self.empresa_id})
+                        empresa = result.fetchone()
+                        link_cardapio = empresa[1] if empresa and empresa[1] else LINK_CARDAPIO
+                    except Exception as e:
+                        print(f"⚠️ Erro ao buscar link do cardápio: {e}")
+                        link_cardapio = LINK_CARDAPIO
+                    
+                    if config.mensagem_redirecionamento:
+                        resposta = config.mensagem_redirecionamento.replace("{link_cardapio}", link_cardapio)
+                    else:
+                        resposta = f"📲 Para fazer seu pedido, acesse nosso cardápio completo pelo link:\n\n👉 {link_cardapio}\n\nDepois é só fazer seu pedido pelo site! 😊"
+                    
+                    return resposta
+                
                 if self._detectar_confirmacao_pedido(mensagem):
                     # Salvar pedido via endpoint /checkout
                     resultado = await self._salvar_pedido_via_checkout(user_id, dados)
@@ -6460,6 +6620,65 @@ Responda de forma natural e curta:"""
                 else:
                     return "❓ Não entendi 😅\n\nDigite *OK* para confirmar ou *CANCELAR* para desistir"
 
+            # ========== VERIFICAÇÃO PRIORITÁRIA: ACEITA PEDIDOS? ==========
+            # IMPORTANTE: Verifica ANTES de chamar a IA, mas apenas para TENTATIVAS CLARAS DE PEDIDO
+            # NÃO bloqueia perguntas e dúvidas - o chatbot deve continuar respondendo dúvidas
+            config = self._get_chatbot_config()
+            if config and not config.aceita_pedidos_whatsapp:
+                # Detecta se a mensagem é uma TENTATIVA CLARA de fazer pedido (não pergunta)
+                msg_lower = mensagem.lower().strip()
+                
+                # Termos que indicam PEDIDO (ação), não pergunta
+                termos_pedido_acao = [
+                    'me ve', 'manda', 'coloca', 'incluir', 'anota', 'anotar',
+                    'finalizar', 'fechar', 'só isso', 'pode fechar', 'levar', 'pegar',
+                    'vou querer', 'vou pedir', 'fazer pedido', 'quero pedir'
+                ]
+                
+                # Termos que indicam PERGUNTA (não bloqueia)
+                termos_pergunta = [
+                    'quanto', 'qual', 'o que', 'tem', 'como', 'onde', 'quando', 'por que',
+                    'preço', 'custa', 'fica', 'valor', 'ingrediente', 'tamanho', 'tempo',
+                    'horário', 'funcionamento', 'localização', 'endereço'
+                ]
+                
+                # Verifica se é pergunta (não bloqueia)
+                is_pergunta = any(termo in msg_lower for termo in termos_pergunta) or \
+                             msg_lower.endswith('?') or \
+                             'quanto custa' in msg_lower or \
+                             'quanto fica' in msg_lower or \
+                             'qual o preço' in msg_lower
+                
+                # Se for pergunta, deixa passar (não bloqueia)
+                if is_pergunta:
+                    print(f"✅ Permitindo pergunta (aceita_pedidos_whatsapp=False): {mensagem[:50]}")
+                # Se contém termos de ação de pedido E não é pergunta, bloqueia
+                elif any(termo in msg_lower for termo in termos_pedido_acao):
+                    # Busca link do cardápio da empresa
+                    try:
+                        empresa_query = text("""
+                            SELECT nome, cardapio_link
+                            FROM cadastros.empresas
+                            WHERE id = :empresa_id
+                        """)
+                        result = self.db.execute(empresa_query, {"empresa_id": self.empresa_id})
+                        empresa = result.fetchone()
+                        link_cardapio = empresa[1] if empresa and empresa[1] else LINK_CARDAPIO
+                    except Exception as e:
+                        print(f"⚠️ Erro ao buscar link do cardápio: {e}")
+                        link_cardapio = LINK_CARDAPIO
+                    
+                    # Retorna mensagem de redirecionamento
+                    if config.mensagem_redirecionamento:
+                        resposta = config.mensagem_redirecionamento.replace("{link_cardapio}", link_cardapio)
+                    else:
+                        resposta = f"📲 Para fazer seu pedido, acesse nosso cardápio completo pelo link:\n\n👉 {link_cardapio}\n\nDepois é só fazer seu pedido pelo site! 😊"
+                    
+                    print(f"🚫 Bloqueado tentativa de pedido (aceita_pedidos_whatsapp=False): {mensagem[:50]}")
+                    return resposta
+                # Se contém "quero" ou "pedir" mas pode ser pergunta, deixa a IA decidir
+                # (a IA vai interpretar corretamente como pergunta ou pedido)
+
             # ========== INTERPRETAÇÃO POR IA (FUNCTION CALLING) ==========
             # A IA analisa a mensagem e decide qual ação tomar
 
@@ -6477,7 +6696,7 @@ Responda de forma natural e curta:"""
             # ========== EXECUTA A AÇÃO BASEADA NA DECISÃO DA IA ==========
 
             # VERIFICA SE ACEITA PEDIDOS ANTES DE PROCESSAR AÇÕES DE PEDIDO
-            config = self._get_chatbot_config()
+            # (Verificação dupla para garantir que mesmo se a IA retornar função de pedido, bloqueia)
             if config and not config.aceita_pedidos_whatsapp:
                 # Se não aceita pedidos, bloqueia ações de pedido
                 if funcao in ["adicionar_produto", "adicionar_produtos", "finalizar_pedido"]:
