@@ -25,7 +25,8 @@ from app.api.cadastros.models.model_entregador_dv import EntregadorDeliveryModel
 from app.api.cadastros.models.model_meio_pagamento import MeioPagamentoModel
 from app.api.cadastros.models.model_parceiros import ParceiroModel, BannerParceiroModel
 from app.api.cadastros.models.model_regiao_entrega import RegiaoEntregaModel
-from app.api.catalogo.models.model_adicional import AdicionalModel
+# AdicionalModel removido - tabela adicionais não é mais usada
+# Adicionais agora são vínculos de produtos/receitas/combos em complementos (complemento_vinculo_item)
 from app.api.cadastros.models.association_tables import (
     VitrineComboLink,
     VitrineReceitaLink
