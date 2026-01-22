@@ -99,76 +99,20 @@ class IngredientesService:
 
     def buscar_adicionais_receita(self, receita_id: int) -> List[Dict[str, Any]]:
         """
-        Busca todos os adicionais disponíveis para uma receita
-
-        Returns:
-            Lista de adicionais com id, nome, preco
+        DEPRECADO: Tabela catalogo.adicionais foi removida.
+        Adicionais agora são vínculos de produtos/receitas/combos em complementos.
+        Retorna lista vazia.
         """
-        try:
-            query = text("""
-                SELECT
-                    a.id,
-                    a.nome,
-                    a.descricao,
-                    a.preco
-                FROM catalogo.receita_adicional ra
-                JOIN catalogo.adicionais a ON a.id = ra.adicional_id
-                WHERE ra.receita_id = :receita_id
-                AND a.ativo = true
-                ORDER BY a.preco
-            """)
-
-            result = self.db.execute(query, {"receita_id": receita_id})
-
-            adicionais = []
-            for row in result.fetchall():
-                adicionais.append({
-                    "id": row[0],
-                    "nome": row[1],
-                    "descricao": row[2],
-                    "preco": float(row[3]) if row[3] else 0
-                })
-
-            return adicionais
-
-        except Exception as e:
-            print(f"Erro ao buscar adicionais: {e}")
-            return []
+        return []
 
     def buscar_adicionais_por_nome_receita(self, nome_receita: str) -> List[Dict[str, Any]]:
         """
-        Busca adicionais pelo nome da receita
-        """
-        try:
-            query = text("""
-                SELECT id FROM catalogo.receitas
-                WHERE nome ILIKE :nome AND empresa_id = :empresa_id
-                LIMIT 1
-            """)
-
-            result = self.db.execute(query, {
-                "nome": f"%{nome_receita}%",
-                "empresa_id": self.empresa_id
-            }).fetchone()
-
-            if result:
-                return self.buscar_adicionais_receita(result[0])
-
-            return []
-
-        except Exception as e:
-            print(f"Erro ao buscar adicionais por nome: {e}")
-            return []
-
-    def buscar_todos_adicionais(self) -> List[Dict[str, Any]]:
-        """
-        DEPRECADO: Este método foi desabilitado.
-        A tabela catalogo.adicionais foi removida.
+        DEPRECADO: Tabela catalogo.adicionais foi removida.
         Adicionais agora são vínculos de produtos/receitas/combos em complementos.
-        Retorna lista vazia para não quebrar código que ainda chama este método.
+        Retorna lista vazia.
         """
-        # TODO: Refatorar código que chama este método para usar complementos/vínculos
         return []
+
 
     def verificar_ingrediente_na_receita(self, receita_id: int, nome_ingrediente: str) -> Optional[Dict[str, Any]]:
         """
@@ -239,51 +183,11 @@ class IngredientesService:
 
     def buscar_adicional_por_nome(self, nome_adicional: str) -> Optional[Dict[str, Any]]:
         """
-        Busca um adicional pelo nome
+        DEPRECADO: Tabela catalogo.adicionais foi removida.
+        Adicionais agora são vínculos de produtos/receitas/combos em complementos.
+        Retorna None.
         """
-        try:
-            # Remove acentos para comparação
-            def remover_acentos(texto):
-                acentos = {'á': 'a', 'à': 'a', 'ã': 'a', 'â': 'a', 'é': 'e', 'ê': 'e',
-                           'í': 'i', 'ó': 'o', 'ô': 'o', 'õ': 'o', 'ú': 'u', 'ç': 'c'}
-                for acentuado, sem_acento in acentos.items():
-                    texto = texto.replace(acentuado, sem_acento)
-                return texto
-
-            nome_lower = nome_adicional.lower().strip()
-            nome_sem_acento = remover_acentos(nome_lower)
-
-            # Busca todos os adicionais
-            adicionais = self.buscar_todos_adicionais()
-
-            # Mapeamento de termos comuns
-            mapeamento = {
-                'queijo extra': ['queijo extra', 'mais queijo', 'queijo a mais'],
-                'bacon extra': ['bacon extra', 'mais bacon', 'bacon a mais'],
-                'borda recheada': ['borda recheada', 'borda catupiry', 'borda cheddar'],
-                'ovo extra': ['ovo extra', 'mais ovo', 'ovo a mais'],
-            }
-
-            for adicional in adicionais:
-                add_nome_lower = adicional['nome'].lower()
-                add_nome_sem_acento = remover_acentos(add_nome_lower)
-
-                # Match direto
-                if (nome_sem_acento in add_nome_sem_acento or
-                    add_nome_sem_acento in nome_sem_acento):
-                    return adicional
-
-                # Match por mapeamento
-                for chave, variantes in mapeamento.items():
-                    if any(v in nome_sem_acento for v in variantes):
-                        if chave in add_nome_sem_acento:
-                            return adicional
-
-            return None
-
-        except Exception as e:
-            print(f"Erro ao buscar adicional: {e}")
-            return None
+        return None
 
     def formatar_composicao_produto(self, nome_receita: str) -> str:
         """

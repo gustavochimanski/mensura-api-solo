@@ -219,40 +219,6 @@ def atualizar_item_cliente(
     return svc.atualizar_item_pedido(pedido_id, item)
 
 # ======================================================================
-# =============== EDITA INFORMAÇÕES GERAIS PEDIDO ======================
-# ⚠️ DEPRECATED: Use /api/pedidos/{pedido_id}/editar ao invés deste endpoint
-@router.put(
-    "/{pedido_id}/editar",
-    response_model=PedidoResponse,
-    status_code=status.HTTP_200_OK
-)
-def atualizar_pedido_cliente(
-        pedido_id: int = Path(..., description="ID do pedido a ser atualizado"),
-        payload: EditarPedidoRequest = Body(...),
-        cliente: ClienteModel = Depends(get_cliente_by_super_token),
-        db: Session = Depends(get_db),
-        svc: PedidoService = Depends(get_pedido_service),
-):
-    """
-    ⚠️ DEPRECATED: Use o Gateway Orquestrador (/api/pedidos/{pedido_id}/editar)
-    
-    Este endpoint está sendo substituído pelo Gateway Orquestrador que unifica
-    endpoints de admin e client em um único endpoint.
-    
-    **Recomendado:** Use `PUT /api/pedidos/{pedido_id}/editar`
-    
-    Este endpoint será mantido apenas para compatibilidade retroativa.
-    """
-    pedido = svc.repo.get_pedido(pedido_id)
-    if not pedido:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
-
-    if pedido.cliente_id != cliente.id:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Pedido não pertence ao cliente")
-
-    return svc.editar_pedido_parcial(pedido_id, payload)
-
-# ======================================================================
 # =================== ALTERAR MODO EDIÇÃO =============================
 @router.put(
     "/{pedido_id}/modo-edicao",

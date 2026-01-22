@@ -9,7 +9,7 @@ from app.api.empresas.repositories.empresa_repo import EmpresaRepository
 from app.api.catalogo.repositories.repo_produto import ProdutoMensuraRepository
 from app.api.catalogo.schemas.schema_produtos import ProdutoListItem, CriarNovoProdutoResponse, ProdutoEmpDTO, \
     ProdutoBaseDTO, CriarNovoProdutoRequest, AtualizarProdutoRequest
-from app.api.catalogo.repositories.repo_adicional import AdicionalRepository
+# AdicionalRepository removido - não é mais usado
 from app.api.catalogo.repositories.repo_receitas import ReceitasRepository
 
 
@@ -18,7 +18,6 @@ class ProdutosMensuraService:
         self.db = db
         self.repo = ProdutoMensuraRepository(db)
         self.empresa_repo = EmpresaRepository(db)
-        self.repo_adicional = AdicionalRepository(db)
         self.repo_receitas = ReceitasRepository(db)
 
     def _empresa_or_404(self, empresa_id: int):
@@ -115,7 +114,7 @@ class ProdutosMensuraService:
             
             # Busca adicionais vinculados ao produto (sem depender de diretivas)
             adicionais = None
-            adicionais_list = self.repo_adicional.listar_por_produto(p.cod_barras, apenas_ativos=True)
+            adicionais_list = []  # Adicionais removidos - usar complementos
             if adicionais_list:
                 adicionais = [
                     {
@@ -269,7 +268,7 @@ class ProdutosMensuraService:
             
             # Busca adicionais vinculados ao produto (sem depender de diretivas)
             adicionais = None
-            adicionais_list = self.repo_adicional.listar_por_produto(p.cod_barras, apenas_ativos=True)
+            adicionais_list = []  # Adicionais removidos - usar complementos
             if adicionais_list:
                 adicionais = [
                     {

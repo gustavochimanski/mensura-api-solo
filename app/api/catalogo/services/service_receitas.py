@@ -6,7 +6,6 @@ from app.api.catalogo.schemas.schema_receitas import (
     ReceitaIngredienteIn,
     ReceitaIngredienteDetalhadoOut,
     ReceitaComIngredientesOut,
-    AdicionalIn,
     ReceitaIn,
     ReceitaUpdate,
     ReceitaOut,
@@ -180,28 +179,6 @@ class ReceitasService:
     def remove_ingrediente(self, receita_ingrediente_id: int):
         return self.repo.remove_ingrediente(receita_ingrediente_id)
 
-    # Adicionais
-    def add_adicional(self, data: AdicionalIn):
-        adicional = self.repo.add_adicional(data)
-        # Busca o preço do cadastro para retornar
-        adicional.preco = self.repo._buscar_preco_adicional(adicional.adicional_id)
-        return adicional
-
-    def list_adicionais(self, receita_id: int):
-        adicionais = self.repo.list_adicionais(receita_id)
-        # Busca o preço do cadastro para cada adicional
-        for adicional in adicionais:
-            adicional.preco = self.repo._buscar_preco_adicional(adicional.adicional_id)
-        return adicionais
-
-    def update_adicional(self, adicional_id: int):
-        adicional = self.repo.update_adicional(adicional_id)
-        # Busca o preço do cadastro para retornar
-        adicional.preco = self.repo._buscar_preco_adicional(adicional.adicional_id)
-        return adicional
-
-    def remove_adicional(self, adicional_id: int):
-        return self.repo.remove_adicional(adicional_id)
 
     def clonar_ingredientes(self, receita_origem_id: int, receita_destino_id: int) -> ClonarIngredientesResponse:
         """

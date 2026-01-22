@@ -21,9 +21,6 @@ from .model_pedido_historico_unificado import (
     TipoOperacaoPedidoEnum,
 )
 
-# Alias apenas para PedidoModel (deprecated, mas mantido por compatibilidade)
-PedidoModel = PedidoUnificadoModel
-
 __all__ = [
     # Modelos unificados
     "PedidoUnificadoModel",
@@ -40,7 +37,5 @@ __all__ = [
     "CanalPedidoEnum",
     "TipoOperacaoPedido",
     "TipoOperacaoPedidoEnum",
-    # Alias para compatibilidade (deprecated)
-    "PedidoModel",
 ]
 

@@ -1,12 +1,12 @@
 from .produto_adapter import ProdutoAdapter
 from .combo_adapter import ComboAdapter
-from .adicional_adapter import AdicionalAdapter
 from .receitas_adapter import ReceitasAdapter
+from .adicional_adapter import AdicionalAdapter  # Stub para compatibilidade
 
 __all__ = [
     "ProdutoAdapter",
     "ComboAdapter",
-    "AdicionalAdapter",
     "ReceitasAdapter",
+    "AdicionalAdapter",
 ]
 

@@ -177,12 +177,6 @@ class ReceitaPedidoRequest(BaseModel):
     )
 
 
-class ComboItemAdicionalPedidoRequest(BaseModel):
-    """DEPRECADO - usar complementos."""
-    produto_cod_barras: str
-    complementos: Optional[List[ItemComplementoRequest]] = None
-
-
 class ComboPedidoRequest(BaseModel):
     combo_id: int
     quantidade: int = Field(ge=1, default=1)

@@ -13,7 +13,7 @@ from app.api.cardapio.schemas.schema_home import (
     ReceitaMiniDTO,
 )
 from app.api.catalogo.models.model_produto_emp import ProdutoEmpModel
-from app.api.catalogo.repositories.repo_adicional import AdicionalRepository
+# AdicionalRepository removido - não é mais usado
 
 from app.api.cardapio.repositories.repo_home import HomeRepository
 from app.api.cardapio.contracts.vitrine_contract import IVitrineContract
@@ -31,7 +31,7 @@ class HomeService:
         # Busca adicionais vinculados ao produto com todas as configurações
         adicionais = None
         try:
-            adicionais_list = self.repo_adicional.listar_por_produto(prod_emp.cod_barras, apenas_ativos=True)
+            adicionais_list = []  # Adicionais removidos - usar complementos
             if adicionais_list:
                 adicionais = [
                     {
@@ -49,7 +49,7 @@ class HomeService:
         
         # Cria o DTO do produto com adicionais dentro
         # Cria um dicionário manualmente excluindo 'adicionais' do relacionamento do modelo
-        # pois o relacionamento retorna objetos AdicionalModel, não dicionários
+        # AdicionalModel foi removido - adicionais agora são vínculos de produtos/receitas/combos em complementos
         produto_data = {
             "cod_barras": prod_emp.produto.cod_barras,
             "descricao": prod_emp.produto.descricao,

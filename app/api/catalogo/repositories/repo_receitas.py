@@ -6,13 +6,13 @@ from decimal import Decimal
 
 from app.api.catalogo.models.model_produto import ProdutoModel
 from app.api.catalogo.models.model_produto_emp import ProdutoEmpModel
-from app.api.catalogo.models.model_adicional import AdicionalModel
+# AdicionalModel removido - não é mais usado
+# Adicionais agora são vínculos de produtos/receitas/combos em complementos (complemento_vinculo_item)
 from app.api.catalogo.models.model_receita import ReceitaIngredienteModel, ReceitaModel
 # Nota: ReceitaAdicionalModel foi removido - adicionais agora são vínculos de produtos/receitas/combos em complementos
 from app.api.catalogo.models.model_combo import ComboModel
 from app.api.catalogo.schemas.schema_receitas import (
     ReceitaIngredienteIn,
-    AdicionalIn,
     ReceitaIn,
     ReceitaUpdate,
 )
@@ -24,17 +24,11 @@ class ReceitasRepository:
 
     def _buscar_preco_adicional(self, adicional_id: int) -> Decimal:
         """
-        Busca o preço do adicional do cadastro atual (AdicionalModel).
-        Retorna 0.00 se não encontrar.
+        DEPRECADO: AdicionalModel foi removido.
+        Adicionais agora são vínculos de produtos/receitas/combos em complementos (complemento_vinculo_item).
+        Retorna 0.00 sempre, pois o preço deve vir do vínculo do complemento.
         """
-        adicional = (
-            self.db.query(AdicionalModel)
-            .filter_by(id=adicional_id)
-            .first()
-        )
-        
-        if adicional and adicional.preco is not None:
-            return adicional.preco
+        # AdicionalModel foi removido - preço agora vem de complemento_vinculo_item
         return Decimal('0.00')
 
     # Receitas - CRUD completo
@@ -352,56 +346,6 @@ class ReceitasRepository:
         self.db.delete(obj)
         self.db.commit()
 
-    # Adicionais - DEPRECADO: ReceitaAdicionalModel foi removido
-    # Adicionais agora são vínculos de produtos/receitas/combos em complementos
-    # Use complementos para vincular itens a receitas
-    def add_adicional(self, data: AdicionalIn):
-        """
-        DEPRECADO: Este método foi desabilitado.
-        ReceitaAdicionalModel foi removido - adicionais agora são vínculos de produtos/receitas/combos em complementos.
-        Use complementos para vincular itens a receitas.
-        """
-        raise HTTPException(
-            status.HTTP_410_GONE,
-            "Este endpoint foi removido. Adicionais agora são vínculos de produtos/receitas/combos em complementos. "
-            "Use os endpoints de complementos para vincular itens a receitas."
-        )
-
-    def list_adicionais(self, receita_id: int):
-        """
-        DEPRECADO: Este método foi desabilitado.
-        ReceitaAdicionalModel foi removido - adicionais agora são vínculos de produtos/receitas/combos em complementos.
-        Use complementos para listar itens vinculados a receitas.
-        """
-        raise HTTPException(
-            status.HTTP_410_GONE,
-            "Este endpoint foi removido. Adicionais agora são vínculos de produtos/receitas/combos em complementos. "
-            "Use os endpoints de complementos para listar itens vinculados a receitas."
-        )
-
-    def update_adicional(self, adicional_id: int):
-        """
-        DEPRECADO: Este método foi desabilitado.
-        ReceitaAdicionalModel foi removido - adicionais agora são vínculos de produtos/receitas/combos em complementos.
-        Use complementos para atualizar vínculos de itens a receitas.
-        """
-        raise HTTPException(
-            status.HTTP_410_GONE,
-            "Este endpoint foi removido. Adicionais agora são vínculos de produtos/receitas/combos em complementos. "
-            "Use os endpoints de complementos para atualizar vínculos de itens a receitas."
-        )
-
-    def remove_adicional(self, adicional_id: int) -> None:
-        """
-        DEPRECADO: Este método foi desabilitado.
-        ReceitaAdicionalModel foi removido - adicionais agora são vínculos de produtos/receitas/combos em complementos.
-        Use complementos para desvincular itens de receitas.
-        """
-        raise HTTPException(
-            status.HTTP_410_GONE,
-            "Este endpoint foi removido. Adicionais agora são vínculos de produtos/receitas/combos em complementos. "
-            "Use os endpoints de complementos para desvincular itens de receitas."
-        )
 
     def receita_tem_ingredientes(self, receita_id: int) -> bool:
         """Verifica se uma receita possui ingredientes cadastrados"""

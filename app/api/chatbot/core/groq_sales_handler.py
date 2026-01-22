@@ -5347,15 +5347,6 @@ Sua única função é ajudar a ESCOLHER PRODUTOS. Nada mais!
             traceback.print_exc()
             return {"erro": True, "mensagem": "Erro interno ao processar pedido."}
 
-    def _salvar_pedido_no_banco(self, user_id: str, dados: Dict) -> Optional[int]:
-        """
-        DEPRECATED: Use _salvar_pedido_via_checkout ao invés disso.
-        Mantido apenas para compatibilidade.
-        """
-        # Este método agora é síncrono, mas o novo fluxo usa o async
-        # Mantém o código antigo como fallback
-        print("[SalvarPedido] AVISO: Método legado chamado. Use _salvar_pedido_via_checkout.")
-        return None
 
     # ========== RESPOSTAS CONVERSACIONAIS ==========
 
