@@ -189,7 +189,7 @@ def listar_complementos_combo(
 @router.post("/{complemento_id}/itens/vincular", response_model=VincularItensComplementoResponse, status_code=status.HTTP_200_OK)
 def vincular_itens_complemento(
     complemento_id: int = Path(..., description="ID do complemento"),
-    req: VincularItensComplementoRequest = Depends(),
+    req: VincularItensComplementoRequest,
     db: Session = Depends(get_db),
 ):
     """
@@ -225,7 +225,7 @@ def vincular_itens_complemento(
 @router.post("/{complemento_id}/itens/adicionar", response_model=VincularItemComplementoResponse, status_code=status.HTTP_201_CREATED)
 def vincular_item_complemento(
     complemento_id: int = Path(..., description="ID do complemento"),
-    req: VincularItemComplementoRequest = Depends(),
+    req: VincularItemComplementoRequest,
     db: Session = Depends(get_db),
 ):
     """

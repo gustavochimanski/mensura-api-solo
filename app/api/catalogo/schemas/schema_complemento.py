@@ -308,6 +308,15 @@ class VincularItemComplementoRequest(BaseModel):
         got = sum(1 for x in (self.produto_cod_barras, self.receita_id, self.combo_id) if x is not None)
         if got != 1:
             raise ValueError("Informe exatamente um de: produto_cod_barras, receita_id, combo_id")
+        
+        # Valida que o tipo corresponde ao campo preenchido
+        if self.tipo == "produto" and not self.produto_cod_barras:
+            raise ValueError("Para tipo=produto, informe produto_cod_barras")
+        if self.tipo == "receita" and self.receita_id is None:
+            raise ValueError("Para tipo=receita, informe receita_id")
+        if self.tipo == "combo" and self.combo_id is None:
+            raise ValueError("Para tipo=combo, informe combo_id")
+        
         return self
 
     model_config = ConfigDict(from_attributes=True)
