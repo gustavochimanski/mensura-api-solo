@@ -216,21 +216,29 @@ class VincularComplementosReceitaRequest(BaseModel):
     Aceita dois formatos:
     1. Formato simples: complemento_ids + ordens (mantém compatibilidade)
     2. Formato completo: configuracoes (permite definir obrigatorio, minimo_itens, maximo_itens por complemento)
+    
+    Nota: Listas vazias são permitidas para remover todas as vinculações.
     """
     # Formato simples (compatibilidade)
-    complemento_ids: Optional[List[int]] = Field(None, description="IDs dos complementos a vincular (formato simples)")
+    complemento_ids: Optional[List[int]] = Field(None, description="IDs dos complementos a vincular (formato simples). Lista vazia remove todas as vinculações.")
     ordens: Optional[List[int]] = Field(None, description="Ordem de cada complemento (opcional, usa índice se não informado)")
     
     # Formato completo (novo)
     configuracoes: Optional[List[ConfiguracaoVinculacaoComplemento]] = Field(
         None, 
-        description="Configurações detalhadas por complemento (formato completo). Se fornecido, ignora complemento_ids e ordens."
+        description="Configurações detalhadas por complemento (formato completo). Se fornecido, ignora complemento_ids e ordens. Lista vazia remove todas as vinculações."
     )
     
     @model_validator(mode='after')
     def validate_at_least_one_format(self):
-        if not self.configuracoes and not self.complemento_ids:
-            raise ValueError("Deve fornecer 'complemento_ids' ou 'configuracoes'")
+        # Listas vazias são permitidas (remove todas as vinculações)
+        if self.complemento_ids is not None and len(self.complemento_ids) == 0:
+            return self
+        if self.configuracoes is not None and len(self.configuracoes) == 0:
+            return self
+        # Verifica se pelo menos um formato foi fornecido (e não vazio)
+        if not self.configuracoes and (not self.complemento_ids or len(self.complemento_ids) == 0):
+            raise ValueError("Deve fornecer 'complemento_ids' (não vazio) ou 'configuracoes' (não vazio)")
         return self
 
 

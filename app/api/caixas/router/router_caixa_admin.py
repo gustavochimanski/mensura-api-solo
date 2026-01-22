@@ -75,7 +75,7 @@ def fechar_caixa(
 
 # ======================================================================
 # ======================= BUSCAR CAIXA POR ID ==========================
-@router.get("/{caixa_id}", response_model=CaixaResponse, status_code=status.HTTP_200_OK)
+@router.get("/{caixa_id}", response_model=CaixaResponse, status_code=status.HTTP_200_OK, operation_id="get_caixa_operacional")
 def get_caixa(
     caixa_id: int = Path(..., description="ID do caixa", gt=0),
     db: Session = Depends(get_db),
@@ -109,7 +109,7 @@ def get_caixa_aberto(
 
 # ======================================================================
 # ========================= LISTAR CAIXAS ==============================
-@router.get("/", response_model=List[CaixaResumoResponse], status_code=status.HTTP_200_OK)
+@router.get("/", response_model=List[CaixaResumoResponse], status_code=status.HTTP_200_OK, operation_id="listar_caixas_operacionais")
 def listar_caixas(
     empresa_id: Optional[int] = Query(None, description="Filtrar por empresa", gt=0),
     status_filtro: Optional[str] = Query(None, alias="status", description="Filtrar por status (ABERTO/FECHADO)"),

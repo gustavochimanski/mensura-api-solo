@@ -40,7 +40,7 @@ def criar_caixa(
     svc = CaixaCRUDService(db)
     return svc.create(data)
 
-@router.get("/", response_model=List[CaixaResponse], status_code=status.HTTP_200_OK)
+@router.get("/", response_model=List[CaixaResponse], status_code=status.HTTP_200_OK, operation_id="listar_caixas_cadastrados")
 def listar_caixas(
     empresa_id: Optional[int] = Query(None, description="Filtrar por empresa", gt=0),
     ativo: Optional[bool] = Query(None, description="Filtrar por status ativo"),
@@ -54,7 +54,7 @@ def listar_caixas(
     svc = CaixaCRUDService(db)
     return svc.list(empresa_id=empresa_id, ativo=ativo, skip=skip, limit=limit)
 
-@router.get("/{caixa_id}", response_model=CaixaResponse, status_code=status.HTTP_200_OK)
+@router.get("/{caixa_id}", response_model=CaixaResponse, status_code=status.HTTP_200_OK, operation_id="get_caixa_cadastrado")
 def get_caixa(
     caixa_id: int = Path(..., description="ID do caixa", gt=0),
     db: Session = Depends(get_db),
