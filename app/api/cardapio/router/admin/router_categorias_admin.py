@@ -40,7 +40,7 @@ def listar_categorias(
 
 @router.get("/search", response_model=List[CategoriaSearchOut])
 def buscar_categorias(
-    q: Optional[str] = Query(None, description="Termo de busca por descrição ou slug."),
+    q: Optional[str] = Query(None, description="Termo de busca por descriçã ou slug."),
     limit: int = Query(100, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
