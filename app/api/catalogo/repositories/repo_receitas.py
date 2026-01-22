@@ -90,13 +90,10 @@ class ReceitasRepository:
         search: Optional[str] = None,
     ) -> List[ReceitaModel]:
         """Lista receitas com seus ingredientes carregados e suporte a busca textual."""
-        query = (
-            self.db.query(ReceitaModel)
-            .options(
-                joinedload(ReceitaModel.ingredientes).joinedload(ReceitaIngredienteModel.receita_ingrediente),
-                joinedload(ReceitaModel.ingredientes).joinedload(ReceitaIngredienteModel.produto),
-                joinedload(ReceitaModel.ingredientes).joinedload(ReceitaIngredienteModel.combo),
-            )
+        query = self.db.query(ReceitaModel).options(
+            joinedload(ReceitaModel.ingredientes).joinedload(ReceitaIngredienteModel.receita_ingrediente),
+            joinedload(ReceitaModel.ingredientes).joinedload(ReceitaIngredienteModel.produto),
+            joinedload(ReceitaModel.ingredientes).joinedload(ReceitaIngredienteModel.combo),
         )
         
         if empresa_id is not None:
