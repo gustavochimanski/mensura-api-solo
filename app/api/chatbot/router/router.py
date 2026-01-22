@@ -1670,7 +1670,6 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 chatbot_db.create_message(db, conversation_id, "assistant", mensagem_cadastro)
                 
                 # Envia mensagem via WhatsApp
-                from ..core.notifications import OrderNotification
                 notifier = OrderNotification()
                 await notifier.send_whatsapp_message(phone_number, mensagem_cadastro, empresa_id=empresa_id)
                 
@@ -2292,8 +2291,7 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
 
             # Envia resposta via WhatsApp
             # Garante que OrderNotification está disponível no escopo
-            from ..core.notifications import OrderNotification as OrderNotificationClass
-            notifier = OrderNotificationClass()
+            notifier = OrderNotification()
             if buttons:
                 result = await notifier.send_whatsapp_message_with_buttons(
                     phone_number, 
