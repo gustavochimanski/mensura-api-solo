@@ -217,47 +217,80 @@ def delete_receita(
     return None
 
 
-# Adicionais
-# IMPORTANTE: Rotas sem parâmetros de path devem vir ANTES das rotas com parâmetros
-# para evitar conflitos de roteamento (ex: /adicionais vs /{receita_id}/adicionais)
-@router.post("/adicionais", response_model=AdicionalOut, status_code=status.HTTP_201_CREATED)
+# Adicionais - DEPRECADO: Endpoints removidos
+# ReceitaAdicionalModel foi removido - adicionais agora são vínculos de produtos/receitas/combos em complementos
+# Use os endpoints de complementos para vincular itens a receitas
+
+@router.post("/adicionais", status_code=status.HTTP_410_GONE)
 def add_adicional(
     body: AdicionalIn,
     db: Session = Depends(get_db),
 ):
-    """Adiciona um adicional a uma receita"""
-    return ReceitasService(db).add_adicional(body)
+    """
+    DEPRECADO: Este endpoint foi removido.
+    ReceitaAdicionalModel foi removido - adicionais agora são vínculos de produtos/receitas/combos em complementos.
+    Use os endpoints de complementos para vincular itens a receitas.
+    """
+    from fastapi import HTTPException
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="Este endpoint foi removido. Adicionais agora são vínculos de produtos/receitas/combos em complementos. "
+               "Use os endpoints de complementos para vincular itens a receitas."
+    )
 
 
-@router.put("/adicionais/{adicional_id}", response_model=AdicionalOut)
+@router.put("/adicionais/{adicional_id}", status_code=status.HTTP_410_GONE)
 def update_adicional(
     adicional_id: int = Path(..., description="ID do adicional"),
     db: Session = Depends(get_db),
 ):
     """
-    Atualiza um adicional de uma receita.
-    Sincroniza o preço com o cadastro atual do produto (sempre busca do ProdutoEmpModel).
+    DEPRECADO: Este endpoint foi removido.
+    ReceitaAdicionalModel foi removido - adicionais agora são vínculos de produtos/receitas/combos em complementos.
+    Use os endpoints de complementos para atualizar vínculos de itens a receitas.
     """
-    return ReceitasService(db).update_adicional(adicional_id)
+    from fastapi import HTTPException
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="Este endpoint foi removido. Adicionais agora são vínculos de produtos/receitas/combos em complementos. "
+               "Use os endpoints de complementos para atualizar vínculos de itens a receitas."
+    )
 
 
-@router.delete("/adicionais/{adicional_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/adicionais/{adicional_id}", status_code=status.HTTP_410_GONE)
 def remove_adicional(
     adicional_id: int = Path(..., description="ID do adicional"),
     db: Session = Depends(get_db),
 ):
-    """Remove um adicional de uma receita"""
-    ReceitasService(db).remove_adicional(adicional_id)
-    return None
+    """
+    DEPRECADO: Este endpoint foi removido.
+    ReceitaAdicionalModel foi removido - adicionais agora são vínculos de produtos/receitas/combos em complementos.
+    Use os endpoints de complementos para desvincular itens de receitas.
+    """
+    from fastapi import HTTPException
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="Este endpoint foi removido. Adicionais agora são vínculos de produtos/receitas/combos em complementos. "
+               "Use os endpoints de complementos para desvincular itens de receitas."
+    )
 
 
-@router.get("/{receita_id}/adicionais", response_model=list[AdicionalOut])
+@router.get("/{receita_id}/adicionais", status_code=status.HTTP_410_GONE)
 def list_adicionais(
     receita_id: int = Path(..., description="ID da receita"),
     db: Session = Depends(get_db),
 ):
-    """Lista todos os adicionais de uma receita"""
-    return ReceitasService(db).list_adicionais(receita_id)
+    """
+    DEPRECADO: Este endpoint foi removido.
+    ReceitaAdicionalModel foi removido - adicionais agora são vínculos de produtos/receitas/combos em complementos.
+    Use os endpoints de complementos para listar itens vinculados a receitas.
+    """
+    from fastapi import HTTPException
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="Este endpoint foi removido. Adicionais agora são vínculos de produtos/receitas/combos em complementos. "
+               "Use os endpoints de complementos para listar itens vinculados a receitas."
+    )
 
 
 # Complementos (vinculação a receitas)

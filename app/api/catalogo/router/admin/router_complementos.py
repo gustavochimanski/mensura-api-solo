@@ -200,9 +200,13 @@ def vincular_itens_complemento(
     (`minimo_itens` e `maximo_itens`), que controlam quantos itens o cliente pode escolher.
     
     **Parâmetros do request:**
-    - `item_ids`: Lista de IDs dos itens a vincular (obrigatório)
-    - `ordens`: Lista de ordens de exibição (opcional, usa índice se não informado)
-    - `precos`: Lista de preços específicos por item neste complemento (opcional)
+    - `items`: Lista de itens a vincular (obrigatório). Cada item deve ter:
+      - `tipo`: "produto", "receita" ou "combo"
+      - Exatamente um de: `produto_cod_barras`, `receita_id`, `combo_id`
+      - `ordem`: Ordem de exibição (opcional)
+      - `preco_complemento`: Preço específico neste complemento (opcional)
+    - `ordens`: Lista de ordens de exibição (opcional, sobrescreve ordem dos items)
+    - `precos`: Lista de preços específicos por item (opcional, sobrescreve preco_complemento dos items)
     
     **Comportamento:**
     - Remove todas as vinculações existentes do complemento e cria novas
@@ -213,7 +217,7 @@ def vincular_itens_complemento(
     - Essas configurações controlam a quantidade de itens que podem ser selecionados pelo cliente
     - Não afetam a vinculação de itens ao complemento (apenas a seleção pelo cliente)
     """
-    logger.info(f"[Complementos] Vincular itens - complemento={complemento_id} itens={req.item_ids}")
+    logger.info(f"[Complementos] Vincular itens - complemento={complemento_id} quantidade_itens={len(req.items)}")
     service = ComplementoService(db)
     return service.vincular_itens_complemento(complemento_id, req)
 
@@ -232,7 +236,8 @@ def vincular_item_complemento(
     que controlam quantos itens o cliente pode escolher dentro deste complemento.
     
     **Parâmetros do request:**
-    - `item_id`: ID do item adicional a vincular (obrigatório)
+    - `tipo`: Tipo do item - "produto", "receita" ou "combo" (obrigatório)
+    - Exatamente um de: `produto_cod_barras`, `receita_id`, `combo_id` (obrigatório)
     - `ordem`: Ordem de exibição do item no complemento (opcional, usa a maior ordem + 1 se não informado)
     - `preco_complemento`: Preço específico do item neste complemento (opcional, sobrescreve o preço padrão)
     
@@ -246,7 +251,8 @@ def vincular_item_complemento(
     - Essas configurações controlam a quantidade de itens que podem ser selecionados pelo cliente
     - Não afetam a vinculação de itens ao complemento (apenas a seleção pelo cliente)
     """
-    logger.info(f"[Complementos] Vincular item - complemento={complemento_id} item={req.item_id}")
+    item_identificador = req.produto_cod_barras or req.receita_id or req.combo_id
+    logger.info(f"[Complementos] Vincular item - complemento={complemento_id} tipo={req.tipo} identificador={item_identificador}")
     service = ComplementoService(db)
     return service.vincular_item_complemento(complemento_id, req)
 
