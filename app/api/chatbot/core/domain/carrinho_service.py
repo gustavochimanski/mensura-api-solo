@@ -88,6 +88,28 @@ class CarrinhoDomainService:
         mensagem += "(Digite 'continuar' para seguir com esse pedido ou 'cancelar' para fazer um novo)"
         return mensagem
 
+    def _resolve_adicional_nome(self, adicional_id: int) -> str:
+        """Resolve adicional_id (vinculo) para nome no catálogo."""
+        try:
+            from sqlalchemy.orm import joinedload
+            from app.api.catalogo.models.model_complemento_vinculo_item import ComplementoVinculoItemModel
+
+            v = (
+                self.db.query(ComplementoVinculoItemModel)
+                .options(
+                    joinedload(ComplementoVinculoItemModel.produto),
+                    joinedload(ComplementoVinculoItemModel.receita),
+                    joinedload(ComplementoVinculoItemModel.combo),
+                )
+                .filter(ComplementoVinculoItemModel.id == adicional_id)
+                .first()
+            )
+            if v and getattr(v, "nome", None):
+                return str(v.nome)
+        except Exception:
+            pass
+        return "Adicional"
+
     def carrinho_response_para_lista(self, carrinho_resp) -> List[Dict]:
         if not carrinho_resp or not carrinho_resp.itens:
             return []
@@ -103,14 +125,45 @@ class CarrinhoDomainService:
             if not item_id and item.combo_id:
                 item_id = f"combo_{item.combo_id}"
 
+            removidos: List[str] = []
+            obs = (item.observacao or "").strip()
+            if obs.upper().startswith("SEM:"):
+                rest = obs[4:].strip()
+                if rest:
+                    removidos = [x.strip() for x in rest.split(",") if x.strip()]
+
+            adicionais: List[Dict[str, Any]] = []
+            preco_adicionais = 0.0
+            if getattr(item, "complementos", None):
+                for comp in item.complementos:
+                    for adic in getattr(comp, "adicionais", []) or []:
+                        total_adic = float(adic.total or 0)
+                        preco_adicionais += total_adic
+                        nome = self._resolve_adicional_nome(int(adic.adicional_id))
+                        qtd_adic = int(adic.quantidade or 1)
+                        if qtd_adic > 1:
+                            nome = f"{qtd_adic}x {nome}"
+                        adicionais.append({"nome": nome, "preco": total_adic})
+
+            # preco_total do item já inclui adicionais; preco_base = só item, preco_adicionais = complementos
+            preco_base = preco_unit
+            if preco_adicionais > 0 and qtd:
+                base_calc = (preco_total - preco_adicionais) / qtd
+                preco_base = max(0.0, base_calc)
+
             lista.append(
                 {
                     "id": item_id or item.id,
                     "nome": item.produto_descricao_snapshot or "Item",
                     "descricao": "",
-                    "preco": preco_unit,
+                    "preco": preco_base,
                     "quantidade": qtd,
-                    "personalizacoes": {"removidos": [], "adicionais": [], "preco_adicionais": 0.0},
+                    "observacao": item.observacao,
+                    "personalizacoes": {
+                        "removidos": removidos,
+                        "adicionais": adicionais,
+                        "preco_adicionais": preco_adicionais,
+                    },
                 }
             )
 

@@ -241,38 +241,48 @@ class MensagemFormatters:
         return mensagem
 
     def formatar_carrinho(self, carrinho: List[Dict]) -> str:
-        """Formata o carrinho para exibição, incluindo personalizações"""
+        """Formata o carrinho para exibição, incluindo personalizações.
+        Complementos/adicionais são impressos indentados (à direita do item) com ➕
+        para indicar que pertencem àquele item e que foram adicionados."""
         if not carrinho:
             return "🛒 *Seu carrinho está vazio!*\n\nO que você gostaria de pedir hoje? 😊"
 
         msg = "🛒 *SEU PEDIDO*\n"
         msg += "━━━━━━━━━━━━━━━━━━━━\n\n"
 
+        # Indentação: item usa 3 espaços; complementos usam 6 (mais à direita, pertencem ao item)
+        _indent_complemento = "      "
+
         total = 0
         for idx, item in enumerate(carrinho, 1):
             qtd = item.get('quantidade', 1)
             preco_base = item['preco']
-            preco_adicionais = item.get('personalizacoes', {}).get('preco_adicionais', 0.0)
+            pers = item.get('personalizacoes', {})
+            preco_adicionais = pers.get('preco_adicionais', item.get('preco_adicionais', 0.0))
             subtotal = (preco_base + preco_adicionais) * qtd
             total += subtotal
 
             msg += f"*{idx}. {qtd}x {item['nome']}*\n"
             msg += f"   R$ {subtotal:.2f}\n"
 
-            # Mostra personalizações se houver
-            personalizacoes = item.get('personalizacoes', {})
-            removidos = personalizacoes.get('removidos', [])
-            adicionais = personalizacoes.get('adicionais', [])
+            removidos = pers.get('removidos', item.get('removidos', []))
+            adicionais = pers.get('adicionais', item.get('adicionais', []))
 
             if removidos:
                 msg += f"   🚫 Sem: {', '.join(removidos)}\n"
 
+            # Complementos/adicionais: cada um em linha, indentado, com ➕ (foi adicional)
             if adicionais:
                 for add in adicionais:
                     if isinstance(add, dict):
-                        msg += f"   ➕ {add.get('nome', add)} (+R$ {add.get('preco', 0):.2f})\n"
+                        nome = add.get('nome', add)
+                        preco = add.get('preco', 0)
+                        if preco and preco > 0:
+                            msg += f"{_indent_complemento}➕ {nome} (+R$ {preco:.2f})\n"
+                        else:
+                            msg += f"{_indent_complemento}➕ {nome}\n"
                     else:
-                        msg += f"   ➕ {add}\n"
+                        msg += f"{_indent_complemento}➕ {add}\n"
 
             msg += "\n"
 

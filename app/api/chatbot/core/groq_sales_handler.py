@@ -3274,7 +3274,13 @@ REGRA PARA COMPLEMENTOS:
                                 if item.get('removidos'):
                                     resumo += f"  _Sem: {', '.join(item['removidos'])}_\n"
                                 if item.get('adicionais'):
-                                    resumo += f"  _Complemento: {', '.join(item['adicionais'])}_\n"
+                                    for add in item['adicionais']:
+                                        nome = add.get('nome', add) if isinstance(add, dict) else add
+                                        preco = add.get('preco', 0) if isinstance(add, dict) else 0
+                                        if preco and preco > 0:
+                                            resumo += f"      ➕ {nome} (+R$ {preco:.2f})\n"
+                                        else:
+                                            resumo += f"      ➕ {nome}\n"
                             resumo += f"\n💰 *Total: R$ {total:.2f}*"
                             resposta_limpa += resumo
 
@@ -3488,7 +3494,13 @@ REGRA PARA COMPLEMENTOS:
                     if item.get('removidos'):
                         resp += f"  _Sem: {', '.join(item['removidos'])}_\n"
                     if item.get('adicionais'):
-                        resp += f"  _Complemento: {', '.join(item['adicionais'])}_\n"
+                        for add in item['adicionais']:
+                            nome = add.get('nome', add) if isinstance(add, dict) else add
+                            preco = add.get('preco', 0) if isinstance(add, dict) else 0
+                            if preco and preco > 0:
+                                resp += f"      ➕ {nome} (+R$ {preco:.2f})\n"
+                            else:
+                                resp += f"      ➕ {nome}\n"
                 resp += f"\n💰 *Total: R$ {total:.2f}*"
                 resp += "\n\nQuer mais alguma coisa? 😊"
                 return resp
@@ -3609,7 +3621,13 @@ REGRA PARA COMPLEMENTOS:
                         if item.get('removidos'):
                             resp += f"  _Sem: {', '.join(item['removidos'])}_\n"
                         if item.get('adicionais'):
-                            resp += f"  _Complemento: {', '.join(item['adicionais'])}_\n"
+                            for add in item['adicionais']:
+                                nome = add.get('nome', add) if isinstance(add, dict) else add
+                                preco = add.get('preco', 0) if isinstance(add, dict) else 0
+                                if preco and preco > 0:
+                                    resp += f"      ➕ {nome} (+R$ {preco:.2f})\n"
+                                else:
+                                    resp += f"      ➕ {nome}\n"
                     resp += f"\n💰 *Total: R$ {total:.2f}*"
 
                     # Verifica se tem complementos obrigatórios
@@ -3684,7 +3702,13 @@ REGRA PARA COMPLEMENTOS:
                     if item.get('removidos'):
                         resp += f"  _Sem: {', '.join(item['removidos'])}_\n"
                     if item.get('adicionais'):
-                        resp += f"  _Complemento: {', '.join(item['adicionais'])}_\n"
+                        for add in item['adicionais']:
+                            nome = add.get('nome', add) if isinstance(add, dict) else add
+                            preco = add.get('preco', 0) if isinstance(add, dict) else 0
+                            if preco and preco > 0:
+                                resp += f"      ➕ {nome} (+R$ {preco:.2f})\n"
+                            else:
+                                resp += f"      ➕ {nome}\n"
                 resp += f"\n💰 *Total: R$ {total:.2f}*\n\nQuer mais alguma coisa? 😊"
 
                 self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
@@ -3713,6 +3737,16 @@ REGRA PARA COMPLEMENTOS:
                 for item in pedido_contexto:
                     preco_item = (item['preco'] + item.get('preco_adicionais', 0)) * item.get('quantidade', 1)
                     resumo += f"• {item.get('quantidade', 1)}x {item['nome']} - R$ {preco_item:.2f}\n"
+                    if item.get('removidos'):
+                        resumo += f"  _Sem: {', '.join(item['removidos'])}_\n"
+                    if item.get('adicionais'):
+                        for add in item['adicionais']:
+                            nome = add.get('nome', add) if isinstance(add, dict) else add
+                            preco = add.get('preco', 0) if isinstance(add, dict) else 0
+                            if preco and preco > 0:
+                                resumo += f"      ➕ {nome} (+R$ {preco:.2f})\n"
+                            else:
+                                resumo += f"      ➕ {nome}\n"
                 resumo += f"\n💰 *Total: R$ {total:.2f}*\n\nQuer mais alguma coisa?"
                 return resumo
             return "Seu carrinho está vazio! O que vai querer? 😊"
@@ -4599,6 +4633,16 @@ REGRA PARA COMPLEMENTOS:
         nome = mensagem.strip()
         if len(nome) < 2:
             return "❓ Nome muito curto! Por favor, digite seu nome completo 😊"
+        
+        # Rejeita se a mensagem for sobre chamar atendente (não é um nome válido)
+        nome_lower = nome.lower()
+        palavras_chamar_atendente = [
+            "chamar", "atendente", "humano", "falar com", "quero falar",
+            "preciso de", "ligar atendente", "chama alguém"
+        ]
+        # Verifica se contém palavras relacionadas a chamar atendente
+        if any(palavra in nome_lower for palavra in palavras_chamar_atendente):
+            return "❓ Isso não parece ser um nome! 😊\n\nPor favor, digite seu *nome completo* (ex: João Silva):"
         
         # Valida se tem pelo menos nome e sobrenome
         partes_nome = nome.split()

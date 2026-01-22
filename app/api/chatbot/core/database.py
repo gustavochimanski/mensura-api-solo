@@ -132,11 +132,27 @@ def init_database(db: Session):
                 phone_number VARCHAR(50) UNIQUE NOT NULL,
                 is_active BOOLEAN DEFAULT TRUE,
                 paused_at TIMESTAMP,
+                paused_until TIMESTAMP,
                 paused_by VARCHAR(255),
                 empresa_id INTEGER,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
+        """))
+        
+        # Adiciona coluna paused_until se não existir (migration)
+        db.execute(text(f"""
+            DO $$ 
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns 
+                    WHERE table_schema = '{CHATBOT_SCHEMA}'
+                    AND table_name = 'bot_status'
+                    AND column_name = 'paused_until'
+                ) THEN
+                    ALTER TABLE {CHATBOT_SCHEMA}.bot_status ADD COLUMN paused_until TIMESTAMP;
+                END IF;
+            END $$;
         """))
 
         # Índices para performance
@@ -689,7 +705,7 @@ def get_bot_status(db: Session, phone_number: str) -> Optional[Dict]:
     """Verifica se o bot está ativo para um número específico"""
     try:
         query = text(f"""
-            SELECT id, phone_number, is_active, paused_at, paused_by, empresa_id
+            SELECT id, phone_number, is_active, paused_at, paused_until, paused_by, empresa_id
             FROM {CHATBOT_SCHEMA}.bot_status
             WHERE phone_number = :phone
         """)
@@ -701,8 +717,9 @@ def get_bot_status(db: Session, phone_number: str) -> Optional[Dict]:
                 "phone_number": result[1],
                 "is_active": result[2],
                 "paused_at": result[3].isoformat() if result[3] else None,
-                "paused_by": result[4],
-                "empresa_id": result[5]
+                "paused_until": result[4].isoformat() if result[4] else None,
+                "paused_by": result[5],
+                "empresa_id": result[6]
             }
         # Se não existe registro, o bot está ativo por padrão
         return {"phone_number": phone_number, "is_active": True}
@@ -714,6 +731,7 @@ def get_bot_status(db: Session, phone_number: str) -> Optional[Dict]:
 def is_bot_active_for_phone(db: Session, phone_number: str) -> bool:
     """Retorna True se o bot está ativo para o número, False se pausado.
     Também verifica o status global - se o bot global estiver pausado, retorna False.
+    Verifica se paused_until já passou - se sim, considera ativo novamente.
     """
     # Primeiro verifica o status global
     global_status = get_global_bot_status(db)
@@ -722,11 +740,40 @@ def is_bot_active_for_phone(db: Session, phone_number: str) -> bool:
 
     # Depois verifica o status individual
     status = get_bot_status(db, phone_number)
-    return status.get("is_active", True)
+    is_active = status.get("is_active", True)
+    
+    # Se está pausado, verifica se o paused_until já passou
+    if not is_active:
+        paused_until = status.get("paused_until")
+        if paused_until:
+            from datetime import datetime
+            try:
+                # Converte paused_until para datetime se for string
+                if isinstance(paused_until, str):
+                    # Remove 'Z' e substitui por '+00:00' para timezone UTC
+                    paused_until_clean = paused_until.replace('Z', '+00:00')
+                    paused_until_dt = datetime.fromisoformat(paused_until_clean)
+                else:
+                    paused_until_dt = paused_until
+                
+                # Compara com agora (timezone-aware)
+                now = datetime.now(paused_until_dt.tzinfo) if paused_until_dt.tzinfo else datetime.now()
+                if now >= paused_until_dt:
+                    # Pausa expirou - reativa automaticamente
+                    set_bot_status(db, phone_number, True, paused_by=None, empresa_id=status.get("empresa_id"))
+                    return True
+            except Exception as e:
+                print(f"Erro ao verificar paused_until: {e}")
+    
+    return is_active
 
 
-def set_bot_status(db: Session, phone_number: str, is_active: bool, paused_by: str = None, empresa_id: int = None) -> Dict:
-    """Define o status do bot para um número específico"""
+def set_bot_status(db: Session, phone_number: str, is_active: bool, paused_by: str = None, empresa_id: int = None, paused_until = None) -> Dict:
+    """Define o status do bot para um número específico
+    
+    Args:
+        paused_until: Timestamp até quando o bot deve ficar pausado (None = pausado indefinidamente)
+    """
     try:
         # Verifica se já existe
         existing = db.execute(
@@ -740,29 +787,32 @@ def set_bot_status(db: Session, phone_number: str, is_active: bool, paused_by: s
                 UPDATE {CHATBOT_SCHEMA}.bot_status
                 SET is_active = :is_active,
                     paused_at = CASE WHEN :is_active = false THEN CURRENT_TIMESTAMP ELSE NULL END,
+                    paused_until = CASE WHEN :is_active = false THEN :paused_until ELSE NULL END,
                     paused_by = CASE WHEN :is_active = false THEN :paused_by ELSE NULL END,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE phone_number = :phone
-                RETURNING id, phone_number, is_active, paused_at, paused_by
+                RETURNING id, phone_number, is_active, paused_at, paused_until, paused_by
             """)
         else:
             # Insere novo
             query = text(f"""
-                INSERT INTO {CHATBOT_SCHEMA}.bot_status (phone_number, is_active, paused_at, paused_by, empresa_id)
+                INSERT INTO {CHATBOT_SCHEMA}.bot_status (phone_number, is_active, paused_at, paused_until, paused_by, empresa_id)
                 VALUES (
                     :phone,
                     :is_active,
                     CASE WHEN :is_active = false THEN CURRENT_TIMESTAMP ELSE NULL END,
+                    CASE WHEN :is_active = false THEN :paused_until ELSE NULL END,
                     CASE WHEN :is_active = false THEN :paused_by ELSE NULL END,
                     :empresa_id
                 )
-                RETURNING id, phone_number, is_active, paused_at, paused_by
+                RETURNING id, phone_number, is_active, paused_at, paused_until, paused_by
             """)
 
         result = db.execute(query, {
             "phone": phone_number,
             "is_active": is_active,
             "paused_by": paused_by,
+            "paused_until": paused_until,
             "empresa_id": empresa_id
         }).fetchone()
         db.commit()
@@ -773,7 +823,8 @@ def set_bot_status(db: Session, phone_number: str, is_active: bool, paused_by: s
             "phone_number": result[1],
             "is_active": result[2],
             "paused_at": result[3].isoformat() if result[3] else None,
-            "paused_by": result[4]
+            "paused_until": result[4].isoformat() if result[4] else None,
+            "paused_by": result[5]
         }
     except Exception as e:
         db.rollback()
@@ -786,7 +837,7 @@ def get_all_bot_statuses(db: Session, empresa_id: int = None) -> List[Dict]:
     try:
         if empresa_id:
             query = text(f"""
-                SELECT id, phone_number, is_active, paused_at, paused_by, empresa_id
+                SELECT id, phone_number, is_active, paused_at, paused_until, paused_by, empresa_id
                 FROM {CHATBOT_SCHEMA}.bot_status
                 WHERE empresa_id = :empresa_id
                 ORDER BY updated_at DESC
@@ -794,7 +845,7 @@ def get_all_bot_statuses(db: Session, empresa_id: int = None) -> List[Dict]:
             result = db.execute(query, {"empresa_id": empresa_id})
         else:
             query = text(f"""
-                SELECT id, phone_number, is_active, paused_at, paused_by, empresa_id
+                SELECT id, phone_number, is_active, paused_at, paused_until, paused_by, empresa_id
                 FROM {CHATBOT_SCHEMA}.bot_status
                 ORDER BY updated_at DESC
             """)
@@ -806,8 +857,9 @@ def get_all_bot_statuses(db: Session, empresa_id: int = None) -> List[Dict]:
                 "phone_number": row[1],
                 "is_active": row[2],
                 "paused_at": row[3].isoformat() if row[3] else None,
-                "paused_by": row[4],
-                "empresa_id": row[5]
+                "paused_until": row[4].isoformat() if row[4] else None,
+                "paused_by": row[5],
+                "empresa_id": row[6]
             }
             for row in result.fetchall()
         ]

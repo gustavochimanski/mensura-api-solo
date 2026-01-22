@@ -912,6 +912,28 @@ async def send_notification(request: Request, db: Session = Depends(get_db)):
                     role="assistant",
                     content=message
                 )
+                
+                # PAUSA O CHATBOT POR 24 HORAS quando atendente responde
+                try:
+                    from datetime import datetime, timedelta
+                    empresa_id = conversations[0].get('empresa_id')
+                    paused_until = datetime.now() + timedelta(hours=24)
+                    
+                    chatbot_db.set_bot_status(
+                        db=db,
+                        phone_number=phone,
+                        is_active=False,
+                        paused_by="atendente_respondeu",
+                        empresa_id=empresa_id,
+                        paused_until=paused_until
+                    )
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.info(f"⏸️ Chatbot pausado por 24h para cliente {phone} (atendente respondeu)")
+                except Exception as e:
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.error(f"❌ Erro ao pausar chatbot após resposta do atendente: {e}", exc_info=True)
         except Exception as e:
             import logging
             logger = logging.getLogger(__name__)
@@ -1022,6 +1044,28 @@ async def send_media(request: Request, db: Session = Depends(get_db)):
                             role="assistant",
                             content=media_content
                         )
+                        
+                        # PAUSA O CHATBOT POR 24 HORAS quando atendente envia mídia
+                        try:
+                            from datetime import datetime, timedelta
+                            empresa_id = conversations[0].get('empresa_id')
+                            paused_until = datetime.now() + timedelta(hours=24)
+                            
+                            chatbot_db.set_bot_status(
+                                db=db,
+                                phone_number=phone,
+                                is_active=False,
+                                paused_by="atendente_respondeu",
+                                empresa_id=empresa_id,
+                                paused_until=paused_until
+                            )
+                            import logging
+                            logger = logging.getLogger(__name__)
+                            logger.info(f"⏸️ Chatbot pausado por 24h para cliente {phone} (atendente enviou mídia)")
+                        except Exception as e:
+                            import logging
+                            logger = logging.getLogger(__name__)
+                            logger.error(f"❌ Erro ao pausar chatbot após envio de mídia pelo atendente: {e}", exc_info=True)
                 except Exception as save_error:
                     import logging
                     logger = logging.getLogger(__name__)
