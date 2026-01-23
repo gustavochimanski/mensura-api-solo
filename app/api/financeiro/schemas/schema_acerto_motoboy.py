@@ -11,11 +11,11 @@ class PedidoPendenteAcertoOut(BaseModel):
     id: int
     entregador_id: Optional[int] = None
     valor_total: Optional[float] = None
-    data_criacao: datetime
+    data_criacao: datetime = Field(alias="created_at")
     cliente_id: Optional[int] = None
     status: str
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
 
 class FecharPedidosDiretoRequest(BaseModel):
