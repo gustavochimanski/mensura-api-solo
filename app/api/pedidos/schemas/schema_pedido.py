@@ -234,6 +234,11 @@ class PreviewCheckoutResponse(BaseModel):
     tempo_entrega_minutos: Optional[float] = None
 
 
+class CheckoutTotalResponse(BaseModel):
+    """Resposta enxuta: retorna apenas o valor total calculado."""
+    valor_total: float
+
+
 class TipoPedidoCheckoutEnum(str, Enum):
     DELIVERY = "DELIVERY"
     MESA = "MESA"

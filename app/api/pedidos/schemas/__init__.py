@@ -19,6 +19,7 @@ from .schema_pedido import (
     ItemPedidoEditar,
     ModoEdicaoRequest,
     PreviewCheckoutResponse,
+    CheckoutTotalResponse,
     # Response schemas
     ItemPedidoResponse,
     ProdutoPedidoAdicionalOut,
@@ -72,6 +73,7 @@ __all__ = [
     "ItemPedidoEditar",
     "ModoEdicaoRequest",
     "PreviewCheckoutResponse",
+    "CheckoutTotalResponse",
     # Response schemas
     "ItemPedidoResponse",
     "ProdutoPedidoAdicionalOut",

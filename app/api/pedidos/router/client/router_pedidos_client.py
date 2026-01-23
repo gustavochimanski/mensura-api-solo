@@ -11,6 +11,7 @@ from app.api.pedidos.schemas.schema_pedido import (
     ItemPedidoEditar,
     ModoEdicaoRequest,
     PreviewCheckoutResponse,
+    CheckoutTotalResponse,
     TipoPedidoCheckoutEnum,
 )
 from app.api.pedidos.schemas.schema_pedido_cliente import PedidoClienteListItem
@@ -48,12 +49,13 @@ def preview_checkout(
     Este endpoint é útil para mostrar ao cliente os valores antes de finalizar o pedido.
     """
     logger.info(f"[Pedidos] Preview checkout solicitado - cliente_id={cliente.id if cliente else None}")
-    return svc.calcular_preview_checkout(payload, cliente_id=cliente.id)
+    preview = svc.calcular_preview_checkout(payload, cliente_id=cliente.id)
+    return CheckoutTotalResponse(valor_total=float(preview.valor_total))
 
 
 @router.post(
     "/checkout",
-    response_model=Union[PedidoResponse, PedidoResponseCompleto],
+    response_model=CheckoutTotalResponse,
     status_code=status.HTTP_201_CREATED,
 )
 async def finalizar_checkout(
@@ -69,7 +71,8 @@ async def finalizar_checkout(
     logger.info(f"[Pedidos] Finalizar checkout - cliente_id={cliente.id} tipo={payload.tipo_pedido}")
 
     if payload.tipo_pedido == TipoPedidoCheckoutEnum.DELIVERY:
-        return await svc.finalizar_pedido(payload, cliente_id=cliente.id)
+        pedido = await svc.finalizar_pedido(payload, cliente_id=cliente.id)
+        return CheckoutTotalResponse(valor_total=float(getattr(pedido, "valor_total", 0) or 0))
 
     if payload.tipo_pedido == TipoPedidoCheckoutEnum.MESA:
         from app.api.catalogo.adapters.complemento_adapter import ComplementoAdapter
@@ -117,7 +120,8 @@ async def finalizar_checkout(
             receitas=receitas_list if receitas_list else None,
             combos=combos_list if combos_list else None,
         )
-        return mesa_service.criar_pedido(mesa_payload)
+        pedido = mesa_service.criar_pedido(mesa_payload)
+        return CheckoutTotalResponse(valor_total=float(getattr(pedido, "valor_total", 0) or 0))
 
     if payload.tipo_pedido == TipoPedidoCheckoutEnum.BALCAO:
         from app.api.catalogo.adapters.complemento_adapter import ComplementoAdapter
@@ -166,7 +170,8 @@ async def finalizar_checkout(
             receitas=receitas_list if receitas_list else None,
             combos=combos_list if combos_list else None,
         )
-        return balcao_service.criar_pedido(balcao_payload)
+        pedido = balcao_service.criar_pedido(balcao_payload)
+        return CheckoutTotalResponse(valor_total=float(getattr(pedido, "valor_total", 0) or 0))
 
     raise HTTPException(
         status.HTTP_400_BAD_REQUEST,
