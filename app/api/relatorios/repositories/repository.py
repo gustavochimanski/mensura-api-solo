@@ -108,29 +108,20 @@ class RelatorioRepository:
     ) -> PeriodoResumo:
         """Calcula resumo de vendas (quantidade e faturamento) para o período."""
 
-        def _query():
-            return (
-                self.db.query(
-                    func.count(PedidoUnificadoModel.id).label("quantidade"),
-                    func.coalesce(func.sum(PedidoUnificadoModel.valor_total), 0).label("faturamento"),
-                )
-                .filter(
-                    PedidoUnificadoModel.empresa_id == empresa_id,
-                    PedidoUnificadoModel.created_at >= inicio,
-                    PedidoUnificadoModel.created_at < fim,
-                    PedidoUnificadoModel.status.not_in(["C"]),  # Exclui cancelados
-                )
-                .first()
+        # Buscar pedidos para calcular faturamento usando valor_total_calc (mais confiável)
+        pedidos = (
+            self.db.query(PedidoUnificadoModel)
+            .filter(
+                PedidoUnificadoModel.empresa_id == empresa_id,
+                PedidoUnificadoModel.created_at >= inicio,
+                PedidoUnificadoModel.created_at < fim,
+                PedidoUnificadoModel.status.not_in(["C"]),  # Exclui cancelados
             )
+            .all()
+        )
 
-        result = self._handle_db_error(_query, default_return=None)
-
-        if result:
-            quantidade = int(result.quantidade or 0)
-            faturamento = _decimal_to_float(result.faturamento)
-        else:
-            quantidade = 0
-            faturamento = 0.0
+        quantidade = len(pedidos)
+        faturamento = sum(float(pedido.valor_total_calc) for pedido in pedidos)
 
         return PeriodoResumo(
             quantidade=quantidade,
