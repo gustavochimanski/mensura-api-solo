@@ -15,19 +15,19 @@ router = APIRouter(
 )
 
 
-@router.post("/", response_model=UserResponse)
+@router.post("", response_model=UserResponse, status_code=201)
 def create_user(request: UserCreate, db: Session = Depends(get_db)):
     return UserService(db).create_user(request)
+
+
+@router.get("", response_model=List[UserResponse])
+def list_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    return UserService(db).list_users(skip, limit)
 
 
 @router.get("/{id}", response_model=UserResponse)
 def get_user(id: int, db: Session = Depends(get_db)):
     return UserService(db).get_user(id)
-
-
-@router.get("/", response_model=List[UserResponse])
-def list_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    return UserService(db).list_users(skip, limit)
 
 
 @router.put("/{id}", response_model=UserResponse)

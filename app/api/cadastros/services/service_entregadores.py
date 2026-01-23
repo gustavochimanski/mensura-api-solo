@@ -451,11 +451,12 @@ class EntregadoresService:
         stats_map = {row.empresa_id: row for row in stats_por_empresa_rows}
 
         # acertos por empresa (totais e dias com acerto)
+        # Usa apenas taxa_entrega para o cálculo de acerto
         acertos_por_empresa_rows = (
             self.db.query(
                 PedidoUnificadoModel.empresa_id.label("empresa_id"),
                 func.count(PedidoUnificadoModel.id).label("total_pedidos_acertados"),
-                func.sum(PedidoUnificadoModel.valor_total).label("total_valor_acertado"),
+                func.sum(PedidoUnificadoModel.taxa_entrega).label("total_valor_acertado"),
                 func.count(
                     func.distinct(cast(PedidoUnificadoModel.acertado_entregador_em, Date))
                 ).label("dias_acerto"),
@@ -474,11 +475,12 @@ class EntregadoresService:
         acertos_map = {row.empresa_id: row for row in acertos_por_empresa_rows}
 
         # pendentes por empresa
+        # Usa apenas taxa_entrega para o cálculo de acerto
         pendentes_por_empresa_rows = (
             self.db.query(
                 PedidoUnificadoModel.empresa_id.label("empresa_id"),
                 func.count(PedidoUnificadoModel.id).label("qtd"),
-                func.sum(PedidoUnificadoModel.valor_total).label("valor"),
+                func.sum(PedidoUnificadoModel.taxa_entrega).label("valor"),
             )
             .filter(
                 *base_filter,

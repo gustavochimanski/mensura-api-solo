@@ -101,7 +101,7 @@ class AcertoEntregadoresService:
                 mensagem="Nenhum pedido encontrado para o período.",
             )
 
-        # Atualiza via ORM e calcula total
+        # Atualiza via ORM e calcula total (apenas taxa_entrega)
         total_dec = Decimal("0")
         total_diarias = Decimal("0")
         ids = []
@@ -112,8 +112,9 @@ class AcertoEntregadoresService:
             p.acertado_entregador_em = now
             p.data_atualizacao = now
             try:
-                if p.valor_total is not None:
-                    total_dec += Decimal(p.valor_total)
+                # Usa apenas taxa_entrega para o acerto
+                if p.taxa_entrega is not None:
+                    total_dec += Decimal(p.taxa_entrega)
             except Exception:
                 pass
 
@@ -187,8 +188,9 @@ class AcertoEntregadoresService:
             entry = entregador_dia_to_sum.setdefault(key, {"qtd": 0, "total": Decimal("0")})
             entry["qtd"] += 1
             try:
-                if p.valor_total is not None:
-                    entry["total"] += Decimal(p.valor_total)
+                # Usa apenas taxa_entrega para o acerto
+                if p.taxa_entrega is not None:
+                    entry["total"] += Decimal(p.taxa_entrega)
             except Exception:
                 pass
 
@@ -273,8 +275,9 @@ class AcertoEntregadoresService:
             entry = entregador_dia_to_sum.setdefault(key, {"qtd": 0, "total": Decimal("0")})
             entry["qtd"] += 1
             try:
-                if p.valor_total is not None:
-                    entry["total"] += Decimal(p.valor_total)
+                # Usa apenas taxa_entrega para o acerto
+                if p.taxa_entrega is not None:
+                    entry["total"] += Decimal(p.taxa_entrega)
             except Exception:
                 pass
 
