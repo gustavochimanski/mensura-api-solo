@@ -106,135 +106,56 @@ class RelatorioRepository:
     def _resumo_periodo(
         self, empresa_id: int, inicio: datetime, fim: datetime
     ) -> PeriodoResumo:
-        quantidade_total = 0
-        faturamento_total = Decimal("0")
+        """Calcula resumo de vendas (quantidade e faturamento) para o período."""
 
-        def _query_delivery():
+        def _query():
             return (
                 self.db.query(
-                    func.count(PedidoUnificadoModel.id),
-                    func.coalesce(func.sum(PedidoUnificadoModel.valor_total), 0),
+                    func.count(PedidoUnificadoModel.id).label("quantidade"),
+                    func.coalesce(func.sum(PedidoUnificadoModel.valor_total), 0).label("faturamento"),
                 )
                 .filter(
                     PedidoUnificadoModel.empresa_id == empresa_id,
-                    PedidoUnificadoModel.tipo_entrega == TipoEntrega.DELIVERY.value,
                     PedidoUnificadoModel.created_at >= inicio,
                     PedidoUnificadoModel.created_at < fim,
-                    PedidoUnificadoModel.status != "C",
+                    PedidoUnificadoModel.status.not_in(["C"]),  # Exclui cancelados
                 )
                 .first()
-                or (0, 0)
             )
 
-        def _query_mesa():
-            return (
-                self.db.query(
-                    func.count(PedidoUnificadoModel.id),
-                    func.coalesce(func.sum(PedidoUnificadoModel.valor_total), 0),
-                )
-                .filter(
-                    PedidoUnificadoModel.empresa_id == empresa_id,
-                    PedidoUnificadoModel.tipo_entrega == TipoEntrega.MESA.value,
-                    PedidoUnificadoModel.created_at >= inicio,
-                    PedidoUnificadoModel.created_at < fim,
-                    PedidoUnificadoModel.status != StatusPedido.CANCELADO.value,
-                )
-                .first()
-                or (0, 0)
-            )
+        result = self._handle_db_error(_query, default_return=None)
 
-        def _query_balcao():
-            return (
-                self.db.query(
-                    func.count(PedidoUnificadoModel.id),
-                    func.coalesce(func.sum(PedidoUnificadoModel.valor_total), 0),
-                )
-                .filter(
-                    PedidoUnificadoModel.empresa_id == empresa_id,
-                    PedidoUnificadoModel.tipo_entrega == TipoEntrega.BALCAO.value,
-                    PedidoUnificadoModel.created_at >= inicio,
-                    PedidoUnificadoModel.created_at < fim,
-                    PedidoUnificadoModel.status != StatusPedido.CANCELADO.value,
-                )
-                .first()
-                or (0, 0)
-            )
-
-        # Delivery (usando modelo unificado)
-        qtd_delivery, fatur_delivery = self._handle_db_error(_query_delivery, default_return=(0, 0))
-        quantidade_total += int(qtd_delivery or 0)
-        faturamento_total += Decimal(str(fatur_delivery or 0))
-
-        # Mesa - usando modelo unificado
-        qtd_mesa, fatur_mesa = self._handle_db_error(_query_mesa, default_return=(0, 0))
-        quantidade_total += int(qtd_mesa or 0)
-        faturamento_total += Decimal(str(fatur_mesa or 0))
-
-        # Balcão - usando modelo unificado
-        qtd_balcao, fatur_balcao = self._handle_db_error(_query_balcao, default_return=(0, 0))
-        quantidade_total += int(qtd_balcao or 0)
-        faturamento_total += Decimal(str(fatur_balcao or 0))
+        if result:
+            quantidade = int(result.quantidade or 0)
+            faturamento = _decimal_to_float(result.faturamento)
+        else:
+            quantidade = 0
+            faturamento = 0.0
 
         return PeriodoResumo(
-            quantidade=quantidade_total,
-            faturamento=_decimal_to_float(faturamento_total),
+            quantidade=quantidade,
+            faturamento=faturamento,
         )
 
     def _cancelados_periodo(
         self, empresa_id: int, inicio: datetime, fim: datetime
     ) -> int:
-        """Conta pedidos cancelados (status = 'C') no período."""
-        total_cancelados = 0
+        """Conta pedidos cancelados no período."""
 
-        def _query_delivery():
+        def _query():
             return (
                 self.db.query(func.count(PedidoUnificadoModel.id))
                 .filter(
                     PedidoUnificadoModel.empresa_id == empresa_id,
-                    PedidoUnificadoModel.tipo_entrega == TipoEntrega.DELIVERY.value,
                     PedidoUnificadoModel.created_at >= inicio,
                     PedidoUnificadoModel.created_at < fim,
-                    PedidoUnificadoModel.status == "C",
+                    PedidoUnificadoModel.status == "C",  # Cancelados
                 )
                 .scalar()
             )
 
-        def _query_mesa():
-            return (
-                self.db.query(func.count(PedidoUnificadoModel.id))
-                .filter(
-                    PedidoUnificadoModel.empresa_id == empresa_id,
-                    PedidoUnificadoModel.tipo_entrega == TipoEntrega.MESA.value,
-                    PedidoUnificadoModel.created_at >= inicio,
-                    PedidoUnificadoModel.created_at < fim,
-                    PedidoUnificadoModel.status == StatusPedido.CANCELADO.value,
-                )
-                .scalar()
-            )
-
-        def _query_balcao():
-            return (
-                self.db.query(func.count(PedidoUnificadoModel.id))
-                .filter(
-                    PedidoUnificadoModel.empresa_id == empresa_id,
-                    PedidoUnificadoModel.tipo_entrega == TipoEntrega.BALCAO.value,
-                    PedidoUnificadoModel.created_at >= inicio,
-                    PedidoUnificadoModel.created_at < fim,
-                    PedidoUnificadoModel.status == StatusPedido.CANCELADO.value,
-                )
-                .scalar()
-            )
-
-        cancelados_delivery = self._handle_db_error(_query_delivery, default_return=0)
-        total_cancelados += int(cancelados_delivery or 0)
-
-        cancelados_mesa = self._handle_db_error(_query_mesa, default_return=0)
-        total_cancelados += int(cancelados_mesa or 0)
-
-        cancelados_balcao = self._handle_db_error(_query_balcao, default_return=0)
-        total_cancelados += int(cancelados_balcao or 0)
-
-        return total_cancelados
+        result = self._handle_db_error(_query, default_return=0)
+        return int(result or 0)
 
     def _media_tempo_entrega_minutos(
         self, empresa_id: int, inicio: datetime, fim: datetime
@@ -472,47 +393,20 @@ class RelatorioRepository:
     def _top_produtos(
         self, empresa_id: int, inicio: datetime, fim: datetime, limite: int = 10
     ) -> List[Dict[str, float | int | str]]:
-        def _query_itens(
-            itens_model,
-            pedido_model,
-            pedido_criacao_attr,
-            status_cancelado_value,
-        ):
-            descricao_expr_local = func.coalesce(
-                itens_model.produto_descricao_snapshot,
-                ProdutoModel.descricao,
-                itens_model.produto_cod_barras,
-            )
+        """Retorna os produtos mais vendidos no período, agregando delivery, mesa e balcão."""
 
+        # Query unificada para todos os tipos de pedido
+        descricao_expr = func.coalesce(
+            PedidoItemUnificadoModel.produto_descricao_snapshot,
+            ProdutoModel.descricao,
+            PedidoItemUnificadoModel.produto_cod_barras,
+            "Produto sem identificação"
+        )
+
+        def _query():
             return (
                 self.db.query(
-                    descricao_expr_local.label("descricao"),
-                    func.sum(itens_model.quantidade).label("quantidade"),
-                    func.coalesce(
-                        func.sum(itens_model.quantidade * itens_model.preco_unitario), 0
-                    ).label("faturamento"),
-                )
-                .join(pedido_model, pedido_model.id == itens_model.pedido_id)
-                .outerjoin(ProdutoModel, ProdutoModel.cod_barras == itens_model.produto_cod_barras)
-                .filter(
-                    pedido_model.empresa_id == empresa_id,
-                    pedido_criacao_attr >= inicio,
-                    pedido_criacao_attr < fim,
-                    pedido_model.status != status_cancelado_value,
-                )
-                .group_by(descricao_expr_local)
-                .all()
-            )
-
-        def _query_delivery():
-            descricao_expr_delivery = func.coalesce(
-                PedidoItemUnificadoModel.produto_descricao_snapshot,
-                ProdutoModel.descricao,
-                PedidoItemUnificadoModel.produto_cod_barras,
-            )
-            return (
-                self.db.query(
-                    descricao_expr_delivery.label("descricao"),
+                    descricao_expr.label("descricao"),
                     func.sum(PedidoItemUnificadoModel.quantidade).label("quantidade"),
                     func.coalesce(
                         func.sum(PedidoItemUnificadoModel.quantidade * PedidoItemUnificadoModel.preco_unitario), 0
@@ -522,103 +416,37 @@ class RelatorioRepository:
                 .outerjoin(ProdutoModel, ProdutoModel.cod_barras == PedidoItemUnificadoModel.produto_cod_barras)
                 .filter(
                     PedidoUnificadoModel.empresa_id == empresa_id,
-                    PedidoUnificadoModel.tipo_entrega == TipoEntrega.DELIVERY.value,
                     PedidoUnificadoModel.created_at >= inicio,
                     PedidoUnificadoModel.created_at < fim,
-                    PedidoUnificadoModel.status != "C",
+                    PedidoUnificadoModel.status.not_in(["C"]),  # Exclui cancelados
                 )
-                .group_by(descricao_expr_delivery)
+                .group_by(descricao_expr)
+                .order_by(func.sum(PedidoItemUnificadoModel.quantidade).desc())
+                .limit(limite)
                 .all()
             )
 
-        def _query_mesa():
-            descricao_expr_mesa = func.coalesce(
-                PedidoItemUnificadoModel.produto_descricao_snapshot,
-                ProdutoModel.descricao,
-                PedidoItemUnificadoModel.produto_cod_barras,
-            )
-            return (
-                self.db.query(
-                    descricao_expr_mesa.label("descricao"),
-                    func.sum(PedidoItemUnificadoModel.quantidade).label("quantidade"),
-                    func.coalesce(
-                        func.sum(PedidoItemUnificadoModel.quantidade * PedidoItemUnificadoModel.preco_unitario), 0
-                    ).label("faturamento"),
-                )
-                .join(PedidoUnificadoModel, PedidoUnificadoModel.id == PedidoItemUnificadoModel.pedido_id)
-                .outerjoin(ProdutoModel, ProdutoModel.cod_barras == PedidoItemUnificadoModel.produto_cod_barras)
-                .filter(
-                    PedidoUnificadoModel.empresa_id == empresa_id,
-                    PedidoUnificadoModel.tipo_entrega == TipoEntrega.MESA.value,
-                    PedidoUnificadoModel.created_at >= inicio,
-                    PedidoUnificadoModel.created_at < fim,
-                    PedidoUnificadoModel.status != StatusPedido.CANCELADO.value,
-                )
-                .group_by(descricao_expr_mesa)
-                .all()
-            )
+        rows = self._handle_db_error(_query, default_return=[])
 
-        def _query_balcao():
-            descricao_expr_balcao = func.coalesce(
-                PedidoItemUnificadoModel.produto_descricao_snapshot,
-                ProdutoModel.descricao,
-                PedidoItemUnificadoModel.produto_cod_barras,
-            )
-            return (
-                self.db.query(
-                    descricao_expr_balcao.label("descricao"),
-                    func.sum(PedidoItemUnificadoModel.quantidade).label("quantidade"),
-                    func.coalesce(
-                        func.sum(PedidoItemUnificadoModel.quantidade * PedidoItemUnificadoModel.preco_unitario), 0
-                    ).label("faturamento"),
-                )
-                .join(PedidoUnificadoModel, PedidoUnificadoModel.id == PedidoItemUnificadoModel.pedido_id)
-                .outerjoin(ProdutoModel, ProdutoModel.cod_barras == PedidoItemUnificadoModel.produto_cod_barras)
-                .filter(
-                    PedidoUnificadoModel.empresa_id == empresa_id,
-                    PedidoUnificadoModel.tipo_entrega == TipoEntrega.BALCAO.value,
-                    PedidoUnificadoModel.created_at >= inicio,
-                    PedidoUnificadoModel.created_at < fim,
-                    PedidoUnificadoModel.status != StatusPedido.CANCELADO.value,
-                )
-                .group_by(descricao_expr_balcao)
-                .all()
-            )
-
-        rows_delivery = self._handle_db_error(_query_delivery, default_return=[])
-        rows_mesa = self._handle_db_error(_query_mesa, default_return=[])
-        rows_balcao = self._handle_db_error(_query_balcao, default_return=[])
-
-        acumulado: dict[str, dict[str, float | int | str]] = {}
-
-        def _somar(rows):
-            for row in rows:
-                key = row.descricao or "Não identificado"
-                entry = acumulado.setdefault(
-                    key,
-                    {"descricao": key, "quantidade": 0, "faturamento": 0.0},
-                )
-                entry["quantidade"] = int(entry["quantidade"]) + int(row.quantidade or 0)
-                entry["faturamento"] = float(entry["faturamento"]) + _decimal_to_float(row.faturamento)
-
-        _somar(rows_delivery)
-        _somar(rows_mesa)
-        _somar(rows_balcao)
-
-        return sorted(
-            acumulado.values(),
-            key=lambda item: item["quantidade"],
-            reverse=True,
-        )[:limite]
+        return [
+            {
+                "descricao": row.descricao or "Produto sem identificação",
+                "quantidade": int(row.quantidade or 0),
+                "faturamento": _decimal_to_float(row.faturamento),
+            }
+            for row in rows
+        ]
 
     def _top_entregadores(
         self, empresa_id: int, inicio: datetime, fim: datetime, limite: int = 5
     ) -> List[Dict[str, float | int | str]]:
+        """Retorna os entregadores com mais pedidos no período."""
+
         def _query():
             return (
                 self.db.query(
-                    EntregadorDeliveryModel.nome.label("nome"),
-                    EntregadorDeliveryModel.telefone.label("telefone"),
+                    func.coalesce(EntregadorDeliveryModel.nome, "Entregador sem nome").label("nome"),
+                    func.coalesce(EntregadorDeliveryModel.telefone, "Sem telefone").label("telefone"),
                     func.count(PedidoUnificadoModel.id).label("quantidade_pedidos"),
                     func.coalesce(
                         func.sum(PedidoUnificadoModel.valor_total),
@@ -634,7 +462,7 @@ class RelatorioRepository:
                     PedidoUnificadoModel.tipo_entrega == TipoEntrega.DELIVERY.value,
                     PedidoUnificadoModel.created_at >= inicio,
                     PedidoUnificadoModel.created_at < fim,
-                    PedidoUnificadoModel.status != "C",  # Exclui apenas cancelados
+                    PedidoUnificadoModel.status.not_in(["C"]),  # Exclui apenas cancelados
                     PedidoUnificadoModel.entregador_id.isnot(None),  # Apenas pedidos com entregador
                 )
                 .group_by(
@@ -646,13 +474,13 @@ class RelatorioRepository:
                 .limit(limite)
                 .all()
             )
-        
+
         rows = self._handle_db_error(_query, default_return=[])
 
         return [
             {
-                "nome": row.nome or "Não identificado",
-                "telefone": row.telefone or "Não informado",
+                "nome": row.nome,
+                "telefone": row.telefone,
                 "quantidade_pedidos": int(row.quantidade_pedidos or 0),
                 "faturamento_total": _decimal_to_float(row.faturamento_total),
             }
