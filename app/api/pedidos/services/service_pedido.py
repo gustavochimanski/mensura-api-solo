@@ -1194,9 +1194,13 @@ class PedidoService:
         # Envia notificação ao cliente quando pedido sai para entrega
         if novo_status == PedidoStatusEnum.S:
             try:
+                # Extrai dados necessários antes de passar para a thread
+                pedido_id = int(pedido.id)
+                empresa_id_val = int(pedido.empresa_id) if pedido.empresa_id else None
+                
                 # Executa notificação em thread separada para não bloquear
                 threading.Thread(
-                    target=lambda: asyncio.run(self._notificar_cliente_pedido_em_rota(pedido)),
+                    target=lambda: asyncio.run(self._notificar_cliente_pedido_em_rota(pedido_id, empresa_id_val)),
                     daemon=True
                 ).start()
             except Exception as e:
@@ -1840,14 +1844,38 @@ class PedidoService:
                 exc,
             )
 
-    async def _notificar_cliente_pedido_em_rota(self, pedido: PedidoUnificadoModel) -> None:
+    async def _notificar_cliente_pedido_em_rota(self, pedido_id: int, empresa_id: Optional[int] = None) -> None:
         """
         Notifica o cliente quando o pedido sai para entrega.
         
         Args:
-            pedido: Pedido que mudou para status "Saiu para entrega"
+            pedido_id: ID do pedido que mudou para status "Saiu para entrega"
+            empresa_id: ID da empresa (opcional)
         """
+        # Cria uma nova sessão do banco para a thread assíncrona
+        from app.database.db_connection import SessionLocal
+        db_session = SessionLocal()
+        
         try:
+            # Recarrega o pedido com os relacionamentos necessários
+            from sqlalchemy.orm import joinedload
+            pedido = (
+                db_session.query(PedidoUnificadoModel)
+                .options(
+                    joinedload(PedidoUnificadoModel.cliente),
+                    joinedload(PedidoUnificadoModel.empresa),
+                )
+                .filter(PedidoUnificadoModel.id == pedido_id)
+                .first()
+            )
+            
+            if not pedido:
+                logger.warning(
+                    "[Pedidos] Pedido %s não encontrado para notificação de entrega",
+                    pedido_id
+                )
+                return
+            
             # Verifica se é um pedido de delivery
             if not pedido.is_delivery():
                 return
@@ -1856,7 +1884,7 @@ class PedidoService:
             if not pedido.cliente:
                 logger.warning(
                     "[Pedidos] Pedido %s sem cliente para notificação de entrega",
-                    pedido.id
+                    pedido_id
                 )
                 return
             
@@ -1866,7 +1894,7 @@ class PedidoService:
                 logger.warning(
                     "[Pedidos] Cliente %s do pedido %s sem telefone para notificação",
                     pedido.cliente.id,
-                    pedido.id
+                    pedido_id
                 )
                 return
             
@@ -1875,7 +1903,7 @@ class PedidoService:
                 logger.warning(
                     "[Pedidos] Telefone do cliente %s do pedido %s está vazio",
                     pedido.cliente.id,
-                    pedido.id
+                    pedido_id
                 )
                 return
             
@@ -1897,7 +1925,7 @@ Em breve estará com você! 🚚
 _Qualquer dúvida, entre em contato conosco._"""
             
             # Envia via WhatsApp
-            empresa_id_str = str(pedido.empresa_id) if pedido.empresa_id else None
+            empresa_id_str = str(pedido.empresa_id) if pedido.empresa_id else (str(empresa_id) if empresa_id else None)
             whatsapp_result = await OrderNotification.send_whatsapp_message(
                 telefone,
                 mensagem,
@@ -1907,7 +1935,7 @@ _Qualquer dúvida, entre em contato conosco._"""
             # Salva no chat interno também
             order_type = "delivery"
             chat_result = await OrderNotification.send_notification_async(
-                self.db,
+                db_session,
                 telefone,
                 mensagem,
                 order_type
@@ -1917,23 +1945,26 @@ _Qualquer dúvida, entre em contato conosco._"""
                 logger.info(
                     "[Pedidos] Notificação de entrega enviada ao cliente %s (pedido %s) via WhatsApp",
                     pedido.cliente.id,
-                    pedido.id
+                    pedido_id
                 )
             else:
                 logger.warning(
                     "[Pedidos] Erro ao enviar WhatsApp ao cliente %s (pedido %s): %s. Mensagem salva no chat interno.",
                     pedido.cliente.id,
-                    pedido.id,
+                    pedido_id,
                     whatsapp_result.get("error", "erro desconhecido")
                 )
             
         except Exception as exc:
             logger.error(
                 "[Pedidos] Falha ao notificar cliente sobre pedido em rota %s: %s",
-                getattr(pedido, "id", None),
+                pedido_id,
                 exc,
                 exc_info=True
             )
+        finally:
+            # Fecha a sessão do banco
+            db_session.close()
 
     def testar_busca_regiao(self, distancia_km: float, empresa_id: int) -> dict:
         """Método auxiliar para testar a busca de faixa por distância."""
