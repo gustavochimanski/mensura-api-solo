@@ -147,22 +147,28 @@ class VitrineRepository:
         v.categorias.clear()
         v.categorias.append(cat)
 
+    def _get_next_ordem(self) -> int:
+        """Calcula a próxima ordem disponível (MAX(ordem) + 1)"""
+        max_ordem = self.db.query(func.max(VitrinesModel.ordem)).scalar()
+        return (max_ordem or 0) + 1
+
     # --------------------- CRUD ---------------------
     def create(
         self,
         *,
-        categoria: CategoriaDeliveryModel,
+        categoria: Optional[CategoriaDeliveryModel],
         titulo: str,
-        ordem: int = 1,
         is_home: bool = False,
     ) -> VitrinesModel:
+        ordem = self._get_next_ordem()
         nova = VitrinesModel(
             titulo=titulo,
             slug=self._ensure_unique_slug(titulo),
             ordem=ordem,
             tipo_exibicao=("P" if is_home else None),
         )
-        self._assign_single_category(nova, categoria)
+        if categoria is not None:
+            self._assign_single_category(nova, categoria)
 
         self.db.add(nova)
         try:

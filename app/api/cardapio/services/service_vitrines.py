@@ -51,7 +51,6 @@ class VitrinesService:
             return self.repo.create(
                 categoria=cat,
                 titulo=req.titulo,
-                ordem=req.ordem or 1,
                 is_home=bool(req.is_home),
             )
         except IntegrityError:
