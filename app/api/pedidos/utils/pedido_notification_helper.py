@@ -96,7 +96,7 @@ async def notificar_novo_pedido(pedido: PedidoUnificadoModel) -> None:
         logger.error(f"Erro ao notificar novo pedido {pedido_id}: {e}", exc_info=True)
 
 
-async def notificar_pedido_impresso(pedido: PedidoUnificadoModel) -> None:
+async def notificar_pedido_impresso(pedido_id: int, empresa_id: Optional[int] = None) -> None:
     """
     Notifica o frontend sobre um pedido marcado como impresso (notificação kanban).
     
@@ -104,18 +104,38 @@ async def notificar_pedido_impresso(pedido: PedidoUnificadoModel) -> None:
     sem bloquear o fluxo principal.
     
     Args:
-        pedido: Instância do PedidoUnificadoModel com todos os relacionamentos carregados
+        pedido_id: ID do pedido que foi marcado como impresso
+        empresa_id: ID da empresa (opcional, será buscado do pedido se não fornecido)
     """
-    # Extrai o ID do pedido logo no início para evitar DetachedInstanceError
-    # caso o objeto seja desconectado da sessão durante operações assíncronas
-    try:
-        pedido_id = str(pedido.id)
-        empresa_id = str(pedido.empresa_id)
-    except Exception as e:
-        logger.error(f"Erro ao extrair IDs do pedido: {e}", exc_info=True)
-        return
+    # Cria uma nova sessão do banco para a thread assíncrona
+    from app.database.db_connection import SessionLocal
+    from sqlalchemy.orm import joinedload
+    db_session = SessionLocal()
     
     try:
+        # Recarrega o pedido com os relacionamentos necessários
+        pedido = (
+            db_session.query(PedidoUnificadoModel)
+            .options(
+                joinedload(PedidoUnificadoModel.cliente),
+                joinedload(PedidoUnificadoModel.itens),
+                joinedload(PedidoUnificadoModel.mesa),
+                joinedload(PedidoUnificadoModel.empresa),
+            )
+            .filter(PedidoUnificadoModel.id == pedido_id)
+            .first()
+        )
+        
+        if not pedido:
+            logger.warning(f"Pedido {pedido_id} não encontrado para notificação de impresso")
+            return
+        
+        # Usa empresa_id do pedido se não foi fornecido
+        empresa_id_final = empresa_id or pedido.empresa_id
+        if not empresa_id_final:
+            logger.warning(f"Pedido {pedido_id} não tem empresa_id")
+            return
+        
         from app.api.notifications.services.pedido_notification_service import PedidoNotificationService
         
         # Extrai dados do cliente
@@ -150,7 +170,9 @@ async def notificar_pedido_impresso(pedido: PedidoUnificadoModel) -> None:
         
         # Informações adicionais sobre o pedido
         tipo_entrega = pedido.tipo_entrega.value if hasattr(pedido.tipo_entrega, "value") else str(pedido.tipo_entrega)
-        numero_pedido = pedido.numero_pedido or pedido_id
+        numero_pedido = pedido.numero_pedido or str(pedido_id)
+        pedido_id_str = str(pedido_id)
+        empresa_id_str = str(empresa_id_final)
         
         # Metadados adicionais
         channel_metadata = {
@@ -164,19 +186,21 @@ async def notificar_pedido_impresso(pedido: PedidoUnificadoModel) -> None:
         # Chama o serviço de notificação
         notification_service = PedidoNotificationService()
         sent_count = await notification_service.notify_pedido_impresso(
-            empresa_id=empresa_id,
-            pedido_id=pedido_id,
+            empresa_id=empresa_id_str,
+            pedido_id=pedido_id_str,
             cliente_data=cliente_data,
             itens=itens,
             valor_total=valor_total,
             channel_metadata=channel_metadata
         )
         
-        logger.debug(f"Processo de notificação kanban concluído: pedido_id={pedido_id}, empresa_id={empresa_id}, sent_count={sent_count}")
+        logger.debug(f"Processo de notificação kanban concluído: pedido_id={pedido_id_str}, empresa_id={empresa_id_str}, sent_count={sent_count}")
         
     except Exception as e:
         # Loga o erro mas não propaga para não quebrar o fluxo de marcação como impresso
-        # Usa pedido_id extraído no início para evitar DetachedInstanceError
         logger.error(f"Erro ao notificar pedido impresso {pedido_id}: {e}", exc_info=True)
+    finally:
+        # Fecha a sessão do banco
+        db_session.close()
 
 

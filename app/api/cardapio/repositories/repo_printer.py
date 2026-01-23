@@ -193,20 +193,14 @@ class PrinterRepository:
                 # Notifica kanban após marcar como impresso
                 try:
                     from app.api.pedidos.utils.pedido_notification_helper import notificar_pedido_impresso
-                    # Recarrega pedido com todos os relacionamentos para a notificação (incluindo mesa)
-                    pedido_completo = (
-                        self.db.query(PedidoUnificadoModel)
-                        .options(
-                            joinedload(PedidoUnificadoModel.cliente),
-                            joinedload(PedidoUnificadoModel.itens),
-                            joinedload(PedidoUnificadoModel.mesa),
-                            joinedload(PedidoUnificadoModel.empresa),
-                        )
-                        .filter(PedidoUnificadoModel.id == pedido_id)
-                        .first()
+                    # Extrai dados necessários antes de passar para a thread
+                    pedido_id_val = int(pedido_id)
+                    empresa_id_val = int(pedido.empresa_id) if pedido.empresa_id else None
+                    
+                    # Executa notificação em thread separada
+                    _run_async_in_thread(
+                        notificar_pedido_impresso(pedido_id_val, empresa_id_val)
                     )
-                    if pedido_completo:
-                        _run_async_in_thread(notificar_pedido_impresso(pedido_completo))
                 except Exception as e:
                     logger.error(f"Erro ao agendar notificação kanban para pedido impresso {pedido_id}: {e}")
                 
@@ -275,20 +269,14 @@ class PrinterRepository:
                 # Notifica kanban após marcar como impresso
                 try:
                     from app.api.pedidos.utils.pedido_notification_helper import notificar_pedido_impresso
-                    # Recarrega pedido com todos os relacionamentos para a notificação (incluindo mesa)
-                    pedido_completo = (
-                        self.db.query(PedidoUnificadoModel)
-                        .options(
-                            joinedload(PedidoUnificadoModel.cliente),
-                            joinedload(PedidoUnificadoModel.itens),
-                            joinedload(PedidoUnificadoModel.mesa),
-                            joinedload(PedidoUnificadoModel.empresa),
-                        )
-                        .filter(PedidoUnificadoModel.id == pedido_id)
-                        .first()
+                    # Extrai dados necessários antes de passar para a thread
+                    pedido_id_val = int(pedido_id)
+                    empresa_id_val = int(pedido.empresa_id) if pedido.empresa_id else None
+                    
+                    # Executa notificação em thread separada
+                    _run_async_in_thread(
+                        notificar_pedido_impresso(pedido_id_val, empresa_id_val)
                     )
-                    if pedido_completo:
-                        _run_async_in_thread(notificar_pedido_impresso(pedido_completo))
                 except Exception as e:
                     logger.error(f"Erro ao agendar notificação kanban para pedido impresso {pedido_id}: {e}")
                 
@@ -367,20 +355,14 @@ class PrinterRepository:
                 # Notifica kanban após marcar como impresso
                 try:
                     from app.api.pedidos.utils.pedido_notification_helper import notificar_pedido_impresso
-                    # Recarrega pedido com todos os relacionamentos para a notificação (incluindo mesa)
-                    pedido_completo = (
-                        self.db.query(PedidoUnificadoModel)
-                        .options(
-                            joinedload(PedidoUnificadoModel.cliente),
-                            joinedload(PedidoUnificadoModel.itens),
-                            joinedload(PedidoUnificadoModel.mesa),
-                            joinedload(PedidoUnificadoModel.empresa),
-                        )
-                        .filter(PedidoUnificadoModel.id == pedido_id)
-                        .first()
+                    # Extrai dados necessários antes de passar para a thread
+                    pedido_id_val = int(pedido_id)
+                    empresa_id_val = int(pedido.empresa_id) if pedido.empresa_id else None
+                    
+                    # Executa notificação em thread separada
+                    _run_async_in_thread(
+                        notificar_pedido_impresso(pedido_id_val, empresa_id_val)
                     )
-                    if pedido_completo:
-                        _run_async_in_thread(notificar_pedido_impresso(pedido_completo))
                 except Exception as e:
                     logger.error(f"Erro ao agendar notificação kanban para pedido impresso {pedido_id}: {e}")
                 
