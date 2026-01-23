@@ -578,50 +578,86 @@ _Obrigado pela preferência!_"""
         return message
 
     @staticmethod
-    async def send_notification_async(db: Session, phone: str, message: str, order_type: str) -> Dict:
+    async def send_notification_async(db: Session, phone: str, message: str, order_type: str, empresa_id: Optional[int] = None) -> Dict:
         """
         Envia notificação como mensagem no chat (versão async)
 
         O número de telefone do cliente vira o user_id no chat
         A IA envia automaticamente a mensagem de confirmação
+        
+        Args:
+            db: Sessão do banco de dados
+            phone: Número de telefone do cliente
+            message: Mensagem a ser enviada
+            order_type: Tipo do pedido (cardapio, mesa, balcao, delivery)
+            empresa_id: ID da empresa (opcional, mas recomendado para garantir histórico correto)
         """
         from . import database as chatbot_db
+        from .config_whatsapp import format_phone_number
 
         try:
-            # Use o telefone como user_id
-            user_id = phone
+            # Normaliza o telefone para garantir consistência com as conversas existentes
+            # Remove caracteres não numéricos e garante código do país
+            phone_normalized = format_phone_number(phone)
+            # Use o telefone normalizado como user_id
+            user_id = phone_normalized
             session_id = f"order_{order_type}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
 
             # Garante que o prompt padrão existe para não violar a FK da tabela
             prompt_key = "default"
-            if not chatbot_db.get_prompt(db, prompt_key):
+            if not chatbot_db.get_prompt(db, prompt_key, empresa_id=empresa_id):
                 chatbot_db.create_prompt(
                     db=db,
                     key=prompt_key,
                     name="Padrão (Notificações)",
                     content="Atendente virtual para notificações automáticas.",
-                    is_default=True
+                    is_default=True,
+                    empresa_id=empresa_id
                 )
 
             # Cria ou busca conversa existente para esse usuário
-            conversations = chatbot_db.get_conversations_by_user(db, user_id)
+            # Se empresa_id foi fornecido, busca apenas conversas dessa empresa
+            conversations = chatbot_db.get_conversations_by_user(db, user_id, empresa_id=empresa_id)
+            
+            # Se não encontrou conversa e o telefone foi normalizado, tenta buscar com o telefone original também
+            if not conversations and phone != phone_normalized:
+                conversations = chatbot_db.get_conversations_by_user(db, phone, empresa_id=empresa_id)
 
             if conversations:
                 # Usa a conversa mais recente
                 conversation_id = conversations[0]['id']
-                # Busca empresa_id da conversa
+                # Busca empresa_id da conversa (pode ser None se não tinha antes)
                 conversation = chatbot_db.get_conversation(db, conversation_id)
-                empresa_id = conversation.get('empresa_id') if conversation else None
+                empresa_id_final = conversation.get('empresa_id') if conversation else empresa_id
+                
+                # Se a conversa não tinha empresa_id mas agora temos, atualiza
+                if empresa_id and not empresa_id_final:
+                    # Atualiza a conversa com o empresa_id
+                    try:
+                        from sqlalchemy import text
+                        query = text(f"""
+                            UPDATE chatbot.conversations
+                            SET empresa_id = :empresa_id
+                            WHERE id = :conversation_id
+                        """)
+                        db.execute(query, {"empresa_id": empresa_id, "conversation_id": conversation_id})
+                        db.commit()
+                        empresa_id_final = empresa_id
+                    except Exception as e:
+                        logger.warning(f"Erro ao atualizar empresa_id da conversa {conversation_id}: {e}")
+                        empresa_id_final = empresa_id
             else:
-                # Cria nova conversa
+                # Cria nova conversa com empresa_id se fornecido
+                # Usa o telefone normalizado para garantir consistência
                 conversation_id = chatbot_db.create_conversation(
                     db=db,
                     session_id=session_id,
-                    user_id=user_id,
+                    user_id=user_id,  # telefone normalizado
                     prompt_key=prompt_key,
-                    model="notification-system"
+                    model="notification-system",
+                    empresa_id=empresa_id
                 )
-                empresa_id = None
+                empresa_id_final = empresa_id
 
             # Adiciona a mensagem de notificação como resposta da IA
             message_id = chatbot_db.create_message(
@@ -634,7 +670,7 @@ _Obrigado pela preferência!_"""
             # Envia notificação WebSocket para atualizar o frontend
             try:
                 await send_chatbot_websocket_notification(
-                    empresa_id=empresa_id,
+                    empresa_id=empresa_id_final,
                     notification_type="chatbot_message",
                     title="Nova Notificação",
                     message=f"Notificação de {order_type} enviada",
@@ -729,13 +765,22 @@ _Obrigado pela preferência!_"""
             "success": False
         }
 
+        # Obtém empresa_id dos dados do pedido
+        empresa_id = order_data.get("empresa_id")
+        # Converte para int se for string
+        if empresa_id and isinstance(empresa_id, str):
+            try:
+                empresa_id = int(empresa_id)
+            except (ValueError, TypeError):
+                empresa_id = None
+
         # Sempre salva no chat interno (para histórico) - usa versão async
-        chat_result = await cls.send_notification_async(db, phone, message, order_type)
+        chat_result = await cls.send_notification_async(db, phone, message, order_type, empresa_id=empresa_id)
         results["chat_interno"] = chat_result
 
         # Envia via WhatsApp API
-        empresa_id = order_data.get("empresa_id")
-        whatsapp_result = await cls.send_whatsapp_message(phone, message, empresa_id=empresa_id)
+        empresa_id_str = str(empresa_id) if empresa_id else None
+        whatsapp_result = await cls.send_whatsapp_message(phone, message, empresa_id=empresa_id_str)
         results["whatsapp_api"] = whatsapp_result
 
         # Considera sucesso se WhatsApp API funcionou

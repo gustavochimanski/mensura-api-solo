@@ -1934,11 +1934,14 @@ _Qualquer dúvida, entre em contato conosco._"""
             
             # Salva no chat interno também
             order_type = "delivery"
+            # Obtém empresa_id do pedido (converte para int se necessário)
+            empresa_id_int = pedido.empresa_id if pedido.empresa_id else (int(empresa_id) if empresa_id else None)
             chat_result = await OrderNotification.send_notification_async(
                 db_session,
                 telefone,
                 mensagem,
-                order_type
+                order_type,
+                empresa_id=empresa_id_int
             )
             
             if whatsapp_result.get("success"):
