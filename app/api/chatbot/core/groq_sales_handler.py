@@ -4625,30 +4625,108 @@ REGRA PARA COMPLEMENTOS:
 
     # ========== FLUXO DE CADASTRO RÁPIDO DE CLIENTE (durante pedido) ==========
 
+    def _detectar_se_nao_e_nome(self, mensagem: str) -> bool:
+        """
+        Detecta se a mensagem NÃO parece ser um nome válido.
+        Retorna True se NÃO for um nome, False se pode ser um nome.
+        """
+        mensagem_lower = mensagem.lower().strip()
+        
+        # Lista de palavras/frases que indicam que NÃO é um nome
+        palavras_nao_nome = [
+            "chamar", "atendente", "humano", "falar com", "quero falar",
+            "preciso de", "ligar atendente", "chama alguém", "oi", "olá",
+            "bom dia", "boa tarde", "boa noite", "tudo bem", "e aí",
+            "estão atendendo", "estao atendendo", "vocês estão", "voce esta",
+            "você está", "voces estao", "atendendo", "atendem", "atende",
+            "sim", "não", "nao", "ok", "tudo certo", "beleza", "blz",
+            "quero", "gostaria", "preciso", "tem", "você tem", "voce tem",
+            "quanto", "qual", "onde", "como", "quando", "por favor",
+            "obrigado", "obrigada", "valeu", "tchau", "até", "ate"
+        ]
+        
+        # Verifica se contém palavras que indicam que não é um nome
+        if any(palavra in mensagem_lower for palavra in palavras_nao_nome):
+            return True
+        
+        # Verifica se é uma pergunta (contém interrogação)
+        if "?" in mensagem:
+            return True
+        
+        # Verifica se tem verbos comuns que não aparecem em nomes
+        verbos_comuns = [
+            "está", "esta", "estão", "estao", "é", "e", "são", "sao",
+            "tem", "têm", "tem", "faz", "fazem", "quer", "querem",
+            "precisa", "precisam", "gosta", "gostam", "vai", "vão", "vao"
+        ]
+        partes = mensagem_lower.split()
+        if any(verbo in partes for verbo in verbos_comuns):
+            return True
+        
+        # Verifica se tem números (nomes geralmente não têm números)
+        if any(char.isdigit() for char in mensagem):
+            return True
+        
+        # Se passou todas as verificações, pode ser um nome
+        return False
+
     async def _processar_cadastro_nome_rapido(self, user_id: str, mensagem: str, dados: Dict) -> str:
         """
         Processa o nome do cliente durante o cadastro rápido
-        Após coletar o nome, cria/atualiza o cliente e continua com o fluxo normal
+        Se a mensagem não for um nome válido, responde ao cliente primeiro e depois pede o nome novamente
         """
         nome = mensagem.strip()
+        
+        # Validação básica de tamanho
         if len(nome) < 2:
             return "❓ Nome muito curto! Por favor, digite seu nome completo 😊"
         
-        # Rejeita se a mensagem for sobre chamar atendente (não é um nome válido)
-        nome_lower = nome.lower()
-        palavras_chamar_atendente = [
-            "chamar", "atendente", "humano", "falar com", "quero falar",
-            "preciso de", "ligar atendente", "chama alguém"
-        ]
-        # Verifica se contém palavras relacionadas a chamar atendente
-        if any(palavra in nome_lower for palavra in palavras_chamar_atendente):
-            return "❓ Isso não parece ser um nome! 😊\n\nPor favor, digite seu *nome completo* (ex: João Silva):"
+        # Detecta se NÃO é um nome válido
+        if self._detectar_se_nao_e_nome(nome):
+            # Não é um nome - responde ao cliente primeiro usando IA conversacional
+            print(f"⚠️ Mensagem não parece ser um nome: '{nome}' - respondendo primeiro e pedindo nome novamente")
+            
+            # Gera resposta conversacional para a mensagem do cliente
+            try:
+                todos_produtos = self._buscar_todos_produtos()
+                carrinho = dados.get('carrinho', [])
+                
+                # Responde ao cliente de forma natural
+                resposta_ia = await self._gerar_resposta_conversacional(
+                    user_id=user_id,
+                    mensagem=mensagem,
+                    tipo_conversa="resposta_generica",
+                    contexto="Cliente respondeu algo que não é um nome durante cadastro",
+                    produtos=todos_produtos,
+                    carrinho=carrinho,
+                    dados=dados
+                )
+                
+                # Mantém o estado de cadastro e pede o nome novamente
+                self._salvar_estado_conversa(user_id, STATE_CADASTRO_NOME, dados)
+                
+                # Combina a resposta da IA com a solicitação do nome
+                mensagem_completa = f"{resposta_ia}\n\n"
+                mensagem_completa += "━━━━━━━━━━━━━━━━━━━━\n\n"
+                mensagem_completa += "Para continuar, preciso do seu *nome completo* 😊\n\n"
+                mensagem_completa += "Como você gostaria de ser chamado?"
+                
+                return mensagem_completa
+                
+            except Exception as e:
+                print(f"⚠️ Erro ao gerar resposta conversacional: {e}")
+                # Fallback: resposta simples + pedido de nome
+                self._salvar_estado_conversa(user_id, STATE_CADASTRO_NOME, dados)
+                return f"Entendi! 😊\n\nMas para continuar, preciso do seu *nome completo*.\n\nComo você gostaria de ser chamado?"
         
         # Valida se tem pelo menos nome e sobrenome
         partes_nome = nome.split()
         if len(partes_nome) < 2:
-            return "❓ Por favor, digite seu *nome completo* (nome e sobrenome) 😊"
+            # Mantém o estado de cadastro
+            self._salvar_estado_conversa(user_id, STATE_CADASTRO_NOME, dados)
+            return "❓ Por favor, digite seu *nome completo* (nome e sobrenome) 😊\n\nExemplo: João Silva"
         
+        # Parece ser um nome válido - tenta salvar
         try:
             # Usa o address_service para criar/atualizar cliente (garante consistência)
             cliente = self.address_service.criar_cliente_se_nao_existe(
@@ -4657,6 +4735,8 @@ REGRA PARA COMPLEMENTOS:
             )
             
             if not cliente:
+                # Mantém o estado de cadastro em caso de erro
+                self._salvar_estado_conversa(user_id, STATE_CADASTRO_NOME, dados)
                 return "❌ Ops! Ocorreu um erro ao salvar seu nome. Tente novamente 😊"
             
             # Nome salvo - remove flag de cadastro e continua com o fluxo normal
@@ -4697,6 +4777,8 @@ REGRA PARA COMPLEMENTOS:
             print(f"❌ Erro ao salvar nome do cliente: {e}")
             import traceback
             traceback.print_exc()
+            # Mantém o estado de cadastro em caso de erro
+            self._salvar_estado_conversa(user_id, STATE_CADASTRO_NOME, dados)
             return "❌ Ops! Ocorreu um erro ao salvar seu nome. Tente novamente 😊"
 
     def _buscar_produtos(self, termo_busca: str = "") -> List[Dict[str, Any]]:
