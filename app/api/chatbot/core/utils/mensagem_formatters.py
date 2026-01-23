@@ -250,8 +250,8 @@ class MensagemFormatters:
         msg = "🛒 *SEU PEDIDO*\n"
         msg += "━━━━━━━━━━━━━━━━━━━━\n\n"
 
-        # Indentação: item usa 3 espaços; complementos usam 6 (mais à direita, pertencem ao item)
-        _indent_complemento = "      "
+        # Indentação: item usa 3 espaços; complementos usam 8 (mais à direita, pertencem ao item)
+        _indent_complemento = "        "
 
         total = 0
         for idx, item in enumerate(carrinho, 1):

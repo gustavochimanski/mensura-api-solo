@@ -3278,9 +3278,9 @@ REGRA PARA COMPLEMENTOS:
                                         nome = add.get('nome', add) if isinstance(add, dict) else add
                                         preco = add.get('preco', 0) if isinstance(add, dict) else 0
                                         if preco and preco > 0:
-                                            resumo += f"      ➕ {nome} (+R$ {preco:.2f})\n"
+                                            resumo += f"        ➕ {nome} (+R$ {preco:.2f})\n"
                                         else:
-                                            resumo += f"      ➕ {nome}\n"
+                                            resumo += f"        ➕ {nome}\n"
                             resumo += f"\n💰 *Total: R$ {total:.2f}*"
                             resposta_limpa += resumo
 
@@ -3498,9 +3498,9 @@ REGRA PARA COMPLEMENTOS:
                             nome = add.get('nome', add) if isinstance(add, dict) else add
                             preco = add.get('preco', 0) if isinstance(add, dict) else 0
                             if preco and preco > 0:
-                                resp += f"      ➕ {nome} (+R$ {preco:.2f})\n"
+                                resp += f"        ➕ {nome} (+R$ {preco:.2f})\n"
                             else:
-                                resp += f"      ➕ {nome}\n"
+                                resp += f"        ➕ {nome}\n"
                 resp += f"\n💰 *Total: R$ {total:.2f}*"
                 resp += "\n\nQuer mais alguma coisa? 😊"
                 return resp
@@ -3625,9 +3625,9 @@ REGRA PARA COMPLEMENTOS:
                                 nome = add.get('nome', add) if isinstance(add, dict) else add
                                 preco = add.get('preco', 0) if isinstance(add, dict) else 0
                                 if preco and preco > 0:
-                                    resp += f"      ➕ {nome} (+R$ {preco:.2f})\n"
+                                    resp += f"        ➕ {nome} (+R$ {preco:.2f})\n"
                                 else:
-                                    resp += f"      ➕ {nome}\n"
+                                    resp += f"        ➕ {nome}\n"
                     resp += f"\n💰 *Total: R$ {total:.2f}*"
 
                     # Verifica se tem complementos obrigatórios
@@ -3706,9 +3706,9 @@ REGRA PARA COMPLEMENTOS:
                             nome = add.get('nome', add) if isinstance(add, dict) else add
                             preco = add.get('preco', 0) if isinstance(add, dict) else 0
                             if preco and preco > 0:
-                                resp += f"      ➕ {nome} (+R$ {preco:.2f})\n"
+                                resp += f"        ➕ {nome} (+R$ {preco:.2f})\n"
                             else:
-                                resp += f"      ➕ {nome}\n"
+                                resp += f"        ➕ {nome}\n"
                 resp += f"\n💰 *Total: R$ {total:.2f}*\n\nQuer mais alguma coisa? 😊"
 
                 self._salvar_estado_conversa(user_id, STATE_CONVERSANDO, dados)
@@ -3744,9 +3744,9 @@ REGRA PARA COMPLEMENTOS:
                             nome = add.get('nome', add) if isinstance(add, dict) else add
                             preco = add.get('preco', 0) if isinstance(add, dict) else 0
                             if preco and preco > 0:
-                                resumo += f"      ➕ {nome} (+R$ {preco:.2f})\n"
+                                resumo += f"        ➕ {nome} (+R$ {preco:.2f})\n"
                             else:
-                                resumo += f"      ➕ {nome}\n"
+                                resumo += f"        ➕ {nome}\n"
                 resumo += f"\n💰 *Total: R$ {total:.2f}*\n\nQuer mais alguma coisa?"
                 return resumo
             return "Seu carrinho está vazio! O que vai querer? 😊"
@@ -5252,9 +5252,14 @@ Sua única função é ajudar a ESCOLHER PRODUTOS. Nada mais!
             if adicionais:
                 for add in adicionais:
                     if isinstance(add, dict):
-                        mensagem += f"   ➕ {add.get('nome', add)} (+R$ {add.get('preco', 0):.2f})\n"
+                        nome = add.get('nome', add)
+                        preco = add.get('preco', 0)
+                        if preco and preco > 0:
+                            mensagem += f"        ➕ {nome} (+R$ {preco:.2f})\n"
+                        else:
+                            mensagem += f"        ➕ {nome}\n"
                     else:
-                        mensagem += f"   ➕ {add}\n"
+                        mensagem += f"        ➕ {add}\n"
             
             mensagem += "\n"
 

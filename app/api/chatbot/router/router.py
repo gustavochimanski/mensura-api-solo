@@ -1646,7 +1646,8 @@ async def process_webhook_background(body: dict, headers_info: Optional[dict] = 
                                     if status_message_id:
                                         try:
                                             # Busca no banco se existe uma mensagem do assistente com esse message_id
-                                            # Considera uma janela de tempo de 30 segundos para lidar com possíveis delays
+                                            # Considera uma janela de tempo de 60 segundos para lidar com possíveis delays
+                                            # e race conditions entre salvar mensagem e receber webhook
                                             query_check_bot = text("""
                                                 SELECT m.id, m.role, m.created_at, m.metadata
                                                 FROM chatbot.messages m
@@ -1654,7 +1655,7 @@ async def process_webhook_background(body: dict, headers_info: Optional[dict] = 
                                                 WHERE m.metadata->>'whatsapp_message_id' = :message_id
                                                 AND m.role = 'assistant'
                                                 AND c.user_id = :recipient_id
-                                                AND m.created_at > NOW() - INTERVAL '30 seconds'
+                                                AND m.created_at > NOW() - INTERVAL '60 seconds'
                                                 ORDER BY m.created_at DESC
                                                 LIMIT 1
                                             """)
@@ -1845,6 +1846,65 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
             
             # Se já está aguardando nome, deixa o handler processar normalmente
             if estado_atual != 'cadastro_nome':
+                # Verifica se a mensagem atual já parece ser um nome (tem pelo menos 2 palavras)
+                # Se for, processa diretamente em vez de pedir o nome novamente
+                palavras_mensagem = message_text.strip().split()
+                parece_ser_nome = len(palavras_mensagem) >= 2 and len(message_text.strip()) >= 3
+                
+                # Rejeita se a mensagem contém palavras que indicam que NÃO é um nome
+                mensagem_lower = message_text.lower().strip()
+                palavras_nao_nome = [
+                    "chamar", "atendente", "humano", "falar com", "quero falar",
+                    "preciso de", "ligar atendente", "chama alguém", "oi", "olá",
+                    "bom dia", "boa tarde", "boa noite", "tudo bem", "e aí"
+                ]
+                contem_palavras_nao_nome = any(palavra in mensagem_lower for palavra in palavras_nao_nome)
+                
+                if parece_ser_nome and not contem_palavras_nao_nome:
+                    # A mensagem atual parece ser um nome - processa diretamente
+                    from app.api.chatbot.core.groq_sales_handler import GroqSalesHandler, STATE_CADASTRO_NOME
+                    from datetime import datetime
+                    
+                    # Cria handler para processar o cadastro
+                    handler = GroqSalesHandler(db, empresa_id_int, emit_welcome_message=False)
+                    
+                    # Salva estado de cadastro
+                    dados_cadastro = {'cadastro_rapido': True}
+                    handler._salvar_estado_conversa(user_id, STATE_CADASTRO_NOME, dados_cadastro)
+                    
+                    # Processa o nome diretamente
+                    resposta_cadastro = await handler._processar_cadastro_nome_rapido(user_id, message_text, dados_cadastro)
+                    
+                    # Cria conversa se não existir
+                    if not conversations:
+                        conversation_id = chatbot_db.create_conversation(
+                            db=db,
+                            session_id=f"whatsapp_{user_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                            user_id=user_id,
+                            prompt_key="atendimento-pedido-whatsapp",
+                            model="groq-sales",
+                            empresa_id=empresa_id_int
+                        )
+                    else:
+                        conversation_id = conversations[0]['id']
+                    
+                    # Salva mensagem do usuário e resposta do assistente
+                    chatbot_db.create_message(db, conversation_id, "user", message_text, whatsapp_message_id=message_id)
+                    
+                    # Envia resposta via WhatsApp
+                    notifier = OrderNotification()
+                    result = await notifier.send_whatsapp_message(phone_number, resposta_cadastro, empresa_id=empresa_id)
+                    
+                    # Salva a mensagem do assistente com o message_id retornado pelo WhatsApp
+                    # IMPORTANTE: Salva ANTES de enviar para garantir que esteja no banco quando o webhook chegar
+                    if isinstance(result, dict) and result.get("success"):
+                        whatsapp_message_id = result.get("message_id")
+                        chatbot_db.create_message(db, conversation_id, "assistant", resposta_cadastro, whatsapp_message_id=whatsapp_message_id)
+                        # Commit explícito para garantir que a mensagem esteja no banco antes do webhook chegar
+                        db.commit()
+                    
+                    return
+                
                 # Primeira vez que detecta cliente não cadastrado - pergunta nome
                 from app.api.chatbot.core.groq_sales_handler import GroqSalesHandler, STATE_CADASTRO_NOME
                 from datetime import datetime
@@ -1874,8 +1934,9 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 else:
                     conversation_id = conversations[0]['id']
                 
-                # Salva mensagem do usuário
-                chatbot_db.create_message(db, conversation_id, "user", message_text)
+                # NÃO salva a mensagem do usuário aqui - ela será salva quando o handler processar
+                # o estado 'cadastro_nome' na próxima mensagem. Isso evita salvar mensagens que
+                # podem ser o próprio nome que o usuário já enviou.
                 
                 # Envia mensagem via WhatsApp
                 notifier = OrderNotification()

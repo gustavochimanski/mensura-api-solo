@@ -848,11 +848,6 @@ def criar_meios_pagamento_padrao():
                 "ativo": True,
             },
             {
-                "nome": "PIX - Online",
-                "tipo": "PIX_ONLINE",
-                "ativo": True,
-            },
-            {
                 "nome": "Pix - POS",
                 "tipo": "OUTROS",
                 "ativo": True,

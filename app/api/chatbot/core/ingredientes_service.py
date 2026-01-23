@@ -189,6 +189,58 @@ class IngredientesService:
         """
         return None
 
+    def buscar_todos_adicionais(self) -> List[Dict[str, Any]]:
+        """
+        Busca todos os adicionais disponíveis (vínculos de produtos/receitas/combos em complementos).
+        
+        Returns:
+            Lista de adicionais com id, nome, descricao, preco
+        """
+        try:
+            query = text("""
+                SELECT DISTINCT
+                    cvi.id,
+                    COALESCE(p.descricao, r.nome, c.titulo, 'Adicional') as nome,
+                    COALESCE(p.descricao, r.descricao, c.descricao, '') as descricao,
+                    COALESCE(
+                        cvi.preco_complemento,
+                        CASE 
+                            WHEN cvi.produto_cod_barras IS NOT NULL THEN pe.preco_venda
+                            WHEN cvi.receita_id IS NOT NULL THEN r.preco_venda
+                            WHEN cvi.combo_id IS NOT NULL THEN c.preco_total
+                            ELSE 0
+                        END
+                    ) as preco
+                FROM catalogo.complemento_vinculo_item cvi
+                LEFT JOIN catalogo.produtos p ON cvi.produto_cod_barras = p.cod_barras
+                LEFT JOIN catalogo.produto_emp pe ON cvi.produto_cod_barras = pe.cod_barras AND pe.empresa_id = :empresa_id
+                LEFT JOIN catalogo.receitas r ON cvi.receita_id = r.id
+                LEFT JOIN catalogo.combos c ON cvi.combo_id = c.id
+                WHERE (
+                    (cvi.produto_cod_barras IS NOT NULL AND pe.ativo = true AND pe.disponivel = true)
+                    OR (cvi.receita_id IS NOT NULL AND r.ativo = true AND r.empresa_id = :empresa_id)
+                    OR (cvi.combo_id IS NOT NULL AND c.ativo = true AND c.empresa_id = :empresa_id)
+                )
+                ORDER BY nome
+            """)
+
+            result = self.db.execute(query, {"empresa_id": self.empresa_id})
+            
+            adicionais = []
+            for row in result.fetchall():
+                adicionais.append({
+                    "id": row[0],
+                    "nome": row[1] or "Adicional",
+                    "descricao": row[2] or "",
+                    "preco": float(row[3]) if row[3] else 0,
+                })
+
+            return adicionais
+
+        except Exception as e:
+            print(f"Erro ao buscar todos os adicionais: {e}")
+            return []
+
     def formatar_composicao_produto(self, nome_receita: str) -> str:
         """
         Formata a composição de um produto para exibir ao cliente

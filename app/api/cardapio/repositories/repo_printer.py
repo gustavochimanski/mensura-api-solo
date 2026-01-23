@@ -1,6 +1,8 @@
 """
 Repository para operações relacionadas à Printer API
 """
+import asyncio
+import threading
 from typing import List, Optional
 
 from sqlalchemy import and_
@@ -20,6 +22,35 @@ from app.api.cardapio.schemas.schema_printer import (
 )
 from app.api.pedidos.repositories.repo_pedidos import PedidoRepository
 from app.utils.logger import logger
+
+
+def _run_async_in_thread(coro, db_session=None):
+    """
+    Executa uma corrotina em uma thread separada com seu próprio event loop.
+    Útil para executar código assíncrono a partir de código síncrono.
+    
+    Args:
+        coro: Corrotina a ser executada
+        db_session: Sessão do banco de dados que será fechada após a execução (opcional)
+    """
+    def _run():
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(coro)
+        except Exception as e:
+            logger.error(f"Erro ao executar corrotina em thread: {e}", exc_info=True)
+        finally:
+            loop.close()
+            # Fecha a sessão do banco se foi fornecida
+            if db_session:
+                try:
+                    db_session.close()
+                except Exception as e:
+                    logger.error(f"Erro ao fechar sessão do banco: {e}")
+    
+    thread = threading.Thread(target=_run, daemon=True)
+    thread.start()
 
 
 class PrinterRepository:
@@ -125,7 +156,6 @@ class PrinterRepository:
                 
                 # Envia resumo do pedido para o cliente via WhatsApp
                 try:
-                    import asyncio
                     from app.api.chatbot.core.notifications import enviar_resumo_pedido_whatsapp
                     
                     # Recarrega pedido com cliente para obter telefone
@@ -141,13 +171,18 @@ class PrinterRepository:
                     
                     if pedido_com_cliente and pedido_com_cliente.cliente and pedido_com_cliente.cliente.telefone:
                         empresa_id_str = str(pedido_com_cliente.empresa_id) if pedido_com_cliente.empresa_id else None
-                        asyncio.create_task(
+                        # Cria uma nova sessão do banco para a thread assíncrona
+                        from app.database.db_connection import SessionLocal
+                        db_session = SessionLocal()
+                        
+                        _run_async_in_thread(
                             enviar_resumo_pedido_whatsapp(
-                                db=self.db,
+                                db=db_session,
                                 pedido_id=pedido_id,
                                 phone_number=pedido_com_cliente.cliente.telefone,
                                 empresa_id=empresa_id_str
-                            )
+                            ),
+                            db_session=db_session
                         )
                         logger.info(f"[PrinterRepository] Agendado envio de resumo do pedido {pedido_id} para o cliente")
                     else:
@@ -157,7 +192,6 @@ class PrinterRepository:
                 
                 # Notifica kanban após marcar como impresso
                 try:
-                    import asyncio
                     from app.api.pedidos.utils.pedido_notification_helper import notificar_pedido_impresso
                     # Recarrega pedido com todos os relacionamentos para a notificação (incluindo mesa)
                     pedido_completo = (
@@ -172,7 +206,7 @@ class PrinterRepository:
                         .first()
                     )
                     if pedido_completo:
-                        asyncio.create_task(notificar_pedido_impresso(pedido_completo))
+                        _run_async_in_thread(notificar_pedido_impresso(pedido_completo))
                 except Exception as e:
                     logger.error(f"Erro ao agendar notificação kanban para pedido impresso {pedido_id}: {e}")
                 
@@ -204,7 +238,6 @@ class PrinterRepository:
                 
                 # Envia resumo do pedido para o cliente via WhatsApp
                 try:
-                    import asyncio
                     from app.api.chatbot.core.notifications import enviar_resumo_pedido_whatsapp
                     
                     # Recarrega pedido com cliente para obter telefone
@@ -220,13 +253,18 @@ class PrinterRepository:
                     
                     if pedido_com_cliente and pedido_com_cliente.cliente and pedido_com_cliente.cliente.telefone:
                         empresa_id_str = str(pedido_com_cliente.empresa_id) if pedido_com_cliente.empresa_id else None
-                        asyncio.create_task(
+                        # Cria uma nova sessão do banco para a thread assíncrona
+                        from app.database.db_connection import SessionLocal
+                        db_session = SessionLocal()
+                        
+                        _run_async_in_thread(
                             enviar_resumo_pedido_whatsapp(
-                                db=self.db,
+                                db=db_session,
                                 pedido_id=pedido_id,
                                 phone_number=pedido_com_cliente.cliente.telefone,
                                 empresa_id=empresa_id_str
-                            )
+                            ),
+                            db_session=db_session
                         )
                         logger.info(f"[PrinterRepository] Agendado envio de resumo do pedido {pedido_id} para o cliente")
                     else:
@@ -236,7 +274,6 @@ class PrinterRepository:
                 
                 # Notifica kanban após marcar como impresso
                 try:
-                    import asyncio
                     from app.api.pedidos.utils.pedido_notification_helper import notificar_pedido_impresso
                     # Recarrega pedido com todos os relacionamentos para a notificação (incluindo mesa)
                     pedido_completo = (
@@ -251,7 +288,7 @@ class PrinterRepository:
                         .first()
                     )
                     if pedido_completo:
-                        asyncio.create_task(notificar_pedido_impresso(pedido_completo))
+                        _run_async_in_thread(notificar_pedido_impresso(pedido_completo))
                 except Exception as e:
                     logger.error(f"Erro ao agendar notificação kanban para pedido impresso {pedido_id}: {e}")
                 
@@ -293,7 +330,6 @@ class PrinterRepository:
                 
                 # Envia resumo do pedido para o cliente via WhatsApp
                 try:
-                    import asyncio
                     from app.api.chatbot.core.notifications import enviar_resumo_pedido_whatsapp
                     
                     # Recarrega pedido com cliente para obter telefone
@@ -309,13 +345,18 @@ class PrinterRepository:
                     
                     if pedido_com_cliente and pedido_com_cliente.cliente and pedido_com_cliente.cliente.telefone:
                         empresa_id_str = str(pedido_com_cliente.empresa_id) if pedido_com_cliente.empresa_id else None
-                        asyncio.create_task(
+                        # Cria uma nova sessão do banco para a thread assíncrona
+                        from app.database.db_connection import SessionLocal
+                        db_session = SessionLocal()
+                        
+                        _run_async_in_thread(
                             enviar_resumo_pedido_whatsapp(
-                                db=self.db,
+                                db=db_session,
                                 pedido_id=pedido_id,
                                 phone_number=pedido_com_cliente.cliente.telefone,
                                 empresa_id=empresa_id_str
-                            )
+                            ),
+                            db_session=db_session
                         )
                         logger.info(f"[PrinterRepository] Agendado envio de resumo do pedido {pedido_id} para o cliente")
                     else:
@@ -325,7 +366,6 @@ class PrinterRepository:
                 
                 # Notifica kanban após marcar como impresso
                 try:
-                    import asyncio
                     from app.api.pedidos.utils.pedido_notification_helper import notificar_pedido_impresso
                     # Recarrega pedido com todos os relacionamentos para a notificação (incluindo mesa)
                     pedido_completo = (
@@ -340,7 +380,7 @@ class PrinterRepository:
                         .first()
                     )
                     if pedido_completo:
-                        asyncio.create_task(notificar_pedido_impresso(pedido_completo))
+                        _run_async_in_thread(notificar_pedido_impresso(pedido_completo))
                 except Exception as e:
                     logger.error(f"Erro ao agendar notificação kanban para pedido impresso {pedido_id}: {e}")
                 
