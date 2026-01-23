@@ -7360,8 +7360,33 @@ async def processar_mensagem_groq(
         )
         print(f"   ✅ Nova conversa criada no banco: {conversation_id}")
 
-    # 2. Salva mensagem do usuário no banco
-    user_message_id = chatbot_db.create_message(db, conversation_id, "user", mensagem)
+    # 2. Salva mensagem do usuário no banco (se ainda não foi salva)
+    # Verifica se a mensagem já foi salva recentemente (evita duplicatas)
+    from sqlalchemy import text
+    try:
+        check_recent = text("""
+            SELECT id FROM chatbot.messages
+            WHERE conversation_id = :conversation_id
+            AND role = 'user'
+            AND content = :content
+            AND created_at > NOW() - INTERVAL '5 seconds'
+            ORDER BY created_at DESC
+            LIMIT 1
+        """)
+        result = db.execute(check_recent, {
+            "conversation_id": conversation_id,
+            "content": mensagem
+        })
+        existing = result.fetchone()
+        if existing:
+            user_message_id = existing[0]
+            print(f"   ℹ️ Mensagem do usuário já estava salva (ID: {user_message_id})")
+        else:
+            user_message_id = chatbot_db.create_message(db, conversation_id, "user", mensagem)
+    except Exception as e:
+        # Em caso de erro, tenta salvar normalmente
+        print(f"   ⚠️ Erro ao verificar mensagem existente: {e}")
+        user_message_id = chatbot_db.create_message(db, conversation_id, "user", mensagem)
     
     # 2.1. Envia notificação WebSocket de nova mensagem do usuário
     try:

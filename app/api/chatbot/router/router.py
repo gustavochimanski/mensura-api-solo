@@ -2291,6 +2291,9 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
             has_any_conversation_for_phone = bool(chatbot_db.get_conversations_by_user(db, user_id))
             should_suppress_welcome = no_conversations_for_empresa and has_any_conversation_for_phone
             if is_new_session and esta_aberta is not False and not should_suppress_welcome and is_saudacao:
+                # IMPORTANTE: Salva a mensagem do usuário ANTES de enviar boas-vindas
+                chatbot_db.create_message(db, conversation_id, "user", message_text, whatsapp_message_id=message_id)
+                
                 # Mensagem "antiga" de boas-vindas (com nome/link) + botões
                 handler = GroqSalesHandler(db, empresa_id_int, prompt_key=prompt_key_sales)
                 mensagem_boas_vindas = handler._gerar_mensagem_boas_vindas_conversacional()
@@ -2439,6 +2442,16 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
             # (pode ser que a conversa já exista, mas a loja fechou depois)
             if esta_aberta is False:
                 return  # Não processa mensagem quando loja está fechada
+            
+            # IMPORTANTE: Salva a mensagem do usuário ANTES de processar (garante que sempre será salva)
+            # A função processar_mensagem_groq também salva, mas garantir aqui evita perdas em caso de erro
+            try:
+                chatbot_db.create_message(db, conversation_id, "user", message_text, whatsapp_message_id=message_id)
+            except Exception as e:
+                # Se já foi salva (duplicata), ignora o erro e continua
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"⚠️ Mensagem do usuário pode já ter sido salva: {e}")
             
             # Processa com o sistema de vendas usando Groq/LLaMA
             # Passa informações sobre pedido em aberto se houver
