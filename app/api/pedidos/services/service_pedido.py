@@ -578,7 +578,8 @@ class PedidoService:
                         raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Produto indisponível: {it.produto_cod_barras}")
 
                     preco = _dec(pe_dto.preco_venda)
-                    subtotal += preco * it.quantidade
+                    # NÃO soma ao subtotal aqui - será recalculado depois usando _calc_total
+                    # que já inclui complementos corretamente
                     self.repo.adicionar_item(
                         pedido_id=pedido.id,
                         cod_barras=it.produto_cod_barras,
@@ -597,7 +598,8 @@ class PedidoService:
                         raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Produto indisponível: {it.produto_cod_barras}")
 
                     preco = _dec(pe.preco_venda)
-                    subtotal += preco * it.quantidade
+                    # NÃO soma ao subtotal aqui - será recalculado depois usando _calc_total
+                    # que já inclui complementos corretamente
                     self.repo.adicionar_item(
                         pedido_id=pedido.id,
                         cod_barras=it.produto_cod_barras,
@@ -609,8 +611,9 @@ class PedidoService:
                         complementos=getattr(it, "complementos", None),
                     )
 
-                adicionais_total, _ = self._resolver_adicionais_item_snapshot(it)
-                subtotal += adicionais_total
+                # REMOVIDO: adicionais_total, _ = self._resolver_adicionais_item_snapshot(it)
+                # REMOVIDO: subtotal += adicionais_total
+                # Os complementos serão somados corretamente quando _calc_total for chamado
 
             # Receitas (sem produto_cod_barras no payload, usam apenas receita_id)
             for rec in receitas_req:
