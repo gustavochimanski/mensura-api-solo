@@ -612,13 +612,10 @@ class PedidoAdminService:
                 if not product_core.validar_empresa(product, empresa_id):
                     raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Produto não pertence à empresa {empresa_id}")
                 
-                # Calcula preço COM complementos
-                preco_total, _ = product_core.calcular_preco_com_complementos(
-                    product=product,
-                    quantidade=qtd,
-                    complementos_request=body.complementos,  # Agora suporta complementos
-                )
-                preco_unitario = preco_total / Decimal(str(qtd))
+                # IMPORTANTE: preco_unitario deve ser apenas o preço BASE do produto (sem complementos)
+                # Os complementos são somados separadamente via _sum_complementos_total_relacional
+                # para evitar duplicação no cálculo do total do item
+                preco_unitario = product.get_preco_venda()
                 
                 # Adiciona item usando repositório
                 descricao_produto = product.nome or product.descricao or ""

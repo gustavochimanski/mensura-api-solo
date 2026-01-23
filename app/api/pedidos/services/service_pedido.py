@@ -426,11 +426,9 @@ class PedidoService:
 
     def _recalcular_pedido(self, pedido: PedidoUnificadoModel):
         """Recalcula subtotal, desconto, taxas e valor total do pedido e salva no banco."""
-        subtotal = self.db.query(
-            func.sum(PedidoItemUnificadoModel.quantidade * PedidoItemUnificadoModel.preco_unitario)
-        ).filter(PedidoItemUnificadoModel.pedido_id == pedido.id).scalar() or Decimal("0")
-
-        subtotal = Decimal(subtotal)
+        # IMPORTANTE: Usa _calc_total do repositório que já soma complementos corretamente
+        # via _calc_item_total que inclui _sum_complementos_total_relacional
+        subtotal = self.repo._calc_total(pedido)
         desconto = self._aplicar_cupom(
             cupom_id=pedido.cupom_id,
             subtotal=subtotal,
@@ -646,17 +644,12 @@ class PedidoService:
                         f"Receita {rec.receita_id} não pertence à empresa {empresa_id}",
                     )
 
-                # Calcula preço com complementos usando ProductCore
+                # IMPORTANTE: preco_unitario deve ser apenas o preço BASE do produto (sem complementos)
+                # Os complementos são somados separadamente via _sum_complementos_total_relacional
+                # para evitar duplicação no cálculo do total do item
                 complementos_rec = getattr(rec, "complementos", None) or []
-                preco_total_rec, _ = self.product_core.calcular_preco_com_complementos(
-                    product=product,
-                    quantidade=qtd_rec,
-                    complementos_request=complementos_rec,
-                )
-                subtotal += preco_total_rec
-
-                # Cria item de receita no banco
-                preco_unit_rec = preco_total_rec / qtd_rec
+                preco_unit_rec = product.get_preco_venda()
+                # O subtotal será recalculado depois incluindo complementos via _recalcular_pedido
                 self.repo.adicionar_item(
                     pedido_id=pedido.id,
                     receita_id=rec.receita_id,
@@ -689,18 +682,13 @@ class PedidoService:
                         f"Combo {cb.combo_id} não pertence à empresa {empresa_id}",
                     )
 
-                # Calcula preço com complementos usando ProductCore
+                # IMPORTANTE: preco_unitario deve ser apenas o preço BASE do produto (sem complementos)
+                # Os complementos são somados separadamente via _sum_complementos_total_relacional
+                # para evitar duplicação no cálculo do total do item
                 complementos_combo = getattr(cb, "complementos", None) or []
-                preco_total_combo, _ = self.product_core.calcular_preco_com_complementos(
-                    product=product,
-                    quantidade=qtd_combo,
-                    complementos_request=complementos_combo,
-                )
-                subtotal += preco_total_combo
-
-                # Cria item de combo no banco (um item por combo, não itens individuais)
-                preco_unit_combo = preco_total_combo / qtd_combo
-                observacao_combo = f"Combo #{product.identifier} - {product.nome}"
+                preco_unit_combo = product.get_preco_venda()
+                # O subtotal será recalculado depois incluindo complementos via _recalcular_pedido
+                observacao_combo = product.nome
                 if hasattr(cb, 'observacao') and cb.observacao:
                     observacao_combo += f" | {cb.observacao}"
                 
@@ -713,6 +701,13 @@ class PedidoService:
                     produto_descricao_snapshot=product.nome or product.descricao,
                     complementos=complementos_combo,
                 )
+            
+            # IMPORTANTE: Recalcula o subtotal usando _calc_total que já inclui complementos
+            # O subtotal calculado manualmente acima não inclui complementos de receitas/combos
+            # e pode estar desatualizado. Usar _calc_total garante que todos os complementos sejam incluídos.
+            pedido_atualizado = self.repo.get_pedido(pedido.id)
+            subtotal = self.repo._calc_total(pedido_atualizado)
+            
             desconto = self._aplicar_cupom(
                 cupom_id=payload.cupom_id,
                 subtotal=subtotal,
@@ -1398,16 +1393,14 @@ class PedidoService:
                     product = self.product_core.buscar_combo(combo_id=it_db.combo_id)
 
                 if product:
-                    # Calcula novo preço com complementos
+                    # IMPORTANTE: preco_unitario deve ser apenas o preço BASE do produto (sem complementos)
+                    # Os complementos são somados separadamente via _sum_complementos_total_relacional
+                    # para evitar duplicação no cálculo do total do item
                     quantidade_item = item.quantidade if item.quantidade is not None else it_db.quantidade
-                    preco_total_com_complementos, _ = self.product_core.calcular_preco_com_complementos(
-                        product=product,
-                        quantidade=quantidade_item,
-                        complementos_request=item.complementos,
-                    )
-                    # Atualiza preço unitário (preço total dividido pela quantidade)
-                    it_db.preco_unitario = preco_total_com_complementos / Decimal(str(quantidade_item))
-                    it_db.preco_total = preco_total_com_complementos
+                    preco_base_produto = product.get_preco_venda()
+                    it_db.preco_unitario = preco_base_produto
+                    # preco_total é apenas produto base * quantidade (sem complementos)
+                    it_db.preco_total = preco_base_produto * Decimal(str(quantidade_item))
                 else:
                     # Se não encontrou o produto, ainda persiste os complementos
                     # (o preço será recalculado depois)

@@ -403,15 +403,10 @@ class PedidoMesaService:
                 f"Produto não pertence à empresa {empresa_id}"
             )
         
-        # Calcula preço com complementos usando ProductCore
-        preco_total, _ = self.product_core.calcular_preco_com_complementos(
-            product=product,
-            quantidade=qtd,
-            complementos_request=body.complementos,
-        )
-        
-        # Prepara dados para adicionar item
-        preco_unitario = preco_total / qtd
+        # IMPORTANTE: preco_unitario deve ser apenas o preço BASE do produto (sem complementos)
+        # Os complementos são somados separadamente via _sum_complementos_total_relacional
+        # para evitar duplicação no cálculo do total do item
+        preco_unitario = product.get_preco_venda()
         descricao_produto = product.nome or product.descricao or ""
         
         # Monta observação completa
@@ -528,16 +523,14 @@ class PedidoMesaService:
                 product = self.product_core.buscar_combo(combo_id=item_db.combo_id)
             
             if product:
-                # Calcula novo preço com complementos
+                # IMPORTANTE: preco_unitario deve ser apenas o preço BASE do produto (sem complementos)
+                # Os complementos são somados separadamente via _sum_complementos_total_relacional
+                # para evitar duplicação no cálculo do total do item
                 quantidade_item = quantidade if quantidade is not None else item_db.quantidade
-                preco_total_com_complementos, _ = self.product_core.calcular_preco_com_complementos(
-                    product=product,
-                    quantidade=quantidade_item,
-                    complementos_request=complementos,
-                )
-                # Atualiza preço unitário (preço total dividido pela quantidade)
-                item_db.preco_unitario = preco_total_com_complementos / Decimal(str(quantidade_item))
-                item_db.preco_total = preco_total_com_complementos
+                preco_base_produto = product.get_preco_venda()
+                item_db.preco_unitario = preco_base_produto
+                # preco_total é apenas produto base * quantidade (sem complementos)
+                item_db.preco_total = preco_base_produto * Decimal(str(quantidade_item))
             
             # Persiste novos complementos
             self.repo._persistir_complementos_do_request(

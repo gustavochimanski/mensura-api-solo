@@ -501,11 +501,11 @@ class ProductCore:
         # Formata observação baseado no tipo
         observacao_formatada = observacao or ""
         if product.product_type == ProductType.COMBO:
-            observacao_formatada = f"Combo #{product.identifier} - {descricao}"
+            observacao_formatada = descricao
             if observacao:
                 observacao_formatada += f" | {observacao}"
         elif product.product_type == ProductType.RECEITA:
-            observacao_formatada = f"Receita #{product.identifier} - {descricao}"
+            observacao_formatada = descricao
             if observacao:
                 observacao_formatada += f" | {observacao}"
         

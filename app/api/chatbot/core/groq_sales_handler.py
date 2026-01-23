@@ -5337,11 +5337,11 @@ Sua única função é ajudar a ESCOLHER PRODUTOS. Nada mais!
                         nome = add.get('nome', add)
                         preco = add.get('preco', 0)
                         if preco and preco > 0:
-                            mensagem += f"        ➕ {nome} (+R$ {preco:.2f})\n"
+                            mensagem += f"            ➕ {nome} (+R$ {preco:.2f})\n"
                         else:
-                            mensagem += f"        ➕ {nome}\n"
+                            mensagem += f"            ➕ {nome}\n"
                     else:
-                        mensagem += f"        ➕ {add}\n"
+                        mensagem += f"            ➕ {add}\n"
             
             mensagem += "\n"
 

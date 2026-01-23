@@ -1154,9 +1154,9 @@ async def enviar_resumo_pedido_whatsapp(
                             preco_add = add['preco']
                             nome_add = add['nome']
                             if qtd_add > 1:
-                                mensagem += f"    ➕ {qtd_add}x {nome_add} (+R$ {preco_add:.2f})\n"
+                                mensagem += f"      ➕ {qtd_add}x {nome_add} (+R$ {preco_add:.2f})\n"
                             else:
-                                mensagem += f"    ➕ {nome_add} (+R$ {preco_add:.2f})\n"
+                                mensagem += f"      ➕ {nome_add} (+R$ {preco_add:.2f})\n"
 
         mensagem += f"\n*Valores:* Subtotal: R$ {subtotal:.2f}"
         if desconto > 0:
