@@ -831,6 +831,32 @@ def criar_meios_pagamento_padrao():
     try:
         from app.api.cadastros.models.model_meio_pagamento import MeioPagamentoModel
 
+        # Garante que a tabela existe antes de inserir dados
+        try:
+            with engine.connect() as conn:
+                result = conn.execute(text("""
+                    SELECT 1 FROM information_schema.tables 
+                    WHERE table_schema = 'cadastros' 
+                    AND table_name = 'meios_pagamento'
+                """))
+                existe = result.scalar()
+                
+                if not existe:
+                    logger.info("📋 Criando tabela cadastros.meios_pagamento...")
+                    MeioPagamentoModel.__table__.create(engine, checkfirst=True)
+                    logger.info("✅ Tabela cadastros.meios_pagamento criada com sucesso")
+                else:
+                    logger.info("ℹ️ Tabela cadastros.meios_pagamento já existe")
+        except Exception as table_err:
+            logger.error(f"❌ Erro ao verificar/criar tabela cadastros.meios_pagamento: {table_err}", exc_info=True)
+            # Tenta criar mesmo assim
+            try:
+                MeioPagamentoModel.__table__.create(engine, checkfirst=True)
+                logger.info("✅ Tabela cadastros.meios_pagamento criada (2ª tentativa)")
+            except Exception as e2:
+                logger.error(f"❌ Erro persistente ao criar tabela: {e2}", exc_info=True)
+                raise
+
         dados_meios_pagamento = [
             {
                 "nome": "Cartão Entrega",
