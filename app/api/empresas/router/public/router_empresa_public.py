@@ -1,4 +1,5 @@
 # app/api/empresas/router/public/router_empresa_public.py
+from typing import Union
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
@@ -15,9 +16,9 @@ router = APIRouter(prefix="/api/empresas/public/emp", tags=["Public - Empresas"]
 
 @router.get(
     "/lista",
-    response_model=list[EmpresaPublicListItem],
+    response_model=Union[EmpresaPublicListItem, list[EmpresaPublicListItem]],
     summary="Listar empresas públicas",
-    description="Retorna empresas disponíveis para seleção pública, com filtros opcionais.",
+    description="Retorna empresas disponíveis para seleção pública, com filtros opcionais. Se empresa_id for fornecido, retorna um único objeto.",
 )
 def listar_empresas_publicas(
     empresa_id: int | None = Query(None, description="Filtrar por ID da empresa"),
@@ -35,8 +36,26 @@ def listar_empresas_publicas(
         estado=estado,
         limit=limit,
     )
-    if empresa_id is not None and not empresas:
-        raise HTTPException(status_code=404, detail="Empresa não encontrada")
+    
+    # Se empresa_id foi fornecido, retorna objeto único
+    if empresa_id is not None:
+        if not empresas:
+            raise HTTPException(status_code=404, detail="Empresa não encontrada")
+        empresa = empresas[0]
+        return EmpresaPublicListItem(
+            id=empresa.id,
+            nome=empresa.nome,
+            logo=empresa.logo,
+            bairro=empresa.bairro,
+            cidade=empresa.cidade,
+            estado=empresa.estado,
+            distancia_km=None,
+            tema=empresa.cardapio_tema,
+            redireciona_home=empresa.redireciona_home,
+            redireciona_home_para=empresa.redireciona_home_para,
+        )
+    
+    # Caso contrário, retorna lista
     return [
         EmpresaPublicListItem(
             id=empresa.id,
