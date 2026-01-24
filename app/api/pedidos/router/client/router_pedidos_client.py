@@ -34,7 +34,7 @@ router = APIRouter(prefix="/api/pedidos/client", tags=["Client - Pedidos"])
 
 # ======================================================================
 # ====================== PREVIEW CHECKOUT =============================
-@router.post("/checkout/preview", response_model=CheckoutTotalResponse, status_code=status.HTTP_200_OK)
+@router.post("/checkout/preview", response_model=PreviewCheckoutResponse, status_code=status.HTTP_200_OK)
 def preview_checkout(
     payload: FinalizarPedidoRequest = Body(...),
     
@@ -50,7 +50,7 @@ def preview_checkout(
     """
     logger.info(f"[Pedidos] Preview checkout solicitado - cliente_id={cliente.id if cliente else None}")
     preview = svc.calcular_preview_checkout(payload, cliente_id=cliente.id)
-    return CheckoutTotalResponse(valor_total=float(preview.valor_total))
+    return preview
 
 
 @router.post(
