@@ -7,6 +7,8 @@ from app.api.empresas.repositories.empresa_repo import EmpresaRepository
 from app.api.empresas.schemas.schema_empresa_client import (
     EmpresaClientOut,
     EmpresaPublicListItem,
+    HorarioDiaOut,
+    HorarioIntervaloOut,
 )
 from app.database.db_connection import get_db
 
@@ -45,7 +47,6 @@ def listar_empresas_publicas(
         # Converte horarios_funcionamento de JSONB para lista de HorarioDiaOut
         horarios = None
         if empresa.horarios_funcionamento:
-            from app.api.empresas.schemas.schema_empresa_client import HorarioDiaOut, HorarioIntervaloOut
             horarios = [
                 HorarioDiaOut(
                     dia_semana=dia.get("dia_semana"),
