@@ -154,10 +154,10 @@ class CaixaAberturaRepository:
         """
         Calcula o saldo esperado da abertura de caixa baseado em:
         - Valor inicial
-        + Entradas (pedidos pagos em dinheiro)
+        + Entradas (pedidos entregues e pagos em dinheiro no período da abertura)
         - Saídas (trocos dados, etc.)
         """
-        from app.api.pedidos.models.model_pedido_unificado import PedidoUnificadoModel
+        from app.api.pedidos.models.model_pedido_unificado import PedidoUnificadoModel, StatusPedido
         from app.api.cardapio.models.model_transacao_pagamento_dv import TransacaoPagamentoModel
         from app.api.cadastros.models.model_meio_pagamento import MeioPagamentoModel
         from app.api.shared.schemas.schema_shared_enums import PagamentoStatusEnum
@@ -168,10 +168,10 @@ class CaixaAberturaRepository:
         
         saldo = Decimal(str(caixa_abertura.valor_inicial))
         
-        # Busca pedidos pagos em dinheiro entre a abertura e agora (ou fechamento)
+        # Busca pedidos entregues e pagos em dinheiro no período da abertura
         data_fim = caixa_abertura.data_fechamento if caixa_abertura.data_fechamento else datetime.utcnow()
         
-        # Entradas: pedidos pagos em dinheiro através de transações
+        # Entradas: pedidos entregues e pagos em dinheiro através de transações
         query_entradas = (
             self.db.query(func.sum(TransacaoPagamentoModel.valor))
             .join(PedidoUnificadoModel, TransacaoPagamentoModel.pedido_id == PedidoUnificadoModel.id)
@@ -181,6 +181,7 @@ class CaixaAberturaRepository:
                     PedidoUnificadoModel.empresa_id == empresa_id,
                     PedidoUnificadoModel.created_at >= caixa_abertura.data_abertura,
                     PedidoUnificadoModel.created_at <= data_fim,
+                    PedidoUnificadoModel.status == StatusPedido.ENTREGUE.value,
                     TransacaoPagamentoModel.status == PagamentoStatusEnum.PAGO.value,
                     MeioPagamentoModel.tipo == "DINHEIRO"
                 )
@@ -189,7 +190,7 @@ class CaixaAberturaRepository:
         total_entradas = query_entradas.scalar() or Decimal("0")
         
         # Saídas: trocos dados (troco_para - valor_total, quando troco_para > valor_total)
-        # Calcula o troco real dado para pedidos pagos em dinheiro com troco
+        # Calcula o troco real dado para pedidos entregues e pagos em dinheiro com troco
         query_saidas = (
             self.db.query(func.sum(PedidoUnificadoModel.troco_para - PedidoUnificadoModel.valor_total))
             .join(TransacaoPagamentoModel, TransacaoPagamentoModel.pedido_id == PedidoUnificadoModel.id)
@@ -199,6 +200,7 @@ class CaixaAberturaRepository:
                     PedidoUnificadoModel.empresa_id == empresa_id,
                     PedidoUnificadoModel.created_at >= caixa_abertura.data_abertura,
                     PedidoUnificadoModel.created_at <= data_fim,
+                    PedidoUnificadoModel.status == StatusPedido.ENTREGUE.value,
                     PedidoUnificadoModel.troco_para.isnot(None),
                     PedidoUnificadoModel.troco_para > PedidoUnificadoModel.valor_total,
                     TransacaoPagamentoModel.status == PagamentoStatusEnum.PAGO.value,
@@ -243,8 +245,9 @@ class CaixaAberturaRepository:
         """
         Calcula valores esperados por tipo de meio de pagamento.
         Retorna lista com informações de cada meio de pagamento usado no período.
+        Considera apenas pedidos entregues no período da abertura.
         """
-        from app.api.pedidos.models.model_pedido_unificado import PedidoUnificadoModel
+        from app.api.pedidos.models.model_pedido_unificado import PedidoUnificadoModel, StatusPedido
         from app.api.cardapio.models.model_transacao_pagamento_dv import TransacaoPagamentoModel
         from app.api.cadastros.models.model_meio_pagamento import MeioPagamentoModel
         from app.api.shared.schemas.schema_shared_enums import PagamentoStatusEnum
@@ -256,6 +259,7 @@ class CaixaAberturaRepository:
         data_fim = caixa_abertura.data_fechamento if caixa_abertura.data_fechamento else datetime.utcnow()
         
         # Busca valores agrupados por meio de pagamento
+        # Considera apenas pedidos entregues no período da abertura
         query = (
             self.db.query(
                 MeioPagamentoModel.id,
@@ -277,6 +281,7 @@ class CaixaAberturaRepository:
                     PedidoUnificadoModel.empresa_id == empresa_id,
                     PedidoUnificadoModel.created_at >= caixa_abertura.data_abertura,
                     PedidoUnificadoModel.created_at <= data_fim,
+                    PedidoUnificadoModel.status == StatusPedido.ENTREGUE.value,
                     TransacaoPagamentoModel.status == PagamentoStatusEnum.PAGO.value
                 )
             )
