@@ -715,6 +715,32 @@ class PedidoBalcaoService:
         )
         self.repo.commit()
         pedido = self.repo.get(pedido_id, TipoEntrega.BALCAO)
+
+        # Notifica cliente quando o pedido (balcão) muda para "Aguardando pagamento" (status A)
+        # (em background, não bloqueia a resposta do endpoint)
+        try:
+            if str(status_anterior) != PedidoStatusEnum.A.value and novo_status == PedidoStatusEnum.A:
+                import asyncio
+                import threading
+                from app.api.pedidos.utils.pedido_notification_helper import (
+                    notificar_cliente_pedido_pronto_aguardando_pagamento,
+                )
+
+                _pid = int(pedido_id)
+                _eid = int(pedido.empresa_id) if pedido.empresa_id else None
+                threading.Thread(
+                    target=lambda p=_pid, e=_eid: asyncio.run(
+                        notificar_cliente_pedido_pronto_aguardando_pagamento(p, e)
+                    ),
+                    daemon=True,
+                ).start()
+        except Exception as e:
+            logger.error(
+                "Erro ao agendar notificação de aguardando pagamento (balcão) %s: %s",
+                pedido_id,
+                e,
+            )
+
         return PedidoResponseBuilder.pedido_to_response_completo(pedido)
 
     def fechar_conta(self, pedido_id: int, payload: FecharContaBalcaoRequest | None = None, usuario_id: int | None = None) -> PedidoResponseCompleto:

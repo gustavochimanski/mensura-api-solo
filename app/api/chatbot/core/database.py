@@ -8,10 +8,24 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 from typing import List, Dict, Optional
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Schema do chatbot
 CHATBOT_SCHEMA = "chatbot"
+
+# ==================== CONSTANTES DE PAUSA ====================
+# Tempo de pausa automática quando o chatbot pausa por conta própria
+AUTO_PAUSE_HOURS = 3
+
+def get_auto_pause_until() -> datetime:
+    """
+    Retorna o datetime até quando o bot deve ficar pausado quando pausa automaticamente.
+    Usado quando o chatbot pausa por conta própria (sistema_nao_entendeu, cliente_chamou_atendente).
+    
+    Returns:
+        datetime: Data/hora até quando o bot deve ficar pausado (3 horas a partir de agora)
+    """
+    return datetime.now() + timedelta(hours=AUTO_PAUSE_HOURS)
 
 
 def init_database(db: Session):

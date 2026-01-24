@@ -27,6 +27,7 @@ from app.api.cadastros.models.model_endereco_dv import EnderecoModel
 from app.api.cadastros.models.model_cliente_dv import ClienteModel
 from app.api.cardapio.models.model_transacao_pagamento_dv import TransacaoPagamentoModel
 from app.api.catalogo.contracts.produto_contract import IProdutoContract, ProdutoEmpDTO
+from app.utils.telefone import normalizar_telefone
 
 
 # Status abertos para balcão e mesa (mesmos valores)
@@ -110,7 +111,19 @@ class PedidoRepository:
 
     # ------------- Validations / Queries -------------
     def get_cliente(self, telefone: str) -> Optional[ClienteModel]:
-        return self.db.query(ClienteModel).filter_by(telefone=telefone).first()
+        telefone_norm = normalizar_telefone(telefone)
+        if not telefone_norm:
+            return None
+
+        cliente = self.db.query(ClienteModel).filter_by(telefone=telefone_norm).first()
+        if cliente:
+            return cliente
+
+        # Compatibilidade: bases antigas podem ter salvo sem o prefixo 55
+        if telefone_norm.startswith("55"):
+            return self.db.query(ClienteModel).filter_by(telefone=telefone_norm[2:]).first()
+
+        return None
 
     def get_cliente_by_id(self, id: int) -> Optional[ClienteModel]:
         return self.db.query(ClienteModel).filter(ClienteModel.id == id).first()

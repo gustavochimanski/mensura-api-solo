@@ -398,3 +398,102 @@ async def notificar_cliente_pedido_cancelado(
     finally:
         db_session.close()
 
+
+async def notificar_cliente_pedido_pronto_aguardando_pagamento(
+    pedido_id: int,
+    empresa_id: Optional[int] = None,
+) -> None:
+    """
+    Notifica o cliente via WhatsApp quando um pedido de balcão muda para
+    status "Aguardando pagamento" (status A).
+
+    Executada em background (ex.: thread com asyncio.run). Cria própria sessão de DB.
+    """
+    from app.database.db_connection import SessionLocal
+    from sqlalchemy.orm import joinedload
+    from app.api.chatbot.core.config_whatsapp import format_phone_number
+    from app.api.chatbot.core.notifications import OrderNotification
+
+    db_session = SessionLocal()
+    try:
+        pedido = (
+            db_session.query(PedidoUnificadoModel)
+            .options(
+                joinedload(PedidoUnificadoModel.cliente),
+                joinedload(PedidoUnificadoModel.empresa),
+            )
+            .filter(PedidoUnificadoModel.id == pedido_id)
+            .first()
+        )
+        if not pedido:
+            logger.warning("[AguardandoPgto] Pedido %s não encontrado para notificação", pedido_id)
+            return
+
+        empresa_id_val = empresa_id or (pedido.empresa_id if pedido.empresa_id else None)
+        if not empresa_id_val:
+            logger.warning("[AguardandoPgto] Pedido %s sem empresa_id", pedido_id)
+            return
+
+        # Só envia se houver cliente e telefone
+        if not pedido.cliente:
+            logger.debug("[AguardandoPgto] Pedido %s sem cliente; notificação omitida", pedido_id)
+            return
+
+        telefone_raw = getattr(pedido.cliente, "telefone", None)
+        if not telefone_raw or not str(telefone_raw).strip():
+            logger.warning(
+                "[AguardandoPgto] Cliente do pedido %s sem telefone; notificação omitida",
+                pedido_id,
+            )
+            return
+
+        # Garante que o pedido realmente está no status esperado (evita mensagens duplicadas/fora de hora)
+        status_val = pedido.status.value if hasattr(pedido.status, "value") else str(pedido.status)
+        if status_val != "A":
+            logger.debug(
+                "[AguardandoPgto] Pedido %s com status %s; notificação omitida",
+                pedido_id,
+                status_val,
+            )
+            return
+
+        telefone = format_phone_number(str(telefone_raw).strip())
+        numero_pedido = pedido.numero_pedido or str(pedido_id)
+        cliente_nome = getattr(pedido.cliente, "nome", None) or "Cliente"
+
+        mensagem = (
+            "✅ *Pedido #%s pronto!*\n\n"
+            "Olá, *%s*! 👋\n"
+            "Seu pedido está pronto e *aguardando pagamento* no balcão.\n\n"
+            "💬 Se precisar de ajuda, toque no botão abaixo para *chamar um atendente*."
+        ) % (numero_pedido, cliente_nome)
+
+        botoes = [{"id": "chamar_atendente", "title": "Chamar atendente"}]
+        result = await OrderNotification.send_whatsapp_message_with_buttons(
+            telefone,
+            mensagem,
+            botoes,
+            empresa_id=str(empresa_id_val),
+        )
+
+        if result.get("success"):
+            logger.info(
+                "[AguardandoPgto] Notificação enviada ao cliente (pedido #%s)",
+                numero_pedido,
+            )
+        else:
+            logger.warning(
+                "[AguardandoPgto] Erro ao enviar WhatsApp (pedido #%s): %s",
+                numero_pedido,
+                result.get("error", "erro desconhecido"),
+            )
+    except Exception as e:
+        logger.error(
+            "[AguardandoPgto] Falha ao notificar cliente (pedido %s): %s",
+            pedido_id,
+            e,
+            exc_info=True,
+        )
+    finally:
+        db_session.close()
+

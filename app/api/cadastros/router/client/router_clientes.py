@@ -11,6 +11,7 @@ from app.api.cadastros.schemas.schema_endereco import EnderecoOut
 from app.api.cadastros.services.service_cliente import ClienteService
 from app.core.client_dependecies import get_cliente_by_super_token
 from app.database.db_connection import get_db
+from app.utils.telefone import normalizar_telefone
 from app.utils.logger import logger
 
 router = APIRouter(prefix="/api/cadastros/client/clientes", tags=["Client - Cadastros - Clientes"])
@@ -27,8 +28,12 @@ def novo_dispositivo(body: NovoDispositivoRequest, db: Session = Depends(get_db)
     Endpoint para novo dispositivo.
     Gera um novo super_token, grava no banco e retorna para o cliente.
     """
-    telefone = body.telefone
+    telefone = normalizar_telefone(body.telefone) or ""
     cliente = db.query(ClienteModel).filter_by(telefone=telefone).first()
+
+    # Compatibilidade: bases antigas podem ter salvo sem o prefixo 55
+    if not cliente and telefone.startswith("55"):
+        cliente = db.query(ClienteModel).filter_by(telefone=telefone[2:]).first()
     if not cliente:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Telefone não cadastrado")
 

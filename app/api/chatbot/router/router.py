@@ -2382,19 +2382,26 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
 
             # Detecta se a mensagem é uma resposta de botão
             # O WhatsApp pode enviar o ID do botão diretamente ou o texto do botão
-            mensagem_lower = message_text.lower().strip()
+            mensagem_lower = (message_text or "").lower().strip()
             botao_clicado = None
+            
+            # Log para debug
+            logger.info(f"🔍 Verificando botão - button_id={button_id}, message_text='{message_text}', mensagem_lower='{mensagem_lower}'")
             
             # Primeiro verifica se veio o button_id diretamente do webhook
             if button_id:
                 botao_clicado = button_id
+                logger.info(f"✅ Botão detectado via button_id: {botao_clicado}")
             # Se não, verifica pelo texto da mensagem
             elif "pedir pelo whatsapp" in mensagem_lower or mensagem_lower == "pedir pelo whatsapp":
                 botao_clicado = "pedir_whatsapp"
+                logger.info(f"✅ Botão detectado via texto: {botao_clicado}")
             elif "pedir pelo link" in mensagem_lower or mensagem_lower == "pedir pelo link":
                 botao_clicado = "pedir_link"
+                logger.info(f"✅ Botão detectado via texto: {botao_clicado}")
             elif "chamar atendente" in mensagem_lower or mensagem_lower == "chamar atendente" or "chamar um atendente" in mensagem_lower:
                 botao_clicado = "chamar_atendente"
+                logger.info(f"✅ Botão detectado via texto: {botao_clicado}")
             
             # Se for clique em botão, processa a resposta
             if botao_clicado:
@@ -2449,18 +2456,20 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                         tipo_solicitacao="chamar_atendente"
                     )
                     
-                    # PAUSA O CHATBOT PARA ESTE CLIENTE
+                    # PAUSA O CHATBOT PARA ESTE CLIENTE (por conta própria - 3 horas)
                     try:
+                        paused_until = chatbot_db.get_auto_pause_until()
                         chatbot_db.set_bot_status(
                             db=db,
                             phone_number=phone_number,
                             is_active=False,
                             paused_by="cliente_chamou_atendente",
-                            empresa_id=empresa_id_int
+                            empresa_id=empresa_id_int,
+                            paused_until=paused_until
                         )
                         import logging
                         logger = logging.getLogger(__name__)
-                        logger.info(f"⏸️ Chatbot pausado para cliente {phone_number} (chamou atendente)")
+                        logger.info(f"⏸️ Chatbot pausado para cliente {phone_number} por {chatbot_db.AUTO_PAUSE_HOURS} horas (chamou atendente) - paused_until: {paused_until}")
                     except Exception as e:
                         import logging
                         logger = logging.getLogger(__name__)
@@ -2498,6 +2507,58 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
             # (pode ser que a conversa já exista, mas a loja fechou depois)
             if esta_aberta is False:
                 return  # Não processa mensagem quando loja está fechada
+            
+            # IMPORTANTE: Verifica novamente se é "chamar atendente" antes de processar pela IA
+            # Isso garante que mesmo se a detecção anterior falhar, não processe como busca de produto
+            mensagem_lower_check = (message_text or "").lower().strip()
+            is_chamar_atendente = (
+                button_id == "chamar_atendente"
+                or mensagem_lower_check == "chamar atendente"
+                or mensagem_lower_check == "chamar um atendente"
+                or "chamar atendente" in mensagem_lower_check
+                or "chamar um atendente" in mensagem_lower_check
+            )
+            
+            if is_chamar_atendente:
+                # Cliente quer chamar atendente humano - processa diretamente sem passar pela IA
+                logger.info(f"🔔 Detectado 'chamar atendente' antes do processamento IA - button_id={button_id}, message_text={message_text}")
+                await _enviar_notificacao_empresa(
+                    db=db,
+                    empresa_id=empresa_id,
+                    empresa_id_int=empresa_id_int,
+                    cliente_phone=phone_number,
+                    cliente_nome=contact_name,
+                    tipo_solicitacao="chamar_atendente"
+                )
+                
+                # PAUSA O CHATBOT PARA ESTE CLIENTE (por conta própria - 3 horas)
+                try:
+                    paused_until = chatbot_db.get_auto_pause_until()
+                    chatbot_db.set_bot_status(
+                        db=db,
+                        phone_number=phone_number,
+                        is_active=False,
+                        paused_by="cliente_chamou_atendente",
+                        empresa_id=empresa_id_int,
+                        paused_until=paused_until
+                    )
+                    logger.info(f"⏸️ Chatbot pausado para cliente {phone_number} por {chatbot_db.AUTO_PAUSE_HOURS} horas (chamou atendente) - paused_until: {paused_until}")
+                except Exception as e:
+                    logger.error(f"❌ Erro ao pausar chatbot: {e}", exc_info=True)
+                
+                resposta = "✅ *Solicitação enviada!*\n\nNossa equipe foi notificada e entrará em contato com você em breve.\n\nEnquanto isso, posso te ajudar com alguma dúvida? 😊"
+                
+                # Envia a resposta
+                notifier = OrderNotification()
+                result = await notifier.send_whatsapp_message(phone_number, resposta, empresa_id=empresa_id)
+                
+                if isinstance(result, dict) and result.get("success"):
+                    # Salva no histórico
+                    chatbot_db.create_message(db, conversation_id, "user", message_text, whatsapp_message_id=message_id)
+                    whatsapp_response_message_id = result.get("message_id")
+                    chatbot_db.create_message(db, conversation_id, "assistant", resposta, whatsapp_message_id=whatsapp_response_message_id)
+                
+                return  # Não processa pela IA
             
             # IMPORTANTE: Salva a mensagem do usuário ANTES de processar (garante que sempre será salva)
             # A função processar_mensagem_groq também salva, mas garantir aqui evita perdas em caso de erro

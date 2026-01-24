@@ -1178,12 +1178,125 @@ async def enviar_resumo_pedido_whatsapp(
 
         if result.get("success"):
             logger.info(f"[enviar_resumo_pedido] Resumo do pedido {pedido_id} enviado com sucesso para {telefone_final}")
+            
+            # Salva no chat interno (chatbot.messages) para manter histórico
+            saved_in_chat = False
+            conversation_id = None
+            chatbot_message_id = None
+            try:
+                from . import database as chatbot_db
+                from .config_whatsapp import format_phone_number
+                from sqlalchemy import text as sql_text
+                from datetime import datetime as _dt
+
+                # Normaliza telefone para manter consistência com conversas existentes
+                telefone_normalizado = format_phone_number(telefone_final)
+                user_id = telefone_normalizado
+
+                # Converte empresa_id para int quando possível (API do DB usa int)
+                empresa_id_int = None
+                if empresa_id_final:
+                    try:
+                        empresa_id_int = int(str(empresa_id_final))
+                    except (ValueError, TypeError):
+                        empresa_id_int = None
+
+                # Garante prompt default (para não violar FK)
+                prompt_key = "default"
+                if not chatbot_db.get_prompt(db, prompt_key, empresa_id=empresa_id_int):
+                    chatbot_db.create_prompt(
+                        db=db,
+                        key=prompt_key,
+                        name="Padrão (Resumo de Pedido)",
+                        content="Atendente virtual para envio de resumo de pedidos.",
+                        is_default=True,
+                        empresa_id=empresa_id_int,
+                    )
+
+                # Busca conversa existente do usuário (escopada por empresa quando disponível)
+                conversations = chatbot_db.get_conversations_by_user(db, user_id, empresa_id=empresa_id_int)
+                if not conversations and telefone_final != telefone_normalizado:
+                    conversations = chatbot_db.get_conversations_by_user(db, telefone_final, empresa_id=empresa_id_int)
+
+                if conversations:
+                    conversation_id = conversations[0]["id"]
+
+                    # Se a conversa não tinha empresa_id e agora temos, atualiza
+                    if empresa_id_int:
+                        try:
+                            db.execute(
+                                sql_text(
+                                    """
+                                    UPDATE chatbot.conversations
+                                    SET empresa_id = :empresa_id
+                                    WHERE id = :conversation_id AND empresa_id IS NULL
+                                    """
+                                ),
+                                {"empresa_id": empresa_id_int, "conversation_id": conversation_id},
+                            )
+                            db.commit()
+                        except Exception as e:
+                            # Não falha o envio se não conseguir atualizar empresa_id
+                            logger.warning(
+                                f"[enviar_resumo_pedido] Não foi possível atualizar empresa_id da conversa {conversation_id}: {e}"
+                            )
+                else:
+                    session_id = f"order_summary_{pedido_id}_{_dt.now().strftime('%Y%m%d%H%M%S')}"
+                    conversation_id = chatbot_db.create_conversation(
+                        db=db,
+                        session_id=session_id,
+                        user_id=user_id,
+                        prompt_key=prompt_key,
+                        model="notification-system",
+                        empresa_id=empresa_id_int,
+                    )
+
+                whatsapp_message_id = result.get("message_id")
+                chatbot_message_id = chatbot_db.create_message(
+                    db=db,
+                    conversation_id=conversation_id,
+                    role="assistant",
+                    content=mensagem,
+                    whatsapp_message_id=whatsapp_message_id,
+                )
+                saved_in_chat = True
+
+                # Notifica frontend via WebSocket (não falha se der erro)
+                try:
+                    await send_chatbot_websocket_notification(
+                        empresa_id=empresa_id_int,
+                        notification_type="chatbot_message",
+                        title="Resumo de pedido enviado",
+                        message=f"Resumo do pedido #{numero_pedido} enviado",
+                        data={
+                            "conversation_id": conversation_id,
+                            "message_id": chatbot_message_id,
+                            "user_id": user_id,
+                            "pedido_id": pedido_id,
+                            "numero_pedido": numero_pedido,
+                            "role": "assistant",
+                            "whatsapp_message_id": whatsapp_message_id,
+                        },
+                    )
+                except Exception as e:
+                    logger.warning(f"[enviar_resumo_pedido] Erro ao enviar notificação WebSocket: {e}")
+
+            except Exception as e:
+                logger.error(
+                    f"[enviar_resumo_pedido] Resumo enviado no WhatsApp, mas falhou ao salvar no chat: {e}",
+                    exc_info=True,
+                )
+
             return {
                 "success": True,
                 "message": "Resumo do pedido enviado com sucesso!",
                 "pedido_id": pedido_id,
                 "numero_pedido": numero_pedido,
-                "status": status_info["name"]
+                "status": status_info["name"],
+                "chat_saved": saved_in_chat,
+                "conversation_id": conversation_id,
+                "chat_message_id": chatbot_message_id,
+                "whatsapp_message_id": result.get("message_id"),
             }
         else:
             error_msg = result.get("error", "Erro desconhecido")

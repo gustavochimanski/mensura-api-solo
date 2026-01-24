@@ -1,5 +1,4 @@
 from datetime import datetime, timezone
-import re
 
 from sqlalchemy import func, case
 from sqlalchemy.orm import Session
@@ -22,6 +21,7 @@ from app.api.pedidos.models.model_pedido_unificado import (
     CanalPedido,
 )
 from app.api.empresas.models.empresa_model import EmpresaModel
+from app.utils.telefone import normalizar_telefone
 
 
 class ClienteService:
@@ -31,22 +31,10 @@ class ClienteService:
     
     def _normalizar_telefone(self, telefone: str) -> str:
         """
-        Normaliza o número de telefone removendo caracteres especiais
-        e garantindo que tenha o prefixo do país (55) quando necessário
+        Compatibilidade: mantém a API interna existente, mas delega para
+        `app.utils.telefone.normalizar_telefone`.
         """
-        telefone_limpo = re.sub(r'[^\d]', '', telefone)
-        
-        # Se o telefone não começar com 55, adiciona o prefixo
-        # Considera números brasileiros (10 ou 11 dígitos sem o 55)
-        if telefone_limpo and not telefone_limpo.startswith("55"):
-            # Se tem 10 ou 11 dígitos (formato brasileiro sem código do país)
-            if len(telefone_limpo) == 10 or len(telefone_limpo) == 11:
-                telefone_limpo = "55" + telefone_limpo
-            # Se tem menos de 10 dígitos, pode ser um número incompleto, mas adiciona 55 mesmo assim
-            elif len(telefone_limpo) < 10:
-                telefone_limpo = "55" + telefone_limpo
-        
-        return telefone_limpo
+        return normalizar_telefone(telefone) or ""
 
     def get_current(self, token: str):
         cli = self.repo.get_by_token(token)

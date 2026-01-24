@@ -5582,16 +5582,20 @@ Sua única função é ajudar a ESCOLHER PRODUTOS. Nada mais!
             # Faz rollback de qualquer transação anterior
             self.db.rollback()
             
+            # PAUSA O CHATBOT POR 3 HORAS quando pausa por conta própria
+            paused_until = chatbot_db.get_auto_pause_until()
+            
             chatbot_db.set_bot_status(
                 self.db,
                 user_id,
                 is_active=False,
                 paused_by="sistema_nao_entendeu",
-                empresa_id=self.empresa_id
+                empresa_id=self.empresa_id,
+                paused_until=paused_until
             )
             # Commit da desativação
             self.db.commit()
-            print(f"✅ Chatbot desativado para cliente {user_id}")
+            print(f"✅ Chatbot desativado para cliente {user_id} por {chatbot_db.AUTO_PAUSE_HOURS} horas (paused_until: {paused_until})")
         except Exception as e:
             print(f"⚠️ Erro ao desativar chatbot: {e}")
             import traceback
@@ -7129,17 +7133,19 @@ Responda de forma natural e curta:"""
                 # Envia notificação para a empresa
                 await self._enviar_notificacao_chamar_atendente(user_id, dados)
                 
-                # PAUSA O CHATBOT PARA ESTE CLIENTE
+                # PAUSA O CHATBOT PARA ESTE CLIENTE (por conta própria - 3 horas)
                 try:
                     from . import database as chatbot_db
+                    paused_until = chatbot_db.get_auto_pause_until()
                     chatbot_db.set_bot_status(
                         db=self.db,
                         phone_number=user_id,
                         is_active=False,
                         paused_by="cliente_chamou_atendente",
-                        empresa_id=self.empresa_id
+                        empresa_id=self.empresa_id,
+                        paused_until=paused_until
                     )
-                    print(f"⏸️ Chatbot pausado para cliente {user_id} (chamou atendente via IA)")
+                    print(f"⏸️ Chatbot pausado para cliente {user_id} por {chatbot_db.AUTO_PAUSE_HOURS} horas (chamou atendente via IA) - paused_until: {paused_until}")
                 except Exception as e:
                     print(f"❌ Erro ao pausar chatbot: {e}")
                     import traceback
