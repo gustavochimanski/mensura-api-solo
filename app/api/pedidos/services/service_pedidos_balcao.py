@@ -193,14 +193,9 @@ class PedidoBalcaoService:
                         "Produto não disponível"
                     )
                 
-                # Calcula preço com complementos (persistência é relacional a partir do request)
-                preco_total, _ = self.product_core.calcular_preco_com_complementos(
-                    product=product,
-                    quantidade=qtd,
-                    complementos_request=it.complementos,
-                )
-                
-                preco_unitario = preco_total / qtd
+                # IMPORTANTE: preco_unitario deve ser apenas o preço BASE (sem complementos).
+                # Os complementos são persistidos relacionalmente e somados no total via _calc_item_total.
+                preco_unitario = product.get_preco_venda()
                 descricao_produto = product.nome or product.descricao or ""
                 
                 # Adiciona item
@@ -257,14 +252,9 @@ class PedidoBalcaoService:
                         "Receita não disponível"
                     )
                 
-                # Calcula preço com complementos
-                preco_total, _ = self.product_core.calcular_preco_com_complementos(
-                    product=product,
-                    quantidade=qtd,
-                    complementos_request=receita_req.complementos,
-                )
-                
-                preco_unitario = preco_total / qtd
+                # IMPORTANTE: preco_unitario deve ser apenas o preço BASE (sem complementos).
+                # Os complementos são persistidos relacionalmente e somados no total via _calc_item_total.
+                preco_unitario = product.get_preco_venda()
                 descricao_produto = product.nome or product.descricao or ""
                 
                 # Adiciona item
@@ -313,14 +303,9 @@ class PedidoBalcaoService:
                         "Combo não disponível"
                     )
                 
-                # Calcula preço com complementos
-                preco_total, _ = self.product_core.calcular_preco_com_complementos(
-                    product=product,
-                    quantidade=qtd,
-                    complementos_request=combo_req.complementos,
-                )
-                
-                preco_unitario = preco_total / qtd
+                # IMPORTANTE: preco_unitario deve ser apenas o preço BASE (sem complementos).
+                # Os complementos são persistidos relacionalmente e somados no total via _calc_item_total.
+                preco_unitario = product.get_preco_venda()
                 descricao_produto = product.nome or product.descricao or ""
                 
                 # Monta observação completa para combos
@@ -587,14 +572,9 @@ class PedidoBalcaoService:
             # Se quantidade mudou mas não há complementos, recalcula apenas o preço total
             item_db.preco_total = item_db.preco_unitario * Decimal(str(item_db.quantidade))
         
-        # Recalcula valor total do pedido (soma todos os itens)
-        from sqlalchemy import func
-        from app.api.pedidos.models.model_pedido_item_unificado import PedidoItemUnificadoModel
-        subtotal = self.db.query(
-            func.sum(PedidoItemUnificadoModel.quantidade * PedidoItemUnificadoModel.preco_unitario)
-        ).filter(PedidoItemUnificadoModel.pedido_id == pedido_id).scalar() or Decimal("0")
-        
-        pedido.valor_total = Decimal(subtotal)
+        # Recalcula valor total do pedido incluindo complementos relacionais
+        pedido_atualizado = self.repo.get(pedido_id, TipoEntrega.BALCAO)
+        pedido_atualizado.valor_total = self.repo._calc_total(pedido_atualizado)
         self.db.flush()
         
         # Registra histórico

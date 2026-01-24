@@ -3273,14 +3273,10 @@ REGRA PARA COMPLEMENTOS:
                                     resumo += f"  _{descricao}_\n"
                                 if item.get('removidos'):
                                     resumo += f"  _Sem: {', '.join(item['removidos'])}_\n"
-                                if item.get('adicionais'):
-                                    for add in item['adicionais']:
-                                        nome = add.get('nome', add) if isinstance(add, dict) else add
-                                        preco = add.get('preco', 0) if isinstance(add, dict) else 0
-                                        if preco and preco > 0:
-                                            resumo += f"        ➕ {nome} (+R$ {preco:.2f})\n"
-                                        else:
-                                            resumo += f"        ➕ {nome}\n"
+                                for add in item.get('adicionais', []):
+                                    nome = add.get('nome', add) if isinstance(add, dict) else add
+                                    preco = add.get('preco', 0) if isinstance(add, dict) else 0
+                                    resumo += f"        ➕ {nome}" + (f" (+R$ {preco:.2f})" if preco > 0 else "") + "\n"
                             resumo += f"\n💰 *Total: R$ {total:.2f}*"
                             resposta_limpa += resumo
 
@@ -6912,12 +6908,10 @@ Responda de forma natural e curta:"""
                         pers = item.get('personalizacoes', {})
                         if pers.get('removidos'):
                             msg_resposta += f"  🚫 Sem: {', '.join(pers['removidos'])}\n"
-                        if pers.get('adicionais'):
-                            for add in pers['adicionais']:
-                                if isinstance(add, dict):
-                                    msg_resposta += f"  ➕ {add.get('nome', add)} (+R$ {add.get('preco', 0):.2f})\n"
-                                else:
-                                    msg_resposta += f"  ➕ {add}\n"
+                        for add in pers.get('adicionais', []):
+                            nome = add.get('nome', add) if isinstance(add, dict) else add
+                            preco = add.get('preco', 0) if isinstance(add, dict) else 0
+                            msg_resposta += f"  ➕ {nome}" + (f" (+R$ {preco:.2f})" if preco > 0 else "") + "\n"
                     
                     msg_resposta += "\n━━━━━━━━━━━━━━━━━━━━\n"
                     msg_resposta += f"💰 *TOTAL: R$ {total:.2f}*\n"
