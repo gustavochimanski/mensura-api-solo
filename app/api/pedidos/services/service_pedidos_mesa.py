@@ -579,6 +579,20 @@ class PedidoMesaService:
                 f"[Pedidos Mesa] Mesa NÃO liberada (cancelar) - mesa_id={mesa_id} "
                 f"(ainda há {len(pedidos_mesa_abertos)} pedidos de mesa e {len(pedidos_balcao_abertos)} de balcão abertos)"
             )
+
+        # Notifica cliente sobre cancelamento (em background)
+        try:
+            import asyncio
+            import threading
+            from app.api.pedidos.utils.pedido_notification_helper import notificar_cliente_pedido_cancelado
+            _pid = int(pedido_id)
+            _eid = int(pedido.empresa_id) if pedido.empresa_id else None
+            threading.Thread(
+                target=lambda p=_pid, e=_eid: asyncio.run(notificar_cliente_pedido_cancelado(p, e)),
+                daemon=True,
+            ).start()
+        except Exception as e:
+            logger.error("Erro ao agendar notificação de cancelamento (mesa) %s: %s", pedido_id, e)
         
         return PedidoResponseBuilder.pedido_to_response_completo(pedido)
 

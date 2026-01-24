@@ -1204,6 +1204,19 @@ class PedidoService:
             except Exception as e:
                 # Loga erro mas não quebra o fluxo
                 logger.error(f"Erro ao agendar notificação de pedido em rota {pedido.id}: {e}")
+
+        # Envia notificação ao cliente quando pedido é cancelado (status C)
+        if novo_status == PedidoStatusEnum.C:
+            try:
+                _pid = int(pedido.id)
+                _eid = int(pedido.empresa_id) if pedido.empresa_id else None
+                from app.api.pedidos.utils.pedido_notification_helper import notificar_cliente_pedido_cancelado
+                threading.Thread(
+                    target=lambda p=_pid, e=_eid: asyncio.run(notificar_cliente_pedido_cancelado(p, e)),
+                    daemon=True,
+                ).start()
+            except Exception as e:
+                logger.error(f"Erro ao agendar notificação de cancelamento {pedido.id}: {e}")
         
         return self._pedido_to_response(pedido)
 

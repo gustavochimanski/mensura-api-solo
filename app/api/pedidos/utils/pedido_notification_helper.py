@@ -204,3 +204,98 @@ async def notificar_pedido_impresso(pedido_id: int, empresa_id: Optional[int] = 
         db_session.close()
 
 
+async def notificar_cliente_pedido_cancelado(
+    pedido_id: int,
+    empresa_id: Optional[int] = None,
+) -> None:
+    """
+    Notifica o cliente via WhatsApp quando o pedido é cancelado (status C).
+    Envia mensagem formatada com link do site e botão "Chamar atendente".
+
+    Executada em background (ex.: thread com asyncio.run). Cria própria sessão de DB.
+    """
+    from app.database.db_connection import SessionLocal
+    from sqlalchemy.orm import joinedload
+    from app.api.chatbot.core.config_whatsapp import format_phone_number
+    from app.api.chatbot.core.notifications import OrderNotification
+    from app.api.chatbot.core.utils.config_loader import ConfigLoader
+
+    db_session = SessionLocal()
+    try:
+        pedido = (
+            db_session.query(PedidoUnificadoModel)
+            .options(
+                joinedload(PedidoUnificadoModel.cliente),
+                joinedload(PedidoUnificadoModel.empresa),
+            )
+            .filter(PedidoUnificadoModel.id == pedido_id)
+            .first()
+        )
+        if not pedido:
+            logger.warning("[Cancelado] Pedido %s não encontrado para notificação", pedido_id)
+            return
+
+        empresa_id_val = empresa_id or (pedido.empresa_id if pedido.empresa_id else None)
+        if not empresa_id_val:
+            logger.warning("[Cancelado] Pedido %s sem empresa_id", pedido_id)
+            return
+
+        if not pedido.cliente:
+            logger.debug("[Cancelado] Pedido %s sem cliente; notificação omitida", pedido_id)
+            return
+
+        telefone_raw = getattr(pedido.cliente, "telefone", None)
+        if not telefone_raw or not str(telefone_raw).strip():
+            logger.warning("[Cancelado] Cliente do pedido %s sem telefone; notificação omitida", pedido_id)
+            return
+
+        telefone = format_phone_number(str(telefone_raw).strip())
+        numero_pedido = pedido.numero_pedido or str(pedido_id)
+        cliente_nome = getattr(pedido.cliente, "nome", None) or "Cliente"
+
+        try:
+            loader = ConfigLoader(db_session, int(empresa_id_val))
+            link_cardapio = loader.obter_link_cardapio()
+        except Exception as e:
+            logger.warning("[Cancelado] Erro ao obter link do cardápio (empresa %s): %s", empresa_id_val, e)
+            link_cardapio = "https://chatbot.mensuraapi.com.br"
+
+        mensagem = (
+            "❌ *Pedido #%s cancelado*\n\n"
+            "Olá, *%s*! 👋\n"
+            "Infelizmente seu pedido foi cancelado.\n\n"
+            "📱 *Quer fazer outro pedido?*\n"
+            "É só acessar nosso site e pedir por lá:\n\n"
+            "👉 %s\n\n"
+            "💬 Precisa de ajuda? Toque no botão abaixo para *chamar um atendente*."
+        ) % (numero_pedido, cliente_nome, link_cardapio)
+
+        botoes = [{"id": "chamar_atendente", "title": "Chamar atendente"}]
+        result = await OrderNotification.send_whatsapp_message_with_buttons(
+            telefone,
+            mensagem,
+            botoes,
+            empresa_id=str(empresa_id_val),
+        )
+
+        if result.get("success"):
+            logger.info(
+                "[Cancelado] Notificação de cancelamento enviada ao cliente (pedido #%s)",
+                numero_pedido,
+            )
+        else:
+            logger.warning(
+                "[Cancelado] Erro ao enviar WhatsApp de cancelamento (pedido #%s): %s",
+                numero_pedido,
+                result.get("error", "erro desconhecido"),
+            )
+    except Exception as e:
+        logger.error(
+            "[Cancelado] Falha ao notificar cliente sobre cancelamento (pedido %s): %s",
+            pedido_id,
+            e,
+            exc_info=True,
+        )
+    finally:
+        db_session.close()
+

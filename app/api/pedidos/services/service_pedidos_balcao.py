@@ -80,6 +80,7 @@ from app.api.catalogo.core import ProductCore
 from app.api.catalogo.adapters.produto_adapter import ProdutoAdapter
 from app.api.catalogo.adapters.combo_adapter import ComboAdapter
 from app.api.catalogo.adapters.complemento_adapter import ComplementoAdapter
+from app.utils.logger import logger
 
 
 class PedidoBalcaoService:
@@ -631,6 +632,21 @@ class PedidoBalcaoService:
         )
         self.repo.commit()
         pedido = self.repo.get(pedido_id, TipoEntrega.BALCAO)
+
+        # Notifica cliente sobre cancelamento (em background)
+        try:
+            import asyncio
+            import threading
+            from app.api.pedidos.utils.pedido_notification_helper import notificar_cliente_pedido_cancelado
+            _pid = int(pedido_id)
+            _eid = int(pedido.empresa_id) if pedido.empresa_id else None
+            threading.Thread(
+                target=lambda p=_pid, e=_eid: asyncio.run(notificar_cliente_pedido_cancelado(p, e)),
+                daemon=True,
+            ).start()
+        except Exception as e:
+            logger.error("Erro ao agendar notificação de cancelamento (balcão) %s: %s", pedido_id, e)
+
         return PedidoResponseBuilder.pedido_to_response_completo(pedido)
 
     def confirmar(self, pedido_id: int, usuario_id: int | None = None) -> PedidoResponseCompleto:
