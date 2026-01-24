@@ -48,6 +48,7 @@ class EmpresaPublicListItem(BaseModel):
     tema: Optional[str] = None
     redireciona_home: bool = False
     redireciona_home_para: Optional[str] = None
+    horarios_funcionamento: Optional[List[HorarioDiaOut]] = None
 
     model_config = ConfigDict(from_attributes=True)
 

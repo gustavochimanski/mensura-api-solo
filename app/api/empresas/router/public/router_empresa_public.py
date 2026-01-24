@@ -42,6 +42,20 @@ def listar_empresas_publicas(
         if not empresas:
             raise HTTPException(status_code=404, detail="Empresa não encontrada")
         empresa = empresas[0]
+        # Converte horarios_funcionamento de JSONB para lista de HorarioDiaOut
+        horarios = None
+        if empresa.horarios_funcionamento:
+            from app.api.empresas.schemas.schema_empresa_client import HorarioDiaOut, HorarioIntervaloOut
+            horarios = [
+                HorarioDiaOut(
+                    dia_semana=dia.get("dia_semana"),
+                    intervalos=[
+                        HorarioIntervaloOut(inicio=intervalo.get("inicio"), fim=intervalo.get("fim"))
+                        for intervalo in dia.get("intervalos", [])
+                    ]
+                )
+                for dia in empresa.horarios_funcionamento
+            ]
         return EmpresaPublicListItem(
             id=empresa.id,
             nome=empresa.nome,
@@ -53,6 +67,7 @@ def listar_empresas_publicas(
             tema=empresa.cardapio_tema,
             redireciona_home=empresa.redireciona_home,
             redireciona_home_para=empresa.redireciona_home_para,
+            horarios_funcionamento=horarios,
         )
     
     # Caso contrário, retorna lista
