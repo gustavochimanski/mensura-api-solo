@@ -1109,22 +1109,27 @@ async def enviar_resumo_pedido_whatsapp(
             "MESA": "🪑 Mesa"
         }.get(tipo_entrega, tipo_entrega)
 
-        # Monta a mensagem compacta
-        mensagem = f"📋 *Pedido #{numero_pedido}* | {status_info['emoji']} {status_info['name']} | {tipo_formatado}\n"
-        mensagem += f"📅 {created_at.strftime('%d/%m/%Y %H:%M') if created_at else 'N/A'}\n\n"
-        mensagem += "*Itens:*\n"
+        # Monta uma mensagem bem fácil de entender (escaneável)
+        data_formatada = created_at.strftime('%d/%m/%Y %H:%M') if created_at else 'N/A'
+        pagamento_str = "✅ Pago" if pago else "⏳ Pendente"
 
-        for item in itens:
+        mensagem = (
+            f"📋 *Pedido #{numero_pedido}*\n"
+            f"{status_info['emoji']} *Status:* {status_info['name']}\n"
+            f"{tipo_formatado} | 📅 {data_formatada}\n\n"
+            f"*Itens:*\n"
+        )
+
+        for idx, item in enumerate(itens, start=1):
             item_id = item[0]
             qtd = item[1]
             preco_total = float(item[3]) if item[3] else 0
             nome_item = item[5]
             obs_item = item[4]
 
-            mensagem += f"• {qtd}x {nome_item} - R$ {preco_total:.2f}"
+            mensagem += f"{idx}) {qtd}x {nome_item} — R$ {preco_total:.2f}\n"
             if obs_item:
-                mensagem += f" (_Obs: {obs_item}_)"
-            mensagem += "\n"
+                mensagem += f"   Obs: {obs_item}\n"
 
             # Adiciona complementos e adicionais do item
             if item_id in complementos_por_item:
@@ -1150,23 +1155,22 @@ async def enviar_resumo_pedido_whatsapp(
                         qtd_add = add["quantidade"] or 1
                         preco_add = add["preco"] or 0.0
                         if qtd_add > 1:
-                            mensagem += f"      ➕ {qtd_add}x {nome_add} (+R$ {preco_add:.2f})\n"
+                            mensagem += f"   ➕ {qtd_add}x {nome_add} (+R$ {preco_add:.2f})\n"
                         else:
-                            mensagem += f"      ➕ {nome_add} (+R$ {preco_add:.2f})\n"
+                            mensagem += f"   ➕ {nome_add} (+R$ {preco_add:.2f})\n"
 
-        mensagem += f"\n*Valores:* Subtotal: R$ {subtotal:.2f}"
-        if desconto > 0:
-            mensagem += f" | Desconto: -R$ {desconto:.2f}"
-        if taxa_entrega > 0:
-            mensagem += f" | Entrega: R$ {taxa_entrega:.2f}"
-        mensagem += f"\n*Total: R$ {valor_total:.2f}* | 💳 {'✅ Pago' if pago else '⏳ Pendente'}"
+            # Linha em branco entre itens para leitura rápida
+            mensagem += "\n"
+
+        # Enviar apenas total e status de pagamento (sem subtotal/desconto/taxa)
+        mensagem += f"*Total:* R$ {valor_total:.2f}\n*Pagamento:* {pagamento_str}"
 
         if observacoes:
-            mensagem += f"\n📝 _Obs: {observacoes}_"
+            mensagem += f"\n\n📝 *Obs do pedido:* {observacoes}"
 
         # Mensagem de status personalizada
         status_message = status_info["message"].format(numero_pedido=numero_pedido)
-        mensagem += f"\n{status_info['emoji']} *{status_message}*"
+        mensagem += f"\n\n{status_info['emoji']} {status_message}"
 
         # Envia via WhatsApp
         notifier = OrderNotification()
