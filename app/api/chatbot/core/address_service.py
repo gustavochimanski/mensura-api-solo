@@ -431,13 +431,20 @@ class ChatbotAddressService:
         """
         Normaliza o número de telefone removendo caracteres especiais
         e garantindo que tenha o prefixo do país (55) quando necessário.
-        Garante que números brasileiros sempre tenham 13 dígitos (55 + 11 dígitos).
+
+        IMPORTANTE:
+        - Não inventa dígitos (ex.: NÃO adiciona "9" para "completar" o número).
+        - Mantém consistência entre cadastro, conversa e envio de mensagem.
         """
         import re
-        telefone_limpo = re.sub(r'[^\d]', '', telefone)
+        telefone_limpo = re.sub(r"[^\d]", "", telefone or "")
         
         if not telefone_limpo:
             return telefone_limpo
+
+        # Remove prefixo internacional "00" quando presente (ex.: 0055...)
+        if telefone_limpo.startswith("00") and len(telefone_limpo) > 2:
+            telefone_limpo = telefone_limpo[2:]
         
         # Se o telefone não começar com 55, adiciona o prefixo
         # Considera números brasileiros (10 ou 11 dígitos sem o 55)
@@ -448,23 +455,11 @@ class ChatbotAddressService:
             # Se tem menos de 10 dígitos, pode ser um número incompleto, mas adiciona 55 mesmo assim
             elif len(telefone_limpo) < 10:
                 telefone_limpo = "55" + telefone_limpo
-        
-        # CORREÇÃO: Se já começa com 55 mas está incompleto (menos de 13 dígitos),
-        # garante que tenha 13 dígitos completos (55 + 11 dígitos)
-        # Números brasileiros devem ter 13 dígitos: 55 + DDD (2) + número (9 dígitos)
-        if telefone_limpo.startswith("55"):
-            if len(telefone_limpo) < 13:
-                # Log para identificar quando número está incompleto
-                logger.warning(f"[ChatbotAddress] Telefone incompleto detectado: {telefone} -> {telefone_limpo} ({len(telefone_limpo)} dígitos). Esperado: 13 dígitos.")
-                # Se está faltando dígitos, adiciona o dígito 9 (mais comum em números brasileiros) até completar 13
-                # Isso garante que o número sempre tenha a quantidade correta
-                while len(telefone_limpo) < 13:
-                    telefone_limpo = telefone_limpo + "9"
-                logger.info(f"[ChatbotAddress] Telefone corrigido: {telefone_limpo} (13 dígitos)")
-            elif len(telefone_limpo) > 13:
-                # Se tem mais de 13 dígitos, mantém apenas os primeiros 13
-                logger.warning(f"[ChatbotAddress] Telefone com mais de 13 dígitos: {telefone_limpo}. Truncando para 13 dígitos.")
-                telefone_limpo = telefone_limpo[:13]
+
+        # Se veio com um "9" duplicado após o DDD (ex.: 55DD99XXXXXXXX), remove o excesso.
+        # Isso evita criar conversas/históricos diferentes por erro de normalização.
+        if telefone_limpo.startswith("55") and len(telefone_limpo) == 14 and telefone_limpo[4:6] == "99":
+            telefone_limpo = telefone_limpo[:5] + telefone_limpo[6:]
         
         return telefone_limpo
 

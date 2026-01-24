@@ -204,6 +204,105 @@ async def notificar_pedido_impresso(pedido_id: int, empresa_id: Optional[int] = 
         db_session.close()
 
 
+async def notificar_pedido_cancelado(
+    pedido_id: int,
+    empresa_id: Optional[int] = None,
+    *,
+    motivo: str = "Pedido cancelado",
+    cancelado_por: str = "sistema",
+) -> None:
+    """
+    Notifica o frontend sobre um pedido cancelado (evento + notificação em tempo real).
+
+    Observação: esta notificação é independente da mensagem WhatsApp ao cliente.
+    """
+    from app.database.db_connection import SessionLocal
+    from sqlalchemy.orm import joinedload
+
+    db_session = SessionLocal()
+    try:
+        pedido = (
+            db_session.query(PedidoUnificadoModel)
+            .options(
+                joinedload(PedidoUnificadoModel.cliente),
+                joinedload(PedidoUnificadoModel.itens),
+                joinedload(PedidoUnificadoModel.mesa),
+                joinedload(PedidoUnificadoModel.empresa),
+            )
+            .filter(PedidoUnificadoModel.id == pedido_id)
+            .first()
+        )
+
+        if not pedido:
+            logger.warning(f"Pedido {pedido_id} não encontrado para notificação de cancelado")
+            return
+
+        empresa_id_final = empresa_id or pedido.empresa_id
+        if not empresa_id_final:
+            logger.warning(f"Pedido {pedido_id} não tem empresa_id")
+            return
+
+        from app.api.notifications.services.pedido_notification_service import PedidoNotificationService
+
+        # Cliente
+        cliente_data: Dict[str, Any] = {}
+        if pedido.cliente:
+            cliente_data = {
+                "id": pedido.cliente.id,
+                "nome": getattr(pedido.cliente, "nome", None)
+                or getattr(pedido.cliente, "nome_completo", None)
+                or "Cliente",
+                "telefone": getattr(pedido.cliente, "telefone", None),
+                "email": getattr(pedido.cliente, "email", None),
+            }
+        else:
+            cliente_data = {"nome": "Cliente não identificado"}
+
+        # Itens
+        itens = []
+        if hasattr(pedido, "itens") and pedido.itens:
+            for item in pedido.itens:
+                itens.append(
+                    {
+                        "id": item.id,
+                        "produto_descricao": getattr(item, "produto_descricao_snapshot", None) or "Produto",
+                        "quantidade": getattr(item, "quantidade", 1),
+                        "preco_unitario": float(getattr(item, "preco_unitario", 0) or 0),
+                        "preco_total": float(getattr(item, "preco_unitario", 0) or 0) * getattr(item, "quantidade", 1),
+                    }
+                )
+
+        valor_total = float(pedido.valor_total or 0)
+
+        tipo_entrega = pedido.tipo_entrega.value if hasattr(pedido.tipo_entrega, "value") else str(pedido.tipo_entrega)
+        numero_pedido = pedido.numero_pedido or str(pedido_id)
+
+        channel_metadata = {
+            "tipo_entrega": tipo_entrega,
+            "numero_pedido": numero_pedido,
+            "status": pedido.status.value if hasattr(pedido.status, "value") else str(pedido.status),
+            "mesa_id": pedido.mesa_id,
+            "mesa_codigo": pedido.mesa.codigo if pedido.mesa and hasattr(pedido.mesa, "codigo") else None,
+        }
+
+        notification_service = PedidoNotificationService()
+        await notification_service.notify_pedido_cancelado(
+            empresa_id=str(empresa_id_final),
+            pedido_id=str(pedido_id),
+            motivo=motivo,
+            cancelado_por=cancelado_por,
+            channel_metadata=channel_metadata,
+        )
+
+        logger.debug(
+            f"Processo de notificação de cancelado concluído: pedido_id={pedido_id}, empresa_id={empresa_id_final}"
+        )
+    except Exception as e:
+        logger.error(f"Erro ao notificar pedido cancelado {pedido_id}: {e}", exc_info=True)
+    finally:
+        db_session.close()
+
+
 async def notificar_cliente_pedido_cancelado(
     pedido_id: int,
     empresa_id: Optional[int] = None,

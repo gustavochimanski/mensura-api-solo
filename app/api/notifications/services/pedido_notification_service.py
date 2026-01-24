@@ -106,6 +106,11 @@ class PedidoNotificationService:
     ) -> str:
         """Notifica sobre pedido cancelado"""
         try:
+            # Metadados opcionais (ajuda o frontend a montar "resumo" e refetch)
+            tipo_entrega = (channel_metadata or {}).get("tipo_entrega")
+            numero_pedido = (channel_metadata or {}).get("numero_pedido")
+            status_atual = (channel_metadata or {}).get("status")
+
             # Publica o evento
             event_id = await self.event_publisher.publish_event(
                 empresa_id=empresa_id,
@@ -114,7 +119,9 @@ class PedidoNotificationService:
                     "pedido_id": pedido_id,
                     "motivo": motivo,
                     "cancelado_por": cancelado_por,
-                    "status": "cancelado"
+                    "status": "cancelado",
+                    "tipo_entrega": tipo_entrega,
+                    "numero_pedido": numero_pedido,
                 },
                 event_id=pedido_id,
                 event_metadata=channel_metadata
@@ -130,8 +137,13 @@ class PedidoNotificationService:
                     "pedido_id": pedido_id,
                     "motivo": motivo,
                     "cancelado_por": cancelado_por,
+                    "tipo_entrega": tipo_entrega,
+                    "numero_pedido": numero_pedido,
+                    "status": status_atual or "C",
                     "timestamp": datetime.utcnow().isoformat()
-                }
+                },
+                # Mantém o tráfego focado na tela de pedidos/kanban
+                required_route="/pedidos",
             )
             
             logger.info(f"Notificação de pedido cancelado enviada: {pedido_id}")
@@ -207,6 +219,11 @@ class PedidoNotificationService:
             Número de conexões que receberam a notificação (0 se nenhuma)
         """
         try:
+            # Metadados opcionais (ajuda o frontend a montar "resumo" e refetch)
+            tipo_entrega = (channel_metadata or {}).get("tipo_entrega")
+            numero_pedido = (channel_metadata or {}).get("numero_pedido")
+            status_atual = (channel_metadata or {}).get("status")
+
             # Normaliza empresa_id para string
             empresa_id_normalized = str(empresa_id)
             
@@ -236,6 +253,9 @@ class PedidoNotificationService:
                     "cliente": cliente_data,
                     "valor_total": valor_total,
                     "itens_count": len(itens),
+                    "tipo_entrega": tipo_entrega,
+                    "numero_pedido": numero_pedido,
+                    "status": status_atual,
                     "timestamp": datetime.utcnow().isoformat()
                 },
                 required_route="/pedidos"
@@ -300,6 +320,12 @@ class PedidoNotificationService:
                 "pedido_entregue": WSEvents.PEDIDO_ENTREGUE,
             }
             ws_event = event_map.get(notification_type)
+
+            # Payload do evento (contrato novo). Mantém pedido_id e inclui metadados úteis se existirem.
+            event_payload: Dict[str, Any] = {"pedido_id": data.get("pedido_id")}
+            for k in ("tipo_entrega", "numero_pedido", "status"):
+                if k in data and data.get(k) is not None:
+                    event_payload[k] = data.get(k)
             
             # Se uma rota é requerida, envia apenas para clientes nessa rota
             if required_route:
@@ -313,7 +339,7 @@ class PedidoNotificationService:
                         event=ws_event,
                         scope="empresa",
                         empresa_id=empresa_id,
-                        payload={"pedido_id": data.get("pedido_id")},
+                        payload=event_payload,
                         required_route=required_route,
                     )
             else:
@@ -324,7 +350,7 @@ class PedidoNotificationService:
                         event=ws_event,
                         scope="empresa",
                         empresa_id=empresa_id,
-                        payload={"pedido_id": data.get("pedido_id")},
+                        payload=event_payload,
                     )
             
             return sent_count

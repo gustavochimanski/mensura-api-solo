@@ -647,6 +647,28 @@ class PedidoBalcaoService:
         except Exception as e:
             logger.error("Erro ao agendar notificação de cancelamento (balcão) %s: %s", pedido_id, e)
 
+        # Notifica frontend/kanban sobre cancelamento (evento WS) (em background)
+        try:
+            import asyncio
+            import threading
+            from app.api.pedidos.utils.pedido_notification_helper import notificar_pedido_cancelado
+            _pid = int(pedido_id)
+            _eid = int(pedido.empresa_id) if pedido.empresa_id else None
+            _cancelado_por = str(usuario_id) if usuario_id is not None else "admin"
+            threading.Thread(
+                target=lambda p=_pid, e=_eid, c=_cancelado_por: asyncio.run(
+                    notificar_pedido_cancelado(
+                        p,
+                        e,
+                        motivo="Pedido cancelado",
+                        cancelado_por=c,
+                    )
+                ),
+                daemon=True,
+            ).start()
+        except Exception as e:
+            logger.error("Erro ao agendar notificação WS de cancelamento (balcão) %s: %s", pedido_id, e)
+
         return PedidoResponseBuilder.pedido_to_response_completo(pedido)
 
     def confirmar(self, pedido_id: int, usuario_id: int | None = None) -> PedidoResponseCompleto:

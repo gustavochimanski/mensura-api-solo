@@ -593,6 +593,27 @@ class PedidoMesaService:
             ).start()
         except Exception as e:
             logger.error("Erro ao agendar notificação de cancelamento (mesa) %s: %s", pedido_id, e)
+
+        # Notifica frontend/kanban sobre cancelamento (evento WS) (em background)
+        try:
+            import asyncio
+            import threading
+            from app.api.pedidos.utils.pedido_notification_helper import notificar_pedido_cancelado
+            _pid = int(pedido_id)
+            _eid = int(pedido.empresa_id) if pedido.empresa_id else None
+            threading.Thread(
+                target=lambda p=_pid, e=_eid: asyncio.run(
+                    notificar_pedido_cancelado(
+                        p,
+                        e,
+                        motivo="Pedido cancelado",
+                        cancelado_por="admin",
+                    )
+                ),
+                daemon=True,
+            ).start()
+        except Exception as e:
+            logger.error("Erro ao agendar notificação WS de cancelamento (mesa) %s: %s", pedido_id, e)
         
         return PedidoResponseBuilder.pedido_to_response_completo(pedido)
 
