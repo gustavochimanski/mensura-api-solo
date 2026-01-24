@@ -22,6 +22,7 @@ class EmpresaRepository:
     def search_public(
         self,
         *,
+        empresa_id: Optional[int] = None,
         q: Optional[str] = None,
         cidade: Optional[str] = None,
         estado: Optional[str] = None,
@@ -31,6 +32,9 @@ class EmpresaRepository:
             self.db.query(EmpresaModel)
             .order_by(EmpresaModel.nome.asc())
         )
+
+        if empresa_id is not None:
+            query = query.filter(EmpresaModel.id == empresa_id)
 
         if q:
             termo = f"%{q.strip()}%"

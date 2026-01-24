@@ -108,7 +108,12 @@ class RelatorioRepository:
     ) -> PeriodoResumo:
         """Calcula resumo de vendas (quantidade e faturamento) para o período."""
 
-        # Buscar pedidos para calcular faturamento usando valor_total_calc (mais confiável)
+        # Buscar pedidos para calcular faturamento.
+        #
+        # Importante: usamos `valor_total` como fonte principal (é o total persistido do pedido),
+        # e fazemos fallback para `valor_total_calc` apenas quando `valor_total` não estiver
+        # preenchido (ou vier zerado). Isso evita divergência entre o resumo e outras agregações
+        # do próprio relatório (ex.: vendas_por_hora) que já usam `valor_total`.
         pedidos = (
             self.db.query(PedidoUnificadoModel)
             .filter(
@@ -121,7 +126,13 @@ class RelatorioRepository:
         )
 
         quantidade = len(pedidos)
-        faturamento = sum(float(pedido.valor_total_calc) for pedido in pedidos)
+        faturamento = 0.0
+        for pedido in pedidos:
+            total_persistido = _decimal_to_float(pedido.valor_total)
+            if total_persistido > 0:
+                faturamento += total_persistido
+            else:
+                faturamento += _decimal_to_float(pedido.valor_total_calc)
 
         return PeriodoResumo(
             quantidade=quantidade,

@@ -1,5 +1,5 @@
 # app/api/empresas/router/public/router_empresa_public.py
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.api.empresas.repositories.empresa_repo import EmpresaRepository
@@ -20,6 +20,7 @@ router = APIRouter(prefix="/api/empresas/public/emp", tags=["Public - Empresas"]
     description="Retorna empresas disponíveis para seleção pública, com filtros opcionais.",
 )
 def listar_empresas_publicas(
+    empresa_id: int | None = Query(None, description="Filtrar por ID da empresa"),
     q: str | None = Query(None, description="Termo de busca por nome ou slug"),
     cidade: str | None = Query(None, description="Filtrar por cidade"),
     estado: str | None = Query(None, description="Filtrar por estado (sigla)"),
@@ -27,7 +28,15 @@ def listar_empresas_publicas(
     db: Session = Depends(get_db),
 ):
     repo_emp = EmpresaRepository(db)
-    empresas = repo_emp.search_public(q=q, cidade=cidade, estado=estado, limit=limit)
+    empresas = repo_emp.search_public(
+        empresa_id=empresa_id,
+        q=q,
+        cidade=cidade,
+        estado=estado,
+        limit=limit,
+    )
+    if empresa_id is not None and not empresas:
+        raise HTTPException(status_code=404, detail="Empresa não encontrada")
     return [
         EmpresaPublicListItem(
             id=empresa.id,
