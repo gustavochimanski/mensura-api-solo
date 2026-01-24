@@ -2136,6 +2136,62 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
             logger.info(
                 f"⏸️ Bot pausado para o número - phone={phone_number}, empresa_id={empresa_id_int}, status={status_info}"
             )
+            # IMPORTANTE: Mesmo pausado, ainda queremos capturar a intenção "chamar atendente"
+            # (ex: clique no botão "chamar_atendente") e notificar o dashboard via WebSocket.
+            try:
+                mensagem_lower = (message_text or "").lower().strip()
+                chamou_atendente = (
+                    button_id == "chamar_atendente"
+                    or mensagem_lower == "chamar atendente"
+                    or "chamar atendente" in mensagem_lower
+                    or "chamar um atendente" in mensagem_lower
+                )
+
+                if chamou_atendente:
+                    from datetime import datetime
+                    from ..core.notifications import send_chatbot_websocket_notification
+
+                    notification_data = {
+                        "cliente_phone": phone_number,
+                        "cliente_nome": contact_name,
+                        "tipo": "chamar_atendente",
+                        "timestamp": datetime.utcnow().isoformat(),
+                        "bot_pausado": True,
+                        "paused_by": (status_info or {}).get("paused_by"),
+                        "paused_until": (status_info or {}).get("paused_until"),
+                    }
+
+                    title = "🔔 Solicitação de Atendimento Humano"
+                    message_ws = (
+                        f"Cliente {contact_name or phone_number} solicitou atendimento humano "
+                        f"(bot está pausado).\n\n📱 Telefone: {phone_number}"
+                    )
+                    if contact_name:
+                        message_ws += f"\n👤 Nome: {contact_name}"
+
+                    sent_count = await send_chatbot_websocket_notification(
+                        empresa_id=empresa_id_int,
+                        notification_type="chamar_atendente",
+                        title=title,
+                        message=message_ws,
+                        data=notification_data,
+                    )
+
+                    if sent_count > 0:
+                        logger.info(
+                            f"✅ Notificação WebSocket (chamar_atendente) enviada mesmo com bot pausado - "
+                            f"empresa_id={empresa_id_int}, conexões={sent_count}, phone={phone_number}"
+                        )
+                    else:
+                        logger.warning(
+                            f"⚠️ Nenhuma conexão WebSocket ativa ao notificar chamar_atendente (bot pausado) - "
+                            f"empresa_id={empresa_id_int}, phone={phone_number}"
+                        )
+            except Exception as e_ws:
+                logger.error(
+                    f"❌ Erro ao enviar notificação WebSocket de chamar_atendente com bot pausado: {e_ws}",
+                    exc_info=True,
+                )
             # Salva a mensagem no histórico mesmo pausado (para ver no preview)
             if conversations:
                 chatbot_db.create_message(
