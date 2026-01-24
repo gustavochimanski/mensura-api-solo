@@ -1128,35 +1128,31 @@ async def enviar_resumo_pedido_whatsapp(
 
             # Adiciona complementos e adicionais do item
             if item_id in complementos_por_item:
-                # Agrupa adicionais por complemento
-                complementos_agrupados = {}
+                # Agrupa apenas os ADICIONAIS (sem nome do complemento/grupo)
+                adicionais_agrupados = {}
                 for comp in complementos_por_item[item_id]:
-                    comp_nome = comp['complemento_nome']
-                    if comp_nome not in complementos_agrupados:
-                        complementos_agrupados[comp_nome] = {
-                            'total': 0,
-                            'adicionais': []
-                        }
-                    if comp['adicional_nome']:
-                        complementos_agrupados[comp_nome]['adicionais'].append({
-                            'nome': comp['adicional_nome'],
-                            'quantidade': comp['adicional_quantidade'],
-                            'preco': comp['adicional_total']
-                        })
-                        complementos_agrupados[comp_nome]['total'] += comp['adicional_total']
+                    nome_add = comp.get('adicional_nome')
+                    if not nome_add:
+                        continue
 
-                # Formata complementos na mensagem
-                for comp_nome, comp_data in complementos_agrupados.items():
-                    if comp_data['adicionais']:
-                        mensagem += f"  📦 {comp_nome}:\n"
-                        for add in comp_data['adicionais']:
-                            qtd_add = add['quantidade'] or 1
-                            preco_add = add['preco']
-                            nome_add = add['nome']
-                            if qtd_add > 1:
-                                mensagem += f"      ➕ {qtd_add}x {nome_add} (+R$ {preco_add:.2f})\n"
-                            else:
-                                mensagem += f"      ➕ {nome_add} (+R$ {preco_add:.2f})\n"
+                    qtd_add = comp.get('adicional_quantidade') or 1
+                    preco_add = float(comp.get('adicional_total') or 0)
+
+                    if nome_add not in adicionais_agrupados:
+                        adicionais_agrupados[nome_add] = {"quantidade": 0, "preco": 0.0}
+                    adicionais_agrupados[nome_add]["quantidade"] += int(qtd_add or 1)
+                    adicionais_agrupados[nome_add]["preco"] += float(preco_add or 0)
+
+                # Lista somente adicionais (sem cabeçalho do complemento)
+                if adicionais_agrupados:
+                    for nome_add in sorted(adicionais_agrupados.keys()):
+                        add = adicionais_agrupados[nome_add]
+                        qtd_add = add["quantidade"] or 1
+                        preco_add = add["preco"] or 0.0
+                        if qtd_add > 1:
+                            mensagem += f"      ➕ {qtd_add}x {nome_add} (+R$ {preco_add:.2f})\n"
+                        else:
+                            mensagem += f"      ➕ {nome_add} (+R$ {preco_add:.2f})\n"
 
         mensagem += f"\n*Valores:* Subtotal: R$ {subtotal:.2f}"
         if desconto > 0:
