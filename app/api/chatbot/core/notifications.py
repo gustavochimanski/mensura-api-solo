@@ -578,7 +578,14 @@ _Obrigado pela preferência!_"""
         return message
 
     @staticmethod
-    async def send_notification_async(db: Session, phone: str, message: str, order_type: str, empresa_id: Optional[int] = None) -> Dict:
+    async def send_notification_async(
+        db: Session,
+        phone: str,
+        message: str,
+        order_type: str,
+        empresa_id: Optional[int] = None,
+        whatsapp_message_id: Optional[str] = None,
+    ) -> Dict:
         """
         Envia notificação como mensagem no chat (versão async)
 
@@ -591,6 +598,7 @@ _Obrigado pela preferência!_"""
             message: Mensagem a ser enviada
             order_type: Tipo do pedido (cardapio, mesa, balcao, delivery)
             empresa_id: ID da empresa (opcional, mas recomendado para garantir histórico correto)
+            whatsapp_message_id: ID da mensagem no WhatsApp (opcional; salvo em metadata)
         """
         from . import database as chatbot_db
         from .config_whatsapp import format_phone_number
@@ -664,7 +672,8 @@ _Obrigado pela preferência!_"""
                 db=db,
                 conversation_id=conversation_id,
                 role="assistant",
-                content=message
+                content=message,
+                whatsapp_message_id=whatsapp_message_id,
             )
 
             # Envia notificação WebSocket para atualizar o frontend

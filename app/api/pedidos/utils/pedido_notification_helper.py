@@ -477,6 +477,23 @@ async def notificar_cliente_pedido_pronto_aguardando_pagamento(
         )
 
         if result.get("success"):
+            # Salva a mensagem no banco (chatbot.messages) para histórico no atendimento
+            try:
+                await OrderNotification.send_notification_async(
+                    db=db_session,
+                    phone=telefone,
+                    message=mensagem,
+                    order_type="balcao",
+                    empresa_id=int(empresa_id_val),
+                    whatsapp_message_id=result.get("message_id"),
+                )
+            except Exception as e:
+                logger.warning(
+                    "[AguardandoPgto] WhatsApp enviado, mas falhou ao salvar mensagem no chat (pedido %s): %s",
+                    pedido_id,
+                    e,
+                )
+
             logger.info(
                 "[AguardandoPgto] Notificação enviada ao cliente (pedido #%s)",
                 numero_pedido,

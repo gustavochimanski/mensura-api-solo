@@ -4,6 +4,7 @@ from .notification_service_contract import INotificationService
 from .message_dispatch_service_contract import IMessageDispatchService
 from .recipient_provider_contract import IRecipientProvider
 from .channel_config_provider_contract import IChannelConfigProvider
+from .notification_message_contract import INotificationMessageContract
 from .repository_contracts import (
     INotificationRepository,
     ISubscriptionRepository,
@@ -15,6 +16,7 @@ __all__ = [
     "IMessageDispatchService",
     "IRecipientProvider",
     "IChannelConfigProvider",
+    "INotificationMessageContract",
     "INotificationRepository",
     "ISubscriptionRepository",
     "IEventRepository"

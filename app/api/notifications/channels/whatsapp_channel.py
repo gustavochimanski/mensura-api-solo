@@ -2,6 +2,7 @@ import httpx
 from typing import Dict, Any, Optional
 import logging
 from .base_channel import BaseNotificationChannel, NotificationResult
+from ..services.notification_message_contract_default import DefaultNotificationMessageContract
 
 logger = logging.getLogger(__name__)
 
@@ -80,32 +81,16 @@ class WhatsAppChannel(BaseNotificationChannel):
         try:
             # Formata o número para o padrão WhatsApp
             phone_formatted = self._format_phone_number(recipient)
-            
-            # Prepara a mensagem completa
-            full_message = f"*{title}*\n\n{message}"
-            
-            # Adiciona metadados se fornecidos
-            if channel_metadata:
-                full_message += f"\n\n_Dados adicionais:_\n"
-                for key, value in channel_metadata.items():
-                    full_message += f"• {key}: {value}\n"
-            
-            if self.is_360:
-                payload = {
-                    "to": phone_formatted,
-                    "type": "text",
-                    "text": {"body": full_message}
-                }
-            else:
-                payload = {
-                    "messaging_product": "whatsapp",
-                    "to": phone_formatted,
-                    "type": "text",
-                    "text": {
-                        "preview_url": False,
-                        "body": full_message
-                    }
-                }
+
+            # Contract de mensagem: permite template (necessário sem interação/janela 24h)
+            contract = DefaultNotificationMessageContract()
+            payload = contract.build_whatsapp_payload(
+                recipient_phone=phone_formatted,
+                title=title,
+                message=message,
+                is_360=self.is_360,
+                channel_metadata=channel_metadata,
+            )
             
             # Headers com token de autorização
             headers = self._get_headers()

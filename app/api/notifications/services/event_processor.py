@@ -71,26 +71,77 @@ class EventProcessor(EventHandler):
             if not recipient:
                 logger.warning(f"Destinatário não encontrado para assinatura {subscription.id}")
                 return
-            
-            # Cria a notificação
-            notification_data = {
-                "empresa_id": event.empresa_id,
-                "user_id": subscription.user_id,
-                "event_type": event.event_type,
-                "event_data": event.data,
-                "title": title,
-                "message": message,
-                "channel": subscription.channel,
-                "recipient": recipient,
-                "priority": self._get_priority_from_event(event),
-                "event_metadata": {
-                    "subscription_id": subscription.id,
-                    "event_id": event.id
-                }
-            }
-            
-            notification = self.notification_repo.create(notification_data)
-            logger.info(f"Notificação criada: {notification.id} para assinatura {subscription.id}")
+
+            # Channel metadata: permite configurar template WhatsApp na própria assinatura (channel_config)
+            channel_metadata = None
+            try:
+                if subscription.channel == "whatsapp":
+                    # Convenção: channel_config pode conter "whatsapp" com o contract de mensagem
+                    # Ex:
+                    # {
+                    #   "phone": "5511...",
+                    #   "whatsapp": {"mode":"template","template":{"name":"meu_template","language":"pt_BR","body_parameters":[...]} }
+                    # }
+                    raw = subscription.channel_config or {}
+                    if isinstance(raw, dict) and raw.get("whatsapp"):
+                        wa_spec = raw.get("whatsapp")
+                        # Se for template sem parâmetros explícitos, injeta um body_parameters padrão
+                        # com o conteúdo (title/message). Isso permite que templates com 1 variável
+                        # funcionem sem precisar repetir configuração por evento.
+                        try:
+                            if (
+                                isinstance(wa_spec, dict)
+                                and wa_spec.get("mode") == "template"
+                                and isinstance(wa_spec.get("template"), dict)
+                            ):
+                                tpl = wa_spec["template"]
+                                if tpl.get("components") is None and tpl.get("body_parameters") is None:
+                                    tpl["body_parameters"] = [f"*{title}*\\n\\n{message}"]
+                        except Exception:
+                            pass
+                        channel_metadata = {"whatsapp": wa_spec}
+            except Exception:
+                channel_metadata = None
+
+            # Cria e envia a notificação via NotificationService (garante entrega imediata)
+            from ..repositories.notification_repository import NotificationRepository
+            from ..repositories.subscription_repository import SubscriptionRepository
+            from ..repositories.event_repository import EventRepository
+            from ..services.notification_service import NotificationService
+            from ..schemas.notification_schemas import CreateNotificationRequest, MessageType
+            from ..models.notification import NotificationChannel as ModelChannel
+
+            service = NotificationService(
+                notification_repo=NotificationRepository(self.notification_repo.db),
+                subscription_repo=SubscriptionRepository(self.subscription_repo.db),
+                event_repo=EventRepository(self.event_repo.db),
+            )
+
+            # Normaliza channel para enum do schema
+            channel_enum = ModelChannel(str(subscription.channel).lower())
+
+            # Embute metadados no event_data para rastreio (não existe campo event_metadata no model)
+            event_data = dict(event.data or {})
+            event_data.setdefault("_notification_meta", {})
+            event_data["_notification_meta"].update({"subscription_id": subscription.id, "event_id": event.id})
+
+            notification_id = await service.create_notification(
+                CreateNotificationRequest(
+                    empresa_id=str(event.empresa_id),
+                    user_id=subscription.user_id,
+                    event_type=str(event.event_type),
+                    event_data=event_data,
+                    title=title,
+                    message=message,
+                    channel=channel_enum,
+                    recipient=recipient,
+                    priority=self._get_priority_from_event(event),
+                    message_type=MessageType.UTILITY,
+                    channel_metadata=channel_metadata,
+                    max_attempts=3,
+                )
+            )
+            logger.info(f"Notificação criada/enviada: {notification_id} para assinatura {subscription.id}")
             
         except Exception as e:
             logger.error(f"Erro ao criar notificação para assinatura {subscription.id}: {e}")

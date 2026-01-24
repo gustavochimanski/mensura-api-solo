@@ -126,11 +126,14 @@ class NotificationService(INotificationService):
             channel = self.channel_factory.create_channel(channel_type, channel_config)
             
             # Envia a notificação
+            # Inclui empresa_id no metadata para decisões de canal (ex.: janela 24h do WhatsApp)
+            channel_metadata = dict(notification.channel_metadata or {})
+            channel_metadata.setdefault("_empresa_id", str(notification.empresa_id))
             result = await channel.send(
                 recipient=notification.recipient,
                 title=notification.title,
                 message=notification.message,
-                channel_metadata=notification.channel_metadata
+                channel_metadata=channel_metadata
             )
             
             if result.success:

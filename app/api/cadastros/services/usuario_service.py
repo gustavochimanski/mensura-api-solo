@@ -1,16 +1,21 @@
 # app/api/mensura/services/usuario_service.py
 from fastapi import HTTPException
+from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.cadastros.repositories.usuarios_repo import UsuarioRepository
 from app.api.empresas.repositories.empresa_repo import EmpresaRepository
 from app.api.cadastros.schemas.schema_usuario import UserCreate, UserUpdate
 from app.api.cadastros.models.user_model import UserModel
+from app.api.caixas.models.model_caixa_abertura import CaixaAberturaModel
+from app.api.caixas.models.model_retirada import RetiradaModel
 from app.core.security import hash_password
 
 
 class UserService:
     def __init__(self, db: Session):
+        self.db = db
         self.repo = UsuarioRepository(db)
         self.repo_emp = EmpresaRepository(db)
 
@@ -65,4 +70,43 @@ class UserService:
 
     def delete_user(self, id: int):
         user = self.get_user(id)
-        self.repo.delete(user)
+        # Aberturas de caixa usam ondelete=RESTRICT (usuario_id_abertura), então a remoção deve ser bloqueada
+        # enquanto existirem registros vinculados.
+        aberturas_qtd = (
+            self.db.query(func.count(CaixaAberturaModel.id))
+            .filter(CaixaAberturaModel.usuario_id_abertura == id)
+            .scalar()
+            or 0
+        )
+        retiradas_qtd = (
+            self.db.query(func.count(RetiradaModel.id))
+            .filter(RetiradaModel.usuario_id == id)
+            .scalar()
+            or 0
+        )
+
+        itens_bloqueio: list[str] = []
+        if aberturas_qtd > 0:
+            itens_bloqueio.append(f"{aberturas_qtd} abertura(s) de caixa")
+        if retiradas_qtd > 0:
+            itens_bloqueio.append(f"{retiradas_qtd} retirada(s) de caixa")
+
+        if itens_bloqueio:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Não é possível remover o usuário porque ainda existem registros vinculados: "
+                    + "; ".join(itens_bloqueio)
+                    + "."
+                ),
+            )
+
+        try:
+            self.repo.delete(user)
+        except IntegrityError as e:
+            # Garante rollback para evitar sessão em estado inválido e retorna erro amigável.
+            self.db.rollback()
+            raise HTTPException(
+                status_code=409,
+                detail=f"Não é possível remover o usuário por restrição de integridade: {str(e.orig)}",
+            )
