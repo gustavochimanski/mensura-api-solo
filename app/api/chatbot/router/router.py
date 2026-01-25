@@ -969,12 +969,15 @@ async def send_notification(request: Request, db: Session = Depends(get_db)):
                     conversation_id = conversation.get('id')
                     empresa_id = conversation.get('empresa_id')
                     
-                    # Salva mensagem no histórico
+                    # Salva mensagem no histórico COM o message_id do WhatsApp
+                    # IMPORTANTE: Salva o message_id para que o webhook possa identificar que foi o atendente que enviou
+                    whatsapp_message_id = result.get("message_id") if isinstance(result, dict) else None
                     chatbot_db.create_message(
                         db=db,
                         conversation_id=conversation_id,
                         role="assistant",
-                        content=message
+                        content=message,
+                        whatsapp_message_id=whatsapp_message_id
                     )
             except Exception as e:
                 logger.warning(f"⚠️ Erro ao buscar/salvar conversa: {e}")
@@ -1680,7 +1683,7 @@ async def process_webhook_background(body: dict, headers_info: Optional[dict] = 
                                     if status_message_id:
                                         try:
                                             # Busca no banco se existe uma mensagem do assistente com esse message_id
-                                            # Considera uma janela de tempo de 60 segundos para lidar com possíveis delays
+                                            # Considera uma janela de tempo de 120 segundos para lidar com possíveis delays
                                             # e race conditions entre salvar mensagem e receber webhook
                                             query_check_bot = text("""
                                                 SELECT m.id, m.role, m.created_at, m.metadata
@@ -1689,7 +1692,7 @@ async def process_webhook_background(body: dict, headers_info: Optional[dict] = 
                                                 WHERE m.metadata->>'whatsapp_message_id' = :message_id
                                                 AND m.role = 'assistant'
                                                 AND c.user_id = :recipient_id
-                                                AND m.created_at > NOW() - INTERVAL '60 seconds'
+                                                AND m.created_at > NOW() - INTERVAL '120 seconds'
                                                 ORDER BY m.created_at DESC
                                                 LIMIT 1
                                             """)
@@ -1704,35 +1707,22 @@ async def process_webhook_background(body: dict, headers_info: Optional[dict] = 
                                                 foi_chatbot = True
                                                 logger.info(f"🤖 Mensagem enviada pelo CHATBOT (message_id: {status_message_id}) - NÃO pausando")
                                             else:
-                                                # Log mais detalhado para debug
-                                                logger.info(f"👤 Verificando mensagem - message_id: {status_message_id}, recipient: {recipient_id}")
-                                                # Verifica se existe alguma mensagem do assistente recente para esse recipient (para debug)
-                                                query_debug = text("""
-                                                    SELECT m.id, m.role, m.created_at, m.metadata->>'whatsapp_message_id' as msg_id
-                                                    FROM chatbot.messages m
-                                                    JOIN chatbot.conversations c ON m.conversation_id = c.id
-                                                    WHERE m.role = 'assistant'
-                                                    AND c.user_id = :recipient_id
-                                                    AND m.created_at > NOW() - INTERVAL '60 seconds'
-                                                    ORDER BY m.created_at DESC
-                                                    LIMIT 5
-                                                """)
-                                                debug_result = db.execute(query_debug, {"recipient_id": recipient_id})
-                                                debug_messages = debug_result.fetchall()
-                                                if debug_messages:
-                                                    logger.info(f"🔍 Mensagens do assistente recentes encontradas: {len(debug_messages)}")
-                                                    for msg in debug_messages:
-                                                        logger.info(f"   - msg_id no banco: {msg[3]}, buscando: {status_message_id}")
-                                                logger.info(f"👤 Mensagem enviada por HUMANO (message_id: {status_message_id} não encontrado nas mensagens do assistente) - pausando")
+                                                # NÃO encontrou no banco = foi HUMANO que enviou pelo WhatsApp
+                                                logger.info(f"👤 Mensagem enviada por HUMANO (message_id: {status_message_id} não encontrado no banco) - PAUSANDO")
                                         except Exception as e:
                                             logger.warning(f"⚠️ Erro ao verificar se foi chatbot pelo message_id: {e}", exc_info=True)
+                                            # Em caso de erro, assume que foi humano (mais seguro)
+                                            foi_chatbot = False
+                                    else:
+                                        # Sem message_id = assume que foi humano
+                                        logger.info(f"👤 Mensagem enviada por HUMANO (sem message_id) - PAUSANDO")
                                     
-                                    # Só pausa se NÃO foi o chatbot que enviou
+                                    # PAUSA se NÃO foi o chatbot que enviou
                                     if not foi_chatbot:
                                         paused_until = datetime.now() + timedelta(hours=24)
                                         empresa_id_int = int(empresa_id) if empresa_id else None
                                         
-                                        logger.info(f"🔄 Detectado envio de mensagem por HUMANO - recipient: {recipient_id}, empresa_id: {empresa_id_int}, paused_until: {paused_until}")
+                                        logger.info(f"🔄 PAUSANDO chatbot - recipient: {recipient_id}, empresa_id: {empresa_id_int}, paused_until: {paused_until}")
                                         
                                         pause_result = chatbot_db.set_bot_status(
                                             db=db,
@@ -1744,7 +1734,7 @@ async def process_webhook_background(body: dict, headers_info: Optional[dict] = 
                                         )
                                         
                                         if pause_result.get("success"):
-                                            logger.info(f"⏸️ Chatbot pausado por 24h para cliente {recipient_id} (humano enviou mensagem via WhatsApp) - paused_until: {paused_until}")
+                                            logger.info(f"⏸️ ✅ Chatbot PAUSADO por 24h para cliente {recipient_id} (humano enviou mensagem via WhatsApp) - paused_until: {paused_until}")
                                         else:
                                             logger.error(f"❌ Falha ao pausar chatbot após envio pelo humano: {pause_result.get('error')}")
                                 except Exception as e:
