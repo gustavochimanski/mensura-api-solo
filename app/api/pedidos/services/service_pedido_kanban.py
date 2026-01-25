@@ -106,11 +106,9 @@ class KanbanService:
     ) -> list[PedidoUnificadoModel]:
         """Busca pedidos de um tipo específico para a data filtrada.
         
-        Usa a mesma lógica do list_all_kanban do repositório:
-        - Pedidos criados naquele dia (qualquer status, exceto cancelados)
-        - Pedidos atualizados naquele dia (mesmo que criados em outro dia, exceto cancelados)
+        Busca apenas pedidos CRIADOS naquele dia (qualquer status, exceto cancelados).
+        Isso evita trazer pedidos antigos que foram apenas atualizados no dia.
         """
-        from sqlalchemy import or_
         from app.api.shared.schemas.schema_shared_enums import PedidoStatusEnum
         
         start_dt = dt.combine(date_filter, dt.min.time())
@@ -128,25 +126,9 @@ class KanbanService:
                 and_(
                     PedidoUnificadoModel.empresa_id == empresa_id,
                     PedidoUnificadoModel.tipo_entrega == tipo_pedido,
-                )
-            )
-        )
-        
-        # Busca pedidos criados naquele dia (qualquer status, exceto cancelados) 
-        # OU pedidos atualizados naquele dia (mesmo que criados em outro dia, exceto cancelados)
-        query = query.filter(
-            PedidoUnificadoModel.status != PedidoStatusEnum.C.value  # Exclui cancelados
-        ).filter(
-            or_(
-                # Pedidos criados naquele dia (qualquer status não cancelado)
-                and_(
+                    PedidoUnificadoModel.status != PedidoStatusEnum.C.value,  # Exclui cancelados
                     PedidoUnificadoModel.created_at >= start_dt,
                     PedidoUnificadoModel.created_at < end_dt
-                ),
-                # Pedidos atualizados naquele dia (mesmo que criados em outro dia)
-                and_(
-                    PedidoUnificadoModel.updated_at >= start_dt,
-                    PedidoUnificadoModel.updated_at < end_dt
                 )
             )
         )
