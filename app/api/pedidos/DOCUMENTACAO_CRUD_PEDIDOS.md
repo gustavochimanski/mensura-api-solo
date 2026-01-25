@@ -106,6 +106,8 @@ Content-Type: application/json
 }
 ```
 
+**`meios_pagamento`:** Array de meios de pagamento. O sistema aceita **um ou mais** meios por pedido. Cada item: `{ "id": number, "valor": number }`. A soma dos valores deve igualar o total. Ver **`app/api/pedidos/docs/DOCUMENTACAO_MULTIPLOS_MEIOS_PAGAMENTO_FRONTEND.md`** para o guia completo (Admin e Cliente).
+
 **Campos Obrigatórios por Tipo:**
 
 #### Delivery
@@ -789,7 +791,7 @@ PUT /api/pedidos/admin/{pedido_id}
 - `cupom_id`: Aplicar/remover cupom
 - `observacoes`: Atualizar observações
 - `troco_para`: Atualizar valor de troco
-- `pagamentos`: Atualizar meios de pagamento parciais
+- `pagamentos`: Atualizar meios de pagamento parciais (aceita **múltiplos**; lista `[{ "id", "valor" }]`). Ver `app/api/pedidos/docs/DOCUMENTACAO_MULTIPLOS_MEIOS_PAGAMENTO_FRONTEND.md`.
 
 **Response (200 OK):**
 ```json
