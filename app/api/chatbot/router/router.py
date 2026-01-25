@@ -1659,13 +1659,16 @@ async def process_webhook_background(body: dict, headers_info: Optional[dict] = 
                                 await process_whatsapp_message(db, from_number, message_text, contact_name, empresa_id, message_id, button_id)
 
                     # Processa STATUSES (status de mensagens enviadas: sent, delivered, read)
+                    # IMPORTANTE: Este bloco só processa quando a EMPRESA envia mensagem para o cliente
+                    # Quando o CLIENTE envia mensagem, vem no bloco "messages" acima (linha 1618)
+                    # e é processado normalmente sem pausar o chatbot
                     statuses = value.get("statuses", [])
                     if statuses:
                         for status in statuses:
                             status_type = status.get("status")  # sent, delivered, read, failed
                             recipient_id = status.get("recipient_id")  # Número do destinatário (cliente)
                             
-                            # Quando status é "sent", significa que a empresa enviou mensagem para o cliente
+                            # Quando status é "sent", significa que a EMPRESA enviou mensagem para o cliente
                             # IMPORTANTE: Só pausa se foi um HUMANO que enviou, não o chatbot
                             # Verifica se o message_id do status corresponde a uma mensagem do assistente (chatbot)
                             if status_type == "sent" and recipient_id:
