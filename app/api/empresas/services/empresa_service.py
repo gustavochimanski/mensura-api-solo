@@ -1,4 +1,6 @@
 # app/api/empresas/services/empresa_service.py
+from urllib.parse import parse_qs, urlparse
+
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -18,6 +20,9 @@ from app.utils.minio_client import upload_file_to_minio, remover_arquivo_minio, 
 from app.api.cadastros.models.association_tables import entregador_empresa, usuario_empresa
 from app.api.catalogo.models.model_produto_emp import ProdutoEmpModel
 from app.api.pedidos.models.model_pedido_unificado import PedidoUnificadoModel, TipoEntrega
+
+BASE_LINK_CARDAPIO = "https://chatbot.mensuraapi.com.br"
+
 
 class EmpresaService:
     def __init__(self, db: Session):
@@ -69,6 +74,32 @@ class EmpresaService:
         
         return slug
 
+    def _gerar_link_cardapio_empresa(self, empresa_id: int) -> str:
+        """Gera o link do cardápio apenas com ?empresa=id (sem via=supervisor etc)."""
+        return f"{BASE_LINK_CARDAPIO}?empresa={empresa_id}"
+
+    def _normalizar_cardapio_link(self, link: str, empresa_id: int) -> str:
+        """
+        Normaliza o link do cardápio: apenas ?empresa=id.
+        Se o link for do nosso app (mensuraapi) ou contiver 'via=' (ex: via=supervisor),
+        retorna BASE?empresa=id. Caso contrário, mantém o link externo como está.
+        """
+        if not link or not str(link).strip():
+            return self._gerar_link_cardapio_empresa(empresa_id)
+        link = str(link).strip()
+        try:
+            parsed = urlparse(link)
+            qs = parse_qs(parsed.query)
+            # Contém via= (ex: via=supervisor) -> normalizar
+            if any(k.lower() == "via" for k in qs):
+                return self._gerar_link_cardapio_empresa(empresa_id)
+            # Domínio do nosso app (mensuraapi) -> usar apenas ?empresa=id
+            if parsed.netloc and "mensuraapi" in parsed.netloc.lower():
+                return self._gerar_link_cardapio_empresa(empresa_id)
+        except Exception:
+            pass
+        return link
+
     # Cria empresa
     def create_empresa(self, data: EmpresaCreate, logo: UploadFile | None = None):
         # Checa se CNPJ já existe
@@ -106,12 +137,16 @@ class EmpresaService:
         if logo:
             empresa.logo = upload_file_to_minio(self.db, empresa.id, logo, "logo")
 
-        # Upload do cardápio
+        # Link do cardápio: gerar apenas ?empresa=id (sem via=supervisor etc)
         if data.cardapio_link:
             if isinstance(data.cardapio_link, UploadFile):
                 empresa.cardapio_link = upload_file_to_minio(self.db, empresa.id, data.cardapio_link, "cardapio")
             else:
-                empresa.cardapio_link = data.cardapio_link
+                empresa.cardapio_link = self._normalizar_cardapio_link(
+                    data.cardapio_link, empresa.id
+                )
+        else:
+            empresa.cardapio_link = self._gerar_link_cardapio_empresa(empresa.id)
 
         try:
             self.db.commit()
@@ -194,7 +229,7 @@ class EmpresaService:
                 remover_arquivo_minio(empresa.logo)
             empresa.logo = upload_file_to_minio(self.db, empresa.id, logo, "logo")
 
-        # Atualiza cardápio
+        # Atualiza cardápio: normalizar para apenas ?empresa=id (sem via=supervisor etc)
         cardapio = payload.get("cardapio_link")
         if cardapio:
             if isinstance(cardapio, UploadFile):
@@ -202,7 +237,7 @@ class EmpresaService:
                     remover_arquivo_minio(empresa.cardapio_link)
                 empresa.cardapio_link = upload_file_to_minio(self.db, empresa.id, cardapio, "cardapio")
             elif isinstance(cardapio, str):
-                empresa.cardapio_link = cardapio
+                empresa.cardapio_link = self._normalizar_cardapio_link(cardapio, empresa.id)
 
         try:
             self.db.commit()
