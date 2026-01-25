@@ -154,7 +154,7 @@ def init_database(db: Session):
             )
         """))
         
-        # Adiciona coluna paused_until se não existir (migration)
+        # Adiciona coluna paused_until se não existir (migration legada)
         db.execute(text(f"""
             DO $$ 
             BEGIN
@@ -167,6 +167,27 @@ def init_database(db: Session):
                     ALTER TABLE {CHATBOT_SCHEMA}.bot_status ADD COLUMN paused_until TIMESTAMP;
                 END IF;
             END $$;
+        """))
+
+        # Coluna oficial da pausa: data/hora em que o chatbot destrava (volta a responder)
+        db.execute(text(f"""
+            DO $$ 
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns 
+                    WHERE table_schema = '{CHATBOT_SCHEMA}'
+                    AND table_name = 'bot_status'
+                    AND column_name = 'chatbot_destrava_em'
+                ) THEN
+                    ALTER TABLE {CHATBOT_SCHEMA}.bot_status ADD COLUMN chatbot_destrava_em TIMESTAMP;
+                END IF;
+            END $$;
+        """))
+        # Migra paused_until -> chatbot_destrava_em para registros existentes
+        db.execute(text(f"""
+            UPDATE {CHATBOT_SCHEMA}.bot_status
+            SET chatbot_destrava_em = paused_until
+            WHERE paused_until IS NOT NULL AND chatbot_destrava_em IS NULL;
         """))
 
         # Índices para performance
@@ -719,7 +740,7 @@ def get_bot_status(db: Session, phone_number: str) -> Optional[Dict]:
     """Verifica se o bot está ativo para um número específico"""
     try:
         query = text(f"""
-            SELECT id, phone_number, is_active, paused_at, paused_until, paused_by, empresa_id
+            SELECT id, phone_number, is_active, paused_at, paused_by, empresa_id, chatbot_destrava_em
             FROM {CHATBOT_SCHEMA}.bot_status
             WHERE phone_number = :phone
         """)
@@ -731,9 +752,9 @@ def get_bot_status(db: Session, phone_number: str) -> Optional[Dict]:
                 "phone_number": result[1],
                 "is_active": result[2],
                 "paused_at": result[3].isoformat() if result[3] else None,
-                "paused_until": result[4].isoformat() if result[4] else None,
-                "paused_by": result[5],
-                "empresa_id": result[6]
+                "paused_by": result[4],
+                "empresa_id": result[5],
+                "chatbot_destrava_em": result[6].isoformat() if result[6] else None,
             }
         # Se não existe registro, o bot está ativo por padrão
         return {"phone_number": phone_number, "is_active": True}
@@ -745,7 +766,7 @@ def get_bot_status(db: Session, phone_number: str) -> Optional[Dict]:
 def is_bot_active_for_phone(db: Session, phone_number: str) -> bool:
     """Retorna True se o bot está ativo para o número, False se pausado.
     Também verifica o status global - se o bot global estiver pausado, retorna False.
-    Verifica se paused_until já passou - se sim, considera ativo novamente.
+    Verifica se chatbot_destrava_em já passou - se sim, considera ativo novamente.
     """
     # Primeiro verifica o status global
     global_status = get_global_bot_status(db)
@@ -755,80 +776,84 @@ def is_bot_active_for_phone(db: Session, phone_number: str) -> bool:
     # Depois verifica o status individual
     status = get_bot_status(db, phone_number)
     is_active = status.get("is_active", True)
-    
-    # Se está pausado, verifica se o paused_until já passou
+
+    # Se está pausado, verifica se chatbot_destrava_em já passou
     if not is_active:
-        paused_until = status.get("paused_until")
-        if paused_until:
-            from datetime import datetime
+        destrava_em = status.get("chatbot_destrava_em")
+        if destrava_em:
             try:
-                # Converte paused_until para datetime se for string
-                if isinstance(paused_until, str):
-                    # Remove 'Z' e substitui por '+00:00' para timezone UTC
-                    paused_until_clean = paused_until.replace('Z', '+00:00')
-                    paused_until_dt = datetime.fromisoformat(paused_until_clean)
+                if isinstance(destrava_em, str):
+                    destrava_em_clean = destrava_em.replace("Z", "+00:00")
+                    destrava_em_dt = datetime.fromisoformat(destrava_em_clean)
                 else:
-                    paused_until_dt = paused_until
-                
-                # Compara com agora (timezone-aware)
-                now = datetime.now(paused_until_dt.tzinfo) if paused_until_dt.tzinfo else datetime.now()
-                if now >= paused_until_dt:
-                    # Pausa expirou - reativa automaticamente
+                    destrava_em_dt = destrava_em
+                now = datetime.now(destrava_em_dt.tzinfo) if destrava_em_dt.tzinfo else datetime.now()
+                if now >= destrava_em_dt:
                     set_bot_status(db, phone_number, True, paused_by=None, empresa_id=status.get("empresa_id"))
                     return True
             except Exception as e:
-                print(f"Erro ao verificar paused_until: {e}")
-    
+                print(f"Erro ao verificar chatbot_destrava_em: {e}")
+
     return is_active
 
 
-def set_bot_status(db: Session, phone_number: str, is_active: bool, paused_by: str = None, empresa_id: int = None, paused_until = None) -> Dict:
-    """Define o status do bot para um número específico
-    
+def set_bot_status(
+    db: Session,
+    phone_number: str,
+    is_active: bool,
+    paused_by: str = None,
+    empresa_id: int = None,
+    chatbot_destrava_em=None,
+) -> Dict:
+    """Define o status do bot para um número específico.
+
     Args:
-        paused_until: Timestamp até quando o bot deve ficar pausado (None = pausado indefinidamente)
+        chatbot_destrava_em: Data/hora em que o chatbot destrava (volta a responder).
+            Quando pausamos com duração, é now + 3h. None = pausado indefinidamente.
     """
     try:
-        # Verifica se já existe
         existing = db.execute(
             text(f"SELECT id FROM {CHATBOT_SCHEMA}.bot_status WHERE phone_number = :phone"),
-            {"phone": phone_number}
+            {"phone": phone_number},
         ).fetchone()
 
         if existing:
-            # Atualiza
             query = text(f"""
                 UPDATE {CHATBOT_SCHEMA}.bot_status
                 SET is_active = :is_active,
                     paused_at = CASE WHEN :is_active = false THEN CURRENT_TIMESTAMP ELSE NULL END,
-                    paused_until = CASE WHEN :is_active = false AND :paused_until IS NOT NULL THEN CAST(:paused_until AS TIMESTAMP) ELSE NULL END,
                     paused_by = CASE WHEN :is_active = false THEN :paused_by ELSE NULL END,
+                    chatbot_destrava_em = CASE WHEN :is_active = false AND :chatbot_destrava_em IS NOT NULL
+                        THEN CAST(:chatbot_destrava_em AS TIMESTAMP) ELSE NULL END,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE phone_number = :phone
-                RETURNING id, phone_number, is_active, paused_at, paused_until, paused_by
+                RETURNING id, phone_number, is_active, paused_at, paused_by, chatbot_destrava_em
             """)
         else:
-            # Insere novo
             query = text(f"""
-                INSERT INTO {CHATBOT_SCHEMA}.bot_status (phone_number, is_active, paused_at, paused_until, paused_by, empresa_id)
+                INSERT INTO {CHATBOT_SCHEMA}.bot_status (phone_number, is_active, paused_at, paused_by, empresa_id, chatbot_destrava_em)
                 VALUES (
                     :phone,
                     :is_active,
                     CASE WHEN :is_active = false THEN CURRENT_TIMESTAMP ELSE NULL END,
-                    CASE WHEN :is_active = false AND :paused_until IS NOT NULL THEN CAST(:paused_until AS TIMESTAMP) ELSE NULL END,
                     CASE WHEN :is_active = false THEN :paused_by ELSE NULL END,
-                    :empresa_id
+                    :empresa_id,
+                    CASE WHEN :is_active = false AND :chatbot_destrava_em IS NOT NULL
+                        THEN CAST(:chatbot_destrava_em AS TIMESTAMP) ELSE NULL END
                 )
-                RETURNING id, phone_number, is_active, paused_at, paused_until, paused_by
+                RETURNING id, phone_number, is_active, paused_at, paused_by, chatbot_destrava_em
             """)
 
-        result = db.execute(query, {
-            "phone": phone_number,
-            "is_active": is_active,
-            "paused_by": paused_by,
-            "paused_until": paused_until,
-            "empresa_id": empresa_id
-        }).fetchone()
+        result = db.execute(
+            query,
+            {
+                "phone": phone_number,
+                "is_active": is_active,
+                "paused_by": paused_by,
+                "empresa_id": empresa_id,
+                "chatbot_destrava_em": chatbot_destrava_em,
+            },
+        ).fetchone()
         db.commit()
 
         return {
@@ -837,8 +862,8 @@ def set_bot_status(db: Session, phone_number: str, is_active: bool, paused_by: s
             "phone_number": result[1],
             "is_active": result[2],
             "paused_at": result[3].isoformat() if result[3] else None,
-            "paused_until": result[4].isoformat() if result[4] else None,
-            "paused_by": result[5]
+            "paused_by": result[4],
+            "chatbot_destrava_em": result[5].isoformat() if result[5] else None,
         }
     except Exception as e:
         db.rollback()
@@ -851,7 +876,7 @@ def get_all_bot_statuses(db: Session, empresa_id: int = None) -> List[Dict]:
     try:
         if empresa_id:
             query = text(f"""
-                SELECT id, phone_number, is_active, paused_at, paused_until, paused_by, empresa_id
+                SELECT id, phone_number, is_active, paused_at, paused_by, empresa_id, chatbot_destrava_em
                 FROM {CHATBOT_SCHEMA}.bot_status
                 WHERE empresa_id = :empresa_id
                 ORDER BY updated_at DESC
@@ -859,7 +884,7 @@ def get_all_bot_statuses(db: Session, empresa_id: int = None) -> List[Dict]:
             result = db.execute(query, {"empresa_id": empresa_id})
         else:
             query = text(f"""
-                SELECT id, phone_number, is_active, paused_at, paused_until, paused_by, empresa_id
+                SELECT id, phone_number, is_active, paused_at, paused_by, empresa_id, chatbot_destrava_em
                 FROM {CHATBOT_SCHEMA}.bot_status
                 ORDER BY updated_at DESC
             """)
@@ -871,9 +896,9 @@ def get_all_bot_statuses(db: Session, empresa_id: int = None) -> List[Dict]:
                 "phone_number": row[1],
                 "is_active": row[2],
                 "paused_at": row[3].isoformat() if row[3] else None,
-                "paused_until": row[4].isoformat() if row[4] else None,
-                "paused_by": row[5],
-                "empresa_id": row[6]
+                "paused_by": row[4],
+                "empresa_id": row[5],
+                "chatbot_destrava_em": row[6].isoformat() if row[6] else None,
             }
             for row in result.fetchall()
         ]

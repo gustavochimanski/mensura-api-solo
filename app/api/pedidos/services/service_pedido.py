@@ -1954,7 +1954,21 @@ Em breve estará com você! 🚚
 _Qualquer dúvida, entre em contato conosco._"""
             
             # Envia via WhatsApp
-            empresa_id_str = str(pedido.empresa_id) if pedido.empresa_id else (str(empresa_id) if empresa_id else None)
+            # Resolve empresa_id de forma robusta (alguns pedidos podem ter empresa_id nulo,
+            # mas ainda terem relacionamento empresa carregado)
+            empresa_id_resolvido = (
+                (int(pedido.empresa_id) if pedido.empresa_id else None)
+                or (int(getattr(pedido.empresa, "id", 0)) if getattr(pedido, "empresa", None) else None)
+                or (int(empresa_id) if empresa_id else None)
+            )
+            if not empresa_id_resolvido:
+                logger.warning(
+                    "[Pedidos] Pedido %s sem empresa_id resolvível; notificação 'em rota' omitida",
+                    pedido_id,
+                )
+                return
+
+            empresa_id_str = str(empresa_id_resolvido)
             whatsapp_result = await OrderNotification.send_whatsapp_message(
                 telefone,
                 mensagem,
@@ -1964,13 +1978,15 @@ _Qualquer dúvida, entre em contato conosco._"""
             # Salva no chat interno também
             order_type = "delivery"
             # Obtém empresa_id do pedido (converte para int se necessário)
-            empresa_id_int = pedido.empresa_id if pedido.empresa_id else (int(empresa_id) if empresa_id else None)
-            chat_result = await OrderNotification.send_notification_async(
-                db_session,
-                telefone,
-                mensagem,
-                order_type,
-                empresa_id=empresa_id_int
+            empresa_id_int = empresa_id_resolvido
+            whatsapp_message_id = whatsapp_result.get("message_id") if isinstance(whatsapp_result, dict) else None
+            await OrderNotification.send_notification_async(
+                db=db_session,
+                phone=telefone,
+                message=mensagem,
+                order_type=order_type,
+                empresa_id=empresa_id_int,
+                whatsapp_message_id=whatsapp_message_id,
             )
             
             if whatsapp_result.get("success"):

@@ -830,8 +830,11 @@ async def toggle_bot_status(
     empresa_id: Optional[int] = None,
     db: Session = Depends(get_db)
 ):
-    """Ativa ou desativa o bot para um número específico"""
-    result = chatbot_db.set_bot_status(db, phone_number, is_active, paused_by, empresa_id)
+    """Ativa ou desativa o bot para um número específico. Ao pausar, destrava em 3h."""
+    destrava_em = chatbot_db.get_auto_pause_until() if not is_active else None
+    result = chatbot_db.set_bot_status(
+        db, phone_number, is_active, paused_by, empresa_id, chatbot_destrava_em=destrava_em
+    )
     if not result.get("success"):
         raise HTTPException(status_code=500, detail=result.get("error", "Erro ao atualizar status"))
     return result
@@ -947,11 +950,10 @@ async def send_notification(request: Request, db: Session = Depends(get_db)):
         import logging
         logger = logging.getLogger(__name__)
         
-        # PAUSA O CHATBOT POR 24 HORAS quando atendente responde
+        # PAUSA O CHATBOT POR 3 HORAS quando atendente responde
         # IMPORTANTE: Pausa SEMPRE, mesmo se não houver conversa no histórico
         try:
-            from datetime import datetime, timedelta
-            paused_until = datetime.now() + timedelta(hours=24)
+            destrava_em = chatbot_db.get_auto_pause_until()
             
             # Tenta obter empresa_id da conversa, mas não é obrigatório
             empresa_id = None
@@ -1011,7 +1013,7 @@ async def send_notification(request: Request, db: Session = Depends(get_db)):
                 logger.warning(f"⚠️ Erro ao buscar/salvar conversa: {e}", exc_info=True)
             
             # PAUSA O CHATBOT (sempre, mesmo sem conversa)
-            logger.info(f"🔄 Tentando pausar chatbot - phone: {phone}, empresa_id: {empresa_id}, paused_until: {paused_until}")
+            logger.info(f"🔄 Tentando pausar chatbot - phone: {phone}, empresa_id: {empresa_id}, chatbot_destrava_em: {destrava_em}")
             
             pause_result = chatbot_db.set_bot_status(
                 db=db,
@@ -1019,11 +1021,11 @@ async def send_notification(request: Request, db: Session = Depends(get_db)):
                 is_active=False,
                 paused_by="atendente_respondeu",
                 empresa_id=empresa_id,
-                paused_until=paused_until
+                chatbot_destrava_em=destrava_em,
             )
 
             if pause_result.get("success"):
-                logger.info(f"⏸️ Chatbot pausado por 24h para cliente {phone_normalized} (atendente respondeu) - paused_until: {paused_until}")
+                logger.info(f"⏸️ Chatbot pausado por {chatbot_db.AUTO_PAUSE_HOURS}h para cliente {phone_normalized} (atendente respondeu) - chatbot_destrava_em: {destrava_em}")
             else:
                 logger.error(f"❌ Falha ao pausar chatbot: {pause_result.get('error')}")
         except Exception as e:
@@ -1121,11 +1123,10 @@ async def send_media(request: Request, db: Session = Depends(get_db)):
                 import logging
                 logger = logging.getLogger(__name__)
                 
-                # PAUSA O CHATBOT POR 24 HORAS quando atendente envia mídia
+                # PAUSA O CHATBOT POR 3 HORAS quando atendente envia mídia
                 # IMPORTANTE: Pausa SEMPRE, mesmo se não houver conversa no histórico
                 try:
-                    from datetime import datetime, timedelta
-                    paused_until = datetime.now() + timedelta(hours=24)
+                    destrava_em = chatbot_db.get_auto_pause_until()
                     
                     # Tenta obter empresa_id da conversa, mas não é obrigatório
                     empresa_id = None
@@ -1155,7 +1156,7 @@ async def send_media(request: Request, db: Session = Depends(get_db)):
                     # PAUSA O CHATBOT (sempre, mesmo sem conversa)
                     # Usa telefone normalizado para garantir consistência
                     phone_clean_media = ''.join(filter(str.isdigit, phone))
-                    logger.info(f"🔄 Tentando pausar chatbot após mídia - phone: {phone_clean_media}, empresa_id: {empresa_id}, paused_until: {paused_until}")
+                    logger.info(f"🔄 Tentando pausar chatbot após mídia - phone: {phone_clean_media}, empresa_id: {empresa_id}, chatbot_destrava_em: {destrava_em}")
                     
                     pause_result = chatbot_db.set_bot_status(
                         db=db,
@@ -1163,11 +1164,11 @@ async def send_media(request: Request, db: Session = Depends(get_db)):
                         is_active=False,
                         paused_by="atendente_respondeu",
                         empresa_id=empresa_id,
-                        paused_until=paused_until
+                        chatbot_destrava_em=destrava_em,
                     )
                     
                     if pause_result.get("success"):
-                        logger.info(f"⏸️ Chatbot pausado por 24h para cliente {phone_clean_media} (atendente enviou mídia) - paused_until: {paused_until}")
+                        logger.info(f"⏸️ Chatbot pausado por {chatbot_db.AUTO_PAUSE_HOURS}h para cliente {phone_clean_media} (atendente enviou mídia) - chatbot_destrava_em: {destrava_em}")
                     else:
                         logger.error(f"❌ Falha ao pausar chatbot após mídia: {pause_result.get('error')}")
                 except Exception as e:
@@ -1750,10 +1751,10 @@ async def process_webhook_background(body: dict, headers_info: Optional[dict] = 
                                     
                                     # PAUSA se NÃO foi o chatbot que enviou
                                     if not foi_chatbot:
-                                        paused_until = datetime.now() + timedelta(hours=24)
+                                        destrava_em = chatbot_db.get_auto_pause_until()
                                         empresa_id_int = int(empresa_id) if empresa_id else None
                                         
-                                        logger.info(f"🔄 PAUSANDO chatbot - recipient: {recipient_id}, empresa_id: {empresa_id_int}, paused_until: {paused_until}")
+                                        logger.info(f"🔄 PAUSANDO chatbot - recipient: {recipient_id}, empresa_id: {empresa_id_int}, chatbot_destrava_em: {destrava_em}")
                                         
                                         # SALVA A MENSAGEM NO BANCO quando atendente envia pelo WhatsApp
                                         try:
@@ -1819,11 +1820,11 @@ async def process_webhook_background(body: dict, headers_info: Optional[dict] = 
                                             is_active=False,
                                             paused_by="atendente_respondeu",
                                             empresa_id=empresa_id_int,
-                                            paused_until=paused_until
+                                            chatbot_destrava_em=destrava_em,
                                         )
                                         
                                         if pause_result.get("success"):
-                                            logger.info(f"⏸️ ✅ Chatbot PAUSADO por 24h para cliente {recipient_id} (humano enviou mensagem via WhatsApp) - paused_until: {paused_until}")
+                                            logger.info(f"⏸️ ✅ Chatbot PAUSADO por {chatbot_db.AUTO_PAUSE_HOURS}h para cliente {recipient_id} (humano enviou mensagem via WhatsApp) - chatbot_destrava_em: {destrava_em}")
                                         else:
                                             logger.error(f"❌ Falha ao pausar chatbot após envio pelo humano: {pause_result.get('error')}")
                                 except Exception as e:
@@ -2342,7 +2343,7 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                         "timestamp": datetime.utcnow().isoformat(),
                         "bot_pausado": True,
                         "paused_by": (status_info or {}).get("paused_by"),
-                        "paused_until": (status_info or {}).get("paused_until"),
+                        "chatbot_destrava_em": (status_info or {}).get("chatbot_destrava_em"),
                     }
 
                     title = "🔔 Solicitação de Atendimento Humano"
@@ -2642,18 +2643,18 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                     
                     # PAUSA O CHATBOT PARA ESTE CLIENTE (por conta própria - 3 horas)
                     try:
-                        paused_until = chatbot_db.get_auto_pause_until()
+                        destrava_em = chatbot_db.get_auto_pause_until()
                         chatbot_db.set_bot_status(
                             db=db,
                             phone_number=phone_number,
                             is_active=False,
                             paused_by="cliente_chamou_atendente",
                             empresa_id=empresa_id_int,
-                            paused_until=paused_until
+                            chatbot_destrava_em=destrava_em,
                         )
                         import logging
                         logger = logging.getLogger(__name__)
-                        logger.info(f"⏸️ Chatbot pausado para cliente {phone_number} por {chatbot_db.AUTO_PAUSE_HOURS} horas (chamou atendente) - paused_until: {paused_until}")
+                        logger.info(f"⏸️ Chatbot pausado para cliente {phone_number} por {chatbot_db.AUTO_PAUSE_HOURS} horas (chamou atendente) - chatbot_destrava_em: {destrava_em}")
                     except Exception as e:
                         import logging
                         logger = logging.getLogger(__name__)
@@ -2717,16 +2718,16 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 
                 # PAUSA O CHATBOT PARA ESTE CLIENTE (por conta própria - 3 horas)
                 try:
-                    paused_until = chatbot_db.get_auto_pause_until()
+                    destrava_em = chatbot_db.get_auto_pause_until()
                     chatbot_db.set_bot_status(
                         db=db,
                         phone_number=phone_number,
                         is_active=False,
                         paused_by="cliente_chamou_atendente",
                         empresa_id=empresa_id_int,
-                        paused_until=paused_until
+                        chatbot_destrava_em=destrava_em,
                     )
-                    logger.info(f"⏸️ Chatbot pausado para cliente {phone_number} por {chatbot_db.AUTO_PAUSE_HOURS} horas (chamou atendente) - paused_until: {paused_until}")
+                    logger.info(f"⏸️ Chatbot pausado para cliente {phone_number} por {chatbot_db.AUTO_PAUSE_HOURS} horas (chamou atendente) - chatbot_destrava_em: {destrava_em}")
                 except Exception as e:
                     logger.error(f"❌ Erro ao pausar chatbot: {e}", exc_info=True)
                 
