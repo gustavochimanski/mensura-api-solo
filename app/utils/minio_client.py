@@ -64,11 +64,11 @@ def get_minio_client():
     return client
 
 
-def gerar_nome_bucket(cnpj: str) -> str:
+def gerar_nome_bucket(identificador: str) -> str:
     """
-    Gera um nome de bucket seguro e válido com base no CNPJ ou nome da empresa.
+    Gera um nome de bucket seguro e válido com base no CNPJ, slug ou outro identificador.
     """
-    return slugify(cnpj)[:63]
+    return slugify(identificador)[:63]
 
 
 def configurar_permissoes_bucket(bucket_name: str) -> bool:
@@ -176,14 +176,26 @@ def upload_file_to_minio(
 ) -> str:
     logger.info(f"[MinIO] Iniciando upload - empresa_id={cod_empresa}, slug={slug}, content_type={file.content_type}")
     
-    # 1️⃣ Busca CNPJ
+    # 1️⃣ Busca dados da empresa (CNPJ ou slug como fallback)
     repo = EmpresaRepository(db)
-    cnpj = repo.get_cnpj_by_id(cod_empresa)
-    if not cnpj:
-        logger.error(f"[MinIO] Empresa {cod_empresa} não possui CNPJ cadastrado")
-        raise ValueError(f"Empresa {cod_empresa} não possui CNPJ cadastrado.")
-
-    logger.info(f"[MinIO] CNPJ encontrado: {cnpj}")
+    empresa = repo.get_empresa_by_id(cod_empresa)
+    if not empresa:
+        logger.error(f"[MinIO] Empresa {cod_empresa} não encontrada")
+        raise ValueError(f"Empresa {cod_empresa} não encontrada.")
+    
+    # Usa CNPJ se disponível, caso contrário usa slug ou ID como fallback
+    identificador_bucket = empresa.cnpj
+    if not identificador_bucket:
+        # Tenta usar o slug da empresa
+        if empresa.slug:
+            identificador_bucket = empresa.slug
+            logger.info(f"[MinIO] Empresa sem CNPJ, usando slug como identificador: {identificador_bucket}")
+        else:
+            # Último recurso: usa o ID da empresa
+            identificador_bucket = f"empresa-{cod_empresa}"
+            logger.info(f"[MinIO] Empresa sem CNPJ e sem slug, usando ID como identificador: {identificador_bucket}")
+    else:
+        logger.info(f"[MinIO] CNPJ encontrado: {identificador_bucket}")
 
     # 2️⃣ Verifica conexão com MinIO
     if not verificar_conexao_minio():
@@ -192,10 +204,10 @@ def upload_file_to_minio(
         raise ConnectionError(error_msg)
 
     # 3️⃣ Bucket
-    bucket_name = gerar_nome_bucket(cnpj)
+    bucket_name = gerar_nome_bucket(identificador_bucket)
     if not bucket_name:
-        logger.error(f"[MinIO] Falha ao gerar nome de bucket para CNPJ: {cnpj}")
-        raise ValueError(f"Falha ao gerar nome de bucket para CNPJ: {cnpj}")
+        logger.error(f"[MinIO] Falha ao gerar nome de bucket para identificador: {identificador_bucket}")
+        raise ValueError(f"Falha ao gerar nome de bucket para identificador: {identificador_bucket}")
     
     logger.info(f"[MinIO] Nome do bucket: {bucket_name}")
     

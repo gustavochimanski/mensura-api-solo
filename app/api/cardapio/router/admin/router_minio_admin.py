@@ -34,11 +34,16 @@ def corrigir_bucket_empresa(empresa_id: int, db: Session = Depends(get_db)):
         if not empresa:
             raise HTTPException(status_code=404, detail="Empresa não encontrada")
         
-        if not empresa.cnpj:
-            raise HTTPException(status_code=400, detail="Empresa não possui CNPJ cadastrado")
+        # Usa CNPJ se disponível, caso contrário usa slug ou ID como fallback
+        identificador_bucket = empresa.cnpj
+        if not identificador_bucket:
+            if empresa.slug:
+                identificador_bucket = empresa.slug
+            else:
+                identificador_bucket = f"empresa-{empresa_id}"
         
         # Gera nome do bucket
-        bucket_name = gerar_nome_bucket(empresa.cnpj)
+        bucket_name = gerar_nome_bucket(identificador_bucket)
         
         if not bucket_name:
             raise HTTPException(status_code=400, detail="Falha ao gerar nome do bucket")
@@ -55,6 +60,7 @@ def corrigir_bucket_empresa(empresa_id: int, db: Session = Depends(get_db)):
             "empresa_id": empresa_id,
             "empresa_nome": empresa.nome,
             "cnpj": empresa.cnpj,
+            "identificador_bucket": identificador_bucket,
             "bucket_name": bucket_name,
             "configurado": sucesso,
             "mensagem": "Bucket configurado com sucesso" if sucesso else "Falha ao configurar bucket"
@@ -76,19 +82,16 @@ def verificar_bucket_empresa(empresa_id: int, db: Session = Depends(get_db)):
         if not empresa:
             raise HTTPException(status_code=404, detail="Empresa não encontrada")
         
-        if not empresa.cnpj:
-            return {
-                "empresa_id": empresa_id,
-                "empresa_nome": empresa.nome,
-                "cnpj": None,
-                "bucket_name": None,
-                "bucket_existe": False,
-                "tem_politica": False,
-                "mensagem": "Empresa não possui CNPJ cadastrado"
-            }
+        # Usa CNPJ se disponível, caso contrário usa slug ou ID como fallback
+        identificador_bucket = empresa.cnpj
+        if not identificador_bucket:
+            if empresa.slug:
+                identificador_bucket = empresa.slug
+            else:
+                identificador_bucket = f"empresa-{empresa_id}"
         
         # Gera nome do bucket
-        bucket_name = gerar_nome_bucket(empresa.cnpj)
+        bucket_name = gerar_nome_bucket(identificador_bucket)
         
         if not bucket_name:
             return {
@@ -126,6 +129,7 @@ def verificar_bucket_empresa(empresa_id: int, db: Session = Depends(get_db)):
             "empresa_id": empresa_id,
             "empresa_nome": empresa.nome,
             "cnpj": empresa.cnpj,
+            "identificador_bucket": identificador_bucket,
             "bucket_name": bucket_name,
             "bucket_existe": bucket_existe,
             "tem_politica": tem_politica,

@@ -118,20 +118,27 @@ class EmpresaService:
             self.db.refresh(empresa)
             
             # Configura bucket MinIO para a nova empresa
-            if empresa.cnpj:
-                try:
-                    bucket_name = gerar_nome_bucket(empresa.cnpj)
-                    if bucket_name:
-                        from app.utils.minio_client import get_minio_client
-                        client = get_minio_client()
-                        if not client.bucket_exists(bucket_name):
-                            client.make_bucket(bucket_name)
-                        # Verifica e configura permissões públicas
-                        verificar_e_configurar_permissoes(bucket_name)
-                except Exception as e:
-                    # Log do erro mas não falha a criação da empresa
-                    from app.utils.logger import logger
-                    logger.warning(f"Falha ao configurar bucket MinIO para empresa {empresa.id}: {e}")
+            try:
+                # Usa CNPJ se disponível, caso contrário usa slug ou ID como fallback
+                identificador_bucket = empresa.cnpj
+                if not identificador_bucket:
+                    if empresa.slug:
+                        identificador_bucket = empresa.slug
+                    else:
+                        identificador_bucket = f"empresa-{empresa.id}"
+                
+                bucket_name = gerar_nome_bucket(identificador_bucket)
+                if bucket_name:
+                    from app.utils.minio_client import get_minio_client
+                    client = get_minio_client()
+                    if not client.bucket_exists(bucket_name):
+                        client.make_bucket(bucket_name)
+                    # Verifica e configura permissões públicas
+                    verificar_e_configurar_permissoes(bucket_name)
+            except Exception as e:
+                # Log do erro mas não falha a criação da empresa
+                from app.utils.logger import logger
+                logger.warning(f"Falha ao configurar bucket MinIO para empresa {empresa.id}: {e}")
                     
         except IntegrityError as e:
             self.db.rollback()
@@ -219,22 +226,29 @@ class EmpresaService:
             raise HTTPException(status_code=400, detail=f"Erro de integridade: {error_str}")
         
         # Verifica e configura bucket MinIO após edição
-        if empresa.cnpj:
-            try:
-                bucket_name = gerar_nome_bucket(empresa.cnpj)
-                if bucket_name:
-                    from app.utils.minio_client import get_minio_client
-                    client = get_minio_client()
-                    # Verifica se bucket existe
-                    if not client.bucket_exists(bucket_name):
-                        client.make_bucket(bucket_name)
-                    
-                    # Verifica e configura permissões públicas (sempre verifica na edição)
-                    verificar_e_configurar_permissoes(bucket_name)
-            except Exception as e:
-                # Log do erro mas não falha a edição da empresa
-                from app.utils.logger import logger
-                logger.warning(f"Falha ao verificar/configurar bucket MinIO para empresa {empresa.id}: {e}")
+        try:
+            # Usa CNPJ se disponível, caso contrário usa slug ou ID como fallback
+            identificador_bucket = empresa.cnpj
+            if not identificador_bucket:
+                if empresa.slug:
+                    identificador_bucket = empresa.slug
+                else:
+                    identificador_bucket = f"empresa-{empresa.id}"
+            
+            bucket_name = gerar_nome_bucket(identificador_bucket)
+            if bucket_name:
+                from app.utils.minio_client import get_minio_client
+                client = get_minio_client()
+                # Verifica se bucket existe
+                if not client.bucket_exists(bucket_name):
+                    client.make_bucket(bucket_name)
+                
+                # Verifica e configura permissões públicas (sempre verifica na edição)
+                verificar_e_configurar_permissoes(bucket_name)
+        except Exception as e:
+            # Log do erro mas não falha a edição da empresa
+            from app.utils.logger import logger
+            logger.warning(f"Falha ao verificar/configurar bucket MinIO para empresa {empresa.id}: {e}")
         
         return empresa
 
