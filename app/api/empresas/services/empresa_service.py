@@ -21,7 +21,7 @@ from app.api.cadastros.models.association_tables import entregador_empresa, usua
 from app.api.catalogo.models.model_produto_emp import ProdutoEmpModel
 from app.api.pedidos.models.model_pedido_unificado import PedidoUnificadoModel, TipoEntrega
 
-BASE_LINK_CARDAPIO = "https://chatbot.mensuraapi.com.br"
+BASE_LINK_CARDAPIO = "https://mi-cardapio.vercel.app"
 
 
 class EmpresaService:
@@ -80,9 +80,10 @@ class EmpresaService:
 
     def _normalizar_cardapio_link(self, link: str, empresa_id: int) -> str:
         """
-        Normaliza o link do cardápio: apenas ?empresa=id.
-        Se o link for do nosso app (mensuraapi) ou contiver 'via=' (ex: via=supervisor),
-        retorna BASE?empresa=id. Caso contrário, mantém o link externo como está.
+        Normaliza o link do cardápio: apenas ?empresa=id (sem via=supervisor etc).
+        Se o link for do nosso app (mi-cardapio.vercel.app, mensuraapi) ou contiver
+        'via=' (ex: via=supervisor), retorna BASE?empresa=id. Caso contrário, mantém
+        o link externo como está.
         """
         if not link or not str(link).strip():
             return self._gerar_link_cardapio_empresa(empresa_id)
@@ -90,11 +91,12 @@ class EmpresaService:
         try:
             parsed = urlparse(link)
             qs = parse_qs(parsed.query)
-            # Contém via= (ex: via=supervisor) -> normalizar
+            # Contém via= (ex: via=supervisor) -> normalizar para apenas ?empresa=id
             if any(k.lower() == "via" for k in qs):
                 return self._gerar_link_cardapio_empresa(empresa_id)
-            # Domínio do nosso app (mensuraapi) -> usar apenas ?empresa=id
-            if parsed.netloc and "mensuraapi" in parsed.netloc.lower():
+            # Domínio do nosso app (mi-cardapio, mensuraapi) -> usar apenas ?empresa=id
+            netloc = (parsed.netloc or "").lower()
+            if "mi-cardapio" in netloc or "mensuraapi" in netloc:
                 return self._gerar_link_cardapio_empresa(empresa_id)
         except Exception:
             pass
