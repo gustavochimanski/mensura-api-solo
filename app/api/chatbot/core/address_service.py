@@ -435,6 +435,7 @@ class ChatbotAddressService:
         IMPORTANTE:
         - Não inventa dígitos (ex.: NÃO adiciona "9" para "completar" o número).
         - Mantém consistência entre cadastro, conversa e envio de mensagem.
+        - Usa o número EXATAMENTE como recebido, sem adicionar dígitos.
         """
         import re
         telefone_limpo = re.sub(r"[^\d]", "", telefone or "")
@@ -446,8 +447,17 @@ class ChatbotAddressService:
         if telefone_limpo.startswith("00") and len(telefone_limpo) > 2:
             telefone_limpo = telefone_limpo[2:]
         
+        # Remove zeros à esquerda que podem vir de formatação incorreta
+        # Mas preserva o número original se já começar com 55
+        if telefone_limpo.startswith("0") and not telefone_limpo.startswith("55"):
+            # Remove apenas zeros à esquerda se o número tiver mais de 11 dígitos
+            # Isso evita remover zeros válidos de números que começam com 0
+            if len(telefone_limpo) > 11:
+                telefone_limpo = telefone_limpo.lstrip("0")
+        
         # Se o telefone não começar com 55, adiciona o prefixo
         # Considera números brasileiros (10 ou 11 dígitos sem o 55)
+        # IMPORTANTE: NÃO adiciona "9" para números de 10 dígitos - usa exatamente como recebido
         if not telefone_limpo.startswith("55"):
             # Se tem 10 ou 11 dígitos (formato brasileiro sem código do país)
             if len(telefone_limpo) == 10 or len(telefone_limpo) == 11:

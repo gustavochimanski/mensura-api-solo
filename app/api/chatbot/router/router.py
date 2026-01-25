@@ -142,6 +142,40 @@ def _is_pedido_intent(message_text: Optional[str]) -> bool:
     return False
 
 
+def _is_pedido_cardapio(message_text: Optional[str]) -> bool:
+    """
+    Detecta se a mensagem é um pedido explícito de cardápio.
+    Exemplos: "pode me mandar o cardápio", "quero ver o cardápio", "me manda o cardápio", etc.
+    """
+    if not message_text:
+        return False
+    msg = str(message_text).lower().strip()
+    if not msg:
+        return False
+    
+    # Padrões que indicam pedido de cardápio
+    padroes_cardapio = [
+        # "pode me mandar o cardápio", "poderia me mandar o cardápio"
+        r'(?:pode|poderia)(?:\s+me)?\s+(?:me\s+)?(?:mandar|manda|enviar|envia|mostrar|mostra|passar|passa)\s+(?:o\s+)?(?:cardapio|cardápio|menu)',
+        # "quero ver o cardápio", "gostaria de ver o cardápio"
+        r'(?:quero|gostaria|gostaria de|queria|queria de)\s+(?:ver|ver o|receber|receber o|ter|ter o)\s+(?:cardapio|cardápio|menu)',
+        # "me manda o cardápio", "manda o cardápio"
+        r'(?:me\s+)?(?:manda|mandar|envia|enviar|mostra|mostrar|passa|passar)\s+(?:o\s+)?(?:cardapio|cardápio|menu)',
+        # "manda aí o cardápio", "envia pra mim o cardápio"
+        r'(?:manda|mandar|envia|enviar|mostra|mostrar|passa|passar)\s+(?:ai|aí|pra mim|para mim)\s+(?:o\s+)?(?:cardapio|cardápio|menu)',
+        # Apenas "cardápio" ou "menu"
+        r'^(?:cardapio|cardápio|menu)$',
+        # "mostra o cardápio", "ver o cardápio"
+        r'^(?:mostra|mostrar|ver|quero ver)\s+(?:o\s+)?(?:cardapio|cardápio|menu)$',
+    ]
+    
+    for padrao in padroes_cardapio:
+        if re.search(padrao, msg, re.IGNORECASE):
+            return True
+    
+    return False
+
+
 def _is_saudacao_intent(message_text: Optional[str]) -> bool:
     """
     Detecta se a mensagem é uma saudação/entrada ("oi", "olá", "menu", "cardápio", etc).
@@ -1802,6 +1836,77 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
             logger.error(f"Erro ao verificar se é entregador: {e}", exc_info=True)
             # Em caso de erro, continua o processamento normal (não bloqueia)
         
+        
+        # VERIFICA INTENÇÃO ANTES DO CADASTRO (usando agentes de IA)
+        # Se detectar pedido de cardápio, responde direto sem pedir cadastro
+        from ..core.intention_agents import IntentionRouter, IntentionType
+        import unicodedata
+        
+        def normalizar_mensagem(texto: str) -> str:
+            """Normaliza mensagem para comparação (lowercase, remove acentos)"""
+            if not texto:
+                return ""
+            texto = texto.lower().strip()
+            # Remove acentos
+            texto = unicodedata.normalize('NFD', texto)
+            texto = ''.join(char for char in texto if unicodedata.category(char) != 'Mn')
+            return texto
+        
+        mensagem_normalizada = normalizar_mensagem(message_text)
+        intention_router = IntentionRouter()
+        intencao = intention_router.detect_intention(message_text, mensagem_normalizada)
+        
+        # Se detectou intenção de ver cardápio, responde direto sem pedir cadastro
+        # Verifica tanto pelo enum quanto pela função retornada
+        intencao_detectada = intencao and (
+            intencao.get("intention") == IntentionType.VER_CARDAPIO or
+            intencao.get("funcao") == "ver_cardapio"
+        )
+        
+        if intencao_detectada:
+            from datetime import datetime
+            conversations = chatbot_db.get_conversations_by_user(db, user_id, empresa_id_int)
+            
+            # Cria conversa se não existir
+            if not conversations:
+                conversation_id = chatbot_db.create_conversation(
+                    db=db,
+                    session_id=f"whatsapp_{user_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                    user_id=user_id,
+                    prompt_key="atendimento-pedido-whatsapp",
+                    model="groq-sales",
+                    empresa_id=empresa_id_int
+                )
+            else:
+                conversation_id = conversations[0]['id']
+            
+            # Salva mensagem do usuário
+            chatbot_db.create_message(db, conversation_id, "user", message_text, whatsapp_message_id=message_id)
+            
+            # Busca configuração do chatbot para usar mensagem personalizada se existir
+            config = None
+            try:
+                config_repo = ChatbotConfigRepository(db)
+                config = config_repo.get_by_empresa_id(empresa_id_int)
+            except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Erro ao buscar configuração do chatbot: {e}")
+            
+            # Monta resposta com link do cardápio
+            resposta_cardapio = _montar_mensagem_redirecionamento(db, empresa_id_int, config)
+            
+            # Envia resposta via WhatsApp
+            notifier = OrderNotification()
+            result = await notifier.send_whatsapp_message(phone_number, resposta_cardapio, empresa_id=empresa_id)
+            
+            # Salva a mensagem do assistente
+            if isinstance(result, dict) and result.get("success"):
+                whatsapp_message_id = result.get("message_id")
+                chatbot_db.create_message(db, conversation_id, "assistant", resposta_cardapio, whatsapp_message_id=whatsapp_message_id)
+                db.commit()
+            
+            return
         
         # VERIFICA SE CLIENTE JÁ ESTÁ CADASTRADO (primeira coisa a fazer)
         from ..core.address_service import ChatbotAddressService

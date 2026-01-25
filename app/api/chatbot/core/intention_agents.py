@@ -267,6 +267,45 @@ class AdicionarProdutoAgent(IntentionAgent):
         return None
 
 
+class VerCardapioAgent(IntentionAgent):
+    """Agente especializado em detectar intenção de VER o cardápio"""
+    
+    def __init__(self):
+        super().__init__(priority=150)  # Prioridade MUITO ALTA - verificado ANTES de iniciar pedido e cadastro
+    
+    def detect(self, mensagem: str, mensagem_normalizada: str, context: Dict[str, Any] = None) -> Optional[Dict[str, Any]]:
+        """
+        Detecta intenção de ver o cardápio.
+        Exemplos: "pode me mandar o cardápio", "quero ver o cardápio", "me manda o cardápio", etc.
+        """
+        # Padrões que indicam pedido de cardápio
+        padroes_cardapio = [
+            # "pode me mandar o cardápio", "poderia me mandar o cardápio"
+            r'(?:pode|poderia)(?:\s+me)?\s+(?:me\s+)?(?:mandar|manda|enviar|envia|mostrar|mostra|passar|passa)\s+(?:o\s+)?(?:cardapio|cardápio|menu)',
+            # "quero ver o cardápio", "gostaria de ver o cardápio"
+            r'(?:quero|gostaria|gostaria de|queria|queria de)\s+(?:ver|ver o|receber|receber o|ter|ter o)\s+(?:cardapio|cardápio|menu)',
+            # "me manda o cardápio", "manda o cardápio"
+            r'(?:me\s+)?(?:manda|mandar|envia|enviar|mostra|mostrar|passa|passar)\s+(?:o\s+)?(?:cardapio|cardápio|menu)',
+            # "manda aí o cardápio", "envia pra mim o cardápio"
+            r'(?:manda|mandar|envia|enviar|mostra|mostrar|passa|passar)\s+(?:ai|aí|pra mim|para mim)\s+(?:o\s+)?(?:cardapio|cardápio|menu)',
+            # Apenas "cardápio" ou "menu"
+            r'^(?:cardapio|cardápio|menu)$',
+            # "mostra o cardápio", "ver o cardápio"
+            r'^(?:mostra|mostrar|ver|quero ver)\s+(?:o\s+)?(?:cardapio|cardápio|menu)$',
+        ]
+        
+        for padrao in padroes_cardapio:
+            if re.search(padrao, mensagem_normalizada, re.IGNORECASE):
+                print(f"📋 [Agente VerCardapio] Detectado: '{mensagem}'")
+                return {
+                    "intention": IntentionType.VER_CARDAPIO,
+                    "funcao": "ver_cardapio",
+                    "params": {}
+                }
+        
+        return None
+
+
 class ConversacaoAgent(IntentionAgent):
     """Agente especializado em detectar saudações e conversas casuais"""
     
@@ -300,7 +339,8 @@ class IntentionRouter:
     def __init__(self):
         # Lista de agentes ordenada por prioridade (maior primeiro)
         self.agents: List[IntentionAgent] = [
-            IniciarPedidoAgent(),      # Prioridade 100 - verificado primeiro
+            VerCardapioAgent(),        # Prioridade 150 - verificado PRIMEIRO (antes de cadastro)
+            IniciarPedidoAgent(),      # Prioridade 100 - verificado segundo
             AdicionarProdutoAgent(),  # Prioridade 50
             ConversacaoAgent(),        # Prioridade 10 - fallback
         ]

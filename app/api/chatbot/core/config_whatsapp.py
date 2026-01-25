@@ -121,6 +121,8 @@ def format_phone_number(phone: str) -> str:
     """
     Formata número de telefone para o formato do WhatsApp
     Remove caracteres especiais e garante que tenha o código do país
+    
+    IMPORTANTE: Usa o número EXATAMENTE como recebido, sem adicionar dígitos como "9"
     """
     phone = ''.join(filter(str.isdigit, phone))
     if not phone.startswith('55'):
