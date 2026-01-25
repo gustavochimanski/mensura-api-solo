@@ -24,6 +24,7 @@ Para a loja aparecer e receber pedidos:
 | **Catálogo** | Pelo menos um cardápio habilitado no iFood. |
 | **Área de entrega** | Configurada no iFood. |
 | **Horário** | Dentro do horário de funcionamento. |
+
 | **Interrupções** | Sem interrupções vigentes. |
 
 **Homologação:** usar conta **Profissional (CNPJ)**. Conta CPF não é aceita.

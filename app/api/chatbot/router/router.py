@@ -964,23 +964,51 @@ async def send_notification(request: Request, db: Session = Depends(get_db)):
                 if not conversations:
                     conversations = chatbot_db.get_conversations_by_user(db, phone)
                 
+                conversation_id = None
                 if conversations:
                     conversation = conversations[0]
                     conversation_id = conversation.get('id')
-                    empresa_id = conversation.get('empresa_id')
+                    empresa_id = conversation.get('empresa_id') or empresa_id  # Mantém empresa_id se já tinha
+                else:
+                    # Cria nova conversa se não existir para salvar a mensagem
+                    from datetime import datetime as dt
+                    # Se não tem empresa_id, usa 1 como padrão
+                    empresa_id_final = empresa_id if empresa_id else 1
+                    # Garante prompt default
+                    prompt_key = "atendimento-pedido-whatsapp"
+                    if not chatbot_db.get_prompt(db, prompt_key, empresa_id=empresa_id_final):
+                        chatbot_db.create_prompt(
+                            db=db,
+                            key=prompt_key,
+                            name="Atendimento WhatsApp",
+                            content="Atendimento via WhatsApp",
+                            is_default=False,
+                            empresa_id=empresa_id_final
+                        )
                     
-                    # Salva mensagem no histórico COM o message_id do WhatsApp
-                    # IMPORTANTE: Salva o message_id para que o webhook possa identificar que foi o atendente que enviou
-                    whatsapp_message_id = result.get("message_id") if isinstance(result, dict) else None
-                    chatbot_db.create_message(
+                    conversation_id = chatbot_db.create_conversation(
                         db=db,
-                        conversation_id=conversation_id,
-                        role="assistant",
-                        content=message,
-                        whatsapp_message_id=whatsapp_message_id
+                        session_id=f"whatsapp_{phone_to_search}_{dt.now().strftime('%Y%m%d%H%M%S')}",
+                        user_id=phone_to_search,
+                        prompt_key=prompt_key,
+                        model="groq-sales",
+                        empresa_id=empresa_id_final
                     )
+                    empresa_id = empresa_id_final  # Atualiza empresa_id para usar depois
+                
+                # Salva mensagem no histórico COM o message_id do WhatsApp
+                # IMPORTANTE: Salva o message_id para que o webhook possa identificar que foi o atendente que enviou
+                whatsapp_message_id = result.get("message_id") if isinstance(result, dict) else None
+                chatbot_db.create_message(
+                    db=db,
+                    conversation_id=conversation_id,
+                    role="assistant",
+                    content=message,
+                    whatsapp_message_id=whatsapp_message_id
+                )
+                logger.info(f"💾 Mensagem do atendente salva no banco via /send-notification - conversation_id: {conversation_id}, message_id: {whatsapp_message_id}")
             except Exception as e:
-                logger.warning(f"⚠️ Erro ao buscar/salvar conversa: {e}")
+                logger.warning(f"⚠️ Erro ao buscar/salvar conversa: {e}", exc_info=True)
             
             # PAUSA O CHATBOT (sempre, mesmo sem conversa)
             logger.info(f"🔄 Tentando pausar chatbot - phone: {phone}, empresa_id: {empresa_id}, paused_until: {paused_until}")
@@ -1726,6 +1754,64 @@ async def process_webhook_background(body: dict, headers_info: Optional[dict] = 
                                         empresa_id_int = int(empresa_id) if empresa_id else None
                                         
                                         logger.info(f"🔄 PAUSANDO chatbot - recipient: {recipient_id}, empresa_id: {empresa_id_int}, paused_until: {paused_until}")
+                                        
+                                        # SALVA A MENSAGEM NO BANCO quando atendente envia pelo WhatsApp
+                                        try:
+                                            # Busca ou cria conversa para salvar a mensagem
+                                            conversations = chatbot_db.get_conversations_by_user(db, recipient_id, empresa_id=empresa_id_int)
+                                            
+                                            if not conversations:
+                                                # Tenta buscar sem empresa_id também
+                                                conversations = chatbot_db.get_conversations_by_user(db, recipient_id)
+                                            
+                                            conversation_id = None
+                                            if conversations:
+                                                conversation_id = conversations[0]['id']
+                                                # Atualiza empresa_id_int se não tinha
+                                                if not empresa_id_int:
+                                                    empresa_id_int = conversations[0].get('empresa_id') or 1
+                                            else:
+                                                # Cria nova conversa se não existir
+                                                from datetime import datetime as dt
+                                                # Se não tem empresa_id, usa 1 como padrão
+                                                empresa_id_final = empresa_id_int if empresa_id_int else 1
+                                                # Garante prompt default
+                                                prompt_key = "atendimento-pedido-whatsapp"
+                                                if not chatbot_db.get_prompt(db, prompt_key, empresa_id=empresa_id_final):
+                                                    chatbot_db.create_prompt(
+                                                        db=db,
+                                                        key=prompt_key,
+                                                        name="Atendimento WhatsApp",
+                                                        content="Atendimento via WhatsApp",
+                                                        is_default=False,
+                                                        empresa_id=empresa_id_final
+                                                    )
+                                                
+                                                conversation_id = chatbot_db.create_conversation(
+                                                    db=db,
+                                                    session_id=f"whatsapp_{recipient_id}_{dt.now().strftime('%Y%m%d%H%M%S')}",
+                                                    user_id=recipient_id,
+                                                    prompt_key=prompt_key,
+                                                    model="groq-sales",
+                                                    empresa_id=empresa_id_final
+                                                )
+                                                empresa_id_int = empresa_id_final  # Atualiza para usar depois
+                                            
+                                            # Salva mensagem indicando que foi enviada pelo atendente
+                                            # O webhook de status não traz o conteúdo, então salvamos uma referência
+                                            mensagem_conteudo = "[Mensagem enviada pelo atendente via WhatsApp]"
+                                            
+                                            chatbot_db.create_message(
+                                                db=db,
+                                                conversation_id=conversation_id,
+                                                role="assistant",
+                                                content=mensagem_conteudo,
+                                                whatsapp_message_id=status_message_id
+                                            )
+                                            
+                                            logger.info(f"💾 Mensagem do atendente salva no banco - conversation_id: {conversation_id}, message_id: {status_message_id}")
+                                        except Exception as e:
+                                            logger.warning(f"⚠️ Erro ao salvar mensagem do atendente no banco: {e}", exc_info=True)
                                         
                                         pause_result = chatbot_db.set_bot_status(
                                             db=db,
