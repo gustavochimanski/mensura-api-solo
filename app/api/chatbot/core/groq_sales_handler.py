@@ -6063,6 +6063,45 @@ Responda de forma natural e curta:"""
             print(f"📊 Estado atual: {estado}")
             print(f"💬 Mensagem recebida (user_id={user_id}): {mensagem}")
             msg_lower = (mensagem or "").lower()
+
+            # Prioridade absoluta: "chamar atendente" deve furar QUALQUER estado (inclusive cadastro de nome).
+            # Caso contrário, quando o cliente clica no botão em meio ao STATE_CADASTRO_NOME,
+            # o fluxo de cadastro interpreta a mensagem e volta a pedir o nome.
+            is_chamar_atendente = (
+                "chamar_atendente" in msg_lower
+                or "chamar atendente" in msg_lower
+                or "chamar um atendente" in msg_lower
+                or "atendente humano" in msg_lower
+                or "preciso de um humano" in msg_lower
+                or "quero falar com um atendente" in msg_lower
+            )
+            if is_chamar_atendente:
+                await self._enviar_notificacao_chamar_atendente(user_id, dados)
+                try:
+                    from . import database as chatbot_db
+                    destrava_em = chatbot_db.get_auto_pause_until()
+                    chatbot_db.set_bot_status(
+                        db=self.db,
+                        phone_number=user_id,
+                        is_active=False,
+                        paused_by="cliente_chamou_atendente",
+                        empresa_id=self.empresa_id,
+                        chatbot_destrava_em=destrava_em,
+                    )
+                    print(
+                        f"⏸️ Chatbot pausado para cliente {user_id} por {chatbot_db.AUTO_PAUSE_HOURS} horas "
+                        f"(chamou atendente - prioridade) - chatbot_destrava_em: {destrava_em}"
+                    )
+                except Exception as e:
+                    print(f"❌ Erro ao pausar chatbot (chamar_atendente - prioridade): {e}")
+                    import traceback
+                    traceback.print_exc()
+
+                return (
+                    "✅ *Solicitação enviada!*\n\n"
+                    "Nossa equipe foi notificada e entrará em contato com você em breve.\n\n"
+                    "Enquanto isso, posso te ajudar com alguma dúvida? 😊"
+                )
             
             # VERIFICA PEDIDO EM ABERTO (apenas na primeira mensagem da conversa ou se ainda não foi tratado)
             if pedido_aberto and not dados.get('pedido_aberto_tratado'):

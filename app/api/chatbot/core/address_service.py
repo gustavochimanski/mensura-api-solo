@@ -314,6 +314,41 @@ class ChatbotAddressService:
         # Verifica se já existe
         cliente = self.get_cliente_by_telefone(telefone_limpo)
         if cliente:
+            # Se o cliente já existe, mas tem nome genérico (ou vazio),
+            # atualiza com o nome informado no cadastro rápido.
+            try:
+                nome_atual = (cliente.get("nome") or "").strip()
+                nome_informado = (nome or "").strip()
+
+                nomes_genericos = {"cliente whatsapp", "cliente", ""}
+                deve_atualizar = (
+                    bool(nome_informado)
+                    and nome_informado.lower() not in nomes_genericos
+                    and nome_atual.lower() in nomes_genericos
+                )
+
+                if deve_atualizar:
+                    query_update = text("""
+                        UPDATE cadastros.clientes
+                        SET nome = :nome, updated_at = NOW()
+                        WHERE id = :id
+                        RETURNING id, nome, telefone, email, ativo, super_token
+                    """)
+                    row = self.db.execute(query_update, {"id": cliente["id"], "nome": nome_informado}).fetchone()
+                    self.db.commit()
+                    if row:
+                        return {
+                            "id": row[0],
+                            "nome": row[1],
+                            "telefone": row[2],
+                            "email": row[3],
+                            "ativo": row[4],
+                            "super_token": row[5],
+                        }
+            except Exception as e:
+                logger.error(f"[ChatbotAddress] Erro ao atualizar nome do cliente existente: {e}")
+                self.db.rollback()
+
             return cliente
 
         try:

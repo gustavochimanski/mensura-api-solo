@@ -2327,6 +2327,8 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 mensagem_lower = (message_text or "").lower().strip()
                 chamou_atendente = (
                     button_id == "chamar_atendente"
+                    or mensagem_lower == "chamar_atendente"
+                    or "chamar_atendente" in mensagem_lower
                     or mensagem_lower == "chamar atendente"
                     or "chamar atendente" in mensagem_lower
                     or "chamar um atendente" in mensagem_lower
@@ -2584,7 +2586,13 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
             elif "pedir pelo link" in mensagem_lower or mensagem_lower == "pedir pelo link":
                 botao_clicado = "pedir_link"
                 logger.info(f"✅ Botão detectado via texto: {botao_clicado}")
-            elif "chamar atendente" in mensagem_lower or mensagem_lower == "chamar atendente" or "chamar um atendente" in mensagem_lower:
+            elif (
+                mensagem_lower == "chamar_atendente"
+                or "chamar_atendente" in mensagem_lower
+                or "chamar atendente" in mensagem_lower
+                or mensagem_lower == "chamar atendente"
+                or "chamar um atendente" in mensagem_lower
+            ):
                 botao_clicado = "chamar_atendente"
                 logger.info(f"✅ Botão detectado via texto: {botao_clicado}")
             
@@ -2698,6 +2706,8 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
             mensagem_lower_check = (message_text or "").lower().strip()
             is_chamar_atendente = (
                 button_id == "chamar_atendente"
+                or mensagem_lower_check == "chamar_atendente"
+                or "chamar_atendente" in mensagem_lower_check
                 or mensagem_lower_check == "chamar atendente"
                 or mensagem_lower_check == "chamar um atendente"
                 or "chamar atendente" in mensagem_lower_check
