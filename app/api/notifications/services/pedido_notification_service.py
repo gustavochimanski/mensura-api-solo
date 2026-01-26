@@ -48,10 +48,33 @@ class PedidoNotificationService:
                 valor_total=valor_total,
                 event_metadata=channel_metadata
             )
-            
-            # Nota: Notificação kanban foi movida para quando o pedido é marcado como impresso
-            # Não enviamos mais notificação kanban na criação do pedido
-            logger.debug(f"[NOTIFY] Evento de novo pedido criado: {pedido_id} para empresa {empresa_id}")
+
+            # Gestor App: precisa ser avisado no checkout (pedido criado).
+            # Envia em tempo real apenas para conexões na rota "/gestor-app".
+            tipo_entrega = (channel_metadata or {}).get("tipo_entrega")
+            numero_pedido = (channel_metadata or {}).get("numero_pedido")
+            status_atual = (channel_metadata or {}).get("status")
+
+            payload: Dict[str, Any] = {"pedido_id": pedido_id}
+            if tipo_entrega is not None:
+                payload["tipo_entrega"] = tipo_entrega
+            if numero_pedido is not None:
+                payload["numero_pedido"] = numero_pedido
+            if status_atual is not None:
+                payload["status"] = status_atual
+
+            sent_event_count = await websocket_manager.emit_event(
+                event=WSEvents.PEDIDO_CRIADO,
+                scope="empresa",
+                empresa_id=empresa_id,
+                payload=payload,
+                required_route="/gestor-app",
+            )
+
+            logger.info(
+                f"[NOTIFY] Pedido criado emitido via WS (gestor-app): "
+                f"empresa_id={empresa_id}, pedido_id={pedido_id}, sent={sent_event_count}"
+            )
             
             return event_id
             

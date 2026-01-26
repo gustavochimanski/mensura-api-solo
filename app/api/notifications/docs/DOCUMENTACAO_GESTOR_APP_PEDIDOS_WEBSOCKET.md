@@ -81,7 +81,7 @@ Para o Gestor App, “**pedido novo chegou**” deve disparar **assim que o pedi
 }
 ```
 
-**Observação importante:** o `payload` é propositalmente “mínimo”. O frontend deve tratar o evento como **sinal** e fazer **refetch** via HTTP (próximca seção).
+**Observação importante:** o `payload` é propositalmente “mínimo”. O frontend deve tratar o evento como **sinal** e fazer **refetch** via HTTP (próxima seção).
 
 ### 4.2) Formato legado (compat): `type="notification"` (opcional)
 
