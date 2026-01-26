@@ -8,7 +8,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 from typing import List, Dict, Optional
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 # Schema do chatbot
 CHATBOT_SCHEMA = "chatbot"
@@ -25,7 +25,40 @@ def get_auto_pause_until() -> datetime:
     Returns:
         datetime: Data/hora até quando o bot deve ficar pausado (3 horas a partir de agora)
     """
-    return datetime.now() + timedelta(hours=AUTO_PAUSE_HOURS)
+    # IMPORTANT: usar UTC para evitar drift por timezone entre app/DB
+    return datetime.utcnow() + timedelta(hours=AUTO_PAUSE_HOURS)
+
+
+def _utcnow() -> datetime:
+    """Agora em UTC (naive), para comparar com TIMESTAMP sem timezone."""
+    return datetime.utcnow()
+
+
+def _is_infinite_timestamp(value) -> bool:
+    """Detecta o valor especial 'infinity' retornado pelo Postgres para TIMESTAMP."""
+    return isinstance(value, str) and value.lower() == "infinity"
+
+
+def _parse_timestamp(value) -> Optional[datetime]:
+    """Converte TIMESTAMP retornado do banco (datetime/str) para datetime (naive) quando possível."""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    if _is_infinite_timestamp(value):
+        return None
+    if isinstance(value, str):
+        try:
+            # cobre strings ISO com ou sem timezone
+            v = value.replace("Z", "+00:00")
+            dt = datetime.fromisoformat(v)
+            # normaliza para naive (assumimos que TIMESTAMP do banco representa UTC)
+            if dt.tzinfo:
+                return dt.astimezone(timezone.utc).replace(tzinfo=None)
+            return dt
+        except Exception:
+            return None
+    return None
 
 
 def init_database(db: Session):
@@ -144,11 +177,13 @@ def init_database(db: Session):
             CREATE TABLE IF NOT EXISTS {CHATBOT_SCHEMA}.bot_status (
                 id SERIAL PRIMARY KEY,
                 phone_number VARCHAR(50) UNIQUE NOT NULL,
-                is_active BOOLEAN DEFAULT TRUE,
                 paused_at TIMESTAMP,
                 paused_until TIMESTAMP,
                 paused_by VARCHAR(255),
                 empresa_id INTEGER,
+                -- Fonte de verdade para pausa: se NULL, bot está ativo; se no futuro, bot está pausado até a data;
+                -- se 'infinity', bot está pausado indefinidamente.
+                desativa_chatbot_em TIMESTAMP,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
@@ -182,6 +217,75 @@ def init_database(db: Session):
                     ALTER TABLE {CHATBOT_SCHEMA}.bot_status ADD COLUMN chatbot_destrava_em TIMESTAMP;
                 END IF;
             END $$;
+        """))
+
+        # Nova coluna oficial: desativa_chatbot_em (substitui is_active como fonte de verdade)
+        db.execute(text(f"""
+            DO $$ 
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns 
+                    WHERE table_schema = '{CHATBOT_SCHEMA}'
+                    AND table_name = 'bot_status'
+                    AND column_name = 'desativa_chatbot_em'
+                ) THEN
+                    ALTER TABLE {CHATBOT_SCHEMA}.bot_status ADD COLUMN desativa_chatbot_em TIMESTAMP;
+                END IF;
+            END $$;
+        """))
+
+        # Migra dados legados para desativa_chatbot_em:
+        # - Se existir chatbot_destrava_em, usa ele (pausa até data).
+        # - Se existir paused_until, usa ele (legado).
+        # - Se is_active=false e não houver data de destravar, marca como pausa indefinida ('infinity').
+        # - Se is_active=true, garante NULL (ativo).
+        db.execute(text(f"""
+            DO $$
+            BEGIN
+                -- Preenche a partir de chatbot_destrava_em quando existir
+                UPDATE {CHATBOT_SCHEMA}.bot_status
+                SET desativa_chatbot_em = chatbot_destrava_em
+                WHERE chatbot_destrava_em IS NOT NULL
+                  AND (desativa_chatbot_em IS NULL OR desativa_chatbot_em <> chatbot_destrava_em);
+
+                -- Preenche a partir de paused_until (legado) quando existir
+                UPDATE {CHATBOT_SCHEMA}.bot_status
+                SET desativa_chatbot_em = paused_until
+                WHERE paused_until IS NOT NULL
+                  AND desativa_chatbot_em IS NULL;
+
+                -- Se is_active existir, migra estados
+                IF EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_schema = '{CHATBOT_SCHEMA}'
+                      AND table_name = 'bot_status'
+                      AND column_name = 'is_active'
+                ) THEN
+                    -- Pausa indefinida: is_active=false e sem data
+                    UPDATE {CHATBOT_SCHEMA}.bot_status
+                    SET desativa_chatbot_em = 'infinity'::timestamp
+                    WHERE is_active = false
+                      AND desativa_chatbot_em IS NULL;
+
+                    -- Ativo: is_active=true força NULL
+                    UPDATE {CHATBOT_SCHEMA}.bot_status
+                    SET desativa_chatbot_em = NULL
+                    WHERE is_active = true
+                      AND desativa_chatbot_em IS NOT NULL
+                      AND desativa_chatbot_em <> 'infinity'::timestamp;
+
+                    -- Remove coluna antiga (ativado)
+                    ALTER TABLE {CHATBOT_SCHEMA}.bot_status DROP COLUMN is_active;
+                END IF;
+            END $$;
+        """))
+
+        # Mantém chatbot_destrava_em sincronizado para compatibilidade (response legado)
+        db.execute(text(f"""
+            UPDATE {CHATBOT_SCHEMA}.bot_status
+            SET chatbot_destrava_em = desativa_chatbot_em
+            WHERE desativa_chatbot_em IS NOT NULL
+              AND (chatbot_destrava_em IS NULL OR chatbot_destrava_em <> desativa_chatbot_em);
         """))
         # Migra paused_until -> chatbot_destrava_em para registros existentes
         db.execute(text(f"""
@@ -740,21 +844,30 @@ def get_bot_status(db: Session, phone_number: str) -> Optional[Dict]:
     """Verifica se o bot está ativo para um número específico"""
     try:
         query = text(f"""
-            SELECT id, phone_number, is_active, paused_at, paused_by, empresa_id, chatbot_destrava_em
+            SELECT id, phone_number, paused_at, paused_by, empresa_id, desativa_chatbot_em
             FROM {CHATBOT_SCHEMA}.bot_status
             WHERE phone_number = :phone
         """)
         result = db.execute(query, {"phone": phone_number}).fetchone()
 
         if result:
+            desativa_em_dt = _parse_timestamp(result[5])
+            # Regra: ativo se NULL (ou timestamp expirado)
+            now = _utcnow()
+            is_active = True
+            if _is_infinite_timestamp(result[5]):
+                is_active = False
+            elif desativa_em_dt and now < desativa_em_dt:
+                is_active = False
             return {
                 "id": result[0],
                 "phone_number": result[1],
-                "is_active": result[2],
-                "paused_at": result[3].isoformat() if result[3] else None,
-                "paused_by": result[4],
-                "empresa_id": result[5],
-                "chatbot_destrava_em": result[6].isoformat() if result[6] else None,
+                "is_active": is_active,
+                "paused_at": result[2].isoformat() if result[2] else None,
+                "paused_by": result[3],
+                "empresa_id": result[4],
+                # Mantém chave legada no response
+                "chatbot_destrava_em": desativa_em_dt.isoformat() if desativa_em_dt else None,
             }
         # Se não existe registro, o bot está ativo por padrão
         return {"phone_number": phone_number, "is_active": True}
@@ -766,7 +879,7 @@ def get_bot_status(db: Session, phone_number: str) -> Optional[Dict]:
 def is_bot_active_for_phone(db: Session, phone_number: str) -> bool:
     """Retorna True se o bot está ativo para o número, False se pausado.
     Também verifica o status global - se o bot global estiver pausado, retorna False.
-    Verifica se chatbot_destrava_em já passou - se sim, considera ativo novamente.
+    Verifica se desativa_chatbot_em já passou - se sim, considera ativo novamente.
     """
     # Primeiro verifica o status global
     global_status = get_global_bot_status(db)
@@ -774,27 +887,37 @@ def is_bot_active_for_phone(db: Session, phone_number: str) -> bool:
         return False  # Bot global pausado, nenhum número responde
 
     # Depois verifica o status individual
-    status = get_bot_status(db, phone_number)
-    is_active = status.get("is_active", True)
+    try:
+        row = db.execute(
+            text(f"""
+                SELECT empresa_id, desativa_chatbot_em
+                FROM {CHATBOT_SCHEMA}.bot_status
+                WHERE phone_number = :phone
+            """),
+            {"phone": phone_number},
+        ).fetchone()
+        if not row:
+            return True
 
-    # Se está pausado, verifica se chatbot_destrava_em já passou
-    if not is_active:
-        destrava_em = status.get("chatbot_destrava_em")
-        if destrava_em:
-            try:
-                if isinstance(destrava_em, str):
-                    destrava_em_clean = destrava_em.replace("Z", "+00:00")
-                    destrava_em_dt = datetime.fromisoformat(destrava_em_clean)
-                else:
-                    destrava_em_dt = destrava_em
-                now = datetime.now(destrava_em_dt.tzinfo) if destrava_em_dt.tzinfo else datetime.now()
-                if now >= destrava_em_dt:
-                    set_bot_status(db, phone_number, True, paused_by=None, empresa_id=status.get("empresa_id"))
-                    return True
-            except Exception as e:
-                print(f"Erro ao verificar chatbot_destrava_em: {e}")
+        empresa_id = row[0]
+        desativa_raw = row[1]
+        if _is_infinite_timestamp(desativa_raw):
+            return False
 
-    return is_active
+        desativa_dt = _parse_timestamp(desativa_raw)
+        if not desativa_dt:
+            return True
+
+        now = _utcnow()
+        if now >= desativa_dt:
+            # Já expirou: despausa limpando a coluna
+            set_bot_status(db, phone_number, True, paused_by=None, empresa_id=empresa_id)
+            return True
+        return False
+    except Exception as e:
+        print(f"Erro ao verificar desativa_chatbot_em: {e}")
+        # fallback conservador: se der erro, assume ativo para não travar atendimento
+        return True
 
 
 def set_bot_status(
@@ -808,8 +931,8 @@ def set_bot_status(
     """Define o status do bot para um número específico.
 
     Args:
-        chatbot_destrava_em: Data/hora em que o chatbot destrava (volta a responder).
-            Quando pausamos com duração, é now + 3h. None = pausado indefinidamente.
+        chatbot_destrava_em: Compat (legado). Internamente usamos desativa_chatbot_em como fonte de verdade.
+            Quando pausamos com duração, é now + 3h. None = pausado indefinidamente ('infinity').
     """
     try:
         existing = db.execute(
@@ -820,28 +943,39 @@ def set_bot_status(
         if existing:
             query = text(f"""
                 UPDATE {CHATBOT_SCHEMA}.bot_status
-                SET is_active = :is_active,
-                    paused_at = CASE WHEN :is_active = false THEN CURRENT_TIMESTAMP ELSE NULL END,
+                SET paused_at = CASE WHEN :is_active = false THEN CURRENT_TIMESTAMP ELSE NULL END,
                     paused_by = CASE WHEN :is_active = false THEN :paused_by ELSE NULL END,
-                    chatbot_destrava_em = CASE WHEN :is_active = false AND :chatbot_destrava_em IS NOT NULL
-                        THEN CAST(:chatbot_destrava_em AS TIMESTAMP) ELSE NULL END,
+                    desativa_chatbot_em = CASE
+                        WHEN :is_active = false AND :chatbot_destrava_em IS NOT NULL THEN CAST(:chatbot_destrava_em AS TIMESTAMP)
+                        WHEN :is_active = false AND :chatbot_destrava_em IS NULL THEN 'infinity'::timestamp
+                        ELSE NULL
+                    END,
+                    chatbot_destrava_em = CASE
+                        WHEN :is_active = false AND :chatbot_destrava_em IS NOT NULL THEN CAST(:chatbot_destrava_em AS TIMESTAMP)
+                        WHEN :is_active = false AND :chatbot_destrava_em IS NULL THEN NULL
+                        ELSE NULL
+                    END,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE phone_number = :phone
-                RETURNING id, phone_number, is_active, paused_at, paused_by, chatbot_destrava_em
+                RETURNING id, phone_number, paused_at, paused_by, empresa_id, desativa_chatbot_em
             """)
         else:
             query = text(f"""
-                INSERT INTO {CHATBOT_SCHEMA}.bot_status (phone_number, is_active, paused_at, paused_by, empresa_id, chatbot_destrava_em)
+                INSERT INTO {CHATBOT_SCHEMA}.bot_status (phone_number, paused_at, paused_by, empresa_id, desativa_chatbot_em, chatbot_destrava_em)
                 VALUES (
                     :phone,
-                    :is_active,
                     CASE WHEN :is_active = false THEN CURRENT_TIMESTAMP ELSE NULL END,
                     CASE WHEN :is_active = false THEN :paused_by ELSE NULL END,
                     :empresa_id,
+                    CASE
+                        WHEN :is_active = false AND :chatbot_destrava_em IS NOT NULL THEN CAST(:chatbot_destrava_em AS TIMESTAMP)
+                        WHEN :is_active = false AND :chatbot_destrava_em IS NULL THEN 'infinity'::timestamp
+                        ELSE NULL
+                    END,
                     CASE WHEN :is_active = false AND :chatbot_destrava_em IS NOT NULL
                         THEN CAST(:chatbot_destrava_em AS TIMESTAMP) ELSE NULL END
                 )
-                RETURNING id, phone_number, is_active, paused_at, paused_by, chatbot_destrava_em
+                RETURNING id, phone_number, paused_at, paused_by, empresa_id, desativa_chatbot_em
             """)
 
         result = db.execute(
@@ -856,14 +990,22 @@ def set_bot_status(
         ).fetchone()
         db.commit()
 
+        desativa_dt = _parse_timestamp(result[5])
+        computed_is_active = True
+        if _is_infinite_timestamp(result[5]):
+            computed_is_active = False
+        elif desativa_dt and _utcnow() < desativa_dt:
+            computed_is_active = False
+
         return {
             "success": True,
             "id": result[0],
             "phone_number": result[1],
-            "is_active": result[2],
-            "paused_at": result[3].isoformat() if result[3] else None,
-            "paused_by": result[4],
-            "chatbot_destrava_em": result[5].isoformat() if result[5] else None,
+            # Mantém resposta no formato antigo
+            "is_active": computed_is_active,
+            "paused_at": result[2].isoformat() if result[2] else None,
+            "paused_by": result[3],
+            "chatbot_destrava_em": desativa_dt.isoformat() if desativa_dt else None,
         }
     except Exception as e:
         db.rollback()
@@ -876,7 +1018,7 @@ def get_all_bot_statuses(db: Session, empresa_id: int = None) -> List[Dict]:
     try:
         if empresa_id:
             query = text(f"""
-                SELECT id, phone_number, is_active, paused_at, paused_by, empresa_id, chatbot_destrava_em
+                SELECT id, phone_number, paused_at, paused_by, empresa_id, desativa_chatbot_em
                 FROM {CHATBOT_SCHEMA}.bot_status
                 WHERE empresa_id = :empresa_id
                 ORDER BY updated_at DESC
@@ -884,7 +1026,7 @@ def get_all_bot_statuses(db: Session, empresa_id: int = None) -> List[Dict]:
             result = db.execute(query, {"empresa_id": empresa_id})
         else:
             query = text(f"""
-                SELECT id, phone_number, is_active, paused_at, paused_by, empresa_id, chatbot_destrava_em
+                SELECT id, phone_number, paused_at, paused_by, empresa_id, desativa_chatbot_em
                 FROM {CHATBOT_SCHEMA}.bot_status
                 ORDER BY updated_at DESC
             """)
@@ -894,11 +1036,12 @@ def get_all_bot_statuses(db: Session, empresa_id: int = None) -> List[Dict]:
             {
                 "id": row[0],
                 "phone_number": row[1],
-                "is_active": row[2],
-                "paused_at": row[3].isoformat() if row[3] else None,
-                "paused_by": row[4],
-                "empresa_id": row[5],
-                "chatbot_destrava_em": row[6].isoformat() if row[6] else None,
+                "is_active": (False if _is_infinite_timestamp(row[5]) else (False if (_parse_timestamp(row[5]) and _utcnow() < _parse_timestamp(row[5])) else True)),
+                "paused_at": row[2].isoformat() if row[2] else None,
+                "paused_by": row[3],
+                "empresa_id": row[4],
+                # Mantém chave legada no response
+                "chatbot_destrava_em": (_parse_timestamp(row[5]).isoformat() if _parse_timestamp(row[5]) else None),
             }
             for row in result.fetchall()
         ]
@@ -915,20 +1058,26 @@ def get_global_bot_status(db: Session, empresa_id: int = None) -> Dict:
     """Verifica se o bot global está ativo (afeta todos os números)"""
     try:
         query = text(f"""
-            SELECT id, phone_number, is_active, paused_at, paused_by, empresa_id
+            SELECT id, phone_number, paused_at, paused_by, empresa_id, desativa_chatbot_em
             FROM {CHATBOT_SCHEMA}.bot_status
             WHERE phone_number = :phone
         """)
         result = db.execute(query, {"phone": GLOBAL_BOT_PHONE}).fetchone()
 
         if result:
+            desativa_raw = result[5]
+            if _is_infinite_timestamp(desativa_raw):
+                is_active = False
+            else:
+                desativa_dt = _parse_timestamp(desativa_raw)
+                is_active = True if not desativa_dt else (_utcnow() >= desativa_dt)
             return {
                 "id": result[0],
                 "phone_number": result[1],
-                "is_active": result[2],
-                "paused_at": result[3].isoformat() if result[3] else None,
-                "paused_by": result[4],
-                "empresa_id": result[5]
+                "is_active": is_active,
+                "paused_at": result[2].isoformat() if result[2] else None,
+                "paused_by": result[3],
+                "empresa_id": result[4]
             }
         # Se não existe registro, o bot global está ativo por padrão
         return {"phone_number": GLOBAL_BOT_PHONE, "is_active": True}
@@ -950,25 +1099,28 @@ def set_global_bot_status(db: Session, is_active: bool, paused_by: str = None, e
             # Atualiza
             query = text(f"""
                 UPDATE {CHATBOT_SCHEMA}.bot_status
-                SET is_active = :is_active,
-                    paused_at = CASE WHEN :is_active = false THEN CURRENT_TIMESTAMP ELSE NULL END,
+                SET paused_at = CASE WHEN :is_active = false THEN CURRENT_TIMESTAMP ELSE NULL END,
                     paused_by = CASE WHEN :is_active = false THEN :paused_by ELSE NULL END,
+                    desativa_chatbot_em = CASE
+                        WHEN :is_active = false THEN 'infinity'::timestamp
+                        ELSE NULL
+                    END,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE phone_number = :phone
-                RETURNING id, phone_number, is_active, paused_at, paused_by
+                RETURNING id, phone_number, paused_at, paused_by, empresa_id, desativa_chatbot_em
             """)
         else:
             # Insere novo
             query = text(f"""
-                INSERT INTO {CHATBOT_SCHEMA}.bot_status (phone_number, is_active, paused_at, paused_by, empresa_id)
+                INSERT INTO {CHATBOT_SCHEMA}.bot_status (phone_number, paused_at, paused_by, empresa_id, desativa_chatbot_em)
                 VALUES (
                     :phone,
-                    :is_active,
                     CASE WHEN :is_active = false THEN CURRENT_TIMESTAMP ELSE NULL END,
                     CASE WHEN :is_active = false THEN :paused_by ELSE NULL END,
-                    :empresa_id
+                    :empresa_id,
+                    CASE WHEN :is_active = false THEN 'infinity'::timestamp ELSE NULL END
                 )
-                RETURNING id, phone_number, is_active, paused_at, paused_by
+                RETURNING id, phone_number, paused_at, paused_by, empresa_id, desativa_chatbot_em
             """)
 
         result = db.execute(query, {
@@ -979,13 +1131,14 @@ def set_global_bot_status(db: Session, is_active: bool, paused_by: str = None, e
         }).fetchone()
         db.commit()
 
+        computed_is_active = not _is_infinite_timestamp(result[5])
         return {
             "success": True,
             "id": result[0],
             "phone_number": result[1],
-            "is_active": result[2],
-            "paused_at": result[3].isoformat() if result[3] else None,
-            "paused_by": result[4]
+            "is_active": computed_is_active,
+            "paused_at": result[2].isoformat() if result[2] else None,
+            "paused_by": result[3]
         }
     except Exception as e:
         db.rollback()
