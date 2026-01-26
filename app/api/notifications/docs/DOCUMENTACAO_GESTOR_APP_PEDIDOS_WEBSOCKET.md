@@ -54,50 +54,50 @@ Ou seja: funciona tanto com `"/gestor-app"` quanto com algo como `"/app/gestor-a
 
 ---
 
-## 4) Qual evento indica “pedido novo” hoje
+## 4) Qual evento indica “pedido novo” no Gestor App (checkout)
 
 ### 4.1) Evento recomendado (contrato novo): `type="event"`
 
-Hoje, o aviso que equivale a “**pedido novo chegou no kanban**” é emitido quando o pedido fica **impresso**:
+Para o Gestor App, “**pedido novo chegou**” deve disparar **assim que o pedido é criado no checkout**:
 
-- **Evento**: `pedido.v1.impresso`
+- **Evento**: `pedido.v1.criado`
 - **Scope**: `empresa`
-- **Filtragem por rota**: historicamente é enviado para `/pedidos`; para o Gestor App receber, a implementação do backend deve usar `required_route="/gestor-app"` (mesmo mecanismo).
+- **Filtragem por rota**: para o Gestor App receber, o backend deve emitir com `required_route="/gestor-app"`.
 
 **Exemplo (envelope padrão):**
 
 ```json
 {
   "type": "event",
-  "event": "pedido.v1.impresso",
+  "event": "pedido.v1.criado",
   "scope": "empresa",
   "payload": {
     "pedido_id": "123",
     "tipo_entrega": "DELIVERY",
     "numero_pedido": "000123",
-    "status": "I"
+    "status": "P"
   },
   "timestamp": "2026-01-24T12:00:00.000000"
 }
 ```
 
-**Observação importante:** o `payload` é propositalmente “mínimo”. O frontend deve tratar o evento como **sinal** e fazer **refetch** via HTTP (próxima seção).
+**Observação importante:** o `payload` é propositalmente “mínimo”. O frontend deve tratar o evento como **sinal** e fazer **refetch** via HTTP (próximca seção).
 
-### 4.2) Formato legado (compat): `type="notification"` (kanban)
+### 4.2) Formato legado (compat): `type="notification"` (opcional)
 
-Além do evento padronizado, o backend também pode enviar uma mensagem compatível:
+Além do evento padronizado, o backend **pode** enviar uma mensagem compatível (se vocês quiserem manter o padrão de “toast” legado):
 
 ```json
 {
   "type": "notification",
-  "notification_type": "kanban",
-  "title": "Novo Pedido Recebido",
-  "message": "Pedido #123 impresso - Valor: R$ 10.00",
+  "notification_type": "pedido_criado",
+  "title": "Novo Pedido",
+  "message": "Pedido #000123 recebido",
   "data": {
     "pedido_id": "123",
     "tipo_entrega": "DELIVERY",
     "numero_pedido": "000123",
-    "status": "I",
+    "status": "P",
     "timestamp": "2026-01-24T12:00:00.000000"
   },
   "empresa_id": "1",
@@ -113,7 +113,7 @@ Além do evento padronizado, o backend também pode enviar uma mensagem compatí
 
 ### Estratégia recomendada: **Refetch (revalidar cache)**
 
-Ao receber `pedido.v1.impresso` (ou `notification_type="kanban"`), o Gestor App deve:
+Ao receber `pedido.v1.criado` (e/ou `notification_type="pedido_criado"`), o Gestor App deve:
 
 - Invalidar cache local (React Query / Redux / Zustand / etc.)
 - Refazer as requisições HTTP necessárias para atualizar a UI
@@ -142,9 +142,9 @@ type WSEventMessage =
 
 function isPedidoNovo(msg: WSEventMessage) {
   // Contrato novo
-  if (msg.type === "event" && msg.event === "pedido.v1.impresso") return true;
+  if (msg.type === "event" && msg.event === "pedido.v1.criado") return true;
   // Compat/legado
-  if (msg.type === "notification" && msg.notification_type === "kanban") return true;
+  if (msg.type === "notification" && msg.notification_type === "pedido_criado") return true;
   return false;
 }
 
@@ -190,16 +190,25 @@ export function setupGestorAppPedidosWS(params: {
 - [ ] Enviar token via `Sec-WebSocket-Protocol` (browser)
 - [ ] Enviar `set_route` com `"/gestor-app"` ao abrir e a cada mudança de rota
 - [ ] Rodar `ping` a cada 30s
-- [ ] Ao receber `pedido.v1.impresso` (ou `notification_type="kanban"`), **refetch** do kanban/lista
+- [ ] Ao receber `pedido.v1.criado` (e/ou `notification_type="pedido_criado"`), **refetch** do kanban/lista
 - [ ] Implementar reconexão automática (backoff) + fallback (polling) se necessário
 
 ---
 
-## 8) Observação de contrato (se quiser “pedido novo” na criação, e não no “impresso”)
+## 8) Status do backend (necessário para o Gestor App)
 
-O contrato central (`WSEvents`) possui `pedido.v1.criado`, mas **o backend atualmente não emite notificação em tempo real na criação** (o fluxo de “kanban” foi movido para quando o pedido é marcado como impresso).
+O contrato central (`WSEvents`) possui `pedido.v1.criado`, porém **hoje o backend não envia esse evento em tempo real no WebSocket na criação** (o “kanban” atual está amarrado ao momento em que o pedido é marcado como impresso).
 
-Se o Gestor App precisar notificar “assim que criou” (antes do impresso), será necessário **implementar a emissão** do evento/notification no backend (ex.: `WSEvents.PEDIDO_CRIADO` com `required_route="/gestor-app"`).
+Para o Gestor App funcionar como descrito aqui, é necessário implementar no backend:
+
+- Emitir `event: "pedido.v1.criado"` (`WSEvents.PEDIDO_CRIADO`)
+- `scope: "empresa"`
+- `payload`: pelo menos `{ "pedido_id": "<id>" }` (opcionalmente incluir `tipo_entrega`, `numero_pedido`, `status`)
+- Filtrar para o Gestor App com `required_route="/gestor-app"`
+
+Opcional (legado):
+
+- Enviar também uma `type="notification"` com `notification_type="pedido_criado"` (apenas se houver consumidores legados que precisam de toast/mensagem pronta)
 
 ---
 
