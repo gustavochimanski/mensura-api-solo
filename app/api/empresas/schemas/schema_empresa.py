@@ -27,11 +27,28 @@ class HorarioDia(BaseModel):
     dia_semana: int = Field(..., ge=0, le=6, description="0=domingo, 1=segunda, ..., 6=sábado")
     intervalos: List[HorarioIntervalo] = Field(default_factory=list)
 
+class EmpresaEndereco(BaseModel):
+    cep: Optional[str] = None
+    logradouro: Optional[str] = None
+    numero: Optional[str] = None
+    complemento: Optional[str] = None
+    bairro: Optional[str] = None
+    cidade: Optional[str] = None
+    estado: Optional[str] = None
+    ponto_referencia: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    completo: Optional[str] = Field(
+        default=None,
+        description="Endereço formatado em uma única string (quando disponível).",
+    )
+
 class EmpresaBase(BaseModel):
     nome: str
     cnpj: Optional[str] = None
     slug: str
     logo: Optional[str] = None
+    telefone: Optional[str] = None
     timezone: Optional[str] = "America/Sao_Paulo"
     horarios_funcionamento: Optional[List[HorarioDia]] = None
     cardapio_link: Optional[str] = None
@@ -58,6 +75,7 @@ class EmpresaUpdate(BaseModel):
     nome: Optional[str] = None
     cnpj: Optional[str] = None
     slug: Optional[str] = None
+    telefone: Optional[str] = None
     aceita_pedido_automatico: Optional[bool] = None
     timezone: Optional[str] = None
     horarios_funcionamento: Optional[List[HorarioDia]] = None
@@ -79,6 +97,10 @@ class EmpresaUpdate(BaseModel):
 
 class EmpresaResponse(EmpresaBase):
     id: int
+    endereco: Optional[EmpresaEndereco] = Field(
+        default=None,
+        description="Objeto com o endereço da empresa (também disponível em campos separados).",
+    )
 
     model_config = ConfigDict(from_attributes=True)
 

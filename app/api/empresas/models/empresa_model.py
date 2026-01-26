@@ -88,3 +88,41 @@ class EmpresaModel(Base):
 
     model_config = ConfigDict(from_attributes=True)
 
+    @property
+    def endereco(self) -> dict:
+        """
+        Retorna um objeto de endereço para facilitar consumo no frontend/Swagger.
+        Mantém também os campos separados (logradouro, bairro, etc.).
+        """
+        partes = []
+        if self.logradouro:
+            if self.numero:
+                partes.append(f"{self.logradouro}, {self.numero}")
+            else:
+                partes.append(f"{self.logradouro}")
+        if self.bairro:
+            partes.append(f"{self.bairro}")
+        if self.cidade:
+            if self.estado:
+                partes.append(f"{self.cidade}/{self.estado}")
+            else:
+                partes.append(f"{self.cidade}")
+        if self.cep:
+            partes.append(f"CEP {self.cep}")
+
+        completo = " - ".join([p for p in partes if p]) if partes else None
+
+        return {
+            "cep": self.cep,
+            "logradouro": self.logradouro,
+            "numero": self.numero,
+            "complemento": self.complemento,
+            "bairro": self.bairro,
+            "cidade": self.cidade,
+            "estado": self.estado,
+            "ponto_referencia": self.ponto_referencia,
+            "latitude": float(self.latitude) if self.latitude is not None else None,
+            "longitude": float(self.longitude) if self.longitude is not None else None,
+            "completo": completo,
+        }
+

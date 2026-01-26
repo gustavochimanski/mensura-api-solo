@@ -116,6 +116,7 @@ class EmpresaService:
             nome=data.nome,
             cnpj=data.cnpj,
             slug=slug,
+            telefone=data.telefone,
             timezone=data.timezone or "America/Sao_Paulo",
             horarios_funcionamento=data.horarios_funcionamento,
             cardapio_tema=data.cardapio_tema,

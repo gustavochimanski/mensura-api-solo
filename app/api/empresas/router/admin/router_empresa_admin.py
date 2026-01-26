@@ -72,6 +72,7 @@ def list_cardapio_links(db: Session = Depends(get_db)):
 async def create_empresa(
     nome: str = Form(...),
     cnpj: str | None = Form(None),
+    telefone: str | None = Form(None),
     endereco: str = Form(...),  # JSON string com campos de endereço
     horarios_funcionamento: str | None = Form(None),  # JSON string com horários
     timezone: str | None = Form("America/Sao_Paulo"),
@@ -100,6 +101,7 @@ async def create_empresa(
         nome=nome,
         cnpj=cnpj,
         slug=slug,
+        telefone=telefone,
         timezone=timezone,
         horarios_funcionamento=horarios_data,
         cardapio_link=cardapio_link,
@@ -115,6 +117,7 @@ async def update_empresa(
     id: int,
     nome: str | None = Form(None),
     cnpj: str | None = Form(None),
+    telefone: str | None = Form(None),
     endereco: str | None = Form(None),  # JSON string com campos de endereço
     horarios_funcionamento: str | None = Form(None),  # JSON string com horários
     timezone: str | None = Form(None),
@@ -146,6 +149,7 @@ async def update_empresa(
         nome=nome,
         cnpj=cnpj,
         slug=slug,
+        telefone=telefone,
         timezone=timezone,
         horarios_funcionamento=horarios_payload,
         cardapio_link=cardapio_link,
