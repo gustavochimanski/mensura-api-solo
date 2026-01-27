@@ -177,7 +177,7 @@ GET /api/cardapio/admin/vitrines/search
 - `q` (string, opcional): Busca por título ou slug
 - `cod_categoria` (integer, opcional): Filtra por categoria vinculada
 - `is_home` (boolean, opcional): Filtra por vitrines da home
-- `limit` (integer, opcional): Limite de resultados (default: 30, min: 1, max: 100)
+- `limit` (integer, opcional): Limite de resultados (default: 30, min: 1, max: 200)
 - `offset` (integer, opcional): Offset para paginação (default: 0, min: 0)
 
 **Exemplo:**

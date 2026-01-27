@@ -50,7 +50,7 @@ def search_vitrines(
     cod_categoria: Optional[int] = Query(None, description="Filtra por categoria vinculada"),
     is_home: Optional[bool] = Query(None, description="Filtra por destaque da home"),
     landingpage_true: bool = Query(False, description="Se true, opera em vitrines_landingpage_store (sem categoria)"),
-    limit: int = Query(30, ge=1, le=100),
+    limit: int = Query(30, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
 ):
