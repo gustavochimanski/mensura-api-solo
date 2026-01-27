@@ -10,7 +10,7 @@ from app.api.cardapio.services.dependencies import get_vitrine_contract
 
 router = APIRouter(prefix="/api/cardapio/public/home", tags=["Public - Delivery - Home"])
 
-@router.get("/home", response_model=HomeResponse)
+@router.get("", response_model=HomeResponse)
 def listar_home(
     empresa_id: int = Query(..., description="ID da empresa"),
     is_home: bool = Query(description="Filtra home: categorias raiz e/ou vitrines da home"),

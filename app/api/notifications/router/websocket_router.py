@@ -66,7 +66,9 @@ async def _close_ws_policy(websocket: WebSocket, reason: str) -> None:
                 pass  # Ignora se não conseguir enviar
         
         # Fecha a conexão
-        await websocket.close(code=1008, reason=reason.encode('utf-8')[:123])  # Limite de 123 bytes
+        # Starlette espera `reason` como string (não bytes).
+        # O RFC limita o "reason" do close frame; mantemos curto para evitar problemas.
+        await websocket.close(code=1008, reason=(reason or "")[:123])
     except Exception as e:
         logger.error(f"[WS_ROUTER] Erro ao fechar WebSocket: {e}")
         return
