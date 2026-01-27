@@ -340,11 +340,14 @@ def importar_models():
     from app.api.cadastros.models.model_cliente_dv import ClienteModel
     from app.api.cadastros.models.model_endereco_dv import EnderecoModel
     from app.api.cardapio.models.model_categoria_dv import CategoriaDeliveryModel
-    from app.api.cardapio.models.model_vitrine import VitrinesModel
+    from app.api.cardapio.models.model_vitrine import VitrinesModel, VitrinesLandingpageStoreModel
     # Importar tabelas de associação de vitrines
     from app.api.cadastros.models.association_tables import (
         VitrineComboLink,
-        VitrineReceitaLink
+        VitrineReceitaLink,
+        VitrineLandingProdutoLink,
+        VitrineLandingComboLink,
+        VitrineLandingReceitaLink,
     )
     from app.api.cadastros.models.model_entregador_dv import EntregadorDeliveryModel
     from app.api.cadastros.models.model_meio_pagamento import MeioPagamentoModel
@@ -375,7 +378,8 @@ def verificar_tabelas_cardapio():
             tabelas_cardapio = [
                 "transacoes_pagamento_dv",
                 "categoria_dv",
-                "vitrines_dv"
+                "vitrines_dv",
+                "vitrines_landingpage_store",
             ]
             
             tabelas_faltando = []
@@ -727,6 +731,9 @@ def criar_tabelas(postgis_disponivel: bool = True):
 
                         ALTER TABLE cardapio.vitrines_dv
                         ADD COLUMN IF NOT EXISTS empresa_id integer;
+
+                        ALTER TABLE cardapio.vitrines_landingpage_store
+                        ADD COLUMN IF NOT EXISTS empresa_id integer;
                         """
                     )
                 )
@@ -734,6 +741,7 @@ def criar_tabelas(postgis_disponivel: bool = True):
                 # Índices (performance)
                 conn.execute(text("CREATE INDEX IF NOT EXISTS idx_categoria_dv_empresa_id ON cardapio.categoria_dv (empresa_id)"))
                 conn.execute(text("CREATE INDEX IF NOT EXISTS idx_vitrines_dv_empresa_id ON cardapio.vitrines_dv (empresa_id)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS idx_vitrines_landingpage_store_empresa_id ON cardapio.vitrines_landingpage_store (empresa_id)"))
 
                 # FKs (idempotentes via DO)
                 conn.execute(
@@ -776,6 +784,30 @@ def criar_tabelas(postgis_disponivel: bool = True):
                           ) THEN
                             ALTER TABLE cardapio.vitrines_dv
                               ADD CONSTRAINT fk_vitrines_dv_empresa_id
+                              FOREIGN KEY (empresa_id)
+                              REFERENCES cadastros.empresas(id)
+                              ON DELETE CASCADE;
+                          END IF;
+                        END$$;
+                        """
+                    )
+                )
+                conn.execute(
+                    text(
+                        """
+                        DO $$
+                        BEGIN
+                          IF NOT EXISTS (
+                            SELECT 1
+                            FROM pg_constraint c
+                            JOIN pg_class t ON t.oid = c.conrelid
+                            JOIN pg_namespace n ON n.oid = t.relnamespace
+                            WHERE n.nspname = 'cardapio'
+                              AND t.relname = 'vitrines_landingpage_store'
+                              AND c.conname = 'fk_vitrines_landingpage_store_empresa_id'
+                          ) THEN
+                            ALTER TABLE cardapio.vitrines_landingpage_store
+                              ADD CONSTRAINT fk_vitrines_landingpage_store_empresa_id
                               FOREIGN KEY (empresa_id)
                               REFERENCES cadastros.empresas(id)
                               ON DELETE CASCADE;
@@ -832,7 +864,28 @@ def criar_tabelas(postgis_disponivel: bool = True):
                         """
                     )
                 )
-            logger.info("✅ Coluna/constraints empresa_id em cardapio.categoria_dv e cardapio.vitrines_dv criadas/verificadas com sucesso")
+                conn.execute(
+                    text(
+                        """
+                        DO $$
+                        BEGIN
+                          IF NOT EXISTS (
+                            SELECT 1
+                            FROM pg_constraint c
+                            JOIN pg_class t ON t.oid = c.conrelid
+                            JOIN pg_namespace n ON n.oid = t.relnamespace
+                            WHERE n.nspname = 'cardapio'
+                              AND t.relname = 'vitrines_landingpage_store'
+                              AND c.conname = 'uq_vitrine_landing_slug_empresa'
+                          ) THEN
+                            ALTER TABLE cardapio.vitrines_landingpage_store
+                              ADD CONSTRAINT uq_vitrine_landing_slug_empresa UNIQUE (empresa_id, slug);
+                          END IF;
+                        END$$;
+                        """
+                    )
+                )
+            logger.info("✅ Coluna/constraints empresa_id em cardapio.categoria_dv, cardapio.vitrines_dv e cardapio.vitrines_landingpage_store criadas/verificadas com sucesso")
         except Exception as e:
             logger.error(
                 "❌ Erro ao garantir empresa_id em categorias/vitrines do cardápio: %s",
@@ -896,6 +949,26 @@ def criar_tabelas(postgis_disponivel: bool = True):
         except Exception as e:
             logger.error(
                 "❌ Erro ao garantir colunas redireciona_home/redireciona_home_para em cadastros.empresas: %s",
+                e,
+                exc_info=True,
+            )
+
+        # Garante landingpage_store e remove redireciona_categoria em cadastros.parceiros_banner
+        try:
+            with engine.begin() as conn:
+                conn.execute(
+                    text(
+                        """
+                        ALTER TABLE cadastros.parceiros_banner
+                        ADD COLUMN IF NOT EXISTS landingpage_store boolean NOT NULL DEFAULT false,
+                        DROP COLUMN IF EXISTS redireciona_categoria
+                        """
+                    )
+                )
+            logger.info("✅ Coluna landingpage_store em cadastros.parceiros_banner criada/verificada e redireciona_categoria removida (se existia)")
+        except Exception as e:
+            logger.error(
+                "❌ Erro ao garantir coluna landingpage_store / remover redireciona_categoria em cadastros.parceiros_banner: %s",
                 e,
                 exc_info=True,
             )

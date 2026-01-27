@@ -6,7 +6,6 @@ from app.api.cadastros.repositories.repo_parceiros import ParceirosRepository
 
 from app.api.cadastros.schemas.schema_parceiros import ParceiroIn, BannerParceiroIn
 from app.api.cadastros.models.model_parceiros import BannerParceiroModel
-from app.api.cardapio.models.model_categoria_dv import CategoriaDeliveryModel
 
 class ParceirosService:
     def __init__(self, db: Session):
@@ -37,50 +36,22 @@ class ParceirosService:
         payload: dict,
         atual: Optional[BannerParceiroModel] = None,
     ) -> dict:
-        redireciona = payload.get(
-            "redireciona_categoria",
-            atual.redireciona_categoria if atual else None,
+        landingpage_store = payload.get(
+            "landingpage_store",
+            atual.landingpage_store if atual else None,
         )
 
-        if redireciona is None:
+        if landingpage_store is None:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                "O campo redireciona_categoria é obrigatório.",
+                "O campo landingpage_store é obrigatório.",
             )
 
-        payload["redireciona_categoria"] = redireciona
+        payload["landingpage_store"] = bool(landingpage_store)
 
-        if redireciona:
-            categoria_id = payload.get(
-                "categoria_id",
-                atual.categoria_id if atual else None,
-            )
-            if categoria_id is None:
-                raise HTTPException(
-                    status.HTTP_400_BAD_REQUEST,
-                    "Informe a categoria quando redireciona_categoria for verdadeiro.",
-                )
-            categoria = (
-                self.repo.db.query(CategoriaDeliveryModel)
-                .filter_by(id=categoria_id)
-                .first()
-            )
-            if not categoria:
-                raise HTTPException(
-                    status.HTTP_404_NOT_FOUND,
-                    "Categoria não encontrada.",
-                )
-            payload["categoria_id"] = categoria.id
-            payload["link_redirecionamento"] = categoria.href
-        else:
-            payload["categoria_id"] = None
-            if "link_redirecionamento" not in payload:
-                if atual and not atual.redireciona_categoria:
-                    payload["link_redirecionamento"] = atual.link_redirecionamento
-                else:
-                    payload["link_redirecionamento"] = None
-            elif not payload["link_redirecionamento"]:
-                payload["link_redirecionamento"] = None
+        # Normaliza link vazio -> None (quando vier via form/json)
+        if "link_redirecionamento" in payload and not payload["link_redirecionamento"]:
+            payload["link_redirecionamento"] = None
 
         return payload
 

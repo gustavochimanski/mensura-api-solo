@@ -42,6 +42,16 @@ Content-Type: application/json
 
 ## 📊 Estrutura de Dados
 
+### Parâmetro `landingpage_true` (Query)
+
+Todos os endpoints do CRUD admin de vitrines aceitam o parâmetro **query**:
+
+- `landingpage_true` (boolean, default: `false`)
+  - **false** (padrão): opera nas vitrines tradicionais (`cardapio.vitrines_dv`) e permite vínculo com categoria (`cod_categoria`).
+  - **true**: opera nas vitrines da landing page store (`cardapio.vitrines_landingpage_store`) e **não permite** vínculo com categoria.
+
+> Regra: quando `landingpage_true=true`, **não envie `cod_categoria`** (o backend retorna 400).
+
 ### CriarVitrineRequest (Criar Vitrine)
 
 ```typescript
@@ -108,6 +118,18 @@ Content-Type: application/json
 }
 ```
 
+**Criar vitrine para Landing Page Store (sem categoria):**
+```
+POST /api/cardapio/admin/vitrines?landingpage_true=true
+```
+
+```json
+{
+  "titulo": "Vitrine Landing",
+  "is_home": true
+}
+```
+
 **Exemplo - Sem categoria:**
 ```json
 {
@@ -163,6 +185,11 @@ GET /api/cardapio/admin/vitrines/search
 GET /api/cardapio/admin/vitrines/search?q=promo&is_home=true&limit=10
 ```
 
+**Exemplo (Landing Page Store):**
+```
+GET /api/cardapio/admin/vitrines/search?landingpage_true=true&q=promo&limit=10
+```
+
 **Response (200 OK):**
 ```json
 [
@@ -194,6 +221,11 @@ Atualiza informações de uma vitrine existente. **Este é o único momento onde
 **Endpoint:**
 ```
 PUT /api/cardapio/admin/vitrines/{vitrine_id}
+```
+
+**Atualizar vitrine (Landing Page Store):**
+```
+PUT /api/cardapio/admin/vitrines/{vitrine_id}?landingpage_true=true&empresa_id=1
 ```
 
 **Path Parameters:**
@@ -281,6 +313,11 @@ Remove uma vitrine do sistema.
 **Endpoint:**
 ```
 DELETE /api/cardapio/admin/vitrines/{vitrine_id}
+```
+
+**Deletar vitrine (Landing Page Store):**
+```
+DELETE /api/cardapio/admin/vitrines/{vitrine_id}?landingpage_true=true&empresa_id=1
 ```
 
 **Path Parameters:**

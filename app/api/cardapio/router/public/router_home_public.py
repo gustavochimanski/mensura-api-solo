@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends, Query, HTTPException, status  # <-- add HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from app.api.cardapio.schemas.schema_home import HomeResponse, VitrineComProdutosResponse, CategoryPageResponse  # <-- add CategoryPageResponse
+from app.api.cardapio.schemas.schema_home import HomeResponse, VitrineComProdutosResponse, CategoryPageResponse, LandingPageStoreResponse  # <-- add CategoryPageResponse
 from app.database.db_connection import get_db
 from app.utils.logger import logger
 from app.api.cardapio.services.service_home import HomeService
@@ -55,3 +55,15 @@ def get_categoria_page(
         return HomeService(db, vitrine_contract=vitrine_contract).categoria_page(empresa_id, slug)
     except ValueError as e:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(e))
+
+
+# 🆕 Landing page store (sem categorias)
+@router.get("/landingpage-store", response_model=LandingPageStoreResponse)
+def get_landingpage_store(
+    empresa_id: int = Query(...),
+    is_home: bool = Query(False, description="Se true, filtra apenas vitrines marcadas como home"),
+    db: Session = Depends(get_db),
+    vitrine_contract = Depends(get_vitrine_contract),
+):
+    logger.info(f"[Home] Landingpage store - empresa_id={empresa_id} is_home={is_home}")
+    return HomeService(db, vitrine_contract=vitrine_contract).landingpage_store(empresa_id, is_home=is_home)

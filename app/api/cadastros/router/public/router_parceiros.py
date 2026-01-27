@@ -63,7 +63,7 @@ def get_parceiro_completo(parceiro_id: int, db: Session = Depends(get_db)):
                 imagem=b.imagem,
                 categoria_id=b.categoria_id,
                  link_redirecionamento=b.link_redirecionamento,
-                 redireciona_categoria=b.redireciona_categoria,
+                 landingpage_store=b.landingpage_store,
                 href_destino=b.href_destino
             ) for b in parceiro.banners
         ]

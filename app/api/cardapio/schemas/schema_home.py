@@ -82,6 +82,14 @@ class HomeResponse(BaseModel):
     vitrines: List[VitrineComProdutosResponse]
     model_config = ConfigDict(from_attributes=True)
 
+
+class LandingPageStoreResponse(BaseModel):
+    """
+    Resposta para montar a landing page da store (sem categorias).
+    """
+    vitrines: List[VitrineComProdutosResponse]
+    model_config = ConfigDict(from_attributes=True)
+
 class CategoryPageResponse(BaseModel):
     categoria: CategoriaMiniSchema
     subcategorias: List[CategoriaMiniSchema]

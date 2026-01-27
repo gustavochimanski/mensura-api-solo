@@ -131,3 +131,97 @@ class VitrineReceitaLink(Base):
     posicao = Column(Integer, nullable=False, default=0)
     destaque = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+# ==========================================================
+# ========== LANDINGPAGE STORE (sem categoria) =============
+# ==========================================================
+
+# Classe de associação VitrineLanding-Produto
+class VitrineLandingProdutoLink(Base):
+    """
+    Liga Produto (cod_barras) a vitrines de landingpage_store (N:N) com ordenação.
+    """
+    __tablename__ = "vitrine_landing_produto"
+    __table_args__ = (
+        PrimaryKeyConstraint("vitrine_id", "cod_barras", name="pk_vitrine_landing_produto"),
+        ForeignKeyConstraint(
+            ["cod_barras"],
+            ["catalogo.produtos.cod_barras"],
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["vitrine_id"],
+            ["cardapio.vitrines_landingpage_store.id"],
+            ondelete="CASCADE",
+        ),
+        Index("idx_vitlandprod_vitrine", "vitrine_id"),
+        Index("idx_vitlandprod_cod_barras", "cod_barras"),
+        {"schema": "cardapio"},
+    )
+
+    vitrine_id = Column(Integer, nullable=False)
+    cod_barras = Column(String, nullable=False)
+    posicao = Column(Integer, nullable=False, default=0)
+    destaque = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+# Classe de associação VitrineLanding-Combo
+class VitrineLandingComboLink(Base):
+    """
+    Liga Combos a vitrines de landingpage_store (N:N) com ordenação.
+    """
+    __tablename__ = "vitrine_landing_combo"
+    __table_args__ = (
+        PrimaryKeyConstraint("vitrine_id", "combo_id", name="pk_vitrine_landing_combo"),
+        ForeignKeyConstraint(
+            ["combo_id"],
+            ["catalogo.combos.id"],
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["vitrine_id"],
+            ["cardapio.vitrines_landingpage_store.id"],
+            ondelete="CASCADE",
+        ),
+        Index("idx_vitlandcombo_vitrine", "vitrine_id"),
+        Index("idx_vitlandcombo_combo", "combo_id"),
+        {"schema": "cardapio"},
+    )
+
+    vitrine_id = Column(Integer, nullable=False)
+    combo_id = Column(Integer, nullable=False)
+    posicao = Column(Integer, nullable=False, default=0)
+    destaque = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+# Classe de associação VitrineLanding-Receita
+class VitrineLandingReceitaLink(Base):
+    """
+    Liga Receitas a vitrines de landingpage_store (N:N) com ordenação.
+    """
+    __tablename__ = "vitrine_landing_receita"
+    __table_args__ = (
+        PrimaryKeyConstraint("vitrine_id", "receita_id", name="pk_vitrine_landing_receita"),
+        ForeignKeyConstraint(
+            ["receita_id"],
+            ["catalogo.receitas.id"],
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["vitrine_id"],
+            ["cardapio.vitrines_landingpage_store.id"],
+            ondelete="CASCADE",
+        ),
+        Index("idx_vitlandreceita_vitrine", "vitrine_id"),
+        Index("idx_vitlandreceita_receita", "receita_id"),
+        {"schema": "cardapio"},
+    )
+
+    vitrine_id = Column(Integer, nullable=False)
+    receita_id = Column(Integer, nullable=False)
+    posicao = Column(Integer, nullable=False, default=0)
+    destaque = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

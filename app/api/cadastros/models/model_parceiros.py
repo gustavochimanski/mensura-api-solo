@@ -35,7 +35,7 @@ class BannerParceiroModel(Base):
     imagem = Column(String(255), nullable=True)
     ativo = Column(Boolean, nullable=False, default=False)
     tipo_banner = Column(String(1), nullable=False)  # "V" ou "H"
-    redireciona_categoria = Column(Boolean, nullable=False, default=True)
+    landingpage_store = Column(Boolean, nullable=False, default=False)
     link_redirecionamento = Column(String(255), nullable=True)
 
     @property
@@ -43,7 +43,4 @@ class BannerParceiroModel(Base):
         # Se houver link explícito, usa-o
         if self.link_redirecionamento:
             return self.link_redirecionamento
-        # Caso contrário, se configurado para redirecionar para categoria, monta com slug
-        if self.redireciona_categoria and self.categoria:
-            return self.categoria.href
         return "#"

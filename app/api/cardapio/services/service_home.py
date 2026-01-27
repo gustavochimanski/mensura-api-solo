@@ -6,6 +6,7 @@ from app.api.cardapio.schemas.schema_home import (
     HomeResponse,
     VitrineComProdutosResponse,
     CategoryPageResponse,
+    LandingPageStoreResponse,
     CategoriaMiniSchema,
     ProdutoEmpMiniDTO,
     ProdutoMiniDTO,
@@ -76,8 +77,9 @@ class HomeService:
         # Pega a primeira categoria da vitrine (se houver)
         cod_categoria = None
         href_categoria = None
-        if vitrine.categorias:
-            primeira_cat = vitrine.categorias[0]
+        categorias = getattr(vitrine, "categorias", None)
+        if categorias:
+            primeira_cat = categorias[0]
             cod_categoria = primeira_cat.id
             href_categoria = primeira_cat.href
         
@@ -310,4 +312,42 @@ class HomeService:
             vitrines=vitrines_response,
             vitrines_filho=vitrines_filho,
         )
+
+    def landingpage_store(self, empresa_id: int, is_home: Optional[bool] = None) -> LandingPageStoreResponse:
+        """
+        Monta os dados da landing page da store (vitrines sem categoria).
+        """
+        vitrines = self.repo.listar_vitrines_landingpage_store(
+            empresa_id=empresa_id,
+            is_home=is_home if is_home is not None else False,
+        )
+        vitrine_ids = [v.id for v in vitrines]
+
+        produtos_por_vitrine = self.repo.listar_produtos_por_vitrine_ids_landingpage_store(
+            empresa_id=empresa_id,
+            vitrine_ids=vitrine_ids,
+        )
+
+        combos_por_vitrine = {}
+        receitas_por_vitrine = {}
+        if self.vitrine_contract and vitrine_ids:
+            combos_por_vitrine = self.vitrine_contract.listar_combos_por_vitrine_ids_landingpage_store(
+                empresa_id=empresa_id,
+                vitrine_ids=vitrine_ids,
+            )
+            receitas_por_vitrine = self.vitrine_contract.listar_receitas_por_vitrine_ids_landingpage_store(
+                empresa_id=empresa_id,
+                vitrine_ids=vitrine_ids,
+            )
+
+        vitrines_response = []
+        for vitrine in vitrines:
+            produtos = produtos_por_vitrine.get(vitrine.id, [])
+            combos = combos_por_vitrine.get(vitrine.id, [])
+            receitas = receitas_por_vitrine.get(vitrine.id, [])
+            vitrines_response.append(
+                self._montar_vitrine_response(vitrine, produtos, combos=combos, receitas=receitas)
+            )
+
+        return LandingPageStoreResponse(vitrines=vitrines_response)
 

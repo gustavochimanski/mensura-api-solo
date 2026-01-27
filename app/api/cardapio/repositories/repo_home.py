@@ -3,7 +3,7 @@ from typing import Dict, List, Tuple, Optional
 from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy import and_
 
-from app.api.cardapio.models.model_vitrine import VitrinesModel
+from app.api.cardapio.models.model_vitrine import VitrinesModel, VitrinesLandingpageStoreModel
 from app.api.cardapio.models.model_categoria_dv import CategoriaDeliveryModel
 from app.api.catalogo.models.model_produto_emp import ProdutoEmpModel
 from app.api.catalogo.models.model_produto import ProdutoModel
@@ -12,6 +12,9 @@ from app.api.cadastros.models.association_tables import (
     VitrineProdutoLink,
     VitrineComboLink,
     VitrineReceitaLink,
+    VitrineLandingProdutoLink,
+    VitrineLandingComboLink,
+    VitrineLandingReceitaLink,
 )
 from app.api.catalogo.models.model_combo import ComboModel
 
@@ -49,6 +52,17 @@ class HomeRepository:
         )
         if is_home:
             q = q.filter(VitrinesModel.tipo_exibicao == "P")
+        return q.all()
+
+    # ----------------- Vitrines Landingpage Store (sem categoria) -----------------
+    def listar_vitrines_landingpage_store(self, *, empresa_id: int, is_home: bool) -> List[VitrinesLandingpageStoreModel]:
+        q = (
+            self.db.query(VitrinesLandingpageStoreModel)
+            .filter(VitrinesLandingpageStoreModel.empresa_id == empresa_id)
+            .order_by(VitrinesLandingpageStoreModel.ordem)
+        )
+        if is_home:
+            q = q.filter(VitrinesLandingpageStoreModel.tipo_exibicao == "P")
         return q.all()
 
     # ----------------- Vitrines por categoria -----------------
@@ -109,6 +123,48 @@ class HomeRepository:
                 joinedload(ProdutoEmpModel.produto).selectinload(ProdutoModel.complementos)
             )
             .order_by(VitrineProdutoLink.posicao)
+            .all()
+        )
+
+        out: Dict[int, List[ProdutoEmpModel]] = {}
+        for vit_id, prod_emp in rows:
+            out.setdefault(vit_id, []).append(prod_emp)
+        return out
+
+    # ----------------- Produtos por vitrine landing (lista de IDs) -----------------
+    def listar_produtos_por_vitrine_ids_landingpage_store(
+        self, empresa_id: int, vitrine_ids: List[int]
+    ) -> Dict[int, List[ProdutoEmpModel]]:
+        if not vitrine_ids:
+            return {}
+
+        rows: List[Tuple[int, ProdutoEmpModel]] = (
+            self.db.query(VitrineLandingProdutoLink.vitrine_id, ProdutoEmpModel)
+            .join(
+                VitrinesLandingpageStoreModel,
+                VitrinesLandingpageStoreModel.id == VitrineLandingProdutoLink.vitrine_id,
+            )
+            .join(
+                ProdutoModel,
+                ProdutoModel.cod_barras == VitrineLandingProdutoLink.cod_barras,
+            )
+            .join(
+                ProdutoEmpModel,
+                and_(
+                    ProdutoEmpModel.cod_barras == ProdutoModel.cod_barras,
+                    ProdutoEmpModel.empresa_id == empresa_id,
+                ),
+            )
+            .filter(
+                VitrineLandingProdutoLink.vitrine_id.in_(vitrine_ids),
+                VitrinesLandingpageStoreModel.empresa_id == empresa_id,
+                ProdutoEmpModel.disponivel.is_(True),
+                ProdutoEmpModel.preco_venda > 0,
+            )
+            .options(
+                joinedload(ProdutoEmpModel.produto).selectinload(ProdutoModel.complementos)
+            )
+            .order_by(VitrineLandingProdutoLink.posicao)
             .all()
         )
 
@@ -260,6 +316,39 @@ class HomeRepository:
             out.setdefault(vit_id, []).append(combo)
         return out
 
+    # ----------------- Combos por vitrine landing (lista de IDs) -----------------
+    def listar_combos_por_vitrine_ids_landingpage_store(
+        self, empresa_id: int, vitrine_ids: List[int]
+    ) -> Dict[int, List[ComboModel]]:
+        if not vitrine_ids:
+            return {}
+
+        rows: List[Tuple[int, ComboModel]] = (
+            self.db.query(VitrineLandingComboLink.vitrine_id, ComboModel)
+            .join(
+                VitrinesLandingpageStoreModel,
+                VitrinesLandingpageStoreModel.id == VitrineLandingComboLink.vitrine_id,
+            )
+            .join(
+                ComboModel,
+                ComboModel.id == VitrineLandingComboLink.combo_id,
+            )
+            .filter(
+                VitrineLandingComboLink.vitrine_id.in_(vitrine_ids),
+                VitrinesLandingpageStoreModel.empresa_id == empresa_id,
+                ComboModel.empresa_id == empresa_id,
+                ComboModel.ativo.is_(True),
+            )
+            .options(joinedload(ComboModel.itens))
+            .order_by(VitrineLandingComboLink.posicao)
+            .all()
+        )
+
+        out: Dict[int, List[ComboModel]] = {}
+        for vit_id, combo in rows:
+            out.setdefault(vit_id, []).append(combo)
+        return out
+
     # ----------------- Receitas por vitrine (lista de IDs) -----------------
     def listar_receitas_por_vitrine_ids(
         self, empresa_id: int, vitrine_ids: List[int]
@@ -292,6 +381,41 @@ class HomeRepository:
                 ReceitaModel.ativo.is_(True),
             )
             .order_by(VitrineReceitaLink.posicao)
+            .all()
+        )
+
+        out: Dict[int, List[ReceitaModel]] = {}
+        for vit_id, receita in rows:
+            out.setdefault(vit_id, []).append(receita)
+        return out
+
+    # ----------------- Receitas por vitrine landing (lista de IDs) -----------------
+    def listar_receitas_por_vitrine_ids_landingpage_store(
+        self, empresa_id: int, vitrine_ids: List[int]
+    ) -> Dict[int, List]:
+        from app.api.catalogo.models.model_receita import ReceitaModel
+
+        if not vitrine_ids:
+            return {}
+
+        rows: List[Tuple[int, ReceitaModel]] = (
+            self.db.query(VitrineLandingReceitaLink.vitrine_id, ReceitaModel)
+            .join(
+                VitrinesLandingpageStoreModel,
+                VitrinesLandingpageStoreModel.id == VitrineLandingReceitaLink.vitrine_id,
+            )
+            .join(
+                ReceitaModel,
+                ReceitaModel.id == VitrineLandingReceitaLink.receita_id,
+            )
+            .filter(
+                VitrineLandingReceitaLink.vitrine_id.in_(vitrine_ids),
+                VitrinesLandingpageStoreModel.empresa_id == empresa_id,
+                ReceitaModel.empresa_id == empresa_id,
+                ReceitaModel.disponivel.is_(True),
+                ReceitaModel.ativo.is_(True),
+            )
+            .order_by(VitrineLandingReceitaLink.posicao)
             .all()
         )
 

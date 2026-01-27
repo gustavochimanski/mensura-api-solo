@@ -72,3 +72,18 @@ class IVitrineContract(ABC):
         """
         raise NotImplementedError
 
+    # ---------------- Landingpage Store (sem categoria) ----------------
+    @abstractmethod
+    def listar_combos_por_vitrine_ids_landingpage_store(
+        self, empresa_id: int, vitrine_ids: List[int]
+    ) -> dict[int, List[ComboVitrineDTO]]:
+        """Combos vinculados às vitrines de landingpage_store."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def listar_receitas_por_vitrine_ids_landingpage_store(
+        self, empresa_id: int, vitrine_ids: List[int]
+    ) -> dict[int, List[ReceitaVitrineDTO]]:
+        """Receitas vinculadas às vitrines de landingpage_store."""
+        raise NotImplementedError
+

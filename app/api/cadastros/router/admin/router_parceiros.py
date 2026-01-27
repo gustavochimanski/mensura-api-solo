@@ -63,7 +63,7 @@ def create_banner(
     parceiro_id: int = Form(...),
     categoria_id: int | None = Form(None),
     link_redirecionamento: str | None = Form(None),
-    redireciona_categoria: bool = Form(...),
+    landingpage_store: bool = Form(...),
     imagem: UploadFile | None = File(None),
     db: Session = Depends(get_db)
 ):
@@ -82,7 +82,7 @@ def create_banner(
         parceiro_id=parceiro_id,
         categoria_id=categoria_id,
         link_redirecionamento=link_redirecionamento,
-        redireciona_categoria=redireciona_categoria,
+        landingpage_store=landingpage_store,
         imagem=imagem_url
     )
     return ParceirosService(db).create_banner(body)
