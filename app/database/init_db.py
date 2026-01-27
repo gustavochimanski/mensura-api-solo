@@ -702,15 +702,15 @@ def criar_tabelas(postgis_disponivel: bool = True):
                 if not _table_exists(conn, "cadastros", "empresas"):
                     logger.warning("⚠️ Tabela cadastros.empresas não existe; pulando ajustes de timezone/horarios_funcionamento.")
                 else:
-                conn.execute(
-                    text(
-                        """
-                        ALTER TABLE cadastros.empresas
-                        ADD COLUMN IF NOT EXISTS timezone varchar(64) DEFAULT 'America/Sao_Paulo',
-                        ADD COLUMN IF NOT EXISTS horarios_funcionamento jsonb
-                        """
+                    conn.execute(
+                        text(
+                            """
+                            ALTER TABLE cadastros.empresas
+                            ADD COLUMN IF NOT EXISTS timezone varchar(64) DEFAULT 'America/Sao_Paulo',
+                            ADD COLUMN IF NOT EXISTS horarios_funcionamento jsonb
+                            """
+                        )
                     )
-                )
             logger.info("✅ Colunas timezone/horarios_funcionamento em cadastros.empresas criadas/verificadas com sucesso")
         except Exception as e:
             logger.error(
