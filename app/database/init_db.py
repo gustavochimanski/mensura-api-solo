@@ -715,6 +715,131 @@ def criar_tabelas(postgis_disponivel: bool = True):
         else:
             logger.info("✅ Todas as tabelas do schema cardapio já existem")
 
+        # Garante multi-tenant (empresa_id) em categorias/vitrines do cardápio
+        try:
+            with engine.begin() as conn:
+                # Colunas
+                conn.execute(
+                    text(
+                        """
+                        ALTER TABLE cardapio.categoria_dv
+                        ADD COLUMN IF NOT EXISTS empresa_id integer;
+
+                        ALTER TABLE cardapio.vitrines_dv
+                        ADD COLUMN IF NOT EXISTS empresa_id integer;
+                        """
+                    )
+                )
+
+                # Índices (performance)
+                conn.execute(text("CREATE INDEX IF NOT EXISTS idx_categoria_dv_empresa_id ON cardapio.categoria_dv (empresa_id)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS idx_vitrines_dv_empresa_id ON cardapio.vitrines_dv (empresa_id)"))
+
+                # FKs (idempotentes via DO)
+                conn.execute(
+                    text(
+                        """
+                        DO $$
+                        BEGIN
+                          IF NOT EXISTS (
+                            SELECT 1
+                            FROM pg_constraint c
+                            JOIN pg_class t ON t.oid = c.conrelid
+                            JOIN pg_namespace n ON n.oid = t.relnamespace
+                            WHERE n.nspname = 'cardapio'
+                              AND t.relname = 'categoria_dv'
+                              AND c.conname = 'fk_categoria_dv_empresa_id'
+                          ) THEN
+                            ALTER TABLE cardapio.categoria_dv
+                              ADD CONSTRAINT fk_categoria_dv_empresa_id
+                              FOREIGN KEY (empresa_id)
+                              REFERENCES cadastros.empresas(id)
+                              ON DELETE CASCADE;
+                          END IF;
+                        END$$;
+                        """
+                    )
+                )
+                conn.execute(
+                    text(
+                        """
+                        DO $$
+                        BEGIN
+                          IF NOT EXISTS (
+                            SELECT 1
+                            FROM pg_constraint c
+                            JOIN pg_class t ON t.oid = c.conrelid
+                            JOIN pg_namespace n ON n.oid = t.relnamespace
+                            WHERE n.nspname = 'cardapio'
+                              AND t.relname = 'vitrines_dv'
+                              AND c.conname = 'fk_vitrines_dv_empresa_id'
+                          ) THEN
+                            ALTER TABLE cardapio.vitrines_dv
+                              ADD CONSTRAINT fk_vitrines_dv_empresa_id
+                              FOREIGN KEY (empresa_id)
+                              REFERENCES cadastros.empresas(id)
+                              ON DELETE CASCADE;
+                          END IF;
+                        END$$;
+                        """
+                    )
+                )
+
+                # Unicidade de slug por empresa (remove unicidade global se existir)
+                conn.execute(text("ALTER TABLE cardapio.vitrines_dv DROP CONSTRAINT IF EXISTS uq_vitrine_slug_global"))
+                conn.execute(text("ALTER TABLE cardapio.categoria_dv DROP CONSTRAINT IF EXISTS categoria_dv_slug_key"))
+                conn.execute(text("ALTER TABLE cardapio.categoria_dv DROP CONSTRAINT IF EXISTS uq_categoria_slug_global"))
+
+                conn.execute(
+                    text(
+                        """
+                        DO $$
+                        BEGIN
+                          IF NOT EXISTS (
+                            SELECT 1
+                            FROM pg_constraint c
+                            JOIN pg_class t ON t.oid = c.conrelid
+                            JOIN pg_namespace n ON n.oid = t.relnamespace
+                            WHERE n.nspname = 'cardapio'
+                              AND t.relname = 'vitrines_dv'
+                              AND c.conname = 'uq_vitrine_slug_empresa'
+                          ) THEN
+                            ALTER TABLE cardapio.vitrines_dv
+                              ADD CONSTRAINT uq_vitrine_slug_empresa UNIQUE (empresa_id, slug);
+                          END IF;
+                        END$$;
+                        """
+                    )
+                )
+                conn.execute(
+                    text(
+                        """
+                        DO $$
+                        BEGIN
+                          IF NOT EXISTS (
+                            SELECT 1
+                            FROM pg_constraint c
+                            JOIN pg_class t ON t.oid = c.conrelid
+                            JOIN pg_namespace n ON n.oid = t.relnamespace
+                            WHERE n.nspname = 'cardapio'
+                              AND t.relname = 'categoria_dv'
+                              AND c.conname = 'uq_categoria_slug_empresa'
+                          ) THEN
+                            ALTER TABLE cardapio.categoria_dv
+                              ADD CONSTRAINT uq_categoria_slug_empresa UNIQUE (empresa_id, slug);
+                          END IF;
+                        END$$;
+                        """
+                    )
+                )
+            logger.info("✅ Coluna/constraints empresa_id em cardapio.categoria_dv e cardapio.vitrines_dv criadas/verificadas com sucesso")
+        except Exception as e:
+            logger.error(
+                "❌ Erro ao garantir empresa_id em categorias/vitrines do cardápio: %s",
+                e,
+                exc_info=True,
+            )
+
         # Garante colunas de mínimo/máximo de itens em complementos
         try:
             with engine.begin() as conn:

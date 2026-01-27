@@ -15,7 +15,7 @@ class CategoriaDeliveryRepository:
         self.db = db
 
     # -------- CRUD --------
-    def create(self, data: CategoriaDeliveryIn) -> CategoriaDeliveryModel:
+    def create(self, data: CategoriaDeliveryIn, *, empresa_id: int) -> CategoriaDeliveryModel:
         from app.utils.logger import logger
         
         logger.info(f"[Categorias] Criando categoria no repositório - descricao={data.descricao}, imagem={data.imagem}, slug={data.slug}")
@@ -24,7 +24,14 @@ class CategoriaDeliveryRepository:
         slug_value = make_slug(data.descricao)
         logger.info(f"[Categorias] Slug gerado: {slug_value}")
 
-        existe = self.db.query(CategoriaDeliveryModel).filter_by(slug=slug_value).first()
+        existe = (
+            self.db.query(CategoriaDeliveryModel)
+            .filter(
+                CategoriaDeliveryModel.empresa_id == empresa_id,
+                CategoriaDeliveryModel.slug == slug_value,
+            )
+            .first()
+        )
         if existe:
             logger.warning(f"[Categorias] Slug já existe: {slug_value}")
             raise HTTPException(
@@ -36,12 +43,16 @@ class CategoriaDeliveryRepository:
         if posicao is None:
             max_posicao = (
                 self.db.query(func.max(CategoriaDeliveryModel.posicao))
-                .filter(CategoriaDeliveryModel.parent_id == data.parent_id)
+                .filter(
+                    CategoriaDeliveryModel.empresa_id == empresa_id,
+                    CategoriaDeliveryModel.parent_id == data.parent_id,
+                )
                 .scalar()
             )
             posicao = (max_posicao or 0) + 1
 
         nova = CategoriaDeliveryModel(
+            empresa_id=empresa_id,
             descricao=data.descricao,
             slug=slug_value,
             parent_id=data.parent_id,
@@ -62,26 +73,32 @@ class CategoriaDeliveryRepository:
             self.db.rollback()
             raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Erro ao criar categoria")
 
-    def list_by_parent(self, parent_id: Optional[int]) -> List[CategoriaDeliveryModel]:
+    def list_by_parent(self, parent_id: Optional[int], *, empresa_id: int) -> List[CategoriaDeliveryModel]:
         stmt = (
             select(CategoriaDeliveryModel)
-            .where(CategoriaDeliveryModel.parent_id == parent_id)
+            .where(
+                CategoriaDeliveryModel.empresa_id == empresa_id,
+                CategoriaDeliveryModel.parent_id == parent_id,
+            )
             .order_by(CategoriaDeliveryModel.posicao)
         )
         return self.db.execute(stmt).scalars().all()
 
-    def get_by_id(self, cat_id: int) -> CategoriaDeliveryModel:
-        cat = self.db.query(CategoriaDeliveryModel).filter_by(id=cat_id).first()
+    def get_by_id(self, cat_id: int, *, empresa_id: Optional[int] = None) -> CategoriaDeliveryModel:
+        qy = self.db.query(CategoriaDeliveryModel).filter_by(id=cat_id)
+        if empresa_id is not None:
+            qy = qy.filter(CategoriaDeliveryModel.empresa_id == empresa_id)
+        cat = qy.first()
         if not cat:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Categoria não encontrada")
         return cat
 
-    def update(self, cat_id: int, update_data: dict) -> CategoriaDeliveryModel:
+    def update(self, cat_id: int, update_data: dict, *, empresa_id: int) -> CategoriaDeliveryModel:
         from app.utils.logger import logger
         
         logger.info(f"[Categorias] Atualizando categoria - id={cat_id}, update_data={update_data}")
         
-        cat = self.get_by_id(cat_id)
+        cat = self.get_by_id(cat_id, empresa_id=empresa_id)
         if not cat:
             logger.error(f"[Categorias] Categoria não encontrada - id={cat_id}")
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Categoria não encontrada")
@@ -97,6 +114,7 @@ class CategoriaDeliveryRepository:
             existe = (
                 self.db.query(CategoriaDeliveryModel)
                 .filter(
+                    CategoriaDeliveryModel.empresa_id == empresa_id,
                     CategoriaDeliveryModel.slug == novo_slug,
                     CategoriaDeliveryModel.id != cat_id
                 )
@@ -138,17 +156,17 @@ class CategoriaDeliveryRepository:
         self.db.refresh(cat)
         return cat
 
-    def delete(self, cat_id: int) -> None:
-        cat = self.get_by_id(cat_id)
+    def delete(self, cat_id: int, *, empresa_id: int) -> None:
+        cat = self.get_by_id(cat_id, empresa_id=empresa_id)
         self.db.delete(cat)
         self.db.commit()
 
     # -------- Ordering --------
-    def move_right(self, cat_id: int) -> CategoriaDeliveryModel:
-        cat = self.get_by_id(cat_id)
+    def move_right(self, cat_id: int, *, empresa_id: int) -> CategoriaDeliveryModel:
+        cat = self.get_by_id(cat_id, empresa_id=empresa_id)
         irmas = (
             self.db.query(CategoriaDeliveryModel)
-            .filter_by(parent_id=cat.parent_id)
+            .filter_by(parent_id=cat.parent_id, empresa_id=empresa_id)
             .order_by(CategoriaDeliveryModel.posicao)
             .all()
         )
@@ -165,11 +183,11 @@ class CategoriaDeliveryRepository:
             self.db.rollback()
             raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Erro ao mover categoria para a direita")
 
-    def move_left(self, cat_id: int) -> CategoriaDeliveryModel:
-        cat = self.get_by_id(cat_id)
+    def move_left(self, cat_id: int, *, empresa_id: int) -> CategoriaDeliveryModel:
+        cat = self.get_by_id(cat_id, empresa_id=empresa_id)
         irmas = (
             self.db.query(CategoriaDeliveryModel)
-            .filter_by(parent_id=cat.parent_id)
+            .filter_by(parent_id=cat.parent_id, empresa_id=empresa_id)
             .order_by(CategoriaDeliveryModel.posicao)
             .all()
         )
@@ -188,7 +206,7 @@ class CategoriaDeliveryRepository:
 
     # -------- SEARCH GLOBAL --------
     def search_all(
-        self, q: Optional[str], limit: int = 30, offset: int = 0
+        self, q: Optional[str], *, empresa_id: int, limit: int = 30, offset: int = 0
     ) -> List[CategoriaDeliveryModel]:
         """
         Busca em TODAS as categorias (raiz e filhas), com filtro por descrição/slug.
@@ -198,6 +216,7 @@ class CategoriaDeliveryRepository:
         base = (
             self.db.query(CategoriaDeliveryModel)
             .options(joinedload(CategoriaDeliveryModel.parent))
+            .filter(CategoriaDeliveryModel.empresa_id == empresa_id)
             .order_by(
                 # raiz primeiro
                 CategoriaDeliveryModel.parent_id.isnot(None),

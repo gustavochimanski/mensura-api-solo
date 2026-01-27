@@ -134,14 +134,14 @@ class HomeService:
     def montar_home(self, empresa_id: int, is_home: Optional[bool] = None) -> HomeResponse:
         """Monta a resposta da home com categorias e vitrines"""
         # Busca categorias
-        categorias = self.repo.listar_categorias(is_home=is_home if is_home is not None else False)
+        categorias = self.repo.listar_categorias(empresa_id=empresa_id, is_home=is_home if is_home is not None else False)
         categorias_dto = [
             CategoriaMiniSchema.model_validate(cat, from_attributes=True)
             for cat in categorias
         ]
         
         # Busca vitrines
-        vitrines = self.repo.listar_vitrines(is_home=is_home if is_home is not None else False)
+        vitrines = self.repo.listar_vitrines(empresa_id=empresa_id, is_home=is_home if is_home is not None else False)
         vitrine_ids = [v.id for v in vitrines]
         
         # Busca produtos por vitrine
@@ -183,7 +183,7 @@ class HomeService:
     ) -> List[VitrineComProdutosResponse]:
         """Retorna vitrines com produtos de uma categoria específica"""
         # Busca vitrines da categoria
-        vitrines = self.repo.listar_vitrines_por_categoria(categoria_id=cod_categoria)
+        vitrines = self.repo.listar_vitrines_por_categoria(empresa_id=empresa_id, categoria_id=cod_categoria)
         vitrine_ids = [v.id for v in vitrines]
         
         # Busca produtos por vitrine (filtrados pela categoria)
@@ -217,9 +217,9 @@ class HomeService:
         
         return resultado
 
-    def resolve_categoria_id_por_slug(self, slug: str) -> int:
+    def resolve_categoria_id_por_slug(self, empresa_id: int, slug: str) -> int:
         """Resolve o ID de uma categoria pelo slug"""
-        categoria = self.repo.get_categoria_by_slug(slug)
+        categoria = self.repo.get_categoria_by_slug(empresa_id=empresa_id, slug=slug)
         if not categoria:
             raise ValueError(f"Categoria com slug '{slug}' não encontrada")
         return categoria.id
@@ -227,21 +227,21 @@ class HomeService:
     def categoria_page(self, empresa_id: int, slug: str) -> CategoryPageResponse:
         """Monta a página de uma categoria com subcategorias e vitrines"""
         # Busca categoria pelo slug
-        categoria = self.repo.get_categoria_by_slug(slug)
+        categoria = self.repo.get_categoria_by_slug(empresa_id=empresa_id, slug=slug)
         if not categoria:
             raise ValueError(f"Categoria com slug '{slug}' não encontrada")
         
         categoria_dto = CategoriaMiniSchema.model_validate(categoria, from_attributes=True)
         
         # Busca subcategorias
-        subcategorias = self.repo.listar_subcategorias(parent_id=categoria.id)
+        subcategorias = self.repo.listar_subcategorias(empresa_id=empresa_id, parent_id=categoria.id)
         subcategorias_dto = [
             CategoriaMiniSchema.model_validate(sub, from_attributes=True)
             for sub in subcategorias
         ]
         
         # Busca vitrines da categoria
-        vitrines = self.repo.listar_vitrines_por_categoria(categoria_id=categoria.id)
+        vitrines = self.repo.listar_vitrines_por_categoria(empresa_id=empresa_id, categoria_id=categoria.id)
         vitrine_ids = [v.id for v in vitrines]
         
         # Busca produtos por vitrine
@@ -277,7 +277,7 @@ class HomeService:
         if subcategorias:
             subcategoria_ids = [sub.id for sub in subcategorias]
             # Busca a primeira vitrine de cada subcategoria
-            vitrines_por_subcat = self.repo.listar_primeiras_vitrines_por_categorias(subcategoria_ids)
+            vitrines_por_subcat = self.repo.listar_primeiras_vitrines_por_categorias(empresa_id=empresa_id, categoria_ids=subcategoria_ids)
             
             for subcat_id, vitrine in vitrines_por_subcat.items():
                 produtos = self.repo.listar_vitrines_com_produtos_empresa_categoria(

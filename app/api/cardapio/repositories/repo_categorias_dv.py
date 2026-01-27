@@ -14,10 +14,11 @@ class CategoriaDeliveryDVRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def list_by_parent(self, parent_id: Optional[int]) -> List[CategoriaDeliveryModel]:
+    def list_by_parent(self, *, empresa_id: int, parent_id: Optional[int]) -> List[CategoriaDeliveryModel]:
         query = (
             self.db.query(CategoriaDeliveryModel)
             .options(joinedload(CategoriaDeliveryModel.parent))
+            .filter(CategoriaDeliveryModel.empresa_id == empresa_id)
             .order_by(CategoriaDeliveryModel.posicao)
         )
 
@@ -28,11 +29,14 @@ class CategoriaDeliveryDVRepository:
 
         return query.all()
 
-    def get_by_id(self, categoria_id: int) -> Optional[CategoriaDeliveryModel]:
+    def get_by_id(self, *, empresa_id: int, categoria_id: int) -> Optional[CategoriaDeliveryModel]:
         return (
             self.db.query(CategoriaDeliveryModel)
             .options(joinedload(CategoriaDeliveryModel.parent))
-            .filter(CategoriaDeliveryModel.id == categoria_id)
+            .filter(
+                CategoriaDeliveryModel.empresa_id == empresa_id,
+                CategoriaDeliveryModel.id == categoria_id,
+            )
             .first()
         )
 
@@ -40,6 +44,7 @@ class CategoriaDeliveryDVRepository:
         self,
         q: Optional[str],
         *,
+        empresa_id: int,
         limit: int = 30,
         offset: int = 0,
     ) -> List[CategoriaDeliveryModel]:
@@ -48,6 +53,7 @@ class CategoriaDeliveryDVRepository:
         query = (
             self.db.query(CategoriaDeliveryModel)
             .options(joinedload(CategoriaDeliveryModel.parent))
+            .filter(CategoriaDeliveryModel.empresa_id == empresa_id)
             .order_by(
                 CategoriaDeliveryModel.parent_id.isnot(None),
                 CategoriaDeliveryModel.posicao,

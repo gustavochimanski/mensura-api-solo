@@ -5587,10 +5587,9 @@ Sua única função é ajudar a ESCOLHER PRODUTOS. Nada mais!
             chatbot_db.set_bot_status(
                 self.db,
                 user_id,
-                is_active=False,
                 paused_by="sistema_nao_entendeu",
                 empresa_id=self.empresa_id,
-                chatbot_destrava_em=destrava_em,
+                desativa_chatbot_em=destrava_em,
             )
             # Commit da desativação
             self.db.commit()
@@ -6083,10 +6082,9 @@ Responda de forma natural e curta:"""
                     chatbot_db.set_bot_status(
                         db=self.db,
                         phone_number=user_id,
-                        is_active=False,
                         paused_by="cliente_chamou_atendente",
                         empresa_id=self.empresa_id,
-                        chatbot_destrava_em=destrava_em,
+                        desativa_chatbot_em=destrava_em,
                     )
                     print(
                         f"⏸️ Chatbot pausado para cliente {user_id} por {chatbot_db.AUTO_PAUSE_HOURS} horas "
@@ -7178,10 +7176,9 @@ Responda de forma natural e curta:"""
                     chatbot_db.set_bot_status(
                         db=self.db,
                         phone_number=user_id,
-                        is_active=False,
                         paused_by="cliente_chamou_atendente",
                         empresa_id=self.empresa_id,
-                        chatbot_destrava_em=destrava_em,
+                        desativa_chatbot_em=destrava_em,
                     )
                     print(f"⏸️ Chatbot pausado para cliente {user_id} por {chatbot_db.AUTO_PAUSE_HOURS} horas (chamou atendente via IA) - chatbot_destrava_em: {destrava_em}")
                 except Exception as e:

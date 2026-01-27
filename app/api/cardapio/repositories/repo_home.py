@@ -21,7 +21,7 @@ class HomeRepository:
         self.db = db
 
     # ----------------- Categorias -----------------
-    def listar_categorias(self, is_home: bool) -> List[CategoriaDeliveryModel]:
+    def listar_categorias(self, *, empresa_id: int, is_home: bool) -> List[CategoriaDeliveryModel]:
         """
         is_home=True  -> apenas categorias raiz (parent_id IS NULL)
         is_home=False -> todas as categorias
@@ -29,6 +29,7 @@ class HomeRepository:
         q = (
             self.db.query(CategoriaDeliveryModel)
             .options(joinedload(CategoriaDeliveryModel.parent))
+            .filter(CategoriaDeliveryModel.empresa_id == empresa_id)
             .order_by(CategoriaDeliveryModel.posicao)
         )
         if is_home:
@@ -36,13 +37,14 @@ class HomeRepository:
         return q.all()
 
     # ----------------- Vitrines (geral) -----------------
-    def listar_vitrines(self, is_home: bool) -> List[VitrinesModel]:
+    def listar_vitrines(self, *, empresa_id: int, is_home: bool) -> List[VitrinesModel]:
         q = (
             self.db.query(VitrinesModel)
             .options(
                 joinedload(VitrinesModel.categorias)
                 .joinedload(CategoriaDeliveryModel.parent)
             )
+            .filter(VitrinesModel.empresa_id == empresa_id)
             .order_by(VitrinesModel.ordem)
         )
         if is_home:
@@ -50,7 +52,7 @@ class HomeRepository:
         return q.all()
 
     # ----------------- Vitrines por categoria -----------------
-    def listar_vitrines_por_categoria(self, categoria_id: int) -> List[VitrinesModel]:
+    def listar_vitrines_por_categoria(self, *, empresa_id: int, categoria_id: int) -> List[VitrinesModel]:
         """
         Busca vitrines ligadas à categoria via tabela de associação.
         (Sem filtro de 'home')
@@ -59,6 +61,7 @@ class HomeRepository:
             self.db.query(VitrinesModel)
             .join(VitrineCategoriaLink, VitrineCategoriaLink.vitrine_id == VitrinesModel.id)
             .filter(VitrineCategoriaLink.categoria_id == categoria_id)
+            .filter(VitrinesModel.empresa_id == empresa_id)
             .options(
                 joinedload(VitrinesModel.categorias)
                 .joinedload(CategoriaDeliveryModel.parent)
@@ -82,6 +85,10 @@ class HomeRepository:
         rows: List[Tuple[int, ProdutoEmpModel]] = (
             self.db.query(VitrineProdutoLink.vitrine_id, ProdutoEmpModel)
             .join(
+                VitrinesModel,
+                VitrinesModel.id == VitrineProdutoLink.vitrine_id,
+            )
+            .join(
                 ProdutoModel,
                 ProdutoModel.cod_barras == VitrineProdutoLink.cod_barras,
             )
@@ -94,6 +101,7 @@ class HomeRepository:
             )
             .filter(
                 VitrineProdutoLink.vitrine_id.in_(vitrine_ids),
+                VitrinesModel.empresa_id == empresa_id,
                 ProdutoEmpModel.disponivel.is_(True),
                 ProdutoEmpModel.preco_venda > 0,
             )
@@ -121,6 +129,10 @@ class HomeRepository:
         rows: List[Tuple[int, ProdutoEmpModel]] = (
             self.db.query(VitrineProdutoLink.vitrine_id, ProdutoEmpModel)
             .join(
+                VitrinesModel,
+                VitrinesModel.id == VitrineProdutoLink.vitrine_id,
+            )
+            .join(
                 ProdutoModel,
                 ProdutoModel.cod_barras == VitrineProdutoLink.cod_barras,
             )
@@ -136,6 +148,7 @@ class HomeRepository:
                 VitrineCategoriaLink.vitrine_id == VitrineProdutoLink.vitrine_id,
             )
             .filter(
+                VitrinesModel.empresa_id == empresa_id,
                 ProdutoEmpModel.disponivel.is_(True),
                 ProdutoEmpModel.preco_venda > 0,
                 VitrineCategoriaLink.categoria_id == categoria_id,
@@ -154,26 +167,32 @@ class HomeRepository:
 
 
     # 🆕 Busca categoria por slug
-    def get_categoria_by_slug(self, slug: str) -> Optional[CategoriaDeliveryModel]:
+    def get_categoria_by_slug(self, *, empresa_id: int, slug: str) -> Optional[CategoriaDeliveryModel]:
         return (
             self.db.query(CategoriaDeliveryModel)
             .options(joinedload(CategoriaDeliveryModel.parent))
-            .filter(CategoriaDeliveryModel.slug == slug)
+            .filter(
+                CategoriaDeliveryModel.empresa_id == empresa_id,
+                CategoriaDeliveryModel.slug == slug,
+            )
             .first()
         )
 
     # 🆕 Lista subcategorias de um pai
-    def listar_subcategorias(self, parent_id: int) -> List[CategoriaDeliveryModel]:
+    def listar_subcategorias(self, *, empresa_id: int, parent_id: int) -> List[CategoriaDeliveryModel]:
         return (
             self.db.query(CategoriaDeliveryModel)
             .options(joinedload(CategoriaDeliveryModel.parent))
-            .filter(CategoriaDeliveryModel.parent_id == parent_id)
+            .filter(
+                CategoriaDeliveryModel.empresa_id == empresa_id,
+                CategoriaDeliveryModel.parent_id == parent_id,
+            )
             .order_by(CategoriaDeliveryModel.posicao)
             .all()
         )
 
     def listar_primeiras_vitrines_por_categorias(
-            self, categoria_ids: List[int]
+            self, *, empresa_id: int, categoria_ids: List[int]
     ) -> Dict[int, VitrinesModel]:
         """
         Retorna um dict {categoria_id: VitrinesModel} contendo a vitrine de menor `ordem`
@@ -188,7 +207,10 @@ class HomeRepository:
             vit = (
                 self.db.query(VitrinesModel)
                 .join(VitrineCategoriaLink, VitrineCategoriaLink.vitrine_id == VitrinesModel.id)
-                .filter(VitrineCategoriaLink.categoria_id == cat_id)
+                .filter(
+                    VitrineCategoriaLink.categoria_id == cat_id,
+                    VitrinesModel.empresa_id == empresa_id,
+                )
                 .options(
                     joinedload(VitrinesModel.categorias)
                     .joinedload(CategoriaDeliveryModel.parent)
@@ -215,11 +237,16 @@ class HomeRepository:
         rows: List[Tuple[int, ComboModel]] = (
             self.db.query(VitrineComboLink.vitrine_id, ComboModel)
             .join(
+                VitrinesModel,
+                VitrinesModel.id == VitrineComboLink.vitrine_id,
+            )
+            .join(
                 ComboModel,
                 ComboModel.id == VitrineComboLink.combo_id,
             )
             .filter(
                 VitrineComboLink.vitrine_id.in_(vitrine_ids),
+                VitrinesModel.empresa_id == empresa_id,
                 ComboModel.empresa_id == empresa_id,
                 ComboModel.ativo.is_(True),
             )
@@ -250,11 +277,16 @@ class HomeRepository:
         rows: List[Tuple[int, ReceitaModel]] = (
             self.db.query(VitrineReceitaLink.vitrine_id, ReceitaModel)
             .join(
+                VitrinesModel,
+                VitrinesModel.id == VitrineReceitaLink.vitrine_id,
+            )
+            .join(
                 ReceitaModel,
                 ReceitaModel.id == VitrineReceitaLink.receita_id,
             )
             .filter(
                 VitrineReceitaLink.vitrine_id.in_(vitrine_ids),
+                VitrinesModel.empresa_id == empresa_id,
                 ReceitaModel.empresa_id == empresa_id,
                 ReceitaModel.disponivel.is_(True),
                 ReceitaModel.ativo.is_(True),
@@ -278,6 +310,10 @@ class HomeRepository:
         rows: List[Tuple[int, ComboModel]] = (
             self.db.query(VitrineComboLink.vitrine_id, ComboModel)
             .join(
+                VitrinesModel,
+                VitrinesModel.id == VitrineComboLink.vitrine_id,
+            )
+            .join(
                 ComboModel,
                 ComboModel.id == VitrineComboLink.combo_id,
             )
@@ -286,6 +322,7 @@ class HomeRepository:
                 VitrineCategoriaLink.vitrine_id == VitrineComboLink.vitrine_id,
             )
             .filter(
+                VitrinesModel.empresa_id == empresa_id,
                 ComboModel.empresa_id == empresa_id,
                 ComboModel.ativo.is_(True),
                 VitrineCategoriaLink.categoria_id == categoria_id,
@@ -312,6 +349,10 @@ class HomeRepository:
         rows: List[Tuple[int, ReceitaModel]] = (
             self.db.query(VitrineReceitaLink.vitrine_id, ReceitaModel)
             .join(
+                VitrinesModel,
+                VitrinesModel.id == VitrineReceitaLink.vitrine_id,
+            )
+            .join(
                 ReceitaModel,
                 ReceitaModel.id == VitrineReceitaLink.receita_id,
             )
@@ -320,6 +361,7 @@ class HomeRepository:
                 VitrineCategoriaLink.vitrine_id == VitrineReceitaLink.vitrine_id,
             )
             .filter(
+                VitrinesModel.empresa_id == empresa_id,
                 ReceitaModel.empresa_id == empresa_id,
                 ReceitaModel.disponivel.is_(True),
                 ReceitaModel.ativo.is_(True),

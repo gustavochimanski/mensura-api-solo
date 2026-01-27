@@ -25,6 +25,7 @@ class VitrinesService:
     def search(
         self,
         *,
+        empresa_id: int,
         q: Optional[str],
         cod_categoria: Optional[int],
         is_home: Optional[bool],
@@ -32,6 +33,7 @@ class VitrinesService:
         offset: int,
     ) -> List[VitrinesModel]:
         return self.repo.search(
+            empresa_id=empresa_id,
             q=q,
             cod_categoria=cod_categoria,
             is_home=is_home,
@@ -43,12 +45,13 @@ class VitrinesService:
     def create(self, req: CriarVitrineRequest) -> VitrinesModel:
         cat = None
         if req.cod_categoria is not None:
-            cat = self.repo.get_categoria_by_id(req.cod_categoria)
+            cat = self.repo.get_categoria_by_id(req.cod_categoria, empresa_id=req.empresa_id)
             if not cat:
                 raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Categoria inválida")
 
         try:
             return self.repo.create(
+                empresa_id=req.empresa_id,
                 categoria=cat,
                 titulo=req.titulo,
                 is_home=bool(req.is_home),
@@ -58,14 +61,14 @@ class VitrinesService:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Conflito de dados ao criar vitrine")
 
     # -------- Update --------
-    def update(self, vitrine_id: int, req: AtualizarVitrineRequest) -> VitrinesModel:
-        v = self.repo.get_vitrine_by_id(vitrine_id)
+    def update(self, vitrine_id: int, req: AtualizarVitrineRequest, *, empresa_id: int) -> VitrinesModel:
+        v = self.repo.get_vitrine_by_id(vitrine_id, empresa_id=empresa_id)
         if not v:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Vitrine não encontrada")
 
         cat = None
         if req.cod_categoria is not None:
-            cat = self.repo.get_categoria_by_id(req.cod_categoria)
+            cat = self.repo.get_categoria_by_id(req.cod_categoria, empresa_id=empresa_id)
             if not cat:
                 raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Categoria inválida")
 
@@ -81,8 +84,8 @@ class VitrinesService:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Conflito de dados ao atualizar vitrine")
 
     # -------- Delete --------
-    def delete(self, vitrine_id: int) -> None:
-        v = self.repo.get_vitrine_by_id(vitrine_id)
+    def delete(self, vitrine_id: int, *, empresa_id: int) -> None:
+        v = self.repo.get_vitrine_by_id(vitrine_id, empresa_id=empresa_id)
         if not v:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Vitrine não encontrada")
 
@@ -95,7 +98,7 @@ class VitrinesService:
 
     # -------- Vínculos produto ↔ vitrine --------
     def vincular_produto(self, vitrine_id: int, empresa_id: int, cod_barras: str):
-        v = self.repo.get_vitrine_by_id(vitrine_id)
+        v = self.repo.get_vitrine_by_id(vitrine_id, empresa_id=empresa_id)
         if not v:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Vitrine não encontrada")
 
@@ -110,7 +113,7 @@ class VitrinesService:
         return {"ok": True}
 
     def desvincular_produto(self, vitrine_id: int, empresa_id: int, cod_barras: str):
-        v = self.repo.get_vitrine_by_id(vitrine_id)
+        v = self.repo.get_vitrine_by_id(vitrine_id, empresa_id=empresa_id)
         if not v:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Vitrine não encontrada")
 
@@ -125,15 +128,15 @@ class VitrinesService:
         return {"ok": True}
 
     # -------- Toggle is_home --------
-    def set_is_home(self, vitrine_id: int, is_home: bool) -> VitrinesModel:
-        v = self.repo.get_vitrine_by_id(vitrine_id)
+    def set_is_home(self, vitrine_id: int, is_home: bool, *, empresa_id: int) -> VitrinesModel:
+        v = self.repo.get_vitrine_by_id(vitrine_id, empresa_id=empresa_id)
         if not v:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Vitrine não encontrada")
         return self.repo.set_is_home(v, is_home)
 
     # -------- Vínculos combo ↔ vitrine --------
-    def vincular_combo(self, vitrine_id: int, combo_id: int):
-        v = self.repo.get_vitrine_by_id(vitrine_id)
+    def vincular_combo(self, vitrine_id: int, combo_id: int, *, empresa_id: int):
+        v = self.repo.get_vitrine_by_id(vitrine_id, empresa_id=empresa_id)
         if not v:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Vitrine não encontrada")
 
@@ -142,8 +145,8 @@ class VitrinesService:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Falha ao vincular combo")
         return {"ok": True}
 
-    def desvincular_combo(self, vitrine_id: int, combo_id: int):
-        v = self.repo.get_vitrine_by_id(vitrine_id)
+    def desvincular_combo(self, vitrine_id: int, combo_id: int, *, empresa_id: int):
+        v = self.repo.get_vitrine_by_id(vitrine_id, empresa_id=empresa_id)
         if not v:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Vitrine não encontrada")
 
@@ -153,8 +156,8 @@ class VitrinesService:
         return {"ok": True}
 
     # -------- Vínculos receita ↔ vitrine --------
-    def vincular_receita(self, vitrine_id: int, receita_id: int):
-        v = self.repo.get_vitrine_by_id(vitrine_id)
+    def vincular_receita(self, vitrine_id: int, receita_id: int, *, empresa_id: int):
+        v = self.repo.get_vitrine_by_id(vitrine_id, empresa_id=empresa_id)
         if not v:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Vitrine não encontrada")
 
@@ -167,8 +170,8 @@ class VitrinesService:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Falha ao vincular receita")
         return {"ok": True}
 
-    def desvincular_receita(self, vitrine_id: int, receita_id: int):
-        v = self.repo.get_vitrine_by_id(vitrine_id)
+    def desvincular_receita(self, vitrine_id: int, receita_id: int, *, empresa_id: int):
+        v = self.repo.get_vitrine_by_id(vitrine_id, empresa_id=empresa_id)
         if not v:
             raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Vitrine não encontrada")
 

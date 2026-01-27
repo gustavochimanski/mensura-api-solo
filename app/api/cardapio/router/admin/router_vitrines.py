@@ -44,6 +44,7 @@ def _to_out(v) -> VitrineOut:
 # --- SEARCH (coloque acima das rotas dinâmicas para evitar conflito) ---
 @router.get("/search", response_model=List[VitrineOut])
 def search_vitrines(
+    empresa_id: int = Query(..., description="ID da empresa"),
     q: Optional[str] = Query(None, description="Busca por título/slug"),
     cod_categoria: Optional[int] = Query(None, description="Filtra por categoria vinculada"),
     is_home: Optional[bool] = Query(None, description="Filtra por destaque da home"),
@@ -52,7 +53,7 @@ def search_vitrines(
     db: Session = Depends(get_db),
 ):
     svc = VitrinesService(db)
-    vitrines = svc.search(q=q, cod_categoria=cod_categoria, is_home=is_home, limit=limit, offset=offset)
+    vitrines = svc.search(empresa_id=empresa_id, q=q, cod_categoria=cod_categoria, is_home=is_home, limit=limit, offset=offset)
     return [_to_out(v) for v in vitrines]
 
 
@@ -60,12 +61,13 @@ def search_vitrines(
 @router.patch("/{vitrine_id}/home", response_model=VitrineOut)
 def toggle_home_vitrine(
     vitrine_id: int = Path(..., description="ID da vitrine"),
+    empresa_id: int = Query(..., description="ID da empresa"),
     payload: ToggleHomeRequest = Body(...),
     db: Session = Depends(get_db),
 ):
     logger.info(f"[Vitrines] Set is_home={payload.is_home} ID={vitrine_id}")
     svc = VitrinesService(db)
-    v = svc.set_is_home(vitrine_id, payload.is_home)
+    v = svc.set_is_home(vitrine_id, payload.is_home, empresa_id=empresa_id)
     return _to_out(v)
 
 
@@ -84,23 +86,25 @@ def criar_vitrine(
 @router.put("/{vitrine_id}", response_model=VitrineOut)
 def atualizar_vitrine(
     vitrine_id: int = Path(..., description="ID da vitrine"),
+    empresa_id: int = Query(..., description="ID da empresa"),
     request: AtualizarVitrineRequest = Body(...),
     db: Session = Depends(get_db)
 ):
     logger.info(f"[Vitrines] Atualizando ID={vitrine_id} payload={request.model_dump(exclude_none=True)}")
     svc = VitrinesService(db)
-    v = svc.update(vitrine_id, request)
+    v = svc.update(vitrine_id, request, empresa_id=empresa_id)
     return _to_out(v)
 
 
 @router.delete("/{vitrine_id}", status_code=status.HTTP_204_NO_CONTENT)
 def deletar_vitrine(
     vitrine_id: int = Path(..., description="ID da vitrine"),
+    empresa_id: int = Query(..., description="ID da empresa"),
     db: Session = Depends(get_db)
 ):
     logger.info(f"[Vitrines] Deletando ID={vitrine_id}")
     svc = VitrinesService(db)
-    svc.delete(vitrine_id)
+    svc.delete(vitrine_id, empresa_id=empresa_id)
     return None
 
 
@@ -112,12 +116,13 @@ class VinculoComboRequest(BaseModel):
 @router.post("/{vitrine_id}/vincular-combo", status_code=status.HTTP_204_NO_CONTENT)
 def vincular_combo(
     vitrine_id: int = Path(..., description="ID da vitrine"),
+    empresa_id: int = Query(..., description="ID da empresa"),
     payload: VinculoComboRequest = Body(...),
     db: Session = Depends(get_db)
 ):
     logger.info(f"[Vitrines] Vincular combo - vitrine={vitrine_id}, combo={payload.combo_id}")
     svc = VitrinesService(db)
-    svc.vincular_combo(vitrine_id=vitrine_id, combo_id=payload.combo_id)
+    svc.vincular_combo(vitrine_id=vitrine_id, combo_id=payload.combo_id, empresa_id=empresa_id)
     return None
 
 
@@ -125,11 +130,12 @@ def vincular_combo(
 def desvincular_combo(
     vitrine_id: int = Path(..., description="ID da vitrine"),
     combo_id: int = Path(..., description="ID do combo"),
+    empresa_id: int = Query(..., description="ID da empresa"),
     db: Session = Depends(get_db)
 ):
     logger.info(f"[Vitrines] Desvincular combo - vitrine={vitrine_id}, combo={combo_id}")
     svc = VitrinesService(db)
-    svc.desvincular_combo(vitrine_id=vitrine_id, combo_id=combo_id)
+    svc.desvincular_combo(vitrine_id=vitrine_id, combo_id=combo_id, empresa_id=empresa_id)
     return None
 
 
@@ -137,12 +143,13 @@ def desvincular_combo(
 @router.post("/{vitrine_id}/vincular-receita", status_code=status.HTTP_204_NO_CONTENT)
 def vincular_receita(
     vitrine_id: int = Path(..., description="ID da vitrine"),
+    empresa_id: int = Query(..., description="ID da empresa"),
     payload: VinculoReceitaRequest = Body(...),
     db: Session = Depends(get_db)
 ):
     logger.info(f"[Vitrines] Vincular receita - vitrine={vitrine_id}, receita={payload.receita_id}")
     svc = VitrinesService(db)
-    svc.vincular_receita(vitrine_id=vitrine_id, receita_id=payload.receita_id)
+    svc.vincular_receita(vitrine_id=vitrine_id, receita_id=payload.receita_id, empresa_id=empresa_id)
     return None
 
 
@@ -150,11 +157,12 @@ def vincular_receita(
 def desvincular_receita(
     vitrine_id: int = Path(..., description="ID da vitrine"),
     receita_id: int = Path(..., description="ID da receita"),
+    empresa_id: int = Query(..., description="ID da empresa"),
     db: Session = Depends(get_db)
 ):
     logger.info(f"[Vitrines] Desvincular receita - vitrine={vitrine_id}, receita={receita_id}")
     svc = VitrinesService(db)
-    svc.desvincular_receita(vitrine_id=vitrine_id, receita_id=receita_id)
+    svc.desvincular_receita(vitrine_id=vitrine_id, receita_id=receita_id, empresa_id=empresa_id)
     return None
 
 

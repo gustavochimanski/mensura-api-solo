@@ -28,23 +28,24 @@ class VitrineRepository:
         self.db = db
 
     # --------------------- LOOKUPS ---------------------
-    def get_vitrine_by_id(self, vitrine_id: int) -> Optional[VitrinesModel]:
-        return (
+    def get_vitrine_by_id(self, vitrine_id: int, *, empresa_id: Optional[int] = None) -> Optional[VitrinesModel]:
+        qy = (
             self.db.query(VitrinesModel)
             .options(
                 selectinload(VitrinesModel.categorias)
                 .selectinload(CategoriaDeliveryModel.parent)
             )
             .filter(VitrinesModel.id == vitrine_id)
-            .first()
         )
+        if empresa_id is not None:
+            qy = qy.filter(VitrinesModel.empresa_id == empresa_id)
+        return qy.first()
 
-    def get_categoria_by_id(self, cat_id: int) -> Optional[CategoriaDeliveryModel]:
-        return (
-            self.db.query(CategoriaDeliveryModel)
-            .filter(CategoriaDeliveryModel.id == cat_id)
-            .first()
-        )
+    def get_categoria_by_id(self, cat_id: int, *, empresa_id: Optional[int] = None) -> Optional[CategoriaDeliveryModel]:
+        qy = self.db.query(CategoriaDeliveryModel).filter(CategoriaDeliveryModel.id == cat_id)
+        if empresa_id is not None:
+            qy = qy.filter(CategoriaDeliveryModel.empresa_id == empresa_id)
+        return qy.first()
 
     def has_vinculos(self, vitrine_id: int) -> bool:
         return (
@@ -79,6 +80,7 @@ class VitrineRepository:
     def search(
         self,
         *,
+        empresa_id: Optional[int] = None,
         q: Optional[str] = None,
         cod_categoria: Optional[int] = None,
         is_home: Optional[bool] = None,
@@ -97,6 +99,9 @@ class VitrineRepository:
             )
             .order_by(VitrinesModel.ordem, VitrinesModel.id)
         )
+
+        if empresa_id is not None:
+            qy = qy.filter(VitrinesModel.empresa_id == empresa_id)
 
         if cod_categoria is not None:
             qy = (
@@ -125,14 +130,13 @@ class VitrineRepository:
         return qy.offset(offset).limit(limit).all()
 
     # --------------------- HELPERS ---------------------
-    def _ensure_unique_slug(self, base: str) -> str:
+    def _ensure_unique_slug(self, base: str, *, empresa_id: Optional[int]) -> str:
         s = slugify(base) or "vitrine"
         # like com parâmetro (bound)
-        rows = (
-            self.db.query(VitrinesModel.slug)
-            .filter(VitrinesModel.slug.like(f"{s}%"))
-            .all()
-        )
+        qy = self.db.query(VitrinesModel.slug).filter(VitrinesModel.slug.like(f"{s}%"))
+        if empresa_id is not None:
+            qy = qy.filter(VitrinesModel.empresa_id == empresa_id)
+        rows = qy.all()
         if not rows:
             return s
         used = {r[0] for r in rows}
@@ -147,23 +151,28 @@ class VitrineRepository:
         v.categorias.clear()
         v.categorias.append(cat)
 
-    def _get_next_ordem(self) -> int:
-        """Calcula a próxima ordem disponível (MAX(ordem) + 1)"""
-        max_ordem = self.db.query(func.max(VitrinesModel.ordem)).scalar()
+    def _get_next_ordem(self, *, empresa_id: Optional[int]) -> int:
+        """Calcula a próxima ordem disponível (MAX(ordem) + 1) por empresa."""
+        qy = self.db.query(func.max(VitrinesModel.ordem))
+        if empresa_id is not None:
+            qy = qy.filter(VitrinesModel.empresa_id == empresa_id)
+        max_ordem = qy.scalar()
         return (max_ordem or 0) + 1
 
     # --------------------- CRUD ---------------------
     def create(
         self,
         *,
+        empresa_id: int,
         categoria: Optional[CategoriaDeliveryModel],
         titulo: str,
         is_home: bool = False,
     ) -> VitrinesModel:
-        ordem = self._get_next_ordem()
+        ordem = self._get_next_ordem(empresa_id=empresa_id)
         nova = VitrinesModel(
+            empresa_id=empresa_id,
             titulo=titulo,
-            slug=self._ensure_unique_slug(titulo),
+            slug=self._ensure_unique_slug(titulo, empresa_id=empresa_id),
             ordem=ordem,
             tipo_exibicao=("P" if is_home else None),
         )
@@ -178,7 +187,7 @@ class VitrineRepository:
         except IntegrityError:
             self.db.rollback()
             # corrida de slug: tenta 1x com novo slug
-            nova.slug = self._ensure_unique_slug(titulo)
+            nova.slug = self._ensure_unique_slug(titulo, empresa_id=empresa_id)
             self.db.add(nova)
             self.db.commit()
             self.db.refresh(nova)
@@ -197,7 +206,7 @@ class VitrineRepository:
             self._assign_single_category(vitrine, categoria)
         if titulo is not None:
             vitrine.titulo = titulo
-            vitrine.slug = self._ensure_unique_slug(titulo)
+            vitrine.slug = self._ensure_unique_slug(titulo, empresa_id=vitrine.empresa_id)
         if ordem is not None:
             vitrine.ordem = ordem
         if is_home is not None:

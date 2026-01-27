@@ -825,15 +825,19 @@ async def get_bot_status_for_phone(phone_number: str, db: Session = Depends(get_
 @router.put("/bot-status/{phone_number}")
 async def toggle_bot_status(
     phone_number: str,
-    is_active: bool,
+    pausar: bool,
     paused_by: Optional[str] = None,
     empresa_id: Optional[int] = None,
     db: Session = Depends(get_db)
 ):
     """Ativa ou desativa o bot para um número específico. Ao pausar, destrava em 3h."""
-    destrava_em = chatbot_db.get_auto_pause_until() if not is_active else None
+    desativa_em = chatbot_db.get_auto_pause_until() if pausar else None
     result = chatbot_db.set_bot_status(
-        db, phone_number, is_active, paused_by, empresa_id, chatbot_destrava_em=destrava_em
+        db,
+        phone_number,
+        paused_by=paused_by if pausar else None,
+        empresa_id=empresa_id,
+        desativa_chatbot_em=desativa_em,
     )
     if not result.get("success"):
         raise HTTPException(status_code=500, detail=result.get("error", "Erro ao atualizar status"))
@@ -849,13 +853,18 @@ async def list_all_bot_statuses(db: Session = Depends(get_db), empresa_id: Optio
 
 @router.put("/bot-status-global")
 async def toggle_all_bots(
-    is_active: bool,
+    pausar: bool,
     paused_by: Optional[str] = None,
     empresa_id: Optional[int] = None,
     db: Session = Depends(get_db)
 ):
     """Ativa ou desativa o bot para TODOS os números de uma vez"""
-    result = chatbot_db.set_global_bot_status(db, is_active, paused_by, empresa_id)
+    result = chatbot_db.set_global_bot_status(
+        db,
+        paused_by=paused_by if pausar else None,
+        empresa_id=empresa_id,
+        desativa_chatbot_em="infinity" if pausar else None,
+    )
     if not result.get("success"):
         raise HTTPException(status_code=500, detail=result.get("error", "Erro ao atualizar status global"))
     return result
@@ -1018,10 +1027,9 @@ async def send_notification(request: Request, db: Session = Depends(get_db)):
             pause_result = chatbot_db.set_bot_status(
                 db=db,
                 phone_number=phone_normalized,
-                is_active=False,
                 paused_by="atendente_respondeu",
                 empresa_id=empresa_id,
-                chatbot_destrava_em=destrava_em,
+                desativa_chatbot_em=destrava_em,
             )
 
             if pause_result.get("success"):
@@ -1161,10 +1169,9 @@ async def send_media(request: Request, db: Session = Depends(get_db)):
                     pause_result = chatbot_db.set_bot_status(
                         db=db,
                         phone_number=phone_clean_media,
-                        is_active=False,
                         paused_by="atendente_respondeu",
                         empresa_id=empresa_id,
-                        chatbot_destrava_em=destrava_em,
+                        desativa_chatbot_em=destrava_em,
                     )
                     
                     if pause_result.get("success"):
@@ -1817,10 +1824,9 @@ async def process_webhook_background(body: dict, headers_info: Optional[dict] = 
                                         pause_result = chatbot_db.set_bot_status(
                                             db=db,
                                             phone_number=recipient_id,
-                                            is_active=False,
                                             paused_by="atendente_respondeu",
                                             empresa_id=empresa_id_int,
-                                            chatbot_destrava_em=destrava_em,
+                                            desativa_chatbot_em=destrava_em,
                                         )
                                         
                                         if pause_result.get("success"):
@@ -2655,10 +2661,9 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                         chatbot_db.set_bot_status(
                             db=db,
                             phone_number=phone_number,
-                            is_active=False,
                             paused_by="cliente_chamou_atendente",
                             empresa_id=empresa_id_int,
-                            chatbot_destrava_em=destrava_em,
+                            desativa_chatbot_em=destrava_em,
                         )
                         import logging
                         logger = logging.getLogger(__name__)
@@ -2732,10 +2737,9 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                     chatbot_db.set_bot_status(
                         db=db,
                         phone_number=phone_number,
-                        is_active=False,
                         paused_by="cliente_chamou_atendente",
                         empresa_id=empresa_id_int,
-                        chatbot_destrava_em=destrava_em,
+                        desativa_chatbot_em=destrava_em,
                     )
                     logger.info(f"⏸️ Chatbot pausado para cliente {phone_number} por {chatbot_db.AUTO_PAUSE_HOURS} horas (chamou atendente) - chatbot_destrava_em: {destrava_em}")
                 except Exception as e:

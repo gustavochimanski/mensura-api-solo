@@ -35,7 +35,7 @@ def listar_vitrines_e_produtos_por_categoria(
     svc = HomeService(db, vitrine_contract=vitrine_contract)
     if cod_categoria is None and slug:
         try:
-            cod_categoria = svc.resolve_categoria_id_por_slug(slug)
+            cod_categoria = svc.resolve_categoria_id_por_slug(empresa_id, slug)
         except ValueError as e:
             raise HTTPException(status.HTTP_404_NOT_FOUND, str(e))
 

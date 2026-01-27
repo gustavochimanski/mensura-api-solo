@@ -1,5 +1,5 @@
 from typing import Optional
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, func
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, func, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.hybrid import hybrid_property
 
@@ -10,11 +10,15 @@ from app.utils.database_utils import now_trimmed
 
 class CategoriaDeliveryModel(Base):
     __tablename__ = "categoria_dv"
-    __table_args__ = {"schema": "cardapio"}
+    __table_args__ = (
+        UniqueConstraint("empresa_id", "slug", name="uq_categoria_slug_empresa"),
+        {"schema": "cardapio"},
+    )
 
     id = Column(Integer, primary_key=True)
+    empresa_id = Column(Integer, ForeignKey("cadastros.empresas.id", ondelete="CASCADE"), nullable=True, index=True)
     descricao = Column(String(100), nullable=False)
-    slug = Column(String(100), nullable=False, unique=True)
+    slug = Column(String(100), nullable=False)
 
     parent_id = Column(Integer, ForeignKey("cardapio.categoria_dv.id", ondelete="SET NULL"), nullable=True)
     parent = relationship("CategoriaDeliveryModel", remote_side=[id], back_populates="children")
