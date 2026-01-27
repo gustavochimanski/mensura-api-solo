@@ -67,6 +67,7 @@ def listar_empresas_publicas(
             distancia_km=None,
             tema=empresa.cardapio_tema,
             horarios_funcionamento=horarios,
+            landingpage_store=empresa.landingpage_store,
         )
     
     # Caso contrário, retorna lista
@@ -80,6 +81,7 @@ def listar_empresas_publicas(
             estado=empresa.estado,
             distancia_km=None,
             tema=empresa.cardapio_tema,
+            landingpage_store=empresa.landingpage_store,
         )
         for empresa in empresas
     ]

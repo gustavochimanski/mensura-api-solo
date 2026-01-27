@@ -45,6 +45,7 @@ class EmpresaPublicListItem(BaseModel):
     distancia_km: Optional[float] = None
     tema: Optional[str] = None
     horarios_funcionamento: Optional[List[HorarioDiaOut]] = None
+    landingpage_store: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 
