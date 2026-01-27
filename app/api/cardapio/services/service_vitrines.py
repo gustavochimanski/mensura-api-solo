@@ -11,6 +11,7 @@ from app.api.cardapio.schemas.schema_vitrine import (
     AtualizarVitrineRequest,
 )
 from app.api.catalogo.models.model_receita import ReceitaModel
+from app.utils.logger import logger
 
 
 class VitrinesService:
@@ -56,9 +57,32 @@ class VitrinesService:
                 titulo=req.titulo,
                 is_home=bool(req.is_home),
             )
-        except IntegrityError:
-            # slug corrido é tratado no repo; se chegou aqui, é conflito real
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Conflito de dados ao criar vitrine")
+        except IntegrityError as e:
+            self.db.rollback()
+            error_str = str(e.orig) if hasattr(e, 'orig') else str(e)
+            logger.error(f"[VitrinesService] Erro de integridade ao criar vitrine: {error_str}")
+            logger.error(f"[VitrinesService] Dados recebidos: empresa_id={req.empresa_id}, titulo={req.titulo}, cod_categoria={req.cod_categoria}")
+            
+            # Verifica se é duplicidade de slug
+            if 'uq_vitrine_slug_empresa' in error_str or 'slug' in error_str.lower():
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    detail=f"Já existe uma vitrine com o título '{req.titulo}' para esta empresa. Tente um título diferente."
+                )
+            
+            # Verifica se é erro de chave estrangeira (empresa não existe)
+            if 'foreign key' in error_str.lower() or 'violates foreign key constraint' in error_str.lower():
+                if 'empresa' in error_str.lower():
+                    raise HTTPException(
+                        status.HTTP_404_NOT_FOUND,
+                        detail=f"Empresa com ID {req.empresa_id} não encontrada"
+                    )
+            
+            # Outros erros de integridade
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail=f"Conflito de dados ao criar vitrine: {error_str}"
+            )
 
     # -------- Update --------
     def update(self, vitrine_id: int, req: AtualizarVitrineRequest, *, empresa_id: int) -> VitrinesModel:
@@ -80,8 +104,24 @@ class VitrinesService:
                 ordem=req.ordem,
                 is_home=req.is_home,
             )
-        except IntegrityError:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Conflito de dados ao atualizar vitrine")
+        except IntegrityError as e:
+            self.db.rollback()
+            error_str = str(e.orig) if hasattr(e, 'orig') else str(e)
+            logger.error(f"[VitrinesService] Erro de integridade ao atualizar vitrine: {error_str}")
+            logger.error(f"[VitrinesService] Dados recebidos: vitrine_id={vitrine_id}, titulo={req.titulo}")
+            
+            # Verifica se é duplicidade de slug
+            if 'uq_vitrine_slug_empresa' in error_str or 'slug' in error_str.lower():
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    detail=f"Já existe uma vitrine com o título '{req.titulo}' para esta empresa. Tente um título diferente."
+                )
+            
+            # Outros erros de integridade
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                detail=f"Conflito de dados ao atualizar vitrine: {error_str}"
+            )
 
     # -------- Delete --------
     def delete(self, vitrine_id: int, *, empresa_id: int) -> None:

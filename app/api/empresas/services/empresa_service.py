@@ -75,8 +75,12 @@ class EmpresaService:
         return slug
 
     def _gerar_link_cardapio_empresa(self, empresa_id: int) -> str:
-        """Gera o link do cardápio apenas com ?empresa=id (sem via=supervisor etc)."""
-        return f"{BASE_LINK_CARDAPIO}?empresa={empresa_id}"
+        """Gera o link do cardápio no formato: url/slugdaempresa?empresa=iddaempresa"""
+        empresa = self.repo_emp.get_empresa_by_id(empresa_id)
+        if not empresa or not empresa.slug:
+            # Fallback caso não encontre a empresa ou não tenha slug
+            return f"{BASE_LINK_CARDAPIO}?empresa={empresa_id}"
+        return f"{BASE_LINK_CARDAPIO}/{empresa.slug}?empresa={empresa_id}"
 
     def _normalizar_cardapio_link(self, link: str, empresa_id: int) -> str:
         """
