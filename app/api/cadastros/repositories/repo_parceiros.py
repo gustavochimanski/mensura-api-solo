@@ -73,7 +73,6 @@ class ParceirosRepository:
             parceiro_id=data.parceiro_id,
             categoria_id=data.categoria_id,
             link_redirecionamento=data.link_redirecionamento,
-            landingpage_store=data.landingpage_store,
             ativo=data.ativo,
             tipo_banner=data.tipo_banner,
             imagem=data.imagem
@@ -97,7 +96,7 @@ class ParceirosRepository:
 
     def update_banner(self, banner_id: int, data: dict) -> BannerParceiroModel:
         b = self.get_banner(banner_id)
-        for key in ["nome", "imagem", "tipo_banner", "parceiro_id", "ativo", "categoria_id", "link_redirecionamento", "landingpage_store"]:
+        for key in ["nome", "imagem", "tipo_banner", "parceiro_id", "ativo", "categoria_id", "link_redirecionamento"]:
             if key in data:
                 setattr(b, key, data[key])
         self.db.commit()

@@ -121,6 +121,7 @@ class EmpresaService:
             horarios_funcionamento=data.horarios_funcionamento,
             cardapio_tema=data.cardapio_tema,
             aceita_pedido_automatico=bool(data.aceita_pedido_automatico),
+            landingpage_store=bool(data.landingpage_store),
             cep=data.cep,
             logradouro=data.logradouro,
             numero=data.numero,
@@ -213,6 +214,8 @@ class EmpresaService:
         for key, value in update_data.items():
             if key == "aceita_pedido_automatico" and value is not None:
                 empresa.aceita_pedido_automatico = bool(value)
+            elif key == "landingpage_store" and value is not None:
+                empresa.landingpage_store = bool(value)
             elif key == "estado" and value is not None:
                 empresa.estado = value.upper()
             elif key == "timezone" and value is not None:

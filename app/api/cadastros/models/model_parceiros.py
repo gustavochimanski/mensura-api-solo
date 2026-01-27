@@ -35,7 +35,6 @@ class BannerParceiroModel(Base):
     imagem = Column(String(255), nullable=True)
     ativo = Column(Boolean, nullable=False, default=False)
     tipo_banner = Column(String(1), nullable=False)  # "V" ou "H"
-    landingpage_store = Column(Boolean, nullable=False, default=False)
     link_redirecionamento = Column(String(255), nullable=True)
 
     @property

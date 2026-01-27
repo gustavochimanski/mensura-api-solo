@@ -17,7 +17,6 @@ class BannerParceiroIn(BaseModel):
     parceiro_id: int
     categoria_id: Optional[int] = None
     link_redirecionamento: Optional[str] = None
-    landingpage_store: bool
     ativo: bool
     tipo_banner: constr(min_length=1, max_length=1)  # "V" ou "H"
     imagem: Optional[str] = None
@@ -32,7 +31,6 @@ class BannerParceiroOut(BaseModel):
     imagem: Optional[str]
     categoria_id: Optional[int] = None
     link_redirecionamento: Optional[str] = None
-    landingpage_store: bool
     href_destino: str
     model_config = ConfigDict(from_attributes=True)
 

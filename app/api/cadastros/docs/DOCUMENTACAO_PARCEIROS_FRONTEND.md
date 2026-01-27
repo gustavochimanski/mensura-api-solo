@@ -5,12 +5,11 @@ Esta documentação descreve os endpoints públicos/admin de **Parceiros** e **B
 ## Mudança importante (breaking change)
 
 - **Removido**: `redireciona_categoria` (não existe mais e não há mais redirecionamento automático para categoria).
-- **Adicionado**: `landingpage_store` (**boolean**: `true` ou `false`).
+- **Removido**: `landingpage_store` dos banners (agora está na tabela de empresas).
 
 ### Regras de destino do banner (frontend)
 
-- Se `landingpage_store = true`: o frontend deve **navegar para a landing page da store** (rota interna definida pelo frontend).
-- Se `landingpage_store = false`: o frontend pode usar `href_destino` (que é derivado de `link_redirecionamento`) para navegação.
+- O frontend deve usar `href_destino` (que é derivado de `link_redirecionamento`) para navegação.
 - Observação: o backend **não monta mais** `href_destino` usando categoria. Agora:
   - `href_destino = link_redirecionamento` quando houver link
   - caso contrário `href_destino = "#"`
@@ -27,7 +26,6 @@ Campos relevantes:
 - `imagem`: string | null
 - `categoria_id`: number | null (pode existir, mas **não é usada** para redirecionamento)
 - `link_redirecionamento`: string | null
-- `landingpage_store`: boolean
 - `href_destino`: string (ver regras acima)
 
 Exemplo:
@@ -41,7 +39,6 @@ Exemplo:
   "imagem": "https://.../banners/abc.png",
   "categoria_id": null,
   "link_redirecionamento": "https://parceiro.com/oferta",
-  "landingpage_store": false,
   "href_destino": "https://parceiro.com/oferta"
 }
 ```
@@ -88,7 +85,6 @@ Exemplo:
   - `parceiro_id` (number, obrigatório)
   - `categoria_id` (number, opcional)
   - `link_redirecionamento` (string, opcional)
-  - `landingpage_store` (boolean, obrigatório) — envie como `"true"`/`"false"`
   - `imagem` (file, opcional)
 - **Resposta**: `BannerParceiroOut`
 
@@ -96,7 +92,6 @@ Exemplo:
 
 - **PUT** `/api/cadastros/admin/parceiros/banners/{banner_id}`
 - **Body (JSON)**: `BannerParceiroIn`
-  - Observação: o schema atual exige os campos do `BannerParceiroIn` completos (incluindo `landingpage_store`).
 - **Resposta**: `BannerParceiroOut`
 
 ### Deletar banner

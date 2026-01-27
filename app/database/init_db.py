@@ -665,16 +665,14 @@ def criar_tabelas(postgis_disponivel: bool = True):
                 exc_info=True,
             )
 
-        # Garante landingpage_store e remove redireciona_categoria em cadastros.parceiros_banner
-        # Ordem: 1) DROP coluna antiga; 2) ADD coluna nova (cada um em execute separado)
+        # Garante landingpage_store em cadastros.empresas
         try:
             with engine.begin() as conn:
-                conn.execute(text("ALTER TABLE cadastros.parceiros_banner DROP COLUMN IF EXISTS redireciona_categoria"))
-                conn.execute(text("ALTER TABLE cadastros.parceiros_banner ADD COLUMN IF NOT EXISTS landingpage_store boolean NOT NULL DEFAULT false"))
-            logger.info("✅ Coluna landingpage_store em cadastros.parceiros_banner criada/verificada e redireciona_categoria removida (se existia)")
+                conn.execute(text("ALTER TABLE cadastros.empresas ADD COLUMN IF NOT EXISTS landingpage_store boolean NOT NULL DEFAULT false"))
+            logger.info("✅ Coluna landingpage_store em cadastros.empresas criada/verificada com sucesso")
         except Exception as e:
             logger.error(
-                "❌ Erro ao garantir coluna landingpage_store / remover redireciona_categoria em cadastros.parceiros_banner: %s",
+                "❌ Erro ao garantir coluna landingpage_store em cadastros.empresas: %s",
                 e,
                 exc_info=True,
             )

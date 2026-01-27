@@ -36,19 +36,6 @@ class ParceirosService:
         payload: dict,
         atual: Optional[BannerParceiroModel] = None,
     ) -> dict:
-        landingpage_store = payload.get(
-            "landingpage_store",
-            atual.landingpage_store if atual else None,
-        )
-
-        if landingpage_store is None:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                "O campo landingpage_store é obrigatório.",
-            )
-
-        payload["landingpage_store"] = bool(landingpage_store)
-
         # Normaliza link vazio -> None (quando vier via form/json)
         if "link_redirecionamento" in payload and not payload["link_redirecionamento"]:
             payload["link_redirecionamento"] = None
