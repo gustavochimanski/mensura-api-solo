@@ -90,8 +90,11 @@ def listar_empresas_publicas(
 @router.get("/", response_model=EmpresaClientOut)
 def buscar_empresa_client(
     empresa_id: int = Query(..., description="ID da empresa"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     repo_emp = EmpresaRepository(db)
-    return repo_emp.get_empresa_by_id(empresa_id)
+    empresa = repo_emp.get_empresa_by_id(empresa_id)
+    if not empresa:
+        raise HTTPException(status_code=404, detail="Empresa não encontrada")
+    return empresa
 

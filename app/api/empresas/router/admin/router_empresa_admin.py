@@ -80,6 +80,7 @@ async def create_empresa(
     cardapio_link: str | None = Form(None),
     cardapio_tema: str | None = Form("padrao"),
     aceita_pedido_automatico: str | None = Form("false"),
+    landingpage_store: str | None = Form("false"),
     db: Session = Depends(get_db),
 ):
     try:
@@ -105,6 +106,7 @@ async def create_empresa(
         cardapio_link=cardapio_link,
         cardapio_tema=cardapio_tema,
         aceita_pedido_automatico=aceita_pedido_automatico.lower() == "true",
+        landingpage_store=landingpage_store.lower() == "true" if landingpage_store else False,
         **endereco_data,
     )
     return EmpresaService(db).create_empresa(empresa_data, logo=logo)
@@ -123,6 +125,7 @@ async def update_empresa(
     cardapio_link: str | None = Form(None),
     cardapio_tema: str | None = Form(None),
     aceita_pedido_automatico: str | None = Form(None),
+    landingpage_store: str | None = Form(None),
     db: Session = Depends(get_db),
 ):
     slug = make_slug(nome) if nome else None
@@ -150,7 +153,8 @@ async def update_empresa(
         horarios_funcionamento=horarios_payload,
         cardapio_link=cardapio_link,
         cardapio_tema=cardapio_tema,
-        aceita_pedido_automatico = aceita_pedido_automatico.lower() == "true" if aceita_pedido_automatico else None,
+        aceita_pedido_automatico=aceita_pedido_automatico.lower() == "true" if aceita_pedido_automatico else None,
+        landingpage_store=landingpage_store.lower() == "true" if landingpage_store else None,
         **endereco_payload,
     )
     return EmpresaService(db).update_empresa(id=id, data=empresa_data, logo=logo)
