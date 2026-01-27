@@ -6,12 +6,22 @@ Esta documentação descreve todos os endpoints disponíveis para o CRUD de empr
 
 ## 📋 Índice
 
-1. [Base URL e Autenticação](#base-url-e-autenticação)
-2. [Estrutura de Dados](#estrutura-de-dados)
-3. [Endpoints Admin (CRUD Completo)](#endpoints-admin-crud-completo)
-4. [Endpoints Públicos](#endpoints-públicos)
-5. [Tratamento de Erros](#tratamento-de-erros)
-6. [Exemplos Práticos](#exemplos-práticos)
+1. [O que mudou](#o-que-mudou)
+2. [Base URL e Autenticação](#base-url-e-autenticação)
+3. [Estrutura de Dados](#estrutura-de-dados)
+4. [Endpoints Admin (CRUD Completo)](#endpoints-admin-crud-completo)
+5. [Endpoints Públicos](#endpoints-públicos)
+6. [Tratamento de Erros](#tratamento-de-erros)
+7. [Exemplos Práticos](#exemplos-práticos)
+
+---
+
+## 🔄 O que mudou
+
+- **Create (POST)**: Passa a aplicar `redireciona_home` e `redireciona_home_para` quando enviados no form. Antes os campos existiam no form mas não eram repassados ao backend.
+- **Create / Update**: Campo `telefone` documentado e suportado em ambos (form `telefone`).
+- **Resposta**: Inclusão de `telefone` em `EmpresaResponse` quando retornado.
+- **Demais endpoints**: Sem alteração de contrato (listar, get, delete, buscar-endereco, cardapios).
 
 ---
 
@@ -45,6 +55,7 @@ interface EmpresaResponse {
   cnpj?: string | null;
   slug: string;
   logo?: string | null;
+  telefone?: string | null;
   timezone?: string; // Padrão: "America/Sao_Paulo"
   horarios_funcionamento?: HorarioDia[];
   cardapio_link?: string | null;
@@ -52,7 +63,7 @@ interface EmpresaResponse {
   aceita_pedido_automatico: boolean; // Padrão: false
   redireciona_home: boolean; // Padrão: false
   redireciona_home_para?: string | null;
-  
+
   // Endereço
   cep?: string | null;
   logradouro?: string | null;
@@ -137,6 +148,7 @@ Authorization: Bearer <token>
     "cnpj": "12.345.678/0001-90",
     "slug": "restaurante-exemplo",
     "logo": "https://minio.../logo.jpg",
+    "telefone": "(11) 99999-9999",
     "timezone": "America/Sao_Paulo",
     "horarios_funcionamento": [
       {
@@ -196,6 +208,7 @@ Authorization: Bearer <token>
   "cnpj": "12.345.678/0001-90",
   "slug": "restaurante-exemplo",
   "logo": "https://minio.../logo.jpg",
+  "telefone": "(11) 99999-9999",
   "timezone": "America/Sao_Paulo",
   "horarios_funcionamento": [...],
   "cardapio_link": "https://...",
@@ -238,6 +251,7 @@ Cria uma nova empresa. **IMPORTANTE**: Este endpoint usa `multipart/form-data` p
 |-------|------|-------------|-----------|
 | `nome` | string | Sim | Nome da empresa |
 | `cnpj` | string | Não | CNPJ da empresa (único) |
+| `telefone` | string | Não | Telefone da empresa |
 | `endereco` | string (JSON) | Sim | JSON string com campos de endereço |
 | `horarios_funcionamento` | string (JSON) | Não | JSON string com horários de funcionamento |
 | `timezone` | string | Não | Timezone (padrão: "America/Sao_Paulo") |
@@ -291,6 +305,7 @@ Cria uma nova empresa. **IMPORTANTE**: Este endpoint usa `multipart/form-data` p
 const formData = new FormData();
 formData.append('nome', 'Restaurante Exemplo');
 formData.append('cnpj', '12.345.678/0001-90');
+formData.append('telefone', '(11) 99999-9999');
 formData.append('endereco', JSON.stringify({
   cep: '01234-567',
   logradouro: 'Rua Exemplo',
@@ -313,6 +328,7 @@ formData.append('timezone', 'America/Sao_Paulo');
 formData.append('cardapio_tema', 'padrao');
 formData.append('aceita_pedido_automatico', 'false');
 formData.append('redireciona_home', 'false');
+formData.append('redireciona_home_para', '');
 
 // Se houver logo
 if (logoFile) {
@@ -335,11 +351,13 @@ curl -X POST "http://localhost:8000/api/empresas/admin/" \
   -H "Authorization: Bearer <token>" \
   -F "nome=Restaurante Exemplo" \
   -F "cnpj=12.345.678/0001-90" \
+  -F "telefone=(11) 99999-9999" \
   -F 'endereco={"cep":"01234-567","logradouro":"Rua Exemplo","numero":"123","bairro":"Centro","cidade":"São Paulo","estado":"SP","latitude":-23.5505,"longitude":-46.6333}' \
   -F 'horarios_funcionamento=[{"dia_semana":1,"intervalos":[{"inicio":"08:00","fim":"18:00"}]}]' \
   -F "timezone=America/Sao_Paulo" \
   -F "cardapio_tema=padrao" \
   -F "aceita_pedido_automatico=false" \
+  -F "redireciona_home=false" \
   -F "logo=@/caminho/para/logo.jpg"
 ```
 
@@ -399,6 +417,7 @@ Todos os campos são **opcionais** (exceto o `id` no path). Apenas os campos env
 |-------|------|-------------|-----------|
 | `nome` | string | Não | Nome da empresa |
 | `cnpj` | string | Não | CNPJ da empresa |
+| `telefone` | string | Não | Telefone da empresa |
 | `endereco` | string (JSON) | Não | JSON string com campos de endereço |
 | `horarios_funcionamento` | string (JSON) | Não | JSON string com horários |
 | `timezone` | string | Não | Timezone |
@@ -414,6 +433,7 @@ Todos os campos são **opcionais** (exceto o `id` no path). Apenas os campos env
 ```javascript
 const formData = new FormData();
 formData.append('nome', 'Novo Nome');
+formData.append('telefone', '(21) 98888-8888');
 formData.append('endereco', JSON.stringify({
   cidade: 'Rio de Janeiro',
   estado: 'RJ'
@@ -706,6 +726,7 @@ GET /api/empresas/public/emp/?empresa_id=1
 interface EmpresaFormData {
   nome: string;
   cnpj?: string;
+  telefone?: string;
   endereco: {
     cep?: string;
     logradouro?: string;
@@ -725,6 +746,7 @@ async function criarEmpresa(data: EmpresaFormData, token: string) {
   
   formData.append('nome', data.nome);
   if (data.cnpj) formData.append('cnpj', data.cnpj);
+  if (data.telefone) formData.append('telefone', data.telefone);
   formData.append('endereco', JSON.stringify(data.endereco));
   
   if (data.horarios_funcionamento) {
@@ -876,4 +898,4 @@ async function deletarEmpresa(empresaId: number, token: string) {
 
 ---
 
-**Última atualização**: 2024
+**Última atualização**: Janeiro 2025

@@ -106,7 +106,9 @@ async def create_empresa(
         horarios_funcionamento=horarios_data,
         cardapio_link=cardapio_link,
         cardapio_tema=cardapio_tema,
-        aceita_pedido_automatico = aceita_pedido_automatico.lower() == "true",
+        aceita_pedido_automatico=aceita_pedido_automatico.lower() == "true",
+        redireciona_home=redireciona_home.lower() == "true" if redireciona_home else False,
+        redireciona_home_para=redireciona_home_para or None,
         **endereco_data,
     )
     return EmpresaService(db).create_empresa(empresa_data, logo=logo)
