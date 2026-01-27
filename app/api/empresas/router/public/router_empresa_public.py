@@ -66,8 +66,6 @@ def listar_empresas_publicas(
             estado=empresa.estado,
             distancia_km=None,
             tema=empresa.cardapio_tema,
-            redireciona_home=empresa.redireciona_home,
-            redireciona_home_para=empresa.redireciona_home_para,
             horarios_funcionamento=horarios,
         )
     
@@ -82,8 +80,6 @@ def listar_empresas_publicas(
             estado=empresa.estado,
             distancia_km=None,
             tema=empresa.cardapio_tema,
-            redireciona_home=empresa.redireciona_home,
-            redireciona_home_para=empresa.redireciona_home_para,
         )
         for empresa in empresas
     ]

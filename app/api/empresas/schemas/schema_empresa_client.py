@@ -21,8 +21,6 @@ class EmpresaClientOut(BaseModel):
     cardapio_tema: Optional[str] = "padrao"
     aceita_pedido_automatico: bool = False
     tempo_entrega_maximo: int = Field(..., gt=0)
-    redireciona_home: bool = False
-    redireciona_home_para: Optional[str] = None
     cep: Optional[str] = None
     logradouro: Optional[str] = None
     numero: Optional[str] = None
@@ -46,8 +44,6 @@ class EmpresaPublicListItem(BaseModel):
     estado: Optional[str] = None
     distancia_km: Optional[float] = None
     tema: Optional[str] = None
-    redireciona_home: bool = False
-    redireciona_home_para: Optional[str] = None
     horarios_funcionamento: Optional[List[HorarioDiaOut]] = None
 
     model_config = ConfigDict(from_attributes=True)

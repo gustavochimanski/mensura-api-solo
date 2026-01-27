@@ -54,8 +54,6 @@ class EmpresaBase(BaseModel):
     cardapio_link: Optional[str] = None
     cardapio_tema: Optional[str] = "padrao"
     aceita_pedido_automatico: bool = False
-    redireciona_home: bool = False
-    redireciona_home_para: Optional[str] = None
 
     cep: Optional[str] = None
     logradouro: Optional[str] = None
@@ -81,8 +79,6 @@ class EmpresaUpdate(BaseModel):
     horarios_funcionamento: Optional[List[HorarioDia]] = None
     cardapio_link: Optional[str] = None
     cardapio_tema: Optional[str] = None
-    redireciona_home: Optional[bool] = None
-    redireciona_home_para: Optional[str] = None
 
     cep: Optional[str] = None
     logradouro: Optional[str] = None

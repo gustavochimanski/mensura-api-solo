@@ -199,29 +199,6 @@ def configurar_timezone():
         logger.warning(f"⚠️ Erro ao configurar timezone do banco: {e}")
 
 
-def garantir_colunas_whatsapp_configs():
-    """Garante colunas necessárias para configuração do WhatsApp/360dialog."""
-    try:
-        with engine.begin() as conn:
-            conn.execute(
-                text(
-                    """
-                    ALTER TABLE notifications.whatsapp_configs
-                    ALTER COLUMN access_token DROP NOT NULL,
-                    ADD COLUMN IF NOT EXISTS webhook_url varchar,
-                    ADD COLUMN IF NOT EXISTS webhook_verify_token varchar,
-                    ADD COLUMN IF NOT EXISTS webhook_header_key varchar,
-                    ADD COLUMN IF NOT EXISTS webhook_header_value text,
-                    ADD COLUMN IF NOT EXISTS webhook_is_active boolean DEFAULT false,
-                    ADD COLUMN IF NOT EXISTS webhook_status varchar DEFAULT 'pending',
-                    ADD COLUMN IF NOT EXISTS webhook_last_sync timestamp without time zone
-                    """
-                )
-            )
-        logger.info("✅ Colunas de webhook em notifications.whatsapp_configs criadas/verificadas")
-    except Exception as e:
-        logger.error("❌ Erro ao garantir colunas de webhook em notifications.whatsapp_configs: %s", e)
-
 def criar_schemas():
     try:
         with engine.begin() as conn:
@@ -401,9 +378,9 @@ def verificar_tabelas_cardapio():
         return False
 
 def criar_tabelas_cardapio_antes():
-    """Cria as tabelas do cardápio antes das outras para garantir que sejam criadas."""
+    """Importa os modelos do cardápio para garantir que estejam registrados no Base."""
     try:
-        logger.info("🚀 Criando tabelas do schema cardapio primeiro...")
+        logger.info("🚀 Importando modelos do schema cardapio...")
         # Importa os modelos para garantir que estejam registrados no Base
         importar_models()
         
@@ -415,144 +392,25 @@ def criar_tabelas_cardapio_antes():
         from app.api.pedidos.models.model_pedido_item_complemento import PedidoItemComplementoModel
         from app.api.pedidos.models.model_pedido_item_complemento_adicional import PedidoItemComplementoAdicionalModel
         
-        # Tabelas de pedidos foram movidas para o schema pedidos
-        cardapio_tables = [
-            TransacaoPagamentoModel.__table__
-        ]
-        
-        # Tabelas do schema pedidos (modelos unificados)
-        pedidos_tables = [
-            PedidoUnificadoModel.__table__,
-            PedidoItemUnificadoModel.__table__,
-            PedidoHistoricoUnificadoModel.__table__,
-            PedidoItemComplementoModel.__table__,
-            PedidoItemComplementoAdicionalModel.__table__,
-        ]
-        
-        # Criar tabelas do schema cardapio (modelos antigos)
-        for table in cardapio_tables:
-            try:
-                with engine.begin() as conn:
-                    result = conn.execute(text("""
-                        SELECT 1 FROM information_schema.tables 
-                        WHERE table_schema = :schema 
-                        AND table_name = :table_name
-                    """), {"schema": table.schema, "table_name": table.name})
-                    existe = result.scalar()
-                
-                if not existe:
-                    with engine.begin() as conn:
-                        table.create(engine, checkfirst=False)
-                    logger.info(f"✅ Tabela {table.schema}.{table.name} criada com sucesso")
-                else:
-                    logger.info(f"ℹ️ Tabela {table.schema}.{table.name} já existe")
-            except Exception as table_err:
-                error_msg = str(table_err)
-                if "already exists" in error_msg.lower():
-                    logger.info(f"ℹ️ Tabela {table.schema}.{table.name} já existe")
-                else:
-                    logger.error(f"❌ Erro ao criar tabela {table.schema}.{table.name}: {table_err}", exc_info=True)
-        
-        # Criar tabelas do schema pedidos (modelos unificados)
-        for table in pedidos_tables:
-            try:
-                with engine.begin() as conn:
-                    result = conn.execute(text("""
-                        SELECT 1 FROM information_schema.tables 
-                        WHERE table_schema = :schema 
-                        AND table_name = :table_name
-                    """), {"schema": table.schema, "table_name": table.name})
-                    existe = result.scalar()
-                
-                if not existe:
-                    with engine.begin() as conn:
-                        table.create(engine, checkfirst=False)
-                    logger.info(f"✅ Tabela {table.schema}.{table.name} criada com sucesso")
-                else:
-                    logger.info(f"ℹ️ Tabela {table.schema}.{table.name} já existe")
-            except Exception as table_err:
-                error_msg = str(table_err)
-                if "already exists" in error_msg.lower():
-                    logger.info(f"ℹ️ Tabela {table.schema}.{table.name} já existe")
-                else:
-                    logger.error(f"❌ Erro ao criar tabela {table.schema}.{table.name}: {table_err}", exc_info=True)
+        logger.info("✅ Modelos do cardapio importados com sucesso")
     except Exception as e:
-        logger.error(f"❌ Erro ao criar tabelas do cardapio antes: {e}", exc_info=True)
+        logger.error(f"❌ Erro ao importar modelos do cardapio: {e}", exc_info=True)
 
 def criar_tabela_pedidos_sem_postgis():
     """
-    Tenta criar a tabela pedidos.pedidos sem a coluna Geography quando PostGIS não está disponível.
-    Esta é uma solução de fallback para permitir que a aplicação funcione sem PostGIS.
+    Função removida - tabelas são criadas automaticamente pelos imports dos modelos.
     """
-    try:
-        logger.info("⚠️ Tentando criar tabela pedidos.pedidos sem coluna Geography...")
-        with engine.begin() as conn:
-            # Verifica se a tabela já existe
-            result = conn.execute(text("""
-                SELECT 1 FROM information_schema.tables 
-                WHERE table_schema = 'pedidos' 
-                AND table_name = 'pedidos'
-            """))
-            if result.scalar():
-                logger.info("ℹ️ Tabela pedidos.pedidos já existe")
-                return True
-            
-            # Tenta criar a tabela sem a coluna Geography
-            # Nota: Esta é uma versão simplificada - pode precisar de ajustes baseado no modelo completo
-            conn.execute(text("""
-                CREATE TABLE IF NOT EXISTS pedidos.pedidos (
-                    id SERIAL PRIMARY KEY,
-                    tipo_entrega pedidos.tipo_entrega_enum NOT NULL,
-                    empresa_id INTEGER NOT NULL REFERENCES cadastros.empresas(id) ON DELETE RESTRICT,
-                    numero_pedido VARCHAR(20) NOT NULL,
-                    status pedidos.pedido_status_enum NOT NULL DEFAULT 'P',
-                    mesa_id INTEGER REFERENCES cadastros.mesas(id) ON DELETE SET NULL,
-                    cliente_id INTEGER REFERENCES cadastros.clientes(id) ON DELETE SET NULL,
-                    endereco_id INTEGER REFERENCES cadastros.enderecos(id) ON DELETE SET NULL,
-                    entregador_id INTEGER REFERENCES cadastros.entregadores_dv(id) ON DELETE SET NULL,
-                    meio_pagamento_id INTEGER REFERENCES cadastros.meios_pagamento(id) ON DELETE SET NULL,
-                    cupom_id INTEGER REFERENCES cadastros.cupons_dv(id) ON DELETE SET NULL,
-                    canal pedidos.canal_pedido_enum,
-                    observacoes VARCHAR(500),
-                    observacao_geral VARCHAR(255),
-                    num_pessoas INTEGER,
-                    subtotal NUMERIC(18, 2) NOT NULL DEFAULT 0,
-                    desconto NUMERIC(18, 2) NOT NULL DEFAULT 0,
-                    taxa_entrega NUMERIC(18, 2) NOT NULL DEFAULT 0,
-                    taxa_servico NUMERIC(18, 2) NOT NULL DEFAULT 0,
-                    valor_total NUMERIC(18, 2) NOT NULL DEFAULT 0,
-                    troco_para NUMERIC(18, 2),
-                    previsao_entrega TIMESTAMP WITH TIME ZONE,
-                    distancia_km NUMERIC(10, 3),
-                    endereco_snapshot JSONB,
-                    -- endereco_geo omitido (requer PostGIS)
-                    acertado_entregador BOOLEAN NOT NULL DEFAULT false,
-                    acertado_entregador_em TIMESTAMP WITH TIME ZONE,
-                    pago BOOLEAN NOT NULL DEFAULT false,
-                    created_at TIMESTAMP WITH TIME ZONE NOT NULL,
-                    updated_at TIMESTAMP WITH TIME ZONE NOT NULL,
-                    CONSTRAINT uq_pedidos_empresa_numero UNIQUE (empresa_id, numero_pedido)
-                );
-                
-                CREATE INDEX IF NOT EXISTS idx_pedidos_empresa ON pedidos.pedidos(empresa_id);
-                CREATE INDEX IF NOT EXISTS idx_pedidos_empresa_tipo_status ON pedidos.pedidos(empresa_id, tipo_entrega, status);
-                CREATE INDEX IF NOT EXISTS idx_pedidos_tipo_status ON pedidos.pedidos(tipo_entrega, status);
-                CREATE INDEX IF NOT EXISTS idx_pedidos_numero ON pedidos.pedidos(empresa_id, numero_pedido);
-                CREATE INDEX IF NOT EXISTS idx_pedidos_endereco_snapshot_gin ON pedidos.pedidos USING gin(endereco_snapshot);
-                -- Índice endereco_geo omitido (requer PostGIS)
-            """))
-        logger.info("✅ Tabela pedidos.pedidos criada sem coluna Geography")
-        return True
-    except Exception as e:
-        logger.error(f"❌ Erro ao criar tabela pedidos.pedidos sem PostGIS: {e}", exc_info=True)
-        return False
+    logger.info("ℹ️ Criação de tabelas delegada aos imports dos modelos")
+    return True
 
 def criar_tabelas(postgis_disponivel: bool = True):
+    """
+    Importa os modelos para garantir que estejam registrados no Base.
+    As tabelas serão criadas automaticamente pelos imports dos modelos.
+    """
     try:
+        logger.info("📦 Importando modelos para registro no Base...")
         importar_models()  # importa só os seus models de mensura e cardapio
-
-        # Nota: Se PostGIS não estiver disponível, tabelas com colunas Geography falharão na criação
-        # mas o erro será tratado especificamente abaixo
 
         # pega todas as Table objects que o Base conhece
         all_tables = list(Base.metadata.tables.values())
@@ -577,163 +435,9 @@ def criar_tabelas(postgis_disponivel: bool = True):
             if t.schema in SCHEMAS
         ]
         
-        logger.info(f"📋 Tabelas filtradas para criar nos schemas {SCHEMAS}: {len(tables_para_criar)} tabelas")
+        logger.info(f"📋 Tabelas registradas nos schemas {SCHEMAS}: {len(tables_para_criar)} tabelas")
         for table in tables_para_criar:
             logger.info(f"  - {table.schema}.{table.name}")
-
-        # Usa a ordenação topológica nativa do SQLAlchemy (respeita FKs)
-        ordered_tables = [t for t in Base.metadata.sorted_tables if t.schema in SCHEMAS]
-        
-        # Exclui a tabela adicionais que não é mais usada
-        # Adicionais agora são vínculos de produtos/receitas/combos em complementos (complemento_vinculo_item)
-        # Filtra a tabela da lista de tabelas a criar (não pode deletar do metadata pois é imutável)
-        tabelas_antes = len(ordered_tables)
-        ordered_tables = [t for t in ordered_tables if not (t.schema == "catalogo" and t.name == "adicionais")]
-        if len(ordered_tables) < tabelas_antes:
-            logger.info("⚠️ Tabela catalogo.adicionais filtrada da criação (não é mais usada)")
-
-        logger.info("🔧 Criando tabelas na ordem correta:")
-        for i, table in enumerate(ordered_tables, 1):
-            logger.info(f"  {i:2d}. {table.schema}.{table.name}")
-
-        # Cria as tabelas na ordem correta (delega a checkfirst do SQLAlchemy)
-        tabelas_com_erro = []
-        for table in ordered_tables:
-            try:
-                table.create(engine, checkfirst=True)
-                logger.info(f"✅/ℹ️ Tabela {table.schema}.{table.name} criada/verificada")
-            except Exception as table_error:
-                error_msg = str(table_error)
-                # Verifica se o erro é relacionado ao tipo Geography e PostGIS não está disponível
-                is_geography_error = ("geography" in error_msg.lower() or 
-                                     ("type" in error_msg.lower() and "does not exist" in error_msg.lower()) or
-                                     "postgis" in error_msg.lower())
-                
-                if not postgis_disponivel and is_geography_error and table.name == "pedidos" and table.schema == "pedidos":
-                    logger.warning(f"⚠️ Tabela {table.schema}.{table.name} requer PostGIS mas PostGIS não está disponível.")
-                    logger.warning(f"⚠️ Tentando criar versão simplificada sem coluna Geography...")
-                    # Tenta criar a tabela sem a coluna Geography
-                    if criar_tabela_pedidos_sem_postgis():
-                        logger.info(f"✅ Tabela {table.schema}.{table.name} criada sem PostGIS (funcionalidades geográficas desabilitadas)")
-                    else:
-                        logger.error(f"❌ Não foi possível criar tabela {table.schema}.{table.name} mesmo sem PostGIS")
-                        tabelas_com_erro.append((table, table_error))
-                elif not postgis_disponivel and is_geography_error:
-                    logger.warning(f"⚠️ Tabela {table.schema}.{table.name} requer PostGIS mas PostGIS não está disponível.")
-                    logger.warning(f"⚠️ Pulando criação desta tabela. Funcionalidades geográficas estarão desabilitadas.")
-                    # Verifica se a tabela já existe
-                    try:
-                        with engine.connect() as conn:
-                            result = conn.execute(text("""
-                                SELECT 1 FROM information_schema.tables 
-                                WHERE table_schema = :schema 
-                                AND table_name = :table_name
-                            """), {"schema": table.schema, "table_name": table.name})
-                            existe = result.scalar()
-                            if existe:
-                                logger.info(f"ℹ️ Tabela {table.schema}.{table.name} já existe")
-                            else:
-                                logger.warning(f"⚠️ Tabela {table.schema}.{table.name} não pode ser criada sem PostGIS")
-                    except Exception as check_error:
-                        logger.warning(f"⚠️ Erro ao verificar existência da tabela: {check_error}")
-                else:
-                    logger.error(f"❌ Erro ao criar tabela {table.schema}.{table.name}: {table_error}", exc_info=True)
-                    tabelas_com_erro.append((table, table_error))
-
-        # Segunda tentativa para tabelas que falharam (apenas se não for erro de PostGIS)
-        if tabelas_com_erro:
-            logger.info(f"🔄 Segunda tentativa para {len(tabelas_com_erro)} tabelas com erro...")
-            for table, error in tabelas_com_erro:
-                try:
-                    table.create(engine, checkfirst=True)
-                    logger.info(f"✅ Tabela {table.schema}.{table.name} criada/verificada (2ª tentativa)")
-                except Exception as table_error:
-                    logger.error(f"❌ Erro persistente na tabela {table.schema}.{table.name}: {table_error}", exc_info=True)
-
-        # Garante colunas específicas do 360dialog (webhook) na tabela whatsapp_configs
-        garantir_colunas_whatsapp_configs()
-
-        # Verifica e força criação das tabelas do cardapio
-        logger.info("🔍 Verificando tabelas do schema cardapio...")
-        if not verificar_tabelas_cardapio():
-            logger.warning("⚠️ Algumas tabelas do schema cardapio não foram criadas. Tentando criar todas as tabelas do cardapio...")
-            # Tenta criar todas as tabelas do cardapio usando create_all
-            try:
-                from app.api.cardapio.models.model_transacao_pagamento_dv import TransacaoPagamentoModel
-                # Modelos unificados (modelos antigos foram removidos)
-                from app.api.pedidos.models.model_pedido_unificado import PedidoUnificadoModel
-                from app.api.pedidos.models.model_pedido_item_unificado import PedidoItemUnificadoModel
-                from app.api.pedidos.models.model_pedido_historico_unificado import PedidoHistoricoUnificadoModel
-                from app.api.pedidos.models.model_pedido_item_complemento import PedidoItemComplementoModel
-                from app.api.pedidos.models.model_pedido_item_complemento_adicional import PedidoItemComplementoAdicionalModel
-                
-                # Garante que os modelos estão registrados no Base
-                # Tabelas de pedidos foram movidas para o schema pedidos
-                cardapio_tables = [
-                    TransacaoPagamentoModel.__table__
-                ]
-                
-                # Tabelas do schema pedidos (modelos unificados)
-                pedidos_tables = [
-                    PedidoUnificadoModel.__table__,
-                    PedidoItemUnificadoModel.__table__,
-                    PedidoHistoricoUnificadoModel.__table__,
-                    PedidoItemComplementoModel.__table__,
-                    PedidoItemComplementoAdicionalModel.__table__,
-                ]
-                
-                # Cria cada tabela individualmente para melhor controle de erros
-                # Criar tabelas do schema cardapio (modelos antigos)
-                for table in cardapio_tables:
-                    try:
-                        with engine.begin() as conn:
-                            table.create(engine, checkfirst=True)
-                        logger.info(f"✅ Tabela {table.schema}.{table.name} criada/verificada")
-                    except Exception as table_err:
-                        error_msg = str(table_err)
-                        if "already exists" in error_msg.lower():
-                            logger.info(f"ℹ️ Tabela {table.schema}.{table.name} já existe")
-                        else:
-                            logger.error(f"❌ Erro ao criar tabela {table.schema}.{table.name}: {table_err}", exc_info=True)
-                
-                # Criar tabelas do schema pedidos (modelos unificados)
-                for table in pedidos_tables:
-                    try:
-                        with engine.begin() as conn:
-                            table.create(engine, checkfirst=True)
-                        logger.info(f"✅ Tabela {table.schema}.{table.name} criada/verificada")
-                    except Exception as table_err:
-                        error_msg = str(table_err)
-                        if "already exists" in error_msg.lower():
-                            logger.info(f"ℹ️ Tabela {table.schema}.{table.name} já existe")
-                        else:
-                            logger.error(f"❌ Erro ao criar tabela {table.schema}.{table.name}: {table_err}", exc_info=True)
-                
-                # Verifica novamente após tentativa de criação
-                if verificar_tabelas_cardapio():
-                    logger.info("✅ Todas as tabelas do schema cardapio foram criadas/verificadas com sucesso")
-                else:
-                    logger.error("❌ Ainda faltam tabelas do schema cardapio após tentativa de criação")
-            except Exception as e:
-                logger.error(f"❌ Erro ao criar tabelas do cardapio: {e}", exc_info=True)
-        else:
-            logger.info("✅ Todas as tabelas do schema cardapio já existem")
-
-        # Garante criação de vitrines_landingpage_store e link tables (podem falhar no loop geral)
-        try:
-            from app.api.cardapio.models.model_vitrine import VitrinesLandingpageStoreModel
-            from app.api.cadastros.models.association_tables import (
-                VitrineLandingProdutoLink,
-                VitrineLandingComboLink,
-                VitrineLandingReceitaLink,
-            )
-            VitrinesLandingpageStoreModel.__table__.create(engine, checkfirst=True)
-            VitrineLandingProdutoLink.__table__.create(engine, checkfirst=True)
-            VitrineLandingComboLink.__table__.create(engine, checkfirst=True)
-            VitrineLandingReceitaLink.__table__.create(engine, checkfirst=True)
-            logger.info("✅ Tabelas vitrines_landingpage_store e vitrine_landing_* criadas/verificadas")
-        except Exception as e:
-            logger.warning("⚠️ Erro ao garantir tabelas vitrines_landingpage_store / link: %s", e)
 
         # Garante multi-tenant (empresa_id) em categorias/vitrines do cardápio
         try:
@@ -948,22 +652,15 @@ def criar_tabelas(postgis_disponivel: bool = True):
                 exc_info=True,
             )
 
-        # Garante colunas de redirecionamento de home em cadastros.empresas
+        # Remove colunas antigas redireciona_home / redireciona_home_para de cadastros.empresas (não existem mais)
         try:
             with engine.begin() as conn:
-                conn.execute(
-                    text(
-                        """
-                        ALTER TABLE cadastros.empresas
-                        ADD COLUMN IF NOT EXISTS redireciona_home boolean NOT NULL DEFAULT false,
-                        ADD COLUMN IF NOT EXISTS redireciona_home_para varchar(255)
-                        """
-                    )
-                )
-            logger.info("✅ Colunas redireciona_home/redireciona_home_para em cadastros.empresas criadas/verificadas com sucesso")
+                conn.execute(text("ALTER TABLE cadastros.empresas DROP COLUMN IF EXISTS redireciona_home"))
+                conn.execute(text("ALTER TABLE cadastros.empresas DROP COLUMN IF EXISTS redireciona_home_para"))
+            logger.info("✅ Colunas redireciona_home/redireciona_home_para removidas de cadastros.empresas (se existiam)")
         except Exception as e:
             logger.error(
-                "❌ Erro ao garantir colunas redireciona_home/redireciona_home_para em cadastros.empresas: %s",
+                "❌ Erro ao remover redireciona_home/redireciona_home_para de cadastros.empresas: %s",
                 e,
                 exc_info=True,
             )
@@ -1038,36 +735,23 @@ def criar_meios_pagamento_padrao():
     try:
         from app.api.cadastros.models.model_meio_pagamento import MeioPagamentoModel
 
-        # Garante que a tabela existe antes de inserir dados
-        try:
-            with engine.connect() as conn:
-                result = conn.execute(text("""
-                    SELECT 1 FROM information_schema.tables 
-                    WHERE table_schema = 'cadastros' 
-                    AND table_name = 'meios_pagamento'
-                """))
-                existe = result.scalar()
-                
-                if not existe:
-                    logger.info("📋 Criando tabela cadastros.meios_pagamento...")
-                    MeioPagamentoModel.__table__.create(engine, checkfirst=True)
-                    logger.info("✅ Tabela cadastros.meios_pagamento criada com sucesso")
-                else:
-                    logger.info("ℹ️ Tabela cadastros.meios_pagamento já existe")
-        except Exception as table_err:
-            logger.error(f"❌ Erro ao verificar/criar tabela cadastros.meios_pagamento: {table_err}", exc_info=True)
-            # Tenta criar mesmo assim
-            try:
-                MeioPagamentoModel.__table__.create(engine, checkfirst=True)
-                logger.info("✅ Tabela cadastros.meios_pagamento criada (2ª tentativa)")
-            except Exception as e2:
-                logger.error(f"❌ Erro persistente ao criar tabela: {e2}", exc_info=True)
-                raise
+        # Importa o modelo para garantir que esteja registrado no Base
+        # A tabela será criada automaticamente pelos imports
 
         dados_meios_pagamento = [
             {
-                "nome": "Cartão Entrega",
+                "nome": "Cartão Débito",
                 "tipo": "CARTAO_ENTREGA",
+                "ativo": True,
+            },
+            {
+                "nome": "Cartão Crédito",
+                "tipo": "CARTAO_ENTREGA",
+                "ativo": True,
+            },
+            {
+                "nome": "Pix Entrega",
+                "tipo": "PIX_ENTREGA",
                 "ativo": True,
             },
             {
@@ -1079,12 +763,7 @@ def criar_meios_pagamento_padrao():
                 "nome": "Outros",
                 "tipo": "OUTROS",
                 "ativo": True,
-            },
-            {
-                "nome": "Pix - POS",
-                "tipo": "OUTROS",
-                "ativo": True,
-            },
+            }
         ]
 #
         with SessionLocal() as session:
