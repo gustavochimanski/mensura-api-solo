@@ -439,9 +439,73 @@ def criar_tabelas(postgis_disponivel: bool = True):
         for table in tables_para_criar:
             logger.info(f"  - {table.schema}.{table.name}")
 
+        # ── (1) Cria/garante as tabelas via SQLAlchemy ────────────────────────
+        # Importante: antes de qualquer ALTER/seed, precisamos garantir que as
+        # tabelas realmente existam no banco.
+        def _has_geo_columns(table) -> bool:
+            try:
+                for col in table.columns:
+                    t = getattr(col, "type", None)
+                    if t is None:
+                        continue
+                    # GeoAlchemy2 normalmente expõe tipos Geography/Geometry
+                    if t.__class__.__name__ in ("Geography", "Geometry"):
+                        return True
+                    if (t.__class__.__module__ or "").startswith("geoalchemy2"):
+                        return True
+                return False
+            except Exception:
+                # em dúvida, não assume que é geo
+                return False
+
+        def _table_exists(conn, schema: str, table_name: str) -> bool:
+            return (
+                conn.execute(
+                    text(
+                        """
+                        SELECT 1
+                        FROM information_schema.tables
+                        WHERE table_schema = :schema
+                          AND table_name = :table
+                        """
+                    ),
+                    {"schema": schema, "table": table_name},
+                ).scalar()
+                is not None
+            )
+
+        try:
+            if postgis_disponivel:
+                tables_to_create = tables_para_criar
+            else:
+                # Se PostGIS não está disponível, evita criar tabelas que dependem
+                # de Geography/Geometry para não quebrar a inicialização inteira.
+                tables_to_create = [t for t in tables_para_criar if not _has_geo_columns(t)]
+                skipped = [t for t in tables_para_criar if t not in tables_to_create]
+                if skipped:
+                    logger.warning(
+                        "⚠️ PostGIS indisponível; pulando criação de %s tabelas com tipos geo: %s",
+                        len(skipped),
+                        ", ".join([f"{t.schema}.{t.name}" for t in skipped]),
+                    )
+
+            Base.metadata.create_all(bind=engine, tables=tables_to_create, checkfirst=True)
+            logger.info("✅ create_all concluído (%s tabelas garantidas).", len(tables_to_create))
+        except Exception as e:
+            # Falha crítica: sem tabelas, qualquer ALTER/seed vai quebrar.
+            logger.error("❌ Erro ao criar tabelas via SQLAlchemy (create_all): %s", e, exc_info=True)
+            raise
+
         # Garante multi-tenant (empresa_id) em categorias/vitrines do cardápio
         try:
             with engine.begin() as conn:
+                # Se as tabelas não existirem por algum motivo, não tenta ALTER.
+                if not _table_exists(conn, "cardapio", "categoria_dv") or not _table_exists(conn, "cardapio", "vitrines_dv"):
+                    logger.warning("⚠️ Tabelas cardapio.categoria_dv/vitrines_dv não existem; pulando ajustes multi-tenant.")
+                    vitrines_landing_exists = False
+                    # Pula todo o bloco de ajustes multi-tenant
+                    raise StopIteration()
+
                 # Colunas (um ALTER por execute; vários statements em um execute podem falhar)
                 conn.execute(text("ALTER TABLE cardapio.categoria_dv ADD COLUMN IF NOT EXISTS empresa_id integer"))
                 conn.execute(text("ALTER TABLE cardapio.vitrines_dv ADD COLUMN IF NOT EXISTS empresa_id integer"))
@@ -605,6 +669,9 @@ def criar_tabelas(postgis_disponivel: bool = True):
                         )
                     )
             logger.info("✅ Coluna/constraints empresa_id em cardapio.categoria_dv, cardapio.vitrines_dv e cardapio.vitrines_landingpage_store (se existir) criadas/verificadas com sucesso")
+        except StopIteration:
+            # fluxo de "pular" ajustes quando tabelas não existem
+            pass
         except Exception as e:
             logger.error(
                 "❌ Erro ao garantir empresa_id em categorias/vitrines do cardápio: %s",
@@ -615,6 +682,9 @@ def criar_tabelas(postgis_disponivel: bool = True):
         # Garante colunas de mínimo/máximo de itens em complementos
         try:
             with engine.begin() as conn:
+                if not _table_exists(conn, "catalogo", "complemento_produto"):
+                    logger.warning("⚠️ Tabela catalogo.complemento_produto não existe; pulando criação de colunas minimo_itens/maximo_itens.")
+                else:
                 conn.execute(
                     text(
                         """
@@ -635,6 +705,9 @@ def criar_tabelas(postgis_disponivel: bool = True):
         # Garante colunas de horário de funcionamento em cadastros.empresas
         try:
             with engine.begin() as conn:
+                if not _table_exists(conn, "cadastros", "empresas"):
+                    logger.warning("⚠️ Tabela cadastros.empresas não existe; pulando ajustes de timezone/horarios_funcionamento.")
+                else:
                 conn.execute(
                     text(
                         """
@@ -655,8 +728,11 @@ def criar_tabelas(postgis_disponivel: bool = True):
         # Remove colunas antigas redireciona_home / redireciona_home_para de cadastros.empresas (não existem mais)
         try:
             with engine.begin() as conn:
-                conn.execute(text("ALTER TABLE cadastros.empresas DROP COLUMN IF EXISTS redireciona_home"))
-                conn.execute(text("ALTER TABLE cadastros.empresas DROP COLUMN IF EXISTS redireciona_home_para"))
+                if not _table_exists(conn, "cadastros", "empresas"):
+                    logger.warning("⚠️ Tabela cadastros.empresas não existe; pulando remoção de colunas antigas.")
+                else:
+                    conn.execute(text("ALTER TABLE cadastros.empresas DROP COLUMN IF EXISTS redireciona_home"))
+                    conn.execute(text("ALTER TABLE cadastros.empresas DROP COLUMN IF EXISTS redireciona_home_para"))
             logger.info("✅ Colunas redireciona_home/redireciona_home_para removidas de cadastros.empresas (se existiam)")
         except Exception as e:
             logger.error(
@@ -668,7 +744,10 @@ def criar_tabelas(postgis_disponivel: bool = True):
         # Garante landingpage_store em cadastros.empresas
         try:
             with engine.begin() as conn:
-                conn.execute(text("ALTER TABLE cadastros.empresas ADD COLUMN IF NOT EXISTS landingpage_store boolean NOT NULL DEFAULT false"))
+                if not _table_exists(conn, "cadastros", "empresas"):
+                    logger.warning("⚠️ Tabela cadastros.empresas não existe; pulando criação da coluna landingpage_store.")
+                else:
+                    conn.execute(text("ALTER TABLE cadastros.empresas ADD COLUMN IF NOT EXISTS landingpage_store boolean NOT NULL DEFAULT false"))
             logger.info("✅ Coluna landingpage_store em cadastros.empresas criada/verificada com sucesso")
         except Exception as e:
             logger.error(
@@ -701,6 +780,20 @@ def criar_tabelas_chatbot():
 def criar_usuario_admin_padrao():
     """Cria o usuário 'admin' com senha padrão caso não exista."""
     try:
+        with engine.connect() as conn:
+            exists = conn.execute(
+                text(
+                    """
+                    SELECT 1
+                    FROM information_schema.tables
+                    WHERE table_schema = 'cadastros' AND table_name = 'usuarios'
+                    """
+                )
+            ).scalar()
+            if not exists:
+                logger.warning("⚠️ Tabela cadastros.usuarios não existe; pulando criação do usuário admin padrão.")
+                return
+
         with SessionLocal() as session:
             stmt = (
                 insert(UserModel)
@@ -764,6 +857,20 @@ def criar_meios_pagamento_padrao():
             }
         ]
 #
+        with engine.connect() as conn:
+            exists = conn.execute(
+                text(
+                    """
+                    SELECT 1
+                    FROM information_schema.tables
+                    WHERE table_schema = 'cadastros' AND table_name = 'meios_pagamento'
+                    """
+                )
+            ).scalar()
+            if not exists:
+                logger.warning("⚠️ Tabela cadastros.meios_pagamento não existe; pulando seed de meios de pagamento.")
+                return
+
         with SessionLocal() as session:
             for dados in dados_meios_pagamento:
                 stmt = (
@@ -800,6 +907,11 @@ def inicializar_banco():
     # SEMPRE cria as tabelas (criar_tabelas usa checkfirst=True, então não sobrescreve)
     logger.info("📋 Passo 5/8: Criando/verificando todas as tabelas...")
     criar_tabelas(postgis_disponivel=postgis_disponivel)
+
+    # Se as tabelas essenciais não existirem, não adianta seguir com seed.
+    if not verificar_banco_inicializado():
+        logger.error("❌ Banco não está inicializado (tabelas principais ausentes). Abortando passos 6-8.")
+        return
     
     # Cria tabelas do chatbot (que não usam modelos SQLAlchemy)
     logger.info("🤖 Passo 6/8: Criando/verificando tabelas do chatbot...")
