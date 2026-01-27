@@ -102,7 +102,24 @@ def toggle_home_vitrine(
 
 
 # --- CRUD ---
-@router.post("/", response_model=VitrineOut, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/",
+    response_model=VitrineOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Criar vitrine",
+    description="Cria uma nova vitrine. Use o parâmetro **landingpage_true=true** na query para criar em vitrines da landing page store (sem categoria); nesse caso não envie cod_categoria no body.",
+    openapi_extra={
+        "parameters": [
+            {
+                "name": "landingpage_true",
+                "in": "query",
+                "required": False,
+                "schema": {"type": "boolean", "default": False},
+                "description": "Se true, cria em vitrines_landingpage_store (sem categoria). Não envie cod_categoria quando true.",
+            }
+        ]
+    },
+)
 def criar_vitrine(
     request: CriarVitrineRequest,
     landingpage_true: bool = Query(False, description="Se true, cria em vitrines_landingpage_store (sem categoria)"),
