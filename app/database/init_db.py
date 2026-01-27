@@ -432,7 +432,7 @@ def criar_tabelas(postgis_disponivel: bool = True):
         tables_para_criar = [
             t
             for t in all_tables
-            if t.schema in SCHEMAS
+            if t.schema is not None and str(t.schema) in SCHEMAS
         ]
         
         logger.info(f"📋 Tabelas registradas nos schemas {SCHEMAS}: {len(tables_para_criar)} tabelas")
@@ -502,78 +502,26 @@ def criar_tabelas(postgis_disponivel: bool = True):
                 # Se as tabelas não existirem por algum motivo, não tenta ALTER.
                 if not _table_exists(conn, "cardapio", "categoria_dv") or not _table_exists(conn, "cardapio", "vitrines_dv"):
                     logger.warning("⚠️ Tabelas cardapio.categoria_dv/vitrines_dv não existem; pulando ajustes multi-tenant.")
-                    vitrines_landing_exists = False
-                    # Pula todo o bloco de ajustes multi-tenant
-                    raise StopIteration()
+                else:
+                    # Colunas (um ALTER por execute; vários statements em um execute podem falhar)
+                    conn.execute(text("ALTER TABLE cardapio.categoria_dv ADD COLUMN IF NOT EXISTS empresa_id integer"))
+                    conn.execute(text("ALTER TABLE cardapio.vitrines_dv ADD COLUMN IF NOT EXISTS empresa_id integer"))
+                    # vitrines_landingpage_store: só altera se a tabela existir
+                    r = conn.execute(text("""
+                        SELECT 1 FROM information_schema.tables
+                        WHERE table_schema = 'cardapio' AND table_name = 'vitrines_landingpage_store'
+                    """))
+                    vitrines_landing_exists = r.scalar()
+                    if vitrines_landing_exists:
+                        conn.execute(text("ALTER TABLE cardapio.vitrines_landingpage_store ADD COLUMN IF NOT EXISTS empresa_id integer"))
 
-                # Colunas (um ALTER por execute; vários statements em um execute podem falhar)
-                conn.execute(text("ALTER TABLE cardapio.categoria_dv ADD COLUMN IF NOT EXISTS empresa_id integer"))
-                conn.execute(text("ALTER TABLE cardapio.vitrines_dv ADD COLUMN IF NOT EXISTS empresa_id integer"))
-                # vitrines_landingpage_store: só altera se a tabela existir
-                r = conn.execute(text("""
-                    SELECT 1 FROM information_schema.tables
-                    WHERE table_schema = 'cardapio' AND table_name = 'vitrines_landingpage_store'
-                """))
-                vitrines_landing_exists = r.scalar()
-                if vitrines_landing_exists:
-                    conn.execute(text("ALTER TABLE cardapio.vitrines_landingpage_store ADD COLUMN IF NOT EXISTS empresa_id integer"))
+                    # Índices (performance)
+                    conn.execute(text("CREATE INDEX IF NOT EXISTS idx_categoria_dv_empresa_id ON cardapio.categoria_dv (empresa_id)"))
+                    conn.execute(text("CREATE INDEX IF NOT EXISTS idx_vitrines_dv_empresa_id ON cardapio.vitrines_dv (empresa_id)"))
+                    if vitrines_landing_exists:
+                        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_vitrines_landingpage_store_empresa_id ON cardapio.vitrines_landingpage_store (empresa_id)"))
 
-                # Índices (performance)
-                conn.execute(text("CREATE INDEX IF NOT EXISTS idx_categoria_dv_empresa_id ON cardapio.categoria_dv (empresa_id)"))
-                conn.execute(text("CREATE INDEX IF NOT EXISTS idx_vitrines_dv_empresa_id ON cardapio.vitrines_dv (empresa_id)"))
-                if vitrines_landing_exists:
-                    conn.execute(text("CREATE INDEX IF NOT EXISTS idx_vitrines_landingpage_store_empresa_id ON cardapio.vitrines_landingpage_store (empresa_id)"))
-
-                # FKs (idempotentes via DO)
-                conn.execute(
-                    text(
-                        """
-                        DO $$
-                        BEGIN
-                          IF NOT EXISTS (
-                            SELECT 1
-                            FROM pg_constraint c
-                            JOIN pg_class t ON t.oid = c.conrelid
-                            JOIN pg_namespace n ON n.oid = t.relnamespace
-                            WHERE n.nspname = 'cardapio'
-                              AND t.relname = 'categoria_dv'
-                              AND c.conname = 'fk_categoria_dv_empresa_id'
-                          ) THEN
-                            ALTER TABLE cardapio.categoria_dv
-                              ADD CONSTRAINT fk_categoria_dv_empresa_id
-                              FOREIGN KEY (empresa_id)
-                              REFERENCES cadastros.empresas(id)
-                              ON DELETE CASCADE;
-                          END IF;
-                        END$$;
-                        """
-                    )
-                )
-                conn.execute(
-                    text(
-                        """
-                        DO $$
-                        BEGIN
-                          IF NOT EXISTS (
-                            SELECT 1
-                            FROM pg_constraint c
-                            JOIN pg_class t ON t.oid = c.conrelid
-                            JOIN pg_namespace n ON n.oid = t.relnamespace
-                            WHERE n.nspname = 'cardapio'
-                              AND t.relname = 'vitrines_dv'
-                              AND c.conname = 'fk_vitrines_dv_empresa_id'
-                          ) THEN
-                            ALTER TABLE cardapio.vitrines_dv
-                              ADD CONSTRAINT fk_vitrines_dv_empresa_id
-                              FOREIGN KEY (empresa_id)
-                              REFERENCES cadastros.empresas(id)
-                              ON DELETE CASCADE;
-                          END IF;
-                        END$$;
-                        """
-                    )
-                )
-                if vitrines_landing_exists:
+                    # FKs (idempotentes via DO)
                     conn.execute(
                         text(
                             """
@@ -585,11 +533,11 @@ def criar_tabelas(postgis_disponivel: bool = True):
                                 JOIN pg_class t ON t.oid = c.conrelid
                                 JOIN pg_namespace n ON n.oid = t.relnamespace
                                 WHERE n.nspname = 'cardapio'
-                                  AND t.relname = 'vitrines_landingpage_store'
-                                  AND c.conname = 'fk_vitrines_landingpage_store_empresa_id'
+                                  AND t.relname = 'categoria_dv'
+                                  AND c.conname = 'fk_categoria_dv_empresa_id'
                               ) THEN
-                                ALTER TABLE cardapio.vitrines_landingpage_store
-                                  ADD CONSTRAINT fk_vitrines_landingpage_store_empresa_id
+                                ALTER TABLE cardapio.categoria_dv
+                                  ADD CONSTRAINT fk_categoria_dv_empresa_id
                                   FOREIGN KEY (empresa_id)
                                   REFERENCES cadastros.empresas(id)
                                   ON DELETE CASCADE;
@@ -598,55 +546,6 @@ def criar_tabelas(postgis_disponivel: bool = True):
                             """
                         )
                     )
-
-                # Unicidade de slug por empresa (remove unicidade global se existir)
-                conn.execute(text("ALTER TABLE cardapio.vitrines_dv DROP CONSTRAINT IF EXISTS uq_vitrine_slug_global"))
-                conn.execute(text("ALTER TABLE cardapio.categoria_dv DROP CONSTRAINT IF EXISTS categoria_dv_slug_key"))
-                conn.execute(text("ALTER TABLE cardapio.categoria_dv DROP CONSTRAINT IF EXISTS uq_categoria_slug_global"))
-
-                conn.execute(
-                    text(
-                        """
-                        DO $$
-                        BEGIN
-                          IF NOT EXISTS (
-                            SELECT 1
-                            FROM pg_constraint c
-                            JOIN pg_class t ON t.oid = c.conrelid
-                            JOIN pg_namespace n ON n.oid = t.relnamespace
-                            WHERE n.nspname = 'cardapio'
-                              AND t.relname = 'vitrines_dv'
-                              AND c.conname = 'uq_vitrine_slug_empresa'
-                          ) THEN
-                            ALTER TABLE cardapio.vitrines_dv
-                              ADD CONSTRAINT uq_vitrine_slug_empresa UNIQUE (empresa_id, slug);
-                          END IF;
-                        END$$;
-                        """
-                    )
-                )
-                conn.execute(
-                    text(
-                        """
-                        DO $$
-                        BEGIN
-                          IF NOT EXISTS (
-                            SELECT 1
-                            FROM pg_constraint c
-                            JOIN pg_class t ON t.oid = c.conrelid
-                            JOIN pg_namespace n ON n.oid = t.relnamespace
-                            WHERE n.nspname = 'cardapio'
-                              AND t.relname = 'categoria_dv'
-                              AND c.conname = 'uq_categoria_slug_empresa'
-                          ) THEN
-                            ALTER TABLE cardapio.categoria_dv
-                              ADD CONSTRAINT uq_categoria_slug_empresa UNIQUE (empresa_id, slug);
-                          END IF;
-                        END$$;
-                        """
-                    )
-                )
-                if vitrines_landing_exists:
                     conn.execute(
                         text(
                             """
@@ -658,20 +557,115 @@ def criar_tabelas(postgis_disponivel: bool = True):
                                 JOIN pg_class t ON t.oid = c.conrelid
                                 JOIN pg_namespace n ON n.oid = t.relnamespace
                                 WHERE n.nspname = 'cardapio'
-                                  AND t.relname = 'vitrines_landingpage_store'
-                                  AND c.conname = 'uq_vitrine_landing_slug_empresa'
+                                  AND t.relname = 'vitrines_dv'
+                                  AND c.conname = 'fk_vitrines_dv_empresa_id'
                               ) THEN
-                                ALTER TABLE cardapio.vitrines_landingpage_store
-                                  ADD CONSTRAINT uq_vitrine_landing_slug_empresa UNIQUE (empresa_id, slug);
+                                ALTER TABLE cardapio.vitrines_dv
+                                  ADD CONSTRAINT fk_vitrines_dv_empresa_id
+                                  FOREIGN KEY (empresa_id)
+                                  REFERENCES cadastros.empresas(id)
+                                  ON DELETE CASCADE;
                               END IF;
                             END$$;
                             """
                         )
                     )
-            logger.info("✅ Coluna/constraints empresa_id em cardapio.categoria_dv, cardapio.vitrines_dv e cardapio.vitrines_landingpage_store (se existir) criadas/verificadas com sucesso")
-        except StopIteration:
-            # fluxo de "pular" ajustes quando tabelas não existem
-            pass
+                    if vitrines_landing_exists:
+                        conn.execute(
+                            text(
+                                """
+                                DO $$
+                                BEGIN
+                                  IF NOT EXISTS (
+                                    SELECT 1
+                                    FROM pg_constraint c
+                                    JOIN pg_class t ON t.oid = c.conrelid
+                                    JOIN pg_namespace n ON n.oid = t.relnamespace
+                                    WHERE n.nspname = 'cardapio'
+                                      AND t.relname = 'vitrines_landingpage_store'
+                                      AND c.conname = 'fk_vitrines_landingpage_store_empresa_id'
+                                  ) THEN
+                                    ALTER TABLE cardapio.vitrines_landingpage_store
+                                      ADD CONSTRAINT fk_vitrines_landingpage_store_empresa_id
+                                      FOREIGN KEY (empresa_id)
+                                      REFERENCES cadastros.empresas(id)
+                                      ON DELETE CASCADE;
+                                  END IF;
+                                END$$;
+                                """
+                            )
+                        )
+
+                    # Unicidade de slug por empresa (remove unicidade global se existir)
+                    conn.execute(text("ALTER TABLE cardapio.vitrines_dv DROP CONSTRAINT IF EXISTS uq_vitrine_slug_global"))
+                    conn.execute(text("ALTER TABLE cardapio.categoria_dv DROP CONSTRAINT IF EXISTS categoria_dv_slug_key"))
+                    conn.execute(text("ALTER TABLE cardapio.categoria_dv DROP CONSTRAINT IF EXISTS uq_categoria_slug_global"))
+
+                    conn.execute(
+                        text(
+                            """
+                            DO $$
+                            BEGIN
+                              IF NOT EXISTS (
+                                SELECT 1
+                                FROM pg_constraint c
+                                JOIN pg_class t ON t.oid = c.conrelid
+                                JOIN pg_namespace n ON n.oid = t.relnamespace
+                                WHERE n.nspname = 'cardapio'
+                                  AND t.relname = 'vitrines_dv'
+                                  AND c.conname = 'uq_vitrine_slug_empresa'
+                              ) THEN
+                                ALTER TABLE cardapio.vitrines_dv
+                                  ADD CONSTRAINT uq_vitrine_slug_empresa UNIQUE (empresa_id, slug);
+                              END IF;
+                            END$$;
+                            """
+                        )
+                    )
+                    conn.execute(
+                        text(
+                            """
+                            DO $$
+                            BEGIN
+                              IF NOT EXISTS (
+                                SELECT 1
+                                FROM pg_constraint c
+                                JOIN pg_class t ON t.oid = c.conrelid
+                                JOIN pg_namespace n ON n.oid = t.relnamespace
+                                WHERE n.nspname = 'cardapio'
+                                  AND t.relname = 'categoria_dv'
+                                  AND c.conname = 'uq_categoria_slug_empresa'
+                              ) THEN
+                                ALTER TABLE cardapio.categoria_dv
+                                  ADD CONSTRAINT uq_categoria_slug_empresa UNIQUE (empresa_id, slug);
+                              END IF;
+                            END$$;
+                            """
+                        )
+                    )
+                    if vitrines_landing_exists:
+                        conn.execute(
+                            text(
+                                """
+                                DO $$
+                                BEGIN
+                                  IF NOT EXISTS (
+                                    SELECT 1
+                                    FROM pg_constraint c
+                                    JOIN pg_class t ON t.oid = c.conrelid
+                                    JOIN pg_namespace n ON n.oid = t.relnamespace
+                                    WHERE n.nspname = 'cardapio'
+                                      AND t.relname = 'vitrines_landingpage_store'
+                                      AND c.conname = 'uq_vitrine_landing_slug_empresa'
+                                  ) THEN
+                                    ALTER TABLE cardapio.vitrines_landingpage_store
+                                      ADD CONSTRAINT uq_vitrine_landing_slug_empresa UNIQUE (empresa_id, slug);
+                                  END IF;
+                                END$$;
+                                """
+                            )
+                        )
+                    logger.info("✅ Coluna/constraints empresa_id em cardapio.categoria_dv, cardapio.vitrines_dv e cardapio.vitrines_landingpage_store (se existir) criadas/verificadas com sucesso")
         except Exception as e:
             logger.error(
                 "❌ Erro ao garantir empresa_id em categorias/vitrines do cardápio: %s",
@@ -685,15 +679,15 @@ def criar_tabelas(postgis_disponivel: bool = True):
                 if not _table_exists(conn, "catalogo", "complemento_produto"):
                     logger.warning("⚠️ Tabela catalogo.complemento_produto não existe; pulando criação de colunas minimo_itens/maximo_itens.")
                 else:
-                conn.execute(
-                    text(
-                        """
-                        ALTER TABLE catalogo.complemento_produto
-                        ADD COLUMN IF NOT EXISTS minimo_itens integer,
-                        ADD COLUMN IF NOT EXISTS maximo_itens integer
-                        """
+                    conn.execute(
+                        text(
+                            """
+                            ALTER TABLE catalogo.complemento_produto
+                            ADD COLUMN IF NOT EXISTS minimo_itens integer,
+                            ADD COLUMN IF NOT EXISTS maximo_itens integer
+                            """
+                        )
                     )
-                )
             logger.info("✅ Colunas minimo_itens/maximo_itens em catalogo.complemento_produto criadas/verificadas com sucesso")
         except Exception as e:
             logger.error(

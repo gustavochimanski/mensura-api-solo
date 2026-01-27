@@ -25,6 +25,19 @@ Esta documentação descreve os endpoints públicos e admin para o CRUD de empre
 - **Local**: `http://localhost:8000/api/empresas/admin`
 - **Produção**: `https://seu-dominio.com/api/empresas/admin`
 
+### Configuração do Frontend (`.env.local`)
+
+Para o frontend apontar para este backend, configure as variáveis abaixo:
+
+```env
+# .env.local
+NEXT_PUBLIC_API_URL=https://teste2.mensuraapi.com.br
+API_DOC_URL=https://teste2.mensuraapi.com.br/openapi.json
+
+# NÃO versionar/commitar chave real. Use apenas localmente.
+XAI_API_KEY=coloque-sua-chave-aqui
+```
+
 ### Autenticação
 
 **Endpoints Admin**: Requerem autenticação via `get_current_user` (token JWT no header `Authorization: Bearer <token>`)
