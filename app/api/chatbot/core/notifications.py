@@ -873,12 +873,18 @@ async def send_chatbot_websocket_notification(
         if empresa_id_str:
             notification_data["empresa_id"] = empresa_id_str
         
-        # Envia notificação via WebSocket
+        # Envia notificação via WebSocket SOMENTE se houver cliente na rota /chatbot
+        # (o frontend deve mandar { "type": "set_route", "route": "/chatbot" } ao entrar na tela)
+        required_route = "/chatbot"
         if empresa_id_str:
-            sent_count = await websocket_manager.send_to_empresa(empresa_id_str, notification_data)
+            sent_count = await websocket_manager.send_to_empresa_on_route(
+                empresa_id_str,
+                notification_data,
+                required_route=required_route,
+            )
         else:
-            # Se não tem empresa_id, faz broadcast para todos
-            sent_count = await websocket_manager.broadcast(notification_data)
+            # Se não tem empresa_id, faz broadcast filtrado por rota
+            sent_count = await websocket_manager.broadcast_on_route(notification_data, required_route=required_route)
         
         logger.info(
             f"[CHATBOT_WS] Notificação enviada - tipo={notification_type}, "

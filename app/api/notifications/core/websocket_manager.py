@@ -490,10 +490,25 @@ class ConnectionManager:
             return 0
         
         # Filtra conexões que estão na rota requerida
+        # Regra:
+        # - aceita rota exatamente igual ("/chatbot")
+        # - aceita prefixo ("/chatbot/..." ) para rotas aninhadas
+        # - mantém compatibilidade com comportamento antigo (endswith) para casos como "/admin/pedidos"
         filtered_connections = []
+        required_route_norm = required_route.rstrip("/")
         for websocket in connections:
             current_route = self.websocket_to_route.get(websocket, "").strip().lower()
-            if current_route == required_route or current_route.endswith(required_route):
+            if not current_route:
+                continue
+            if current_route == required_route:
+                filtered_connections.append(websocket)
+                continue
+            # Prefix match (ex: /chatbot/conversations/123)
+            if required_route_norm and current_route.startswith(required_route_norm + "/"):
+                filtered_connections.append(websocket)
+                continue
+            # Compat: rota pode ser uma URL completa ou rota com prefixo (ex: /admin/pedidos)
+            if current_route.endswith(required_route):
                 filtered_connections.append(websocket)
         
         if not filtered_connections:
@@ -518,6 +533,54 @@ class ConnectionManager:
             f"Mensagem enviada para {success_count}/{len(filtered_connections)} conexões "
             f"da empresa {empresa_id} na rota {required_route} "
             f"(total de conexões da empresa: {len(connections)})"
+        )
+        return success_count
+
+    async def broadcast_on_route(self, message: Dict[str, Any], required_route: str) -> int:
+        """
+        Broadcast apenas para conexões que estão em uma rota específica.
+
+        Útil para eventos que só fazem sentido quando o usuário está na tela (ex: /chatbot).
+        """
+        required_route = (required_route or "").strip().lower()
+        required_route_norm = required_route.rstrip("/")
+
+        all_connections = set()
+        for connections in self.active_connections.values():
+            all_connections.update(connections)
+
+        if not all_connections:
+            return 0
+
+        filtered_connections = []
+        for websocket in all_connections:
+            current_route = self.websocket_to_route.get(websocket, "").strip().lower()
+            if not current_route:
+                continue
+            if current_route == required_route:
+                filtered_connections.append(websocket)
+                continue
+            if required_route_norm and current_route.startswith(required_route_norm + "/"):
+                filtered_connections.append(websocket)
+                continue
+            if current_route.endswith(required_route):
+                filtered_connections.append(websocket)
+
+        if not filtered_connections:
+            return 0
+
+        success_count = 0
+        for websocket in filtered_connections:
+            try:
+                await websocket.send_text(json.dumps(message))
+                success_count += 1
+            except Exception as e:
+                logger.error(f"Erro no broadcast_on_route ({required_route}): {e}")
+                await self.disconnect(websocket)
+
+        logger.info(
+            f"Broadcast_on_route enviado para {success_count}/{len(filtered_connections)} conexões "
+            f"(route={required_route})"
         )
         return success_count
 
