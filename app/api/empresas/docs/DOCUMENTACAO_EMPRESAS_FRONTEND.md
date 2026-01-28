@@ -295,27 +295,39 @@ GET /api/empresas/public/emp/lista?empresa_id=1
 
 ## 🔧 Endpoints Admin (CRUD Completo)
 
-### 1. Listar Empresas
+### 1. Listar Empresas (ou Meios de Pagamento)
 
 **GET** `/api/empresas/admin/`
 
-Lista todas as empresas com paginação.
+Lista todas as empresas com paginação. Se `recurso=meios-pagamento`, retorna a lista de meios de pagamento (para uso no gestor-app na tela de meios de pagamento).
 
 #### Parâmetros Query
 
 | Parâmetro | Tipo | Obrigatório | Padrão | Descrição |
 |-----------|------|-------------|--------|-----------|
-| `skip` | integer | Não | 0 | Número de registros a pular |
-| `limit` | integer | Não | 100 | Número máximo de registros retornados |
+| `skip` | integer | Não | 0 | Número de registros a pular (só para listar empresas) |
+| `limit` | integer | Não | 100 | Número máximo de registros retornados (só para listar empresas) |
+| `recurso` | string | Não | — | Se `"meios-pagamento"`, a resposta é a lista de meios de pagamento em vez de empresas |
 
-#### Exemplo de Requisição
+#### Exemplos de Requisição
+
+Listar empresas (comportamento padrão):
 
 ```http
 GET /api/empresas/admin/?skip=0&limit=10
 Authorization: Bearer <token>
 ```
 
+Listar meios de pagamento (gestor-app: usar quando a tela for “Meios de pagamento”):
+
+```http
+GET /api/empresas/admin/?recurso=meios-pagamento
+Authorization: Bearer <token>
+```
+
 #### Resposta de Sucesso (200 OK)
+
+**Quando não usa `recurso=meios-pagamento`** — lista de empresas:
 
 ```json
 [
@@ -366,6 +378,8 @@ Authorization: Bearer <token>
   }
 ]
 ```
+
+**Quando usa `recurso=meios-pagamento`** — lista de meios de pagamento (array de `{ id, nome, tipo, ativo, created_at, updated_at }`).
 
 ---
 

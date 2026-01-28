@@ -1,7 +1,7 @@
 # app/api/empresas/router/admin/router_empresa_admin.py
 from fastapi import APIRouter, Depends, UploadFile, Form, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional, Union
 import json
 from functools import lru_cache
 
@@ -175,9 +175,16 @@ def get_empresa(id: int, db: Session = Depends(get_db)):
     return EmpresaService(db).get_empresa(id)
 
 
-# Listar empresas
-@router.get("/", response_model=List[EmpresaResponse])
-def list_empresas(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+# Listar empresas ou meios de pagamento (quando recurso=meios-pagamento)
+@router.get("/")
+def list_empresas(
+    skip: int = 0,
+    limit: int = 100,
+    recurso: Optional[str] = Query(None, description="Se 'meios-pagamento', retorna meios de pagamento; senão, lista empresas."),
+    db: Session = Depends(get_db),
+) -> Union[List[EmpresaResponse], List[MeioPagamentoResponse]]:
+    if recurso == "meios-pagamento":
+        return MeioPagamentoService(db).list_all()
     return EmpresaService(db).list_empresas(skip, limit)
 
 
