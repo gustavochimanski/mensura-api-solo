@@ -170,7 +170,14 @@ class GoogleMapsAdapter:
     
     def buscar_enderecos(self, texto: str, max_results: int = 5) -> List[Dict]:
         """
-        Busca endereços usando Google Maps Places Autocomplete API.
+        Busca por texto de forma "geral", funcionando para:
+        - Endereços (rua/avenida/CEP etc)
+        - Estabelecimentos e pontos de referência (POIs) (ex: "motel", "restaurante", "hospital")
+
+        Estratégia automática (sem precisar de parâmetro):
+        - Tenta Places Autocomplete com types=address
+        - Se não achar, tenta Places Autocomplete com types=establishment
+        - Se ainda não achar, faz fallback com Places Text Search (busca geral) e resolve detalhes por place_id
         
         Args:
             texto: Texto para buscar (pode ser parcial)
@@ -182,19 +189,61 @@ class GoogleMapsAdapter:
         if not self.api_key:
             logger.warning("[GoogleMapsAdapter] API key não configurada")
             return []
-            
-        try:
+
+        texto_norm = (texto or "").strip()
+        if not texto_norm:
+            return []
+
+        if max_results < 1:
+            max_results = 1
+        if max_results > 10:
+            # Mantém o mesmo limite dos endpoints atuais (1-10)
+            max_results = 10
+
+        def _buscar_details_por_place_ids(place_ids: List[str]) -> List[Dict]:
+            resultados: List[Dict] = []
+            if not place_ids:
+                return resultados
+            with httpx.Client(timeout=10.0) as client_details:
+                for place_id in place_ids:
+                    try:
+                        details_response = client_details.get(
+                            self.PLACES_DETAILS_URL,
+                            params={
+                                "place_id": place_id,
+                                "key": self.api_key,
+                                "language": "pt-BR",
+                                "fields": "address_components,formatted_address,geometry,name,types",
+                            },
+                        )
+                        details_response.raise_for_status()
+                        details_data = details_response.json()
+                        if details_data.get("status") == "OK" and details_data.get("result"):
+                            result = details_data.get("result")
+                            endereco_info = self._extrair_endereco_formatado(result)
+                            # Campos aditivos (não quebram quem espera campos de endereço)
+                            endereco_info["place_id"] = place_id
+                            endereco_info["nome"] = result.get("name")
+                            endereco_info["types"] = result.get("types") or []
+                            endereco_info["formatted_address"] = result.get("formatted_address")
+                            resultados.append(endereco_info)
+                    except Exception as e:
+                        logger.warning(f"[GoogleMapsAdapter] Erro ao buscar detalhes do place_id {place_id}: {e}")
+                        continue
+            return resultados
+
+        def _autocomplete_place_ids(types_value: str) -> Optional[List[str]]:
+            """Retorna place_ids ou [] (ZERO_RESULTS) ou None (erro crítico)."""
             with httpx.Client(timeout=10.0) as client:
-                # Primeiro, usa Places Autocomplete para obter múltiplos resultados
                 response = client.get(
                     self.PLACES_AUTOCOMPLETE_URL,
                     params={
-                        "input": texto,
+                        "input": texto_norm,
                         "key": self.api_key,
-                        "components": "country:br",  # Restringe busca APENAS ao Brasil
+                        "components": "country:br",
                         "language": "pt-BR",
-                        "types": "address"  # Restringe a endereços
-                    }
+                        "types": types_value,
+                    },
                 )
             response.raise_for_status()
             data = response.json()
@@ -214,74 +263,101 @@ class GoogleMapsAdapter:
                     )
                 else:
                     logger.error(
-                        f"[GoogleMapsAdapter] Acesso negado pela API do Google Maps para '{texto}'. "
+                        f"[GoogleMapsAdapter] Acesso negado pela API do Google Maps para '{texto_norm}'. "
                         f"Verifique se a API key está correta e se a Places API está habilitada. "
                         f"Erro: {error_message}"
                     )
-                return []
+                return None
             elif status_code == "OVER_QUERY_LIMIT":
                 logger.error(
-                    f"[GoogleMapsAdapter] Limite de requisições excedido para '{texto}'. "
+                    f"[GoogleMapsAdapter] Limite de requisições excedido para '{texto_norm}'. "
                     f"Verifique a cota da API do Google Maps."
                 )
-                return []
+                return None
             elif status_code == "INVALID_REQUEST":
                 logger.warning(
-                    f"[GoogleMapsAdapter] Requisição inválida para '{texto}': {data.get('error_message', '')}"
+                    f"[GoogleMapsAdapter] Requisição inválida para '{texto_norm}': {data.get('error_message', '')}"
                 )
-                return []
+                return None
             elif status_code == "ZERO_RESULTS":
-                logger.info(f"[GoogleMapsAdapter] Nenhum resultado encontrado para '{texto}'")
                 return []
             elif status_code != "OK" or not data.get("predictions"):
                 logger.warning(
-                    f"[GoogleMapsAdapter] Status inesperado para '{texto}': {status_code}. "
+                    f"[GoogleMapsAdapter] Status inesperado para '{texto_norm}': {status_code}. "
                     f"Mensagem: {data.get('error_message', 'N/A')}"
                 )
-                return []
-            
-            # Obtém os place_ids dos resultados
+                return None
+
             predictions = data.get("predictions", [])[:max_results]
-            
-            if not predictions:
+            place_ids = [p.get("place_id") for p in predictions if p.get("place_id")]
+            return place_ids
+
+        def _text_search_place_ids() -> Optional[List[str]]:
+            """Fallback: busca geral por texto (Text Search). Retorna place_ids, [] ou None (erro crítico)."""
+            with httpx.Client(timeout=12.0) as client:
+                response = client.get(
+                    self.PLACES_TEXT_SEARCH_URL,
+                    params={
+                        "query": texto_norm,
+                        "key": self.api_key,
+                        "language": "pt-BR",
+                        "region": "br",
+                    },
+                )
+            response.raise_for_status()
+            data = response.json()
+            status_code = data.get("status")
+            if status_code == "ZERO_RESULTS":
                 return []
-            
-            # Para cada prediction, busca os detalhes completos usando Places Details
-            resultados = []
-            with httpx.Client(timeout=10.0) as client:
-                for prediction in predictions:
-                    place_id = prediction.get("place_id")
-                    if not place_id:
-                        continue
-                    
-                    try:
-                        # Busca detalhes do lugar
-                        details_response = client.get(
-                            self.PLACES_DETAILS_URL,
-                            params={
-                                "place_id": place_id,
-                                "key": self.api_key,
-                                "language": "pt-BR",
-                                "fields": "address_components,formatted_address,geometry"
-                            }
-                        )
-                        details_response.raise_for_status()
-                        details_data = details_response.json()
-                        
-                        if details_data.get("status") == "OK" and details_data.get("result"):
-                            result = details_data.get("result")
-                            endereco_info = self._extrair_endereco_formatado(result)
-                            resultados.append(endereco_info)
-                    except Exception as e:
-                        logger.warning(f"[GoogleMapsAdapter] Erro ao buscar detalhes do place_id {place_id}: {e}")
-                        continue
-            
-            return resultados
+            if status_code == "REQUEST_DENIED":
+                logger.error(
+                    f"[GoogleMapsAdapter] Acesso negado (Places Text Search) para '{texto_norm}': "
+                    f"{data.get('error_message', 'N/A')}"
+                )
+                return None
+            if status_code == "OVER_QUERY_LIMIT":
+                logger.error("[GoogleMapsAdapter] Limite de requisições excedido (Places Text Search).")
+                return None
+            if status_code != "OK":
+                logger.warning(
+                    f"[GoogleMapsAdapter] Status inesperado (Places Text Search) para '{texto_norm}': {status_code}. "
+                    f"Mensagem: {data.get('error_message', 'N/A')}"
+                )
+                return None
+            results = (data.get("results") or [])[:max_results]
+            return [r.get("place_id") for r in results if r.get("place_id")]
+
+        try:
+            # 1) Endereço
+            place_ids = _autocomplete_place_ids("address")
+            if place_ids is None:
+                return []
+            if place_ids:
+                return _buscar_details_por_place_ids(place_ids)
+
+            # 2) Estabelecimento/POI
+            place_ids = _autocomplete_place_ids("establishment")
+            if place_ids is None:
+                return []
+            if place_ids:
+                return _buscar_details_por_place_ids(place_ids)
+
+            # 3) Fallback: busca geral por texto
+            place_ids = _text_search_place_ids()
+            if place_ids is None:
+                return []
+            if place_ids:
+                return _buscar_details_por_place_ids(place_ids)
+
+            return []
         except httpx.HTTPStatusError as e:
-            logger.error(f"[GoogleMapsAdapter] Erro HTTP ao buscar endereços para {texto}: Status {e.response.status_code}")
+            logger.error(
+                f"[GoogleMapsAdapter] Erro HTTP ao buscar endereços/lugares para {texto_norm}: "
+                f"Status {e.response.status_code}"
+            )
             return []
         except Exception as e:
-            logger.error(f"[GoogleMapsAdapter] Erro ao buscar endereços para {texto}: {e}")
+            logger.error(f"[GoogleMapsAdapter] Erro ao buscar endereços/lugares para {texto_norm}: {e}")
             return []
     
     def _extrair_endereco_formatado(self, result: Dict) -> Dict:
