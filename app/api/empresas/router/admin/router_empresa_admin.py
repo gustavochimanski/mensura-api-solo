@@ -132,10 +132,13 @@ async def update_empresa(
     logo: UploadFile | None = None,
     cardapio_link: str | None = Form(None),
     cardapio_tema: str | None = Form(None),
-    aceita_pedido_automatico: str | None = Form(None),
+    aceita_pedido_automatico: str | None = Form(None, description="'true' ou 'false'. Também controla 'aceita pedidos WhatsApp' (chatbot)."),
+    aceita_pedidos_whatsapp: str | None = Form(None, description="Alias para aceita_pedido_automatico. Se enviado, tem precedência."),
     landingpage_store: str | None = Form(None),
     db: Session = Depends(get_db),
 ):
+    # Aceita pedidos WhatsApp: usa aceita_pedidos_whatsapp se enviado, senão aceita_pedido_automatico
+    _aceita = aceita_pedidos_whatsapp if aceita_pedidos_whatsapp is not None else aceita_pedido_automatico
     slug = make_slug(nome) if nome else None
     if endereco:
         try:
@@ -161,7 +164,7 @@ async def update_empresa(
         horarios_funcionamento=horarios_payload,
         cardapio_link=cardapio_link,
         cardapio_tema=cardapio_tema,
-        aceita_pedido_automatico=aceita_pedido_automatico.lower() == "true" if aceita_pedido_automatico else None,
+        aceita_pedido_automatico=_aceita.lower() == "true" if _aceita else None,
         landingpage_store=landingpage_store.lower() == "true" if landingpage_store else None,
         **endereco_payload,
     )

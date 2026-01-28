@@ -227,6 +227,14 @@ class EmpresaService:
             else:
                 setattr(empresa, key, value)
 
+        # Sincroniza "aceita pedidos WhatsApp" com a config do chatbot (é ela que o chatbot usa)
+        if "aceita_pedido_automatico" in update_data:
+            from app.api.chatbot.repositories.repo_chatbot_config import ChatbotConfigRepository
+            repo_config = ChatbotConfigRepository(self.db)
+            config_chatbot = repo_config.get_by_empresa_id(id)
+            if config_chatbot is not None:
+                config_chatbot.aceita_pedidos_whatsapp = bool(empresa.aceita_pedido_automatico)
+
         # Atualiza logo
         if logo:
             if empresa.logo:
