@@ -170,7 +170,10 @@ class RelatorioRepository:
                     PedidoUnificadoModel.tipo_entrega == TipoEntrega.DELIVERY.value,
                     PedidoUnificadoModel.created_at >= inicio,
                     PedidoUnificadoModel.created_at < fim,
-                    PedidoUnificadoModel.status == "E",  # Apenas entregues
+                    # Considera pedidos finalizados: Entregue (E) ou Aguardando pagamento (A)
+                    PedidoUnificadoModel.status.in_(
+                        [StatusPedido.ENTREGUE.value, StatusPedido.AGUARDANDO_PAGAMENTO.value]
+                    ),
                 )
                 .all()
             )
@@ -181,7 +184,10 @@ class RelatorioRepository:
                 .filter(
                     PedidoUnificadoModel.empresa_id == empresa_id,
                     PedidoUnificadoModel.tipo_entrega == TipoEntrega.MESA.value,
-                    PedidoUnificadoModel.status == StatusPedido.ENTREGUE.value,
+                    # Considera pedidos finalizados: Entregue (E) ou Aguardando pagamento (A)
+                    PedidoUnificadoModel.status.in_(
+                        [StatusPedido.ENTREGUE.value, StatusPedido.AGUARDANDO_PAGAMENTO.value]
+                    ),
                     PedidoUnificadoModel.mesa_id.isnot(None),
                     PedidoUnificadoModel.created_at >= inicio,
                     PedidoUnificadoModel.created_at < fim,
@@ -195,7 +201,10 @@ class RelatorioRepository:
                 .filter(
                     PedidoUnificadoModel.empresa_id == empresa_id,
                     PedidoUnificadoModel.tipo_entrega == TipoEntrega.BALCAO.value,
-                    PedidoUnificadoModel.status == StatusPedido.ENTREGUE.value,
+                    # Considera pedidos finalizados: Entregue (E) ou Aguardando pagamento (A)
+                    PedidoUnificadoModel.status.in_(
+                        [StatusPedido.ENTREGUE.value, StatusPedido.AGUARDANDO_PAGAMENTO.value]
+                    ),
                     PedidoUnificadoModel.created_at >= inicio,
                     PedidoUnificadoModel.created_at < fim,
                 )
@@ -203,7 +212,7 @@ class RelatorioRepository:
             )
 
         # Calcular tempo médio para pedidos de delivery
-        # Buscar pedidos entregues (status E) no período
+        # Buscar pedidos finalizados (status E ou A) no período
         pedidos_delivery_entregues = self._handle_db_error(_query_delivery, default_return=[])
         if pedidos_delivery_entregues is None:
             return 0.0, 0.0
@@ -218,13 +227,18 @@ class RelatorioRepository:
         if pedidos_delivery_entregues:
             tempos_delivery = []
             for pedido in pedidos_delivery_entregues:
-                # Buscar quando foi finalizado (status E no histórico)
+                # Buscar quando foi finalizado (status E ou A no histórico)
                 # Tenta primeiro com modelo unificado, depois com modelo antigo
+                status_final = (
+                    pedido.status
+                    if isinstance(pedido.status, str)
+                    else getattr(pedido.status, "value", str(pedido.status))
+                )
                 finalizacao = (
                     self.db.query(PedidoHistoricoUnificadoModel.created_at)
                     .filter(
                         PedidoHistoricoUnificadoModel.pedido_id == pedido.id,
-                        PedidoHistoricoUnificadoModel.status_novo == "E"
+                        PedidoHistoricoUnificadoModel.status_novo == status_final,
                     )
                     .order_by(PedidoHistoricoUnificadoModel.created_at.desc())
                     .first()

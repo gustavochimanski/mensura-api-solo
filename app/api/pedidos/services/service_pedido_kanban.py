@@ -179,16 +179,29 @@ class KanbanService:
                 ])
             )
 
-        # Calcula tempo de entrega em minutos apenas quando status = 'E'
+        # Calcula tempo de entrega em minutos apenas quando status = 'E' (Entregue)
+        # ou 'A' (Aguardando pagamento)
         tempo_entrega_minutos = None
         try:
             status_str = p.status if isinstance(p.status, str) else getattr(p.status, "value", str(p.status))
-            if status_str == "E":
+            if status_str in ("E", "A"):
                 historicos = getattr(p, "historico", []) or []
-                entregas = [h.criado_em for h in historicos if getattr(h, "status", None) == "E"]
-                entregue_em = min(entregas) if entregas else getattr(p, "updated_at", None)
-                if entregue_em and getattr(p, "created_at", None):
-                    delta_min = round(((entregue_em - p.created_at).total_seconds()) / 60.0, 2)
+                eventos = [
+                    getattr(h, "created_at", None)
+                    for h in historicos
+                    if (
+                        (
+                            getattr(getattr(h, "status_novo", None), "value", None)
+                            if getattr(h, "status_novo", None) is not None
+                            else getattr(h, "status_novo", None)
+                        )
+                        == status_str
+                    )
+                    and getattr(h, "created_at", None) is not None
+                ]
+                marco_em = min(eventos) if eventos else getattr(p, "updated_at", None)
+                if marco_em and getattr(p, "created_at", None):
+                    delta_min = round(((marco_em - p.created_at).total_seconds()) / 60.0, 2)
                     if delta_min >= 0:
                         tempo_entrega_minutos = float(delta_min)
         except Exception:
@@ -262,14 +275,30 @@ class KanbanService:
         else:
             endereco_str = "Retirada"
         
-        # Calcula tempo de entrega
+        # Calcula tempo de entrega (apenas quando status = 'E' ou 'A')
         tempo_entrega_minutos = None
         try:
             status_str = p.status if isinstance(p.status, str) else getattr(p.status, "value", str(p.status))
-            if status_str == "E" and p.updated_at and p.created_at:
-                delta_min = round(((p.updated_at - p.created_at).total_seconds()) / 60.0, 2)
-                if delta_min >= 0:
-                    tempo_entrega_minutos = float(delta_min)
+            if status_str in ("E", "A") and getattr(p, "created_at", None):
+                historicos = getattr(p, "historico", []) or []
+                eventos = [
+                    getattr(h, "created_at", None)
+                    for h in historicos
+                    if (
+                        (
+                            getattr(getattr(h, "status_novo", None), "value", None)
+                            if getattr(h, "status_novo", None) is not None
+                            else getattr(h, "status_novo", None)
+                        )
+                        == status_str
+                    )
+                    and getattr(h, "created_at", None) is not None
+                ]
+                marco_em = min(eventos) if eventos else getattr(p, "updated_at", None)
+                if marco_em:
+                    delta_min = round(((marco_em - p.created_at).total_seconds()) / 60.0, 2)
+                    if delta_min >= 0:
+                        tempo_entrega_minutos = float(delta_min)
         except Exception:
             tempo_entrega_minutos = None
         
@@ -339,14 +368,30 @@ class KanbanService:
         else:
             endereco_str = "Balcão - Retirada"
         
-        # Calcula tempo de entrega
+        # Calcula tempo de entrega (apenas quando status = 'E' ou 'A')
         tempo_entrega_minutos = None
         try:
             status_str = p.status if isinstance(p.status, str) else getattr(p.status, "value", str(p.status))
-            if status_str == "E" and p.updated_at and p.created_at:
-                delta_min = round(((p.updated_at - p.created_at).total_seconds()) / 60.0, 2)
-                if delta_min >= 0:
-                    tempo_entrega_minutos = float(delta_min)
+            if status_str in ("E", "A") and getattr(p, "created_at", None):
+                historicos = getattr(p, "historico", []) or []
+                eventos = [
+                    getattr(h, "created_at", None)
+                    for h in historicos
+                    if (
+                        (
+                            getattr(getattr(h, "status_novo", None), "value", None)
+                            if getattr(h, "status_novo", None) is not None
+                            else getattr(h, "status_novo", None)
+                        )
+                        == status_str
+                    )
+                    and getattr(h, "created_at", None) is not None
+                ]
+                marco_em = min(eventos) if eventos else getattr(p, "updated_at", None)
+                if marco_em:
+                    delta_min = round(((marco_em - p.created_at).total_seconds()) / 60.0, 2)
+                    if delta_min >= 0:
+                        tempo_entrega_minutos = float(delta_min)
         except Exception:
             tempo_entrega_minutos = None
         

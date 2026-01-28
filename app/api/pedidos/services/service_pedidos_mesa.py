@@ -25,6 +25,7 @@ from app.api.pedidos.schemas.schema_pedido import (
 from app.api.pedidos.services.service_pedido_responses import PedidoResponseBuilder
 from app.api.shared.schemas.schema_shared_enums import PedidoStatusEnum
 from app.api.pedidos.models.model_pedido_unificado import StatusPedido
+from app.api.pedidos.models.model_pedido_historico_unificado import TipoOperacaoPedido
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from decimal import Decimal as PyDecimal
@@ -306,6 +307,19 @@ class PedidoMesaService:
         # Recarrega pedido com todos os itens
         pedido = self.repo.get(pedido.id, TipoEntrega.MESA)
 
+        # Registra histórico (mesa) - pedido criado
+        status_novo = pedido.status.value if hasattr(pedido.status, "value") else str(pedido.status)
+        self.repo.add_historico(
+            pedido_id=pedido.id,
+            tipo_operacao=TipoOperacaoPedido.PEDIDO_CRIADO,
+            status_anterior=None,
+            status_novo=status_novo,
+            descricao=f"Pedido {pedido.numero_pedido} criado",
+            cliente_id=payload.cliente_id,
+        )
+        self.repo.commit()
+        pedido = self.repo.get(pedido.id, TipoEntrega.MESA)
+
         # Notifica novo pedido em background
         try:
             import asyncio
@@ -546,10 +560,25 @@ class PedidoMesaService:
         # Obtém o pedido antes de cancelar para pegar o mesa_id
         pedido_antes = self.repo.get(pedido_id, TipoEntrega.MESA)
         mesa_id = pedido_antes.mesa_id
+        status_anterior = (
+            pedido_antes.status.value if hasattr(pedido_antes.status, "value") else str(pedido_antes.status)
+        )
         
         # Cancela o pedido (muda status para CANCELADO)
         pedido = self.repo.cancelar(pedido_id)
+        status_novo = pedido.status.value if hasattr(pedido.status, "value") else str(pedido.status)
 
+        # Registra histórico (mesa)
+        self.repo.add_historico(
+            pedido_id=pedido_id,
+            tipo_operacao=TipoOperacaoPedido.PEDIDO_CANCELADO,
+            status_anterior=status_anterior,
+            status_novo=status_novo,
+            descricao=f"Pedido {pedido.numero_pedido} cancelado",
+        )
+        self.repo.commit()
+        pedido = self.repo.get(pedido_id, TipoEntrega.MESA)
+        
         
         # IMPORTANTE: Força refresh da sessão para garantir que a query veja o status atualizado
         self.db.expire_all()
@@ -618,7 +647,25 @@ class PedidoMesaService:
         return PedidoResponseBuilder.pedido_to_response_completo(pedido)
 
     def confirmar(self, pedido_id: int) -> PedidoResponseCompleto:
+        pedido_antes = self.repo.get(pedido_id, TipoEntrega.MESA)
+        status_anterior = (
+            pedido_antes.status.value if hasattr(pedido_antes.status, "value") else str(pedido_antes.status)
+        )
+
         pedido = self.repo.confirmar(pedido_id)
+        status_novo = pedido.status.value if hasattr(pedido.status, "value") else str(pedido.status)
+
+        # Registra histórico (mesa)
+        self.repo.add_historico(
+            pedido_id=pedido_id,
+            tipo_operacao=TipoOperacaoPedido.PEDIDO_CONFIRMADO,
+            status_anterior=status_anterior,
+            status_novo=status_novo,
+            descricao=f"Pedido {pedido.numero_pedido} confirmado",
+        )
+        self.repo.commit()
+
+        pedido = self.repo.get(pedido_id, TipoEntrega.MESA)
         return PedidoResponseBuilder.pedido_to_response_completo(pedido)
 
     def atualizar_status(self, pedido_id: int, payload: AtualizarStatusPedidoRequest) -> PedidoResponseCompleto:
@@ -629,13 +676,34 @@ class PedidoMesaService:
             return self.fechar_conta(pedido_id, None)
         if novo_status == PedidoStatusEnum.I:
             return self.confirmar(pedido_id)
+
+        pedido_antes = self.repo.get(pedido_id, TipoEntrega.MESA)
+        status_anterior = (
+            pedido_antes.status.value if hasattr(pedido_antes.status, "value") else str(pedido_antes.status)
+        )
+
         pedido = self.repo.atualizar_status(pedido_id, novo_status)
+        status_novo = pedido.status.value if hasattr(pedido.status, "value") else str(pedido.status)
+
+        self.repo.add_historico(
+            pedido_id=pedido_id,
+            tipo_operacao=TipoOperacaoPedido.STATUS_ALTERADO,
+            status_anterior=status_anterior,
+            status_novo=status_novo,
+            descricao=f"Status atualizado para {status_novo}",
+        )
+        self.repo.commit()
+
+        pedido = self.repo.get(pedido_id, TipoEntrega.MESA)
         return PedidoResponseBuilder.pedido_to_response_completo(pedido)
 
     def fechar_conta(self, pedido_id: int, payload: FecharContaMesaRequest | None = None) -> PedidoResponseCompleto:
         # Obtém o pedido antes de fechar para pegar o mesa_id
         pedido_antes = self.repo.get(pedido_id, TipoEntrega.MESA)
         mesa_id = pedido_antes.mesa_id
+        status_anterior = (
+            pedido_antes.status.value if hasattr(pedido_antes.status, "value") else str(pedido_antes.status)
+        )
         
         # Se receber payload, salva dados de pagamento nos campos diretos
         if payload is not None:
@@ -648,6 +716,7 @@ class PedidoMesaService:
 
         # Fecha o pedido (muda status para ENTREGUE)
         pedido = self.repo.fechar_conta(pedido_id)
+        status_novo = pedido.status.value if hasattr(pedido.status, "value") else str(pedido.status)
         
         # IMPORTANTE: Força refresh da sessão para garantir que a query veja o status atualizado
         self.db.expire_all()
@@ -677,14 +746,48 @@ class PedidoMesaService:
                 f"[Pedidos Mesa] Mesa NÃO liberada - mesa_id={mesa_id} "
                 f"(ainda há {len(pedidos_mesa_abertos)} pedidos de mesa e {len(pedidos_balcao_abertos)} de balcão abertos)"
             )
+
+        # Registra histórico (mesa) - pedido fechado
+        observacoes_historico = None
+        if payload:
+            if payload.meio_pagamento_id:
+                observacoes_historico = f"Meio pagamento: {payload.meio_pagamento_id}"
+            if payload.troco_para:
+                observacoes_historico = (observacoes_historico or "") + f" | Troco para: {payload.troco_para}"
+        self.repo.add_historico(
+            pedido_id=pedido_id,
+            tipo_operacao=TipoOperacaoPedido.PEDIDO_FECHADO,
+            status_anterior=status_anterior,
+            status_novo=status_novo,
+            descricao=f"Pedido {pedido.numero_pedido} fechado",
+            observacoes=observacoes_historico,
+        )
+        self.repo.commit()
+        pedido = self.repo.get(pedido_id, TipoEntrega.MESA)
         
         return PedidoResponseBuilder.pedido_to_response_completo(pedido)
 
     def reabrir(self, pedido_id: int) -> PedidoResponseCompleto:
+        pedido_antes = self.repo.get(pedido_id, TipoEntrega.MESA)
+        status_anterior = (
+            pedido_antes.status.value if hasattr(pedido_antes.status, "value") else str(pedido_antes.status)
+        )
         pedido = self.repo.reabrir(pedido_id)
+        status_novo = pedido.status.value if hasattr(pedido.status, "value") else str(pedido.status)
         logger.info(f"[Pedidos Mesa] Reabrindo pedido - pedido_id={pedido_id}, novo_status=PENDENTE, mesa_id={pedido.mesa_id}")
         # Ao reabrir o pedido, garantir que a mesa vinculada esteja marcada como OCUPADA
         self.repo_mesa.ocupar_mesa(pedido.mesa_id, empresa_id=pedido.empresa_id)
+
+        # Registra histórico (mesa) - pedido reaberto
+        self.repo.add_historico(
+            pedido_id=pedido_id,
+            tipo_operacao=TipoOperacaoPedido.PEDIDO_REABERTO,
+            status_anterior=status_anterior,
+            status_novo=status_novo,
+            descricao=f"Pedido {pedido.numero_pedido} reaberto",
+        )
+        self.repo.commit()
+        pedido = self.repo.get(pedido_id, TipoEntrega.MESA)
         return PedidoResponseBuilder.pedido_to_response_completo(pedido)
 
     # Fluxo cliente
@@ -692,6 +795,7 @@ class PedidoMesaService:
         pedido = self.repo.get(pedido_id, TipoEntrega.MESA)
         if pedido.cliente_id and pedido.cliente_id != cliente_id:
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Pedido não pertence ao cliente")
+        status_anterior = pedido.status.value if hasattr(pedido.status, "value") else str(pedido.status)
 
         # Salva dados de pagamento nos campos diretos
         if payload.troco_para is not None:
@@ -707,6 +811,7 @@ class PedidoMesaService:
 
         # Fecha pedido (muda status para ENTREGUE)
         pedido = self.repo.fechar_conta(pedido_id)
+        status_novo = pedido.status.value if hasattr(pedido.status, "value") else str(pedido.status)
         
         # IMPORTANTE: Força refresh da sessão para garantir que a query veja o status atualizado
         self.db.expire_all()
@@ -735,6 +840,25 @@ class PedidoMesaService:
                 f"[Pedidos Mesa] Mesa NÃO liberada (cliente) - mesa_id={mesa_id} "
                 f"(ainda há {len(pedidos_mesa_abertos)} pedidos de mesa e {len(pedidos_balcao_abertos)} de balcão abertos)"
             )
+
+        # Registra histórico (mesa) - pedido fechado pelo cliente
+        observacoes_historico = None
+        if payload:
+            if payload.meio_pagamento_id:
+                observacoes_historico = f"Meio pagamento: {payload.meio_pagamento_id}"
+            if payload.troco_para:
+                observacoes_historico = (observacoes_historico or "") + f" | Troco para: {payload.troco_para}"
+        self.repo.add_historico(
+            pedido_id=pedido_id,
+            tipo_operacao=TipoOperacaoPedido.PEDIDO_FECHADO,
+            status_anterior=status_anterior,
+            status_novo=status_novo,
+            descricao=f"Pedido {pedido.numero_pedido} fechado (cliente)",
+            observacoes=observacoes_historico,
+            cliente_id=cliente_id,
+        )
+        self.repo.commit()
+        pedido = self.repo.get(pedido_id, TipoEntrega.MESA)
         
         return PedidoResponseBuilder.pedido_to_response_completo(pedido)
 
