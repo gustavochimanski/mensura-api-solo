@@ -2292,18 +2292,23 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                     mensagem_horarios += horarios_formatados
                     mensagem_horarios += "\n💬 Assim que estivermos abertos, retornaremos sua mensagem o mais rápido possível.\n\n"
                     
-                    # Salva resposta do bot
-                    chatbot_db.create_message(
-                        db=db,
-                        conversation_id=conversation_id,
-                        role="assistant",
-                        content=mensagem_horarios
-                    )
-                    
                     # Envia mensagem via WhatsApp
                     notifier = OrderNotification()
                     result = await notifier.send_whatsapp_message(phone_number, mensagem_horarios, empresa_id=empresa_id)
                     
+                    # Salva resposta do bot já com o message_id do WhatsApp (quando houver),
+                    # para o webhook de status "sent" NÃO pausar achando que foi humano.
+                    whatsapp_message_id = None
+                    if isinstance(result, dict) and result.get("success"):
+                        whatsapp_message_id = result.get("message_id")
+                    chatbot_db.create_message(
+                        db=db,
+                        conversation_id=conversation_id,
+                        role="assistant",
+                        content=mensagem_horarios,
+                        whatsapp_message_id=whatsapp_message_id,
+                    )
+
                     if not isinstance(result, dict) or not result.get("success"):
                         import logging
                         logger = logging.getLogger(__name__)
@@ -3040,6 +3045,56 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
         # 6. Envia resposta via WhatsApp
         notifier = OrderNotification()
         result = await notifier.send_whatsapp_message(phone_number, ai_response, empresa_id=empresa_id)
+
+        # 6.1. Vincula o whatsapp_message_id à última resposta do bot salva no banco
+        # Observação: `processar_mensagem_groq` já salva a resposta do assistente, porém sem o ID
+        # retornado pelo WhatsApp. Aqui atualizamos o metadata para evitar duplicar mensagens.
+        if isinstance(result, dict) and result.get("success") and result.get("message_id"):
+            try:
+                from sqlalchemy import text
+                whatsapp_response_message_id = result.get("message_id")
+
+                update_whatsapp_id_query = text("""
+                    WITH target AS (
+                        SELECT id
+                        FROM chatbot.messages
+                        WHERE conversation_id = :conversation_id
+                          AND role = 'assistant'
+                          AND content = :content
+                          AND created_at > NOW() - INTERVAL '60 seconds'
+                        ORDER BY created_at DESC
+                        LIMIT 1
+                    )
+                    UPDATE chatbot.messages
+                    SET metadata = jsonb_set(
+                        COALESCE(metadata, '{}'::jsonb),
+                        '{whatsapp_message_id}',
+                        to_jsonb(CAST(:whatsapp_message_id AS text)),
+                        true
+                    )
+                    WHERE id IN (SELECT id FROM target)
+                """)
+
+                update_result = db.execute(update_whatsapp_id_query, {
+                    "conversation_id": conversation_id,
+                    "content": ai_response,
+                    "whatsapp_message_id": whatsapp_response_message_id
+                })
+                db.commit()
+
+                # Fallback: se não encontrou a mensagem recém-salva, cria uma com metadata
+                if update_result.rowcount == 0:
+                    chatbot_db.create_message(
+                        db=db,
+                        conversation_id=conversation_id,
+                        role="assistant",
+                        content=ai_response,
+                        whatsapp_message_id=whatsapp_response_message_id
+                    )
+            except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Erro ao vincular whatsapp_message_id à resposta do bot: {e}", exc_info=True)
 
         if not isinstance(result, dict) or not result.get("success"):
             import logging

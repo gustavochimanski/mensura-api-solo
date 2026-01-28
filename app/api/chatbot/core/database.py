@@ -840,15 +840,53 @@ Tom de conversa:
 
 # ==================== BOT STATUS (PAUSAR/ATIVAR) ====================
 
+def _normalize_phone_number(phone_number: Optional[str]) -> Optional[str]:
+    """
+    Normaliza telefone para formato consistente no banco.
+
+    Regras:
+    - Remove tudo que não for dígito.
+    - Se não começar com 55 e tiver 10/11 dígitos (DDD + número), prefixa 55.
+    - Não altera o registro global (`GLOBAL_BOT_PHONE`).
+
+    Isso evita que endpoints consultem `+55...`/`11...` enquanto o banco guarda `5511...`,
+    o que fazia retornar "ativo por padrão" indevidamente.
+    """
+    if phone_number is None:
+        return None
+
+    phone_str = str(phone_number).strip()
+    # Mantém o registro global
+    if "GLOBAL_BOT_PHONE" in globals() and phone_str == GLOBAL_BOT_PHONE:
+        return phone_str
+
+    digits = "".join(ch for ch in phone_str if ch.isdigit())
+    if not digits:
+        return phone_str
+
+    # Remove prefixo internacional "00" quando vier (ex: 0055...)
+    if digits.startswith("00") and len(digits) > 2:
+        digits = digits[2:]
+
+    if digits.startswith("55"):
+        return digits
+
+    if len(digits) in (10, 11):
+        return f"55{digits}"
+
+    return digits
+
+
 def get_bot_status(db: Session, phone_number: str) -> Optional[Dict]:
     """Verifica se o bot está ativo para um número específico"""
     try:
+        phone_normalized = _normalize_phone_number(phone_number)
         query = text(f"""
             SELECT id, phone_number, paused_at, paused_by, empresa_id, desativa_chatbot_em
             FROM {CHATBOT_SCHEMA}.bot_status
             WHERE phone_number = :phone
         """)
-        result = db.execute(query, {"phone": phone_number}).fetchone()
+        result = db.execute(query, {"phone": phone_normalized}).fetchone()
 
         if result:
             desativa_em_dt = _parse_timestamp(result[5])
@@ -870,7 +908,7 @@ def get_bot_status(db: Session, phone_number: str) -> Optional[Dict]:
                 "chatbot_destrava_em": desativa_em_dt.isoformat() if desativa_em_dt else None,
             }
         # Se não existe registro, o bot está ativo por padrão
-        return {"phone_number": phone_number, "is_active": True}
+        return {"phone_number": phone_normalized, "is_active": True}
     except Exception as e:
         print(f"Erro ao verificar status do bot: {e}")
         return {"phone_number": phone_number, "is_active": True}
@@ -886,6 +924,8 @@ def is_bot_active_for_phone(db: Session, phone_number: str) -> bool:
     if not global_status.get("is_active", True):
         return False  # Bot global pausado, nenhum número responde
 
+    phone_normalized = _normalize_phone_number(phone_number)
+
     # Depois verifica o status individual
     try:
         row = db.execute(
@@ -894,7 +934,7 @@ def is_bot_active_for_phone(db: Session, phone_number: str) -> bool:
                 FROM {CHATBOT_SCHEMA}.bot_status
                 WHERE phone_number = :phone
             """),
-            {"phone": phone_number},
+            {"phone": phone_normalized},
         ).fetchone()
         if not row:
             return True
@@ -911,7 +951,7 @@ def is_bot_active_for_phone(db: Session, phone_number: str) -> bool:
         now = _utcnow()
         if now >= desativa_dt:
             # Já expirou: despausa limpando a coluna
-            set_bot_status(db, phone_number, paused_by=None, empresa_id=empresa_id, desativa_chatbot_em=None)
+            set_bot_status(db, phone_normalized, paused_by=None, empresa_id=empresa_id, desativa_chatbot_em=None)
             return True
         return False
     except Exception as e:
@@ -934,6 +974,7 @@ def set_bot_status(
             Se string 'infinity' => pausado indefinidamente.
     """
     try:
+        phone_number = _normalize_phone_number(phone_number)
         is_paused = desativa_chatbot_em is not None
         desativa_is_infinity = _is_infinite_timestamp(desativa_chatbot_em) or (
             isinstance(desativa_chatbot_em, str) and desativa_chatbot_em.lower() == "infinity"
