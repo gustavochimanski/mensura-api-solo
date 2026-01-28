@@ -42,7 +42,7 @@ def novo_dispositivo(body: NovoDispositivoRequest, db: Session = Depends(get_db)
     db.commit()
     db.refresh(cliente)
 
-    logger.info(f"[Novo Dispositivo] Novo token gerado para telefone: {telefone}")
+    logger.info(f"[Novo Dispositivo] Novo token gerado para telefone: {cliente.telefone}")
     
     return {
         "super_token": novo_token,
