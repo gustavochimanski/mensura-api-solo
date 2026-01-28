@@ -209,6 +209,7 @@ Os eventos padronizados (envelope `type="event"`) seguem:
 - `pedido.v1.entregue`
 - `pedido.v1.impresso`
 - `meios_pagamento.v1.atualizados`
+- `auth.v1.token_expirado` (**somente Admin**)
 
 **Recomendação:** o frontend deve tratar `event` como “sinal” e **refazer fetch** dos dados necessários (cache/revalidate fica no HTTP).
 
@@ -338,6 +339,47 @@ Quando a autenticação falha, o backend fecha com:
 
 - `code = 1008` (**policy violation**)
 - `reason` com texto curto (ex: “Authorization Bearer ausente ou malformado”)
+
+### 8.1) Token expirado durante a sessão (somente Admin)
+
+Quando o **JWT expira durante uma sessão WebSocket**, o backend deve:
+
+1. **Enviar um último evento padronizado** (`type="event"`)
+2. **Fechar a conexão** com `code=1008`
+
+#### Evento: `auth.v1.token_expirado`
+
+- **type**: `"event"`
+- **event**: `auth.v1.token_expirado`
+- **scope**: `"usuario"`
+- **payload.code**: `"TOKEN_EXPIRED"`
+- **payload.action**: `"logout"`
+
+Exemplo:
+
+```json
+{
+  "type": "event",
+  "event": "auth.v1.token_expirado",
+  "scope": "usuario",
+  "payload": {
+    "code": "TOKEN_EXPIRED",
+    "message": "Sessão expirada. Faça login novamente.",
+    "action": "logout"
+  },
+  "timestamp": "2026-01-04T12:00:00.000000"
+}
+```
+
+#### O que o frontend Admin deve fazer
+
+- Remover `access_token` do storage
+- Encerrar o WS (se necessário)
+- Redirecionar para `/login`
+
+#### Fallback
+
+Se o socket fechar com `code=1008` e `reason` contendo “Token inválido ou expirado”, trate como o mesmo fluxo (logout).
 
 ---
 
