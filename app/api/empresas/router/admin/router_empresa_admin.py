@@ -14,6 +14,8 @@ from app.api.empresas.schemas.schema_empresa import (
     EmpresaCardapioLinkResponse,
 )
 from app.api.empresas.services.empresa_service import EmpresaService
+from app.api.cadastros.schemas.schema_meio_pagamento import MeioPagamentoResponse
+from app.api.cadastros.services.service_meio_pagamento import MeioPagamentoService
 from app.utils.slug_utils import make_slug
 from app.api.localizacao.adapters.google_maps_adapter import GoogleMapsAdapter
 from app.utils.logger import logger
@@ -65,6 +67,12 @@ def buscar_endereco(
 @router.get("/cardapios", response_model=List[EmpresaCardapioLinkResponse])
 def list_cardapio_links(db: Session = Depends(get_db)):
     return EmpresaService(db).list_cardapio_links()
+
+
+@router.get("/meios-pagamento", response_model=List[MeioPagamentoResponse])
+def list_meios_pagamento(db: Session = Depends(get_db)):
+    """Lista meios de pagamento. Alias de /api/cadastros/admin/meios-pagamento para uso sob /api/empresas/admin."""
+    return MeioPagamentoService(db).list_all()
 
 
 # Criar empresa
