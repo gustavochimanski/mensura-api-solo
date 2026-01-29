@@ -20,6 +20,13 @@ class ProdutoDomainService:
         self.db = db
         self.empresa_id = empresa_id
 
+    def _safe_rollback(self) -> None:
+        """Evita deixar a sessão em estado abortado após erro de DB."""
+        try:
+            self.db.rollback()
+        except Exception:
+            pass
+
     def buscar_produtos(self, termo_busca: str = "") -> List[Dict[str, Any]]:
         """Busca produtos no banco de dados usando SQL direto."""
         try:
@@ -60,6 +67,7 @@ class ProdutoDomainService:
                 for row in result.fetchall()
             ]
         except Exception as e:
+            self._safe_rollback()
             print(f"Erro ao buscar produtos: {e}")
             return []
 
@@ -115,6 +123,7 @@ class ProdutoDomainService:
 
             return produtos[:5]
         except Exception as e:
+            self._safe_rollback()
             print(f"Erro ao buscar promoções: {e}")
             return []
 
@@ -172,6 +181,7 @@ class ProdutoDomainService:
 
             return produtos
         except Exception as e:
+            self._safe_rollback()
             print(f"Erro ao buscar todos produtos: {e}")
             import traceback
 
@@ -470,6 +480,7 @@ class ProdutoDomainService:
             return resultados[:limit]
 
         except Exception as e:
+            self._safe_rollback()
             print(f"❌ Erro ao buscar produtos inteligente: {e}")
             import traceback
 

@@ -635,35 +635,55 @@ def create_message(db: Session, conversation_id: int, role: str, content: str, w
     if whatsapp_message_id:
         import json
         metadata_json = json.dumps({"whatsapp_message_id": whatsapp_message_id})
-    
-    if metadata_json:
-        query = text(f"""
-            INSERT INTO {CHATBOT_SCHEMA}.messages (conversation_id, role, content, metadata)
-            VALUES (:conversation_id, :role, :content, CAST(:metadata AS jsonb))
-            RETURNING id
-        """)
-        result = db.execute(query, {
-            "conversation_id": conversation_id,
-            "role": role,
-            "content": content,
-            "metadata": metadata_json
-        })
-    else:
+
+    from sqlalchemy.exc import SQLAlchemyError
+
+    def _insert():
+        if metadata_json:
+            query = text(f"""
+                INSERT INTO {CHATBOT_SCHEMA}.messages (conversation_id, role, content, metadata)
+                VALUES (:conversation_id, :role, :content, CAST(:metadata AS jsonb))
+                RETURNING id
+            """)
+            return db.execute(
+                query,
+                {
+                    "conversation_id": conversation_id,
+                    "role": role,
+                    "content": content,
+                    "metadata": metadata_json,
+                },
+            )
+
         query = text(f"""
             INSERT INTO {CHATBOT_SCHEMA}.messages (conversation_id, role, content)
             VALUES (:conversation_id, :role, :content)
             RETURNING id
         """)
-        result = db.execute(query, {
-            "conversation_id": conversation_id,
-            "role": role,
-            "content": content
-        })
-    
-    db.commit()
+        return db.execute(
+            query,
+            {
+                "conversation_id": conversation_id,
+                "role": role,
+                "content": content,
+            },
+        )
 
-    # Atualiza timestamp da conversa
-    update_conversation(db, conversation_id)
+    # Se a sessão estiver em transação abortada (InFailedSqlTransaction), precisamos de rollback
+    # antes de conseguir inserir a mensagem.
+    try:
+        result = _insert()
+        db.commit()
+    except SQLAlchemyError:
+        db.rollback()
+        result = _insert()
+        db.commit()
+
+    # Atualiza timestamp da conversa (não deve impedir o retorno da mensagem)
+    try:
+        update_conversation(db, conversation_id)
+    except SQLAlchemyError:
+        db.rollback()
 
     row = result.fetchone()
     return row[0] if row else None
