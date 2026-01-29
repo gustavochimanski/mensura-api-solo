@@ -4,6 +4,7 @@ import json
 import logging
 import asyncio
 import os
+from urllib.parse import urlparse
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -33,6 +34,52 @@ class ConnectionManager:
         self.max_connections_per_user_empresa: int = int(
             os.getenv("WS_MAX_CONNECTIONS_PER_USER_EMPRESA", "1")
         )
+
+    @staticmethod
+    def _normalize_route(route: str | None) -> str:
+        """
+        Normaliza rota para comparações consistentes.
+
+        Aceita:
+        - "/pedidos", "/pedidos/"
+        - "pedidos" (sem barra)
+        - URL completa ("https://host/app/pedidos?x=1#y")
+        - strings com query/hash
+        """
+        if not route:
+            return ""
+
+        r = str(route).strip()
+        if not r:
+            return ""
+
+        # URL completa → extrai apenas path
+        if "://" in r:
+            try:
+                r = urlparse(r).path or ""
+            except Exception:
+                # Fallback: remove query/hash manualmente
+                r = r.split("?", 1)[0].split("#", 1)[0]
+        else:
+            # Remove query/hash se vierem por engano
+            r = r.split("?", 1)[0].split("#", 1)[0]
+
+        r = r.strip()
+        if not r:
+            return ""
+
+        if not r.startswith("/"):
+            r = "/" + r
+
+        r = r.lower()
+
+        # Remove trailing slash (exceto root)
+        if r != "/" and r.endswith("/"):
+            r = r.rstrip("/")
+            if not r:
+                r = "/"
+
+        return r
 
     def _remove_connection_no_lock(self, websocket: WebSocket) -> None:
         """Remove um websocket das estruturas internas (NÃO faz await e pressupõe lock)."""
@@ -437,9 +484,10 @@ class ConnectionManager:
     def set_route(self, websocket: WebSocket, route: str):
         """Define a rota atual de um cliente conectado"""
         if websocket in self.websocket_to_user:
-            self.websocket_to_route[websocket] = route
+            normalized = self._normalize_route(route)
+            self.websocket_to_route[websocket] = normalized
             user_id = self.websocket_to_user.get(websocket)
-            logger.debug(f"Rota atualizada para usuário {user_id}: {route}")
+            logger.debug(f"Rota atualizada para usuário {user_id}: {normalized} (raw={route})")
     
     def get_route(self, websocket: WebSocket) -> Optional[str]:
         """Retorna a rota atual de um cliente"""
@@ -464,7 +512,11 @@ class ConnectionManager:
         """
         # Normaliza empresa_id para string
         empresa_id = str(empresa_id)
-        required_route = required_route.strip().lower()
+        required_route = self._normalize_route(required_route)
+
+        # Se não há rota requerida válida, envia para toda a empresa (fallback seguro)
+        if not required_route:
+            return await self.send_to_empresa(empresa_id, message)
         
         # Verifica se a empresa tem conexões
         if empresa_id not in self.empresa_connections:
@@ -497,7 +549,7 @@ class ConnectionManager:
         filtered_connections = []
         required_route_norm = required_route.rstrip("/")
         for websocket in connections:
-            current_route = self.websocket_to_route.get(websocket, "").strip().lower()
+            current_route = self._normalize_route(self.websocket_to_route.get(websocket, ""))
             if not current_route:
                 continue
             if current_route == required_route:
@@ -542,7 +594,7 @@ class ConnectionManager:
 
         Útil para eventos que só fazem sentido quando o usuário está na tela (ex: /chatbot).
         """
-        required_route = (required_route or "").strip().lower()
+        required_route = self._normalize_route(required_route)
         required_route_norm = required_route.rstrip("/")
 
         all_connections = set()
@@ -554,7 +606,7 @@ class ConnectionManager:
 
         filtered_connections = []
         for websocket in all_connections:
-            current_route = self.websocket_to_route.get(websocket, "").strip().lower()
+            current_route = self._normalize_route(self.websocket_to_route.get(websocket, ""))
             if not current_route:
                 continue
             if current_route == required_route:
