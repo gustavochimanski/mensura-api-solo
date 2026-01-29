@@ -1,9 +1,10 @@
 # app/database/db_connection.py
 
 import logging
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, declarative_base
 from ..config.settings import DB_CONFIG, DB_SSL_MODE
+from app.core.rls_context import get_rls_empresa_id, get_rls_user_id
 
 # Base única para todos os models
 Base = declarative_base()
@@ -54,6 +55,25 @@ def conectar():
 def get_db():
     db = SessionLocal()
     try:
+        # RLS (Postgres): injeta contexto do request na sessão atual.
+        # Isso habilita políticas como:
+        #   empresa_id = current_setting('app.empresa_id')::int
+        # sem precisar criar um usuário de banco por usuário da aplicação.
+        user_id = get_rls_user_id()
+        empresa_id = get_rls_empresa_id()
+        try:
+            db.execute(
+                text("SELECT set_config('app.user_id', :v, true)"),
+                {"v": str(user_id) if user_id is not None else ""},
+            )
+            db.execute(
+                text("SELECT set_config('app.empresa_id', :v, true)"),
+                {"v": str(empresa_id) if empresa_id is not None else ""},
+            )
+        except Exception as e:
+            # Não deve bloquear a API caso o banco não aceite set_config por algum motivo.
+            logger.warning("Falha ao aplicar contexto RLS (set_config): %s", e)
+
         yield db
         db.commit()
     except Exception:

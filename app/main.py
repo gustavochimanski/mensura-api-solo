@@ -6,7 +6,7 @@ from fastapi.openapi.utils import get_openapi
 from fastapi.staticfiles import StaticFiles
 from fastapi.openapi.docs import get_swagger_ui_html
 
-from app.core.admin_dependencies import get_current_user
+from app.core.admin_dependencies import get_current_user, decode_access_token
 from app.core.exception_handlers import (
     validation_exception_handler,
     http_exception_handler,
@@ -78,6 +78,8 @@ app.add_exception_handler(Exception, general_exception_handler)
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
+from app.core.rls_context import set_rls_context, reset_rls_context
+
 class WebhookLoggingMiddleware(BaseHTTPMiddleware):
     """Middleware para logar todas as requisições, especialmente webhooks"""
     async def dispatch(self, request: Request, call_next):
@@ -102,6 +104,50 @@ class WebhookLoggingMiddleware(BaseHTTPMiddleware):
         return response
 
 app.add_middleware(WebhookLoggingMiddleware)
+
+class RlsContextMiddleware(BaseHTTPMiddleware):
+    """
+    Middleware que popula contexto (user_id/empresa_id) para RLS no Postgres.
+    O `get_db()` aplica isso via `set_config('app.*')` na sessão.
+    """
+    async def dispatch(self, request: Request, call_next):
+        user_id = None
+        empresa_id = None
+
+        # user_id via JWT (quando existir)
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            token = auth_header.replace("Bearer ", "").strip()
+            if token:
+                try:
+                    payload = decode_access_token(token)
+                    raw_sub = payload.get("sub")
+                    user_id = int(raw_sub) if raw_sub not in (None, "") else None
+                except Exception:
+                    # Token inválido/ausente -> não seta contexto de usuário
+                    user_id = None
+
+        # empresa_id via header/query (compatível com `authorization.py`)
+        raw_empresa = (
+            request.headers.get("X-Empresa-Id")
+            or request.headers.get("x-empresa-id")
+            or request.query_params.get("empresa_id")
+            or request.query_params.get("id_empresa")
+        )
+        if raw_empresa not in (None, ""):
+            try:
+                empresa_id = int(raw_empresa)
+            except Exception:
+                empresa_id = None
+
+        tokens = set_rls_context(user_id=user_id, empresa_id=empresa_id)
+        try:
+            return await call_next(request)
+        finally:
+            reset_rls_context(tokens)
+
+# Middleware de contexto RLS (antes de métricas/logs é ok)
+app.add_middleware(RlsContextMiddleware)
 
 # Prometheus Middleware (para coletar métricas)
 from app.utils.prometheus_metrics import PrometheusMiddleware
