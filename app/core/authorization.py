@@ -80,14 +80,26 @@ def _load_user_permission_keys(db: Session, user_id: int, empresa_id: int) -> Se
 
 
 def _is_satisfied(required_key: str, user_keys: Set[str]) -> bool:
+    def _has_key(key: str) -> bool:
+        """
+        Checa presença considerando normalização básica de rotas:
+        - permite equivalência com/sem barra final em chaves `route:/...`
+        """
+        if key in user_keys:
+            return True
+        if key.startswith("route:/"):
+            if key.endswith("/"):
+                return key.rstrip("/") in user_keys
+            return f"{key}/" in user_keys
+        return False
+
     # Aliases de permissões (tratadas como equivalentes).
-    # Ex.: no frontend "Dashboard" e "Relatórios" são uma única área.
-    # Então qualquer uma das duas keys satisfaz a outra.
+    # No frontend "Dashboard" e "Relatórios" são uma única área.
     if required_key in ("route:/dashboard", "route:/relatorios"):
-        if "route:/dashboard" in user_keys or "route:/relatorios" in user_keys:
+        if _has_key("route:/dashboard") or _has_key("route:/relatorios"):
             return True
 
-    if required_key in user_keys:
+    if _has_key(required_key):
         return True
     # wildcard por domínio: "<domain>:*"
     if ":" in required_key:
