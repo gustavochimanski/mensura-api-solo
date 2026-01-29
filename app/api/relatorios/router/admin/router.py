@@ -5,10 +5,15 @@ from sqlalchemy.orm import Session
 
 from app.api.relatorios.repositories.repository import RelatorioRepository
 from app.api.relatorios.services.service import RelatoriosService
-from app.core.admin_dependencies import get_current_user
+from app.core.authorization import require_permissions
 from app.database.db_connection import get_db
 
-router = APIRouter(prefix="/api/relatorios/admin/relatorios", tags=["Admin - Relatórios - Panorâmico Diário"], dependencies=[Depends(get_current_user)])
+router = APIRouter(
+    prefix="/api/relatorios/admin/relatorios",
+    tags=["Admin - Relatórios - Panorâmico Diário"],
+    # Dashboard/relatórios panorâmicos são parte do Supervisor (tela Dashboard)
+    dependencies=[Depends(require_permissions(["route:/dashboard"]))],
+)
 
 
 @router.get("/panoramico")
