@@ -96,6 +96,11 @@ def _is_satisfied(required_key: str, user_keys: Set[str]) -> bool:
     # Aliases de permissões (tratadas como equivalentes).
     # No frontend "Dashboard" e "Relatórios" são uma única área.
     if required_key in ("route:/dashboard", "route:/relatorios"):
+        # Compatibilidade: alguns setups usam chaves por domínio "relatorios:*"
+        # (não no formato "route:/..."). Se existir, considera equivalente.
+        if "relatorios:*" in user_keys or "relatorios:read" in user_keys:
+            return True
+
         if _has_key("route:/dashboard") or _has_key("route:/relatorios"):
             return True
 
