@@ -121,14 +121,9 @@ def get_authz_context(
 ) -> AuthzContext:
     """
     Carrega contexto para autorização.
-    - type_user=admin: bypass (superusuário operacional)
-    - caso contrário: exige empresa_id e carrega permissões do usuário nessa empresa.
+    Exige empresa_id e carrega permissões do usuário nessa empresa (tenant).
     """
     empresa_id = _extract_empresa_id(request)
-
-    # Super-admin operacional: mantém compatibilidade e evita "brickar" o sistema.
-    if getattr(current_user, "type_user", None) == "admin":
-        return AuthzContext(user=current_user, empresa_id=empresa_id, permission_keys=set(["*:*"]))
 
     if empresa_id is None:
         raise HTTPException(
@@ -145,10 +140,6 @@ def require_permissions(required: Iterable[str]):
     required_list = list(required)
 
     def dependency(ctx: AuthzContext = Depends(get_authz_context)) -> AuthzContext:
-        # bypass admin operacional
-        if "*:*" in ctx.permission_keys:
-            return ctx
-
         missing = [k for k in required_list if not _is_satisfied(k, ctx.permission_keys)]
         if missing:
             logger.warning(
@@ -173,10 +164,6 @@ def require_any_permissions(required: Iterable[str]):
     required_list = list(required)
 
     def dependency(ctx: AuthzContext = Depends(get_authz_context)) -> AuthzContext:
-        # bypass admin operacional
-        if "*:*" in ctx.permission_keys:
-            return ctx
-
         if any(_is_satisfied(k, ctx.permission_keys) for k in required_list):
             return ctx
 
@@ -196,10 +183,11 @@ def require_any_permissions(required: Iterable[str]):
 
 def require_domain(domain: str, action: str = "read"):
     """
-    Atalho por domínio. Exemplos:
-    - require_domain("pedidos") -> exige "pedidos:read" (ou "pedidos:*")
-    - require_domain("financeiro", "write") -> exige "financeiro:write" (ou "financeiro:*")
+    Atalho por domínio.
+
+    **IMPORTANTE**: o sistema não diferencia mais `:read`/`:write`.
+    O backend trabalha apenas com wildcard por domínio (`<dominio>:*`).
+    O parâmetro `action` é mantido só por compatibilidade.
     """
-    key = f"{domain}:{action}"
-    return require_permissions([key])
+    return require_permissions([f"{domain}:*"])
 

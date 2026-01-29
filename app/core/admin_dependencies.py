@@ -109,9 +109,10 @@ def require_type_user(allowed_types: list[str]):
 
 def require_admin(current_user: UserModel = Depends(get_current_user)) -> UserModel:
     """
-    Atalho para rotas que só podem ser acessadas por usuários type_user='admin'.
+    Atalho para rotas administrativas.
+    Permite usuários type_user='admin' e type_user='super'.
     """
-    if current_user.type_user != "admin":
+    if current_user.type_user not in ("admin", "super"):
         logger.warning(
             "[AUTH] Acesso negado. type_user=%s tentou acessar rota admin.",
             current_user.type_user,

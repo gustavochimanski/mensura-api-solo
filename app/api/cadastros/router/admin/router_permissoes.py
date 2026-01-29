@@ -57,15 +57,6 @@ def listar_minhas_permissoes(
     ctx: AuthzContext = Depends(get_authz_context),
     db: Session = Depends(get_db),
 ):
-    # Admin operacional: devolve catálogo completo para UX do frontend (menu/guards).
-    if "*:*" in ctx.permission_keys:
-        all_keys = [k for (k,) in db.query(PermissionModel.key).order_by(PermissionModel.key.asc()).all()]
-        return UserPermissionKeysResponse(
-            user_id=ctx.user.id,
-            empresa_id=int(ctx.empresa_id or 0),
-            permission_keys=all_keys,
-        )
-
     return UserPermissionKeysResponse(
         user_id=ctx.user.id,
         empresa_id=int(ctx.empresa_id or 0),

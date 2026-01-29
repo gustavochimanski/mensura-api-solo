@@ -9,7 +9,7 @@ class PermissionModel(Base):
     """
     Permissões canônicas do sistema (catálogo).
 
-    - key: string estável usada no código (ex: "pedidos:read", "financeiro:write", "pedidos:*")
+    - key: string estável usada no código (ex: "route:/dashboard", "financeiro:*", "pedidos:*")
     - domain: primeiro segmento da key (ex: "pedidos")
     """
 

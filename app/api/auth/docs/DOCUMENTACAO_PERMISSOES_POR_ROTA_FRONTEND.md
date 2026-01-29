@@ -9,9 +9,13 @@ Este documento define como o frontend (Supervisor) deve **exibir menus/telas** e
 ## 1) Conceitos
 
 - **Empresa (tenant)**: permissões são concedidas por **usuário + empresa**.
-- **Permissão por rota**: chave que representa uma **tela/área do Supervisor**.
+- **Permissões (formatos suportados)**:
+  - **Permissão por rota**: chave que representa uma **tela/área do Supervisor**.
   - **Formato base**: `route:<pathname>`
   - **Formato por aba**: `route:<pathname>:<tab>`
+  - **Permissão por domínio (backend)**: chave técnica por domínio, **somente wildcard**:
+    - Formato: `<dominio>:*` (ex.: `pedidos:*`, `relatorios:*`)
+    - **Não existe mais** `:read` / `:write`.
 
 Exemplos:
 - `route:/dashboard`
@@ -108,6 +112,24 @@ Body:
 }
 ```
 
+### 4.4) Minhas permissões (para o frontend montar menu/guards)
+> Endpoint para o frontend buscar as permissões do usuário logado na empresa selecionada.
+
+- `GET /api/mensura/permissoes/me`
+
+Regras:
+- Enviar `Authorization: Bearer <access_token>`
+- Enviar `X-Empresa-Id: <empresa_id>` (ou `?empresa_id=...`)
+
+Exemplo:
+```json
+{
+  "user_id": 10,
+  "empresa_id": 3,
+  "permission_keys": ["route:/dashboard", "route:/pedidos", "pedidos:*"]
+}
+```
+
 ---
 
 ## 5) Regras de erro (para UX do frontend)
@@ -201,4 +223,11 @@ Padronize sempre para **uma única chave**:
 - **Menu**: mostrar item apenas se o usuário tem a permissão da rota (ou do container).
 - **Guarda de página**: se não tiver permissão, redirecionar para uma página “Sem permissão”.
 - **Troca de empresa**: ao trocar `empresa_id`, recarregar permissões e reconstruir menu/guards.
+
+---
+
+## 9) Regra especial: Dashboard e Relatórios são equivalentes
+
+No backend, `route:/dashboard` e `route:/relatorios` são tratados como **equivalentes** para autorização.
+Recomendação pro frontend: trate ambos como a mesma área (se tiver um, pode liberar o outro no menu/guard).
 

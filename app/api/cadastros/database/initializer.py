@@ -49,7 +49,7 @@ class CadastrosInitializer(DomainInitializer):
         self._criar_usuario_admin_padrao()
     
     def _criar_usuario_admin_padrao(self) -> None:
-        """Cria o usuário 'admin' com senha padrão caso não exista."""
+        """Cria o usuário 'super' com senha padrão caso não exista."""
         try:
             with SessionLocal() as session:
                 stmt = (
@@ -57,25 +57,25 @@ class CadastrosInitializer(DomainInitializer):
                     .values(
                         username="super",
                         hashed_password=hash_password("171717"),#
-                        type_user="admin",
+                        type_user="super",
                     )
                     .on_conflict_do_nothing(index_elements=[UserModel.username])
                 )
                 result = session.execute(stmt)
                 session.commit()
                 if hasattr(result, "rowcount") and result.rowcount == 0:
-                    logger.info("  ℹ️ Usuário admin já existe. Pulando criação.")
+                    logger.info("  ℹ️ Usuário super já existe. Pulando criação.")
                 else:
-                    logger.info("  ✅ Usuário admin criado com sucesso (senha padrão: 171717).")
+                    logger.info("  ✅ Usuário super criado com sucesso (senha padrão: 171717).")
         except IntegrityError:
             # Em caso de corrida entre múltiplos processos
             try:
                 session.rollback()
             except Exception:
                 pass
-            logger.info("  ℹ️ Usuário admin já existe (detectado por integridade).")
+            logger.info("  ℹ️ Usuário super já existe (detectado por integridade).")
         except Exception as e:
-            logger.error(f"  ❌ Erro ao criar usuário admin: {e}", exc_info=True)
+            logger.error(f"  ❌ Erro ao criar usuário super: {e}", exc_info=True)
 
 
 # Cria e registra a instância do inicializador

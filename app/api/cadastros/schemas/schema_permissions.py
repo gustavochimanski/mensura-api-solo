@@ -21,5 +21,8 @@ class UserPermissionKeysResponse(BaseModel):
 
 
 class SetUserPermissionsRequest(BaseModel):
-    permission_keys: List[str] = Field(default_factory=list, description="Lista de keys (ex: pedidos:read, financeiro:*).")
+    permission_keys: List[str] = Field(
+        default_factory=list,
+        description="Lista de keys. Formatos suportados: route:/... e <dominio>:* (ex: pedidos:*, financeiro:*).",
+    )
 
