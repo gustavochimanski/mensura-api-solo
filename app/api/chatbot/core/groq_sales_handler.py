@@ -5498,7 +5498,7 @@ Sua única função é ajudar a ESCOLHER PRODUTOS. Nada mais!
         """
         Quando o chatbot não entende a mensagem:
         1. Envia notificação para WhatsApp da empresa
-        2. Envia mensagem para cliente avisando que vai chamar atendente
+        2. Envia mensagem para cliente com link do cardápio
         3. Desativa o chatbot para esse cliente
         """
         from . import database as chatbot_db
@@ -5604,9 +5604,19 @@ Sua única função é ajudar a ESCOLHER PRODUTOS. Nada mais!
             except:
                 pass
         
-        # Mensagem para o cliente
-        mensagem_cliente = "Desculpe, não consegui entender o que você precisa. 😔\n\n"
-        mensagem_cliente += "Vou chamar um atendente para te ajudar. Em breve alguém entrará em contato! 🙏"
+        # Mensagem para o cliente:
+        # Quando não entendemos e pausamos, direcionamos para o cardápio (evita pedir nome/dados aqui).
+        try:
+            link_cardapio = self._obter_link_cardapio()
+        except Exception:
+            link_cardapio = "https://chatbot.mensuraapi.com.br"
+
+        mensagem_cliente = (
+            "Desculpe, não consegui entender sua mensagem. 😔\n\n"
+            "Para fazer seu pedido, acesse nosso cardápio:\n"
+            f"👉 {link_cardapio}\n\n"
+            "Se precisar de ajuda, digite *chamar atendente*."
+        )
         
         # Salva no histórico (sem commit para não interferir)
         try:
