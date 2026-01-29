@@ -1436,6 +1436,12 @@ def _extrair_slug_do_host(host: Optional[str]) -> Optional[str]:
     return None
 
 
+def _digits_only(value: Optional[str]) -> str:
+    if not value:
+        return ""
+    return "".join(ch for ch in str(value) if ch.isdigit())
+
+
 def get_empresa_id_by_slug(db: Session, slug: Optional[str]) -> Optional[str]:
     import logging
     logger = logging.getLogger(__name__)
@@ -1656,13 +1662,16 @@ async def process_webhook_background(body: dict, headers_info: Optional[dict] = 
                         # Extrai nome do contato da Meta (se disponível)
                         contacts = value.get("contacts", [])
                         contact_name = None
+                        contact_wa_id = None
                         if contacts and len(contacts) > 0:
                             profile = contacts[0].get("profile", {})
                             contact_name = profile.get("name")
+                            contact_wa_id = contacts[0].get("wa_id")
 
                         for message in messages:
                             # Dados da mensagem
                             from_number = message.get("from")
+                            to_number = message.get("to")
                             message_id = message.get("id")
                             message_type = message.get("type")
                             timestamp = message.get("timestamp")
@@ -1681,6 +1690,122 @@ async def process_webhook_background(body: dict, headers_info: Optional[dict] = 
                                 message_text = button_response.get("title")  # Texto do botão
 
                             if message_text:
+                                # Detecta se a mensagem foi enviada pelo HUMANO (WhatsApp Web) vs CLIENTE.
+                                # Alguns provedores enviam mensagens "outgoing" no bloco `messages`.
+                                # Regras (heurísticas):
+                                # - Se `from` == metadata.phone_number_id => empresa enviou
+                                # - Se `from` (digits) == metadata.display_phone_number (digits) => empresa enviou
+                                # - Se existir `to`, e `from` parece ser o remetente da empresa => empresa enviou
+                                business_phone_number_id = str(metadata.get("phone_number_id") or "").strip()
+                                business_display_phone = str(metadata.get("display_phone_number") or "").strip()
+
+                                from_digits = _digits_only(from_number)
+                                to_digits = _digits_only(to_number)
+                                business_id_digits = _digits_only(business_phone_number_id)
+                                business_display_digits = _digits_only(business_display_phone)
+
+                                is_outgoing_human = False
+                                if business_phone_number_id and str(from_number).strip() == business_phone_number_id:
+                                    is_outgoing_human = True
+                                elif business_display_digits and from_digits and from_digits == business_display_digits:
+                                    is_outgoing_human = True
+                                elif message.get("from_me") is True:
+                                    is_outgoing_human = True
+
+                                if is_outgoing_human:
+                                    # Determina o cliente (destinatário) para salvar no histórico correto
+                                    cliente_phone = None
+                                    if to_digits and to_digits != business_id_digits and to_digits != business_display_digits:
+                                        cliente_phone = to_digits
+                                    elif contact_wa_id:
+                                        cliente_phone = _digits_only(contact_wa_id) or str(contact_wa_id).strip()
+                                    # fallback: se não conseguiu, tenta usar to_number bruto
+                                    if not cliente_phone and to_number:
+                                        cliente_phone = str(to_number).strip()
+
+                                    if not cliente_phone:
+                                        import logging
+                                        logger = logging.getLogger(__name__)
+                                        logger.warning(
+                                            f"⚠️ Webhook recebeu mensagem outgoing (humano), mas não conseguiu identificar cliente. "
+                                            f"from={from_number}, to={to_number}, empresa_id={empresa_id}"
+                                        )
+                                        continue
+
+                                    try:
+                                        import logging
+                                        from datetime import datetime as dt
+                                        logger = logging.getLogger(__name__)
+
+                                        empresa_id_int = int(empresa_id) if empresa_id else 1
+
+                                        # Busca ou cria conversa do cliente
+                                        conversations = chatbot_db.get_conversations_by_user(db, cliente_phone, empresa_id=empresa_id_int)
+                                        if not conversations:
+                                            conversations = chatbot_db.get_conversations_by_user(db, cliente_phone)
+
+                                        conversation_id = None
+                                        if conversations:
+                                            conversation_id = conversations[0]["id"]
+                                        else:
+                                            prompt_key = "atendimento-pedido-whatsapp"
+                                            if not chatbot_db.get_prompt(db, prompt_key, empresa_id=empresa_id_int):
+                                                chatbot_db.create_prompt(
+                                                    db=db,
+                                                    key=prompt_key,
+                                                    name="Atendimento WhatsApp",
+                                                    content="Atendimento via WhatsApp",
+                                                    is_default=False,
+                                                    empresa_id=empresa_id_int,
+                                                )
+                                            conversation_id = chatbot_db.create_conversation(
+                                                db=db,
+                                                session_id=f"whatsapp_{cliente_phone}_{dt.now().strftime('%Y%m%d%H%M%S')}",
+                                                user_id=cliente_phone,
+                                                prompt_key=prompt_key,
+                                                model="groq-sales",
+                                                empresa_id=empresa_id_int,
+                                                contact_name=contact_name,
+                                            )
+
+                                        # Salva o conteúdo real enviado pelo humano (WhatsApp Web)
+                                        chatbot_db.create_message(
+                                            db=db,
+                                            conversation_id=conversation_id,
+                                            role="assistant",
+                                            content=message_text,
+                                            whatsapp_message_id=message_id,
+                                            extra_metadata={"sender": "human", "source": "whatsapp_web"},
+                                        )
+
+                                        # Pausa o bot por 3h para este cliente
+                                        destrava_em = chatbot_db.get_auto_pause_until()
+                                        pause_result = chatbot_db.set_bot_status(
+                                            db=db,
+                                            phone_number=cliente_phone,
+                                            paused_by="atendente_respondeu",
+                                            empresa_id=empresa_id_int,
+                                            desativa_chatbot_em=destrava_em,
+                                        )
+                                        if pause_result.get("success"):
+                                            logger.info(
+                                                f"⏸️ Chatbot pausado por {chatbot_db.AUTO_PAUSE_HOURS}h após mensagem humana (WhatsApp Web) - "
+                                                f"cliente={cliente_phone}, empresa_id={empresa_id_int}, chatbot_destrava_em={destrava_em}"
+                                            )
+                                        else:
+                                            logger.error(
+                                                f"❌ Falha ao pausar chatbot após mensagem humana (WhatsApp Web): {pause_result.get('error')}"
+                                            )
+                                    except Exception as e:
+                                        import logging
+                                        logger = logging.getLogger(__name__)
+                                        logger.error(
+                                            f"❌ Erro ao processar mensagem outgoing (humano) do WhatsApp Web: {e}",
+                                            exc_info=True,
+                                        )
+                                    # Não deve cair no fluxo de IA para mensagens enviadas pelo humano
+                                    continue
+
                                 # Marca mensagem como lida (conforme documentação 360Dialog)
                                 # Todas as mensagens recebidas aparecem como "delivered" por padrão
                                 # Para aparecerem como "read", precisamos marcar explicitamente
@@ -1733,6 +1858,7 @@ async def process_webhook_background(body: dict, headers_info: Optional[dict] = 
                                                 JOIN chatbot.conversations c ON m.conversation_id = c.id
                                                 WHERE m.metadata->>'whatsapp_message_id' = :message_id
                                                 AND m.role = 'assistant'
+                                                AND (m.metadata->>'sender' IS NULL OR m.metadata->>'sender' = 'chatbot')
                                                 AND c.user_id = :recipient_id
                                                 ORDER BY m.created_at DESC
                                                 LIMIT 1
@@ -1820,7 +1946,8 @@ async def process_webhook_background(body: dict, headers_info: Optional[dict] = 
                                                 conversation_id=conversation_id,
                                                 role="assistant",
                                                 content=mensagem_conteudo,
-                                                whatsapp_message_id=status_message_id
+                                                whatsapp_message_id=status_message_id,
+                                                extra_metadata={"sender": "human", "source": "whatsapp_status"},
                                             )
                                             
                                             logger.info(f"💾 Mensagem do atendente salva no banco - conversation_id: {conversation_id}, message_id: {status_message_id}")

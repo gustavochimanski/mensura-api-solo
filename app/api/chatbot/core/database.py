@@ -620,7 +620,14 @@ def delete_conversation(db: Session, conversation_id: int) -> bool:
 
 # ==================== MENSAGENS ====================
 
-def create_message(db: Session, conversation_id: int, role: str, content: str, whatsapp_message_id: Optional[str] = None) -> Optional[int]:
+def create_message(
+    db: Session,
+    conversation_id: int,
+    role: str,
+    content: str,
+    whatsapp_message_id: Optional[str] = None,
+    extra_metadata: Optional[dict] = None,
+) -> Optional[int]:
     """Adiciona uma mensagem à conversa
     
     Args:
@@ -629,12 +636,24 @@ def create_message(db: Session, conversation_id: int, role: str, content: str, w
         role: Papel da mensagem ('user' ou 'assistant')
         content: Conteúdo da mensagem
         whatsapp_message_id: ID único da mensagem do WhatsApp (opcional, usado para detectar duplicatas)
+        extra_metadata: Metadados adicionais (opcional). Será mesclado com whatsapp_message_id.
     """
-    # Prepara metadata se tiver whatsapp_message_id
+    # Prepara metadata (jsonb) se houver whatsapp_message_id e/ou extra_metadata
     metadata_json = None
+    metadata_obj = {}
     if whatsapp_message_id:
+        metadata_obj["whatsapp_message_id"] = whatsapp_message_id
+    if extra_metadata:
+        # Garante que é dict e mescla sem quebrar chamadas legadas
+        try:
+            if isinstance(extra_metadata, dict):
+                metadata_obj.update(extra_metadata)
+        except Exception:
+            # Se vier algo inválido, ignora silenciosamente para não quebrar fluxo
+            pass
+    if metadata_obj:
         import json
-        metadata_json = json.dumps({"whatsapp_message_id": whatsapp_message_id})
+        metadata_json = json.dumps(metadata_obj)
 
     from sqlalchemy.exc import SQLAlchemyError
 
