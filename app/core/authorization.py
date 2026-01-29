@@ -142,6 +142,34 @@ def require_permissions(required: Iterable[str]):
     return dependency
 
 
+def require_any_permissions(required: Iterable[str]):
+    """
+    Variante "OR": permite acesso se o usuário possuir pelo menos uma das permissões.
+    """
+    required_list = list(required)
+
+    def dependency(ctx: AuthzContext = Depends(get_authz_context)) -> AuthzContext:
+        # bypass admin operacional
+        if "*:*" in ctx.permission_keys:
+            return ctx
+
+        if any(_is_satisfied(k, ctx.permission_keys) for k in required_list):
+            return ctx
+
+        logger.warning(
+            "[AUTHZ] Acesso negado user_id=%s empresa_id=%s required_any=%s",
+            getattr(ctx.user, "id", None),
+            ctx.empresa_id,
+            required_list,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Você não tem permissão para acessar este recurso",
+        )
+
+    return dependency
+
+
 def require_domain(domain: str, action: str = "read"):
     """
     Atalho por domínio. Exemplos:
