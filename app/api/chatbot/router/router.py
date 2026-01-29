@@ -1704,10 +1704,12 @@ async def process_webhook_background(body: dict, headers_info: Optional[dict] = 
                             status_type = status.get("status")  # sent, delivered, read, failed
                             recipient_id = status.get("recipient_id")  # Número do destinatário (cliente)
                             
-                            # Quando status é "sent", significa que a EMPRESA enviou mensagem para o cliente
-                            # IMPORTANTE: Só pausa se foi um HUMANO que enviou, não o chatbot
-                            # Verifica se o message_id do status corresponde a uma mensagem do assistente (chatbot)
-                            if status_type == "sent" and recipient_id:
+                            # Quando status é "sent"/"delivered"/"read", significa que a EMPRESA enviou mensagem para o cliente
+                            # (dependendo do provedor, o primeiro status pode vir como delivered/read, então não podemos depender só de "sent").
+                            # IMPORTANTE: Só pausa se foi um HUMANO que enviou, não o chatbot.
+                            # Verifica se o message_id do status corresponde a uma mensagem do assistente (chatbot).
+                            OUTGOING_STATUS_TYPES = {"sent", "delivered", "read"}
+                            if (status_type or "").lower() in OUTGOING_STATUS_TYPES and recipient_id:
                                 try:
                                     from datetime import datetime, timedelta
                                     from sqlalchemy import text
@@ -1722,8 +1724,9 @@ async def process_webhook_background(body: dict, headers_info: Optional[dict] = 
                                     if status_message_id:
                                         try:
                                             # Busca no banco se existe uma mensagem do assistente com esse message_id
-                                            # Considera uma janela de tempo de 120 segundos para lidar com possíveis delays
-                                            # e race conditions entre salvar mensagem e receber webhook
+                                            # Não restringimos por janela curta de tempo aqui, pois alguns provedores podem
+                                            # atrasar o primeiro status (ex.: "delivered"/"read"). A identificação correta
+                                            # é pela combinação message_id + c.user_id.
                                             query_check_bot = text("""
                                                 SELECT m.id, m.role, m.created_at, m.metadata
                                                 FROM chatbot.messages m
@@ -1731,7 +1734,6 @@ async def process_webhook_background(body: dict, headers_info: Optional[dict] = 
                                                 WHERE m.metadata->>'whatsapp_message_id' = :message_id
                                                 AND m.role = 'assistant'
                                                 AND c.user_id = :recipient_id
-                                                AND m.created_at > NOW() - INTERVAL '120 seconds'
                                                 ORDER BY m.created_at DESC
                                                 LIMIT 1
                                             """)
@@ -1744,17 +1746,21 @@ async def process_webhook_background(body: dict, headers_info: Optional[dict] = 
                                             if mensagem_assistente:
                                                 # Encontrou mensagem do assistente com esse message_id = foi o chatbot
                                                 foi_chatbot = True
-                                                logger.info(f"🤖 Mensagem enviada pelo CHATBOT (message_id: {status_message_id}) - NÃO pausando")
+                                                logger.info(
+                                                    f"🤖 Mensagem enviada pelo CHATBOT (status: {status_type}, message_id: {status_message_id}) - NÃO pausando"
+                                                )
                                             else:
                                                 # NÃO encontrou no banco = foi HUMANO que enviou pelo WhatsApp
-                                                logger.info(f"👤 Mensagem enviada por HUMANO (message_id: {status_message_id} não encontrado no banco) - PAUSANDO")
+                                                logger.info(
+                                                    f"👤 Mensagem enviada por HUMANO (status: {status_type}, message_id: {status_message_id} não encontrado no banco) - PAUSANDO"
+                                                )
                                         except Exception as e:
                                             logger.warning(f"⚠️ Erro ao verificar se foi chatbot pelo message_id: {e}", exc_info=True)
                                             # Em caso de erro, assume que foi humano (mais seguro)
                                             foi_chatbot = False
                                     else:
                                         # Sem message_id = assume que foi humano
-                                        logger.info(f"👤 Mensagem enviada por HUMANO (sem message_id) - PAUSANDO")
+                                        logger.info(f"👤 Mensagem enviada por HUMANO (status: {status_type}, sem message_id) - PAUSANDO")
                                     
                                     # PAUSA se NÃO foi o chatbot que enviou
                                     if not foi_chatbot:

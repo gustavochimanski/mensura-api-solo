@@ -959,6 +959,82 @@ ORDER_STATUS_TEMPLATES = {
 }
 
 
+def _formatar_tempo_minutos(tempo_min: int) -> str:
+    """Formata minutos em string amigável (ex.: 45 min, 1h 20min)."""
+    try:
+        tempo_int = int(tempo_min)
+    except Exception:
+        return str(tempo_min)
+
+    if tempo_int < 0:
+        tempo_int = 0
+    if tempo_int < 60:
+        return f"{tempo_int} min"
+    horas = tempo_int // 60
+    minutos = tempo_int % 60
+    if minutos == 0:
+        return f"{horas}h"
+    return f"{horas}h {minutos}min"
+
+
+def _obter_tempo_estimado_min_por_regiao_distancia(
+    db: Session, *, empresa_id: int, distancia_km
+) -> Optional[int]:
+    """
+    Retorna tempo_estimado_min conforme regiões de entrega (por distância).
+    Usa o mesmo critério do contrato/adaptador de região.
+    """
+    if not empresa_id or distancia_km is None:
+        return None
+    try:
+        from decimal import Decimal as _Dec
+        from app.api.cadastros.adapters.regiao_entrega_adapter import RegiaoEntregaAdapter
+
+        regiao = RegiaoEntregaAdapter(db).obter_regiao_por_distancia(
+            int(empresa_id), _Dec(str(distancia_km))
+        )
+        if not regiao:
+            return None
+        tempo = getattr(regiao, "tempo_estimado_min", None)
+        return int(tempo) if tempo is not None else None
+    except Exception:
+        # Mantém silencioso (não deve falhar o envio por erro de ETA)
+        return None
+
+
+def _obter_tempo_estimado_min_da_menor_taxa(
+    db: Session, *, empresa_id: int
+) -> Optional[int]:
+    """
+    Para balcão/mesa: retorna o tempo_estimado_min da região com MENOR taxa_entrega cadastrada.
+    """
+    if not empresa_id:
+        return None
+    try:
+        from sqlalchemy import text
+
+        row = db.execute(
+            text(
+                """
+                SELECT re.tempo_estimado_min
+                FROM cadastros.regioes_entrega re
+                WHERE re.empresa_id = :empresa_id
+                  AND re.ativo = true
+                  AND re.tempo_estimado_min IS NOT NULL
+                ORDER BY re.taxa_entrega ASC NULLS LAST, re.id ASC
+                LIMIT 1
+                """
+            ),
+            {"empresa_id": int(empresa_id)},
+        ).fetchone()
+        if not row:
+            return None
+        tempo = row[0]
+        return int(tempo) if tempo is not None else None
+    except Exception:
+        return None
+
+
 async def enviar_resumo_pedido_whatsapp(
     db: Session,
     pedido_id: int,
@@ -997,7 +1073,10 @@ async def enviar_resumo_pedido_whatsapp(
                 p.created_at,
                 c.nome as cliente_nome,
                 c.telefone as cliente_telefone,
-                p.empresa_id
+                p.empresa_id,
+                p.endereco_id,
+                p.distancia_km,
+                p.previsao_entrega
             FROM pedidos.pedidos p
             LEFT JOIN cadastros.clientes c ON p.cliente_id = c.id
             WHERE p.id = :pedido_id
@@ -1027,6 +1106,9 @@ async def enviar_resumo_pedido_whatsapp(
         cliente_nome = pedido[11]
         cliente_telefone_db = pedido[12]
         empresa_id_pedido = str(pedido[13]) if pedido[13] else empresa_id
+        endereco_id = pedido[14]
+        distancia_km = float(pedido[15]) if pedido[15] is not None else None
+        previsao_entrega = pedido[16]
 
         # Usa o telefone fornecido ou busca do banco
         telefone_final = phone_number or cliente_telefone_db
@@ -1040,6 +1122,12 @@ async def enviar_resumo_pedido_whatsapp(
 
         # Usa empresa_id do pedido se não foi fornecido
         empresa_id_final = empresa_id_pedido or empresa_id
+        empresa_id_int: Optional[int] = None
+        if empresa_id_final:
+            try:
+                empresa_id_int = int(str(empresa_id_final))
+            except (ValueError, TypeError):
+                empresa_id_int = None
 
         # Busca os itens do pedido com seus IDs
         itens_query = text("""
@@ -1186,6 +1274,43 @@ async def enviar_resumo_pedido_whatsapp(
         # Mensagem de status personalizada
         status_message = status_info["message"].format(numero_pedido=numero_pedido)
         mensagem += f"\n\n{status_info['emoji']} {status_message}"
+
+        # Quando o status for "Em preparo" (R), inclui tempo estimado baseado nas regiões de entrega.
+        # - Delivery: tempo da região correspondente à distância (se disponível)
+        # - Balcão/Mesa: tempo da região com menor taxa cadastrada
+        if str(status_code) == "R":
+            tempo_estimado_min: Optional[int] = None
+            if str(tipo_entrega) == "DELIVERY":
+                if empresa_id_int is not None and distancia_km is not None:
+                    tempo_estimado_min = _obter_tempo_estimado_min_por_regiao_distancia(
+                        db, empresa_id=empresa_id_int, distancia_km=distancia_km
+                    )
+
+                # Fallback: se houver previsao_entrega, calcula minutos restantes (não depende de região)
+                if tempo_estimado_min is None and previsao_entrega is not None:
+                    try:
+                        from datetime import datetime, timezone
+
+                        now = datetime.now(tz=timezone.utc)
+                        prev = previsao_entrega
+                        if getattr(prev, "tzinfo", None) is None:
+                            # prev pode vir "naive" dependendo do driver; assume UTC
+                            prev = prev.replace(tzinfo=timezone.utc)
+                        delta_min = int((prev - now).total_seconds() // 60)
+                        tempo_estimado_min = max(delta_min, 0)
+                    except Exception:
+                        tempo_estimado_min = None
+
+                if tempo_estimado_min is not None:
+                    mensagem += f"\n⏱️ *Previsão de entrega:* ~{_formatar_tempo_minutos(tempo_estimado_min)}"
+
+            elif str(tipo_entrega) in ("BALCAO", "MESA"):
+                if empresa_id_int is not None:
+                    tempo_estimado_min = _obter_tempo_estimado_min_da_menor_taxa(
+                        db, empresa_id=empresa_id_int
+                    )
+                if tempo_estimado_min is not None:
+                    mensagem += f"\n⏱️ *Tempo estimado:* ~{_formatar_tempo_minutos(tempo_estimado_min)}"
 
         # Envia via WhatsApp
         notifier = OrderNotification()

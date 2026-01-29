@@ -154,8 +154,13 @@ async def websocket_notifications(
         try:
             payload = decode_access_token(token)
             logger.info(f"[WS_ROUTER] Token decodificado com sucesso. Payload keys: {list(payload.keys())}")
+        except HTTPException as e:
+            # Token inválido/expirado (evita stacktrace ruidoso em reconexões do frontend)
+            logger.info(f"[WS_ROUTER] Token inválido/expirado: {e.detail}")
+            await _close_ws_policy(websocket, "Token inválido ou expirado")
+            return
         except Exception as e:
-            logger.error(f"[WS_ROUTER] Erro ao decodificar token: {e}", exc_info=True)
+            logger.error(f"[WS_ROUTER] Erro inesperado ao decodificar token: {e}", exc_info=True)
             await _close_ws_policy(websocket, "Token inválido ou expirado")
             return
             

@@ -1,5 +1,6 @@
 # app/core/admin_dependencies.py
 
+import os
 from fastapi import Depends, HTTPException, status, Request
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
@@ -27,12 +28,23 @@ def decode_access_token(access_token: str) -> dict:
     Mantém os mesmos parâmetros de validação usados pelo fluxo HTTP.
     """
     try:
-        return jwt.decode(
-            access_token,
-            SECRET_KEY,
-            algorithms=[ALGORITHM],
-            options={"verify_sub": False},
-        )
+        leeway_seconds = int(os.getenv("JWT_LEEWAY_SECONDS", "30"))
+        try:
+            return jwt.decode(
+                access_token,
+                SECRET_KEY,
+                algorithms=[ALGORITHM],
+                options={"verify_sub": False},
+                leeway=leeway_seconds,
+            )
+        except TypeError:
+            # Compatibilidade caso a versão do python-jose não suporte `leeway`
+            return jwt.decode(
+                access_token,
+                SECRET_KEY,
+                algorithms=[ALGORITHM],
+                options={"verify_sub": False},
+            )
     except JWTError as e:
         logger.error(f"[AUTH] Erro ao decodificar JWT: {e}")
         raise credentials_exception
