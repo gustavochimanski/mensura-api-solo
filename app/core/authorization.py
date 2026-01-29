@@ -80,6 +80,13 @@ def _load_user_permission_keys(db: Session, user_id: int, empresa_id: int) -> Se
 
 
 def _is_satisfied(required_key: str, user_keys: Set[str]) -> bool:
+    # Aliases de permissões (tratadas como equivalentes).
+    # Ex.: no frontend "Dashboard" e "Relatórios" são uma única área.
+    # Então qualquer uma das duas keys satisfaz a outra.
+    if required_key in ("route:/dashboard", "route:/relatorios"):
+        if "route:/dashboard" in user_keys or "route:/relatorios" in user_keys:
+            return True
+
     if required_key in user_keys:
         return True
     # wildcard por domínio: "<domain>:*"

@@ -5,14 +5,14 @@ from sqlalchemy.orm import Session
 
 from app.api.relatorios.repositories.repository import RelatorioRepository
 from app.api.relatorios.services.service import RelatoriosService
-from app.core.authorization import require_any_permissions
+from app.core.authorization import require_permissions
 from app.database.db_connection import get_db
 
 router = APIRouter(
     prefix="/api/relatorios/admin/relatorios",
     tags=["Admin - Relatórios - Panorâmico Diário"],
-    # Permite acessar pelo menu Dashboard OU Relatórios
-    dependencies=[Depends(require_any_permissions(["route:/dashboard", "route:/relatorios"]))],
+    # "Dashboard" e "Relatórios" são equivalentes (alias em `authorization._is_satisfied`)
+    dependencies=[Depends(require_permissions(["route:/dashboard"]))],
 )
 
 
