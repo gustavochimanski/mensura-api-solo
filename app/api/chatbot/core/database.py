@@ -13,6 +13,67 @@ from datetime import datetime, timedelta, timezone
 # Schema do chatbot
 CHATBOT_SCHEMA = "chatbot"
 
+# ==================== JANELA DE CONVERSA (WHATSAPP 24H) ====================
+
+def cliente_conversou_nas_ultimas_horas(
+    db: Session,
+    phone_number: str,
+    *,
+    empresa_id: Optional[int] = None,
+    horas: int = 24,
+) -> bool:
+    """
+    Retorna True se existe mensagem do cliente (role='user') nas últimas `horas`.
+
+    Motivo:
+    - WhatsApp (Cloud API / 360dialog) só permite mensagens "livres" fora de template
+      dentro da janela de 24h desde a última mensagem do cliente.
+    """
+    try:
+        if not phone_number or not str(phone_number).strip():
+            return False
+
+        user_id = _normalize_phone_number(str(phone_number).strip())
+        if not user_id:
+            return False
+
+        # Se empresa_id for informado, tentamos respeitar o escopo da empresa.
+        # Ainda assim, mantemos compatibilidade com conversas legadas sem empresa_id (NULL).
+        if empresa_id is not None:
+            q = text(
+                f"""
+                SELECT MAX(m.created_at) AS last_user_message_at
+                FROM {CHATBOT_SCHEMA}.conversations c
+                JOIN {CHATBOT_SCHEMA}.messages m ON m.conversation_id = c.id
+                WHERE c.user_id = :user_id
+                  AND (c.empresa_id = :empresa_id OR c.empresa_id IS NULL)
+                  AND m.role = 'user'
+                """
+            )
+            row = db.execute(q, {"user_id": user_id, "empresa_id": int(empresa_id)}).fetchone()
+        else:
+            q = text(
+                f"""
+                SELECT MAX(m.created_at) AS last_user_message_at
+                FROM {CHATBOT_SCHEMA}.conversations c
+                JOIN {CHATBOT_SCHEMA}.messages m ON m.conversation_id = c.id
+                WHERE c.user_id = :user_id
+                  AND m.role = 'user'
+                """
+            )
+            row = db.execute(q, {"user_id": user_id}).fetchone()
+
+        last_at = row[0] if row else None
+        last_dt = _parse_timestamp(last_at)
+        if not last_dt:
+            return False
+
+        limite = _utcnow() - timedelta(hours=max(int(horas), 0))
+        return last_dt >= limite
+    except Exception:
+        # fallback conservador: se der erro, não envia WhatsApp (evita violar janela).
+        return False
+
 # ==================== CONSTANTES DE PAUSA ====================
 # Tempo de pausa automática quando o chatbot pausa por conta própria
 AUTO_PAUSE_HOURS = 3

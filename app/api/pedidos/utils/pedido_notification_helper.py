@@ -352,6 +352,33 @@ async def notificar_cliente_pedido_cancelado(
         numero_pedido = pedido.numero_pedido or str(pedido_id)
         cliente_nome = getattr(pedido.cliente, "nome", None) or "Cliente"
 
+        # Compliance WhatsApp: só enviamos mensagem "livre" se o cliente falou nas últimas 24h.
+        # Caso contrário, seria necessário usar template aprovado — por enquanto, omitimos o envio.
+        try:
+            from app.api.chatbot.core import database as chatbot_db
+
+            conversou_24h = chatbot_db.cliente_conversou_nas_ultimas_horas(
+                db_session,
+                telefone,
+                empresa_id=int(empresa_id_val) if empresa_id_val is not None else None,
+                horas=24,
+            )
+            if not conversou_24h:
+                logger.info(
+                    "[Cancelado] Cliente fora da janela de 24h; WhatsApp não enviado (pedido #%s, telefone=%s)",
+                    numero_pedido,
+                    telefone,
+                )
+                return
+        except Exception as e:
+            # Se der erro ao checar a janela, falha de forma conservadora (não envia).
+            logger.warning(
+                "[Cancelado] Falha ao checar janela 24h; WhatsApp não enviado (pedido #%s): %s",
+                numero_pedido,
+                e,
+            )
+            return
+
         try:
             loader = ConfigLoader(db_session, int(empresa_id_val))
             link_cardapio = loader.obter_link_cardapio()
