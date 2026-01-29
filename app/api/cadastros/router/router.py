@@ -11,6 +11,7 @@ from app.api.cadastros.router.admin import (
     router_regiao_entrega,
     router_enderecos,
     router_usuario,
+    router_permissoes,
 )
 from app.api.empresas.router.admin import router_empresa_admin
 from app.api.cadastros.router.client import (
@@ -46,6 +47,7 @@ api_cadastros.include_router(router_parceiros)
 api_cadastros.include_router(router_regiao_entrega)
 api_cadastros.include_router(router_enderecos)
 api_cadastros.include_router(router_usuario)
+api_cadastros.include_router(router_permissoes)
 api_cadastros.include_router(
     router_empresa_admin,
     prefix="/api/cadastros/admin/empresas",

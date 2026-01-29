@@ -85,7 +85,13 @@ class WebhookLoggingMiddleware(BaseHTTPMiddleware):
         if "/webhook" in request.url.path:
             logger.info(f"🔔 WEBHOOK REQUEST: {request.method} {request.url.path}")
             logger.info(f"   Query params: {dict(request.query_params)}")
-            logger.info(f"   Headers: {dict(request.headers)}")
+            # Segurança: nunca logar segredos (Authorization, cookies, tokens etc.)
+            headers = dict(request.headers)
+            for k in list(headers.keys()):
+                lk = k.lower()
+                if lk in ("authorization", "cookie", "set-cookie") or "token" in lk or "secret" in lk:
+                    headers[k] = "[REDACTED]"
+            logger.info(f"   Headers: {headers}")
             logger.info(f"   Client: {request.client.host if request.client else 'unknown'}")
         
         response = await call_next(request)

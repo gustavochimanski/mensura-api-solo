@@ -293,6 +293,9 @@ def importar_models():
     # ─── Models Cadastros ────────────────────────────────────────────
     from app.api.empresas.models.empresa_model import EmpresaModel
     from app.api.cadastros.models.user_model import UserModel
+    # Permissões (RBAC/grants por domínio)
+    from app.api.cadastros.models.model_permission import PermissionModel
+    from app.api.cadastros.models.model_user_permission import UserPermissionModel
     from app.api.cadastros.models.categoria_model import CategoriaModel
     # Importar ProdutoModel DEPOIS de CategoriaModel para resolver relacionamentos
     # ProdutoModel, ProdutoEmpModel, ComboModel e ReceitaModel agora estão no módulo catalogo
@@ -344,6 +347,44 @@ def importar_models():
     from app.api.chatbot.models.model_carrinho_item_complemento import CarrinhoItemComplementoModel
     from app.api.chatbot.models.model_carrinho_item_complemento_adicional import CarrinhoItemComplementoAdicionalModel
     logger.info("📦 Models importados com sucesso.")
+
+
+def criar_permissoes_padrao():
+    """Cria/verifica permissões padrão (catálogo)."""
+    try:
+        from app.core.permissions_catalog import get_default_permissions
+        from app.api.cadastros.models.model_permission import PermissionModel
+
+        with engine.connect() as conn:
+            exists = conn.execute(
+                text(
+                    """
+                    SELECT 1
+                    FROM information_schema.tables
+                    WHERE table_schema = 'cadastros' AND table_name = 'permissions'
+                    """
+                )
+            ).scalar()
+            if not exists:
+                logger.warning("⚠️ Tabela cadastros.permissions não existe; pulando seed de permissões.")
+                return
+
+        defaults = get_default_permissions()
+        rows = [{"key": p.key, "domain": p.domain, "description": p.description} for p in defaults]
+
+        with SessionLocal() as session:
+            for row in rows:
+                stmt = (
+                    insert(PermissionModel)
+                    .values(**row)
+                    .on_conflict_do_nothing(index_elements=[PermissionModel.key])
+                )
+                session.execute(stmt)
+            session.commit()
+
+        logger.info("✅ Permissões padrão criadas/verificadas com sucesso (%s).", len(rows))
+    except Exception as e:
+        logger.error(f"❌ Erro ao criar permissões padrão: {e}", exc_info=True)
 
 
 def verificar_tabelas_cardapio():
@@ -803,7 +844,7 @@ def criar_usuario_admin_padrao():
             if hasattr(result, "rowcount") and result.rowcount == 0:
                 logger.info("🔹 Usuário admin já existe. Pulando criação.")
             else:
-                logger.info("✅ Usuário admin criado com sucesso (senha padrão: 123456).")
+                logger.info("✅ Usuário admin criado com sucesso.")
     except IntegrityError:
         # Em caso de corrida entre múltiplos processos
         try:
@@ -917,5 +958,9 @@ def inicializar_banco():
     # Dados iniciais de meios de pagamento
     logger.info("💳 Passo 8/8: Criando/verificando meios de pagamento padrão...")
     criar_meios_pagamento_padrao()
+
+    # Catálogo de permissões (idempotente)
+    logger.info("🔐 Seed: Criando/verificando permissões padrão...")
+    criar_permissoes_padrao()
     
     logger.info("✅ Banco inicializado com sucesso.")

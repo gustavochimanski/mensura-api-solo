@@ -7,6 +7,7 @@ from .router_regiao_entrega import router as router_regiao_entrega
 from .router_enderecos import router as router_enderecos
 from .router_mesas import router as router_mesas
 from .router_usuario import router as router_usuario
+from .router_permissoes import router as router_permissoes
 
 __all__ = [
     "router_categorias",
@@ -18,4 +19,5 @@ __all__ = [
     "router_enderecos",
     "router_mesas",
     "router_usuario",
+    "router_permissoes",
 ]
