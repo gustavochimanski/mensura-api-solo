@@ -179,7 +179,8 @@ class PrinterRepository:
                             enviar_resumo_pedido_whatsapp(
                                 db=db_session,
                                 pedido_id=pedido_id,
-                                phone_number=pedido_com_cliente.cliente.telefone,
+                                # NÃO forçar telefone do cadastro aqui (pode estar divergente do WhatsApp).
+                                # O serviço de resumo tenta resolver o telefone real do WhatsApp pelo pedido_id.
                                 empresa_id=empresa_id_str
                             ),
                             db_session=db_session
@@ -255,7 +256,8 @@ class PrinterRepository:
                             enviar_resumo_pedido_whatsapp(
                                 db=db_session,
                                 pedido_id=pedido_id,
-                                phone_number=pedido_com_cliente.cliente.telefone,
+                                # NÃO forçar telefone do cadastro aqui (pode estar divergente do WhatsApp).
+                                # O serviço de resumo tenta resolver o telefone real do WhatsApp pelo pedido_id.
                                 empresa_id=empresa_id_str
                             ),
                             db_session=db_session
@@ -341,7 +343,8 @@ class PrinterRepository:
                             enviar_resumo_pedido_whatsapp(
                                 db=db_session,
                                 pedido_id=pedido_id,
-                                phone_number=pedido_com_cliente.cliente.telefone,
+                                # NÃO forçar telefone do cadastro aqui (pode estar divergente do WhatsApp).
+                                # O serviço de resumo tenta resolver o telefone real do WhatsApp pelo pedido_id.
                                 empresa_id=empresa_id_str
                             ),
                             db_session=db_session

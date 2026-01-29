@@ -7448,7 +7448,26 @@ async def processar_mensagem_groq(
     resposta = await handler.processar_mensagem(user_id, mensagem, pedido_aberto=pedido_aberto)
 
     # 4. Salva resposta do bot no banco
-    assistant_message_id = chatbot_db.create_message(db, conversation_id, "assistant", resposta)
+    # Se a resposta confirmou um pedido, tentamos extrair o pedido_id e gravar em metadata
+    # para permitir rastrear o telefone (user_id) associado ao pedido depois.
+    extra_metadata = None
+    try:
+        import re
+
+        # Ex.: "📋 *Número do pedido:* #123" (formatação do fluxo de checkout)
+        m = re.search(r"n[úu]mero do pedido:\s*#\s*(\d+)", str(resposta), flags=re.IGNORECASE)
+        if m:
+            extra_metadata = {"pedido_id": int(m.group(1)), "empresa_id": int(empresa_id)}
+    except Exception:
+        extra_metadata = None
+
+    assistant_message_id = chatbot_db.create_message(
+        db,
+        conversation_id,
+        "assistant",
+        resposta,
+        extra_metadata=extra_metadata,
+    )
     
     # 4.1. Envia notificação WebSocket de resposta do bot
     try:
