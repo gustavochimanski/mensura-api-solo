@@ -2,6 +2,8 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPExce
 from typing import Dict, Any
 import json
 import logging
+import asyncio
+import os
 from datetime import datetime
 
 # Tenta importar ClientDisconnected, se não estiver disponível, usa verificação dinâmica
@@ -31,6 +33,8 @@ from app.api.auth.auth_repo import AuthRepository
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/ws", tags=["websocket"])
+
+WS_IDLE_TIMEOUT_SECONDS: int = int(os.getenv("WS_IDLE_TIMEOUT_SECONDS", "3600"))  # 1h
 
 async def _close_ws_policy(websocket: WebSocket, reason: str) -> None:
     # 1008: Policy Violation (apropriado para auth inválida)
@@ -310,7 +314,29 @@ async def websocket_notifications(
         while True:
             try:
                 # Aguarda mensagem do cliente (ping/pong, comandos, etc.)
-                data = await websocket.receive_text()
+                try:
+                    data = await asyncio.wait_for(
+                        websocket.receive_text(),
+                        timeout=WS_IDLE_TIMEOUT_SECONDS,
+                    )
+                except asyncio.TimeoutError:
+                    logger.info(
+                        f"[WS_ROUTER] Desconectando por inatividade (>{WS_IDLE_TIMEOUT_SECONDS}s) - "
+                        f"user_id={user_id}, empresa_id={empresa_id}, websocket_id={id(websocket)}"
+                    )
+                    timeout_message = {
+                        "type": "idle_timeout",
+                        "message": "Desconectado por inatividade",
+                        "timeout_seconds": WS_IDLE_TIMEOUT_SECONDS,
+                        "timestamp": datetime.utcnow().isoformat(),
+                    }
+                    await _safe_send_text(websocket, timeout_message, user_id, empresa_id)
+                    try:
+                        # 1001: Going Away (fechamento normal / timeout)
+                        await websocket.close(code=1001, reason="Inatividade")
+                    except Exception:
+                        pass
+                    break
                 message = json.loads(data)
                 
                 # Processa mensagens do cliente
