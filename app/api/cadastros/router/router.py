@@ -12,6 +12,7 @@ from app.api.cadastros.router.admin import (
     router_enderecos,
     router_usuario,
     router_permissoes,
+    router_permissoes_me,
 )
 from app.api.empresas.router.admin import router_empresa_admin
 from app.api.cadastros.router.client import (
@@ -24,7 +25,6 @@ from app.api.cadastros.router.public import (
     router_parceiros as router_parceiros_public,
 )
 from app.core.admin_dependencies import get_current_user
-from app.api.cadastros.router.router_permissoes_me import router as router_permissoes_me
 
 api_cadastros = APIRouter(
     tags=["API - Cadastros"]

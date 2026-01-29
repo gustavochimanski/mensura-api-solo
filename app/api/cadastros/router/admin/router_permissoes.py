@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Header, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.admin_dependencies import require_admin
+from app.core.authorization import AuthzContext, get_authz_context
 from app.database.db_connection import get_db
 from app.api.cadastros.models.association_tables import usuario_empresa
 from app.api.cadastros.models.model_permission import PermissionModel
@@ -23,20 +24,61 @@ router = APIRouter(
     prefix="/api/mensura/admin/permissoes",
     tags=["Admin - Mensura - Permissões"],
     dependencies=[Depends(require_admin)],
+    # Mesmo com `redirect_slashes=False` no app, este router aceita / e sem /
+    # sem precisar duplicar decorators.
+    redirect_slashes=True,
+)
+
+def _empresa_id_openapi(
+    x_empresa_id: int | None = Header(
+        default=None,
+        alias="X-Empresa-Id",
+        description="ID da empresa (tenant). Recomendado enviar por header.",
+    ),
+    empresa_id: int | None = Query(
+        default=None,
+        description="Alternativa ao header X-Empresa-Id.",
+    ),
+) -> int | None:
+    # Não valida aqui; a validação/obrigatoriedade é feita em `get_authz_context`.
+    return x_empresa_id or empresa_id
+
+router_me = APIRouter(
+    prefix="/api/mensura/permissoes",
+    tags=["Mensura - Permissões"],
+    # Só para o Swagger documentar o header/query de empresa.
+    dependencies=[Depends(_empresa_id_openapi)],
+    redirect_slashes=True,
 )
 
 
-# Observação: o app está com `redirect_slashes=False` (em `app/main.py`),
-# então precisamos declarar explicitamente as duas variações (com e sem "/")
-# para evitar 404 quando o cliente usa barra final.
+@router_me.get("/me", response_model=UserPermissionKeysResponse)
+def listar_minhas_permissoes(
+    ctx: AuthzContext = Depends(get_authz_context),
+    db: Session = Depends(get_db),
+):
+    # Admin operacional: devolve catálogo completo para UX do frontend (menu/guards).
+    if "*:*" in ctx.permission_keys:
+        all_keys = [k for (k,) in db.query(PermissionModel.key).order_by(PermissionModel.key.asc()).all()]
+        return UserPermissionKeysResponse(
+            user_id=ctx.user.id,
+            empresa_id=int(ctx.empresa_id or 0),
+            permission_keys=all_keys,
+        )
+
+    return UserPermissionKeysResponse(
+        user_id=ctx.user.id,
+        empresa_id=int(ctx.empresa_id or 0),
+        permission_keys=sorted(ctx.permission_keys),
+    )
+
+
 @router.get("", response_model=List[PermissionResponse])
-@router.get("/", response_model=List[PermissionResponse], include_in_schema=False)
 def listar_catalogo_permissoes(db: Session = Depends(get_db)):
     return db.query(PermissionModel).order_by(PermissionModel.domain.asc(), PermissionModel.key.asc()).all()
 
 
 @router.get("/usuarios/{user_id}/empresas/{empresa_id}", response_model=UserPermissionKeysResponse)
-@router.get("/usuarios/{user_id}/empresas/{empresa_id}/", response_model=UserPermissionKeysResponse, include_in_schema=False)
 def listar_permissoes_usuario_empresa(
     user_id: int,
     empresa_id: int,
@@ -80,7 +122,6 @@ def listar_permissoes_usuario_empresa(
 
 
 @router.put("/usuarios/{user_id}/empresas/{empresa_id}", response_model=UserPermissionKeysResponse)
-@router.put("/usuarios/{user_id}/empresas/{empresa_id}/", response_model=UserPermissionKeysResponse, include_in_schema=False)
 def definir_permissoes_usuario_empresa(
     user_id: int,
     empresa_id: int,
