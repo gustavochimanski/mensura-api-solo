@@ -13,7 +13,7 @@ def _empresa_id_openapi(
     x_empresa_id: int | None = Header(
         default=None,
         alias="X-Empresa-Id",
-        description="ID da empresa (tenant). Recomendado enviar por header.",
+        description="ID da empresa (tenant). Recomendado enviar por heaer.",
     ),
     empresa_id: int | None = Query(
         default=None,
