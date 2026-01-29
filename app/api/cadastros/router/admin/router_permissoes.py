@@ -26,12 +26,17 @@ router = APIRouter(
 )
 
 
+# Observação: o app está com `redirect_slashes=False` (em `app/main.py`),
+# então precisamos declarar explicitamente as duas variações (com e sem "/")
+# para evitar 404 quando o cliente usa barra final.
 @router.get("", response_model=List[PermissionResponse])
+@router.get("/", response_model=List[PermissionResponse], include_in_schema=False)
 def listar_catalogo_permissoes(db: Session = Depends(get_db)):
     return db.query(PermissionModel).order_by(PermissionModel.domain.asc(), PermissionModel.key.asc()).all()
 
 
 @router.get("/usuarios/{user_id}/empresas/{empresa_id}", response_model=UserPermissionKeysResponse)
+@router.get("/usuarios/{user_id}/empresas/{empresa_id}/", response_model=UserPermissionKeysResponse, include_in_schema=False)
 def listar_permissoes_usuario_empresa(
     user_id: int,
     empresa_id: int,
@@ -75,6 +80,7 @@ def listar_permissoes_usuario_empresa(
 
 
 @router.put("/usuarios/{user_id}/empresas/{empresa_id}", response_model=UserPermissionKeysResponse)
+@router.put("/usuarios/{user_id}/empresas/{empresa_id}/", response_model=UserPermissionKeysResponse, include_in_schema=False)
 def definir_permissoes_usuario_empresa(
     user_id: int,
     empresa_id: int,
