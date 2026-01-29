@@ -104,6 +104,14 @@ def _is_satisfied(required_key: str, user_keys: Set[str]) -> bool:
         if _has_key("route:/dashboard") or _has_key("route:/relatorios"):
             return True
 
+    # Equivalência inversa: se o backend exigir permissão por domínio `relatorios:*`,
+    # aceitar também as permissões por rota (Dashboard/Relatórios).
+    if required_key == "relatorios:*":
+        if "relatorios:*" in user_keys:
+            return True
+        if _has_key("route:/dashboard") or _has_key("route:/relatorios"):
+            return True
+
     if _has_key(required_key):
         return True
     # wildcard por domínio: "<domain>:*"
