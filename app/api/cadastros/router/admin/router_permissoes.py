@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, Header, Query, status
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.core.admin_dependencies import require_admin
@@ -83,19 +83,6 @@ def listar_permissoes_usuario_empresa(
     if not empresa:
         raise HTTPException(status_code=404, detail="Empresa não encontrada")
 
-    # Segurança: só permite gerenciar permissões se o usuário está vinculado à empresa.
-    vínculo = db.execute(
-        select(usuario_empresa.c.empresa_id).where(
-            usuario_empresa.c.usuario_id == user_id,
-            usuario_empresa.c.empresa_id == empresa_id,
-        )
-    ).first()
-    if not vínculo:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Usuário não está vinculado à empresa (vincule o usuário à empresa antes).",
-        )
-
     rows = (
         db.execute(
             select(PermissionModel.key)
@@ -127,17 +114,22 @@ def definir_permissoes_usuario_empresa(
     if not empresa:
         raise HTTPException(status_code=404, detail="Empresa não encontrada")
 
-    vínculo = db.execute(
-        select(usuario_empresa.c.empresa_id).where(
-            usuario_empresa.c.usuario_id == user_id,
-            usuario_empresa.c.empresa_id == empresa_id,
-        )
-    ).first()
-    if not vínculo:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Usuário não está vinculado à empresa (vincule o usuário à empresa antes).",
-        )
+    # Garante vínculo usuario_empresa (idempotente via NOT EXISTS).
+    # Isso evita o fluxo "travado" (não havia endpoint dedicado para vincular usuário↔empresa).
+    db.execute(
+        text(
+            """
+            INSERT INTO cadastros.usuario_empresa (usuario_id, empresa_id)
+            SELECT :user_id, :empresa_id
+            WHERE NOT EXISTS (
+              SELECT 1
+              FROM cadastros.usuario_empresa ue
+              WHERE ue.usuario_id = :user_id AND ue.empresa_id = :empresa_id
+            )
+            """
+        ),
+        {"user_id": int(user_id), "empresa_id": int(empresa_id)},
+    )
 
     requested_keys = sorted(set(payload.permission_keys or []))
 

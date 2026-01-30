@@ -30,6 +30,43 @@ class KanbanService:
         self.db = db
         self.repo = repo
         self.repo_cliente = ClienteRepository(db)
+
+    def _calcular_tempo_entrega_minutos(self, p: PedidoUnificadoModel) -> float | None:
+        """
+        Calcula o tempo (min) desde a criação até o primeiro marco de "finalização".
+
+        Regra: se o pedido passar por "A" e depois "E", deve considerar o PRIMEIRO
+        momento em que ele entrou em ("A", "E"), e não o último/status atual.
+        """
+        try:
+            created_at = getattr(p, "created_at", None)
+            if created_at is None:
+                return None
+
+            status_str = p.status if isinstance(p.status, str) else getattr(p.status, "value", str(p.status))
+            if status_str not in ("E", "A"):
+                return None
+
+            historicos = getattr(p, "historico", []) or []
+            eventos: list[dt] = []
+            for h in historicos:
+                st = getattr(h, "status_novo", None)
+                st = getattr(st, "value", st)
+                if st in ("E", "A"):
+                    ts = getattr(h, "created_at", None)
+                    if ts is not None:
+                        eventos.append(ts)
+
+            marco_em = min(eventos) if eventos else getattr(p, "updated_at", None)
+            if marco_em is None:
+                return None
+
+            delta_min = round(((marco_em - created_at).total_seconds()) / 60.0, 2)
+            if delta_min < 0:
+                return None
+            return float(delta_min)
+        except Exception:
+            return None
     
     def _buscar_cliente_simplificado(self, cliente_id: int | None) -> ClienteKanbanSimplificado | None:
         """Busca apenas campos do cliente necessários para o kanban"""
@@ -179,33 +216,8 @@ class KanbanService:
                 ])
             )
 
-        # Calcula tempo de entrega em minutos apenas quando status = 'E' (Entregue)
-        # ou 'A' (Aguardando pagamento)
-        tempo_entrega_minutos = None
-        try:
-            status_str = p.status if isinstance(p.status, str) else getattr(p.status, "value", str(p.status))
-            if status_str in ("E", "A"):
-                historicos = getattr(p, "historico", []) or []
-                eventos = [
-                    getattr(h, "created_at", None)
-                    for h in historicos
-                    if (
-                        (
-                            getattr(getattr(h, "status_novo", None), "value", None)
-                            if getattr(h, "status_novo", None) is not None
-                            else getattr(h, "status_novo", None)
-                        )
-                        == status_str
-                    )
-                    and getattr(h, "created_at", None) is not None
-                ]
-                marco_em = min(eventos) if eventos else getattr(p, "updated_at", None)
-                if marco_em and getattr(p, "created_at", None):
-                    delta_min = round(((marco_em - p.created_at).total_seconds()) / 60.0, 2)
-                    if delta_min >= 0:
-                        tempo_entrega_minutos = float(delta_min)
-        except Exception:
-            tempo_entrega_minutos = None
+        # Calcula tempo de entrega (considera o primeiro marco em A/E)
+        tempo_entrega_minutos = self._calcular_tempo_entrega_minutos(p)
 
         # Campos alternativos para cliente
         nome_cliente = None
@@ -275,32 +287,8 @@ class KanbanService:
         else:
             endereco_str = "Retirada"
         
-        # Calcula tempo de entrega (apenas quando status = 'E' ou 'A')
-        tempo_entrega_minutos = None
-        try:
-            status_str = p.status if isinstance(p.status, str) else getattr(p.status, "value", str(p.status))
-            if status_str in ("E", "A") and getattr(p, "created_at", None):
-                historicos = getattr(p, "historico", []) or []
-                eventos = [
-                    getattr(h, "created_at", None)
-                    for h in historicos
-                    if (
-                        (
-                            getattr(getattr(h, "status_novo", None), "value", None)
-                            if getattr(h, "status_novo", None) is not None
-                            else getattr(h, "status_novo", None)
-                        )
-                        == status_str
-                    )
-                    and getattr(h, "created_at", None) is not None
-                ]
-                marco_em = min(eventos) if eventos else getattr(p, "updated_at", None)
-                if marco_em:
-                    delta_min = round(((marco_em - p.created_at).total_seconds()) / 60.0, 2)
-                    if delta_min >= 0:
-                        tempo_entrega_minutos = float(delta_min)
-        except Exception:
-            tempo_entrega_minutos = None
+        # Calcula tempo de entrega (considera o primeiro marco em A/E)
+        tempo_entrega_minutos = self._calcular_tempo_entrega_minutos(p)
         
         # Busca cliente simplificado se tivermos ID
         cliente_simplificado = None
@@ -368,32 +356,8 @@ class KanbanService:
         else:
             endereco_str = "Balcão - Retirada"
         
-        # Calcula tempo de entrega (apenas quando status = 'E' ou 'A')
-        tempo_entrega_minutos = None
-        try:
-            status_str = p.status if isinstance(p.status, str) else getattr(p.status, "value", str(p.status))
-            if status_str in ("E", "A") and getattr(p, "created_at", None):
-                historicos = getattr(p, "historico", []) or []
-                eventos = [
-                    getattr(h, "created_at", None)
-                    for h in historicos
-                    if (
-                        (
-                            getattr(getattr(h, "status_novo", None), "value", None)
-                            if getattr(h, "status_novo", None) is not None
-                            else getattr(h, "status_novo", None)
-                        )
-                        == status_str
-                    )
-                    and getattr(h, "created_at", None) is not None
-                ]
-                marco_em = min(eventos) if eventos else getattr(p, "updated_at", None)
-                if marco_em:
-                    delta_min = round(((marco_em - p.created_at).total_seconds()) / 60.0, 2)
-                    if delta_min >= 0:
-                        tempo_entrega_minutos = float(delta_min)
-        except Exception:
-            tempo_entrega_minutos = None
+        # Calcula tempo de entrega (considera o primeiro marco em A/E)
+        tempo_entrega_minutos = self._calcular_tempo_entrega_minutos(p)
         
         # Busca cliente simplificado se tivermos ID
         cliente_simplificado = None

@@ -51,13 +51,41 @@ def _extract_empresa_id(request: Request) -> Optional[int]:
     return empresa_id
 
 
-def _assert_user_has_empresa_access(db: Session, user_id: int, empresa_id: int) -> None:
+def _assert_user_has_empresa_access(db: Session, user: UserModel, empresa_id: int) -> None:
+    """
+    Garante que o usuário possa atuar na empresa (tenant) informada.
+
+    Regras:
+    - Usuário `type_user='super'` pode acessar qualquer empresa.
+    - Caso contrário, exige vínculo explícito em `cadastros.usuario_empresa`,
+      OU existência de pelo menos uma permissão em `cadastros.user_permissions`
+      (alguns fluxos legados gravavam permissões antes do vínculo).
+    """
+    # Super (tenant-global)
+    if getattr(user, "type_user", None) == "super":
+        return
+
+    user_id = int(getattr(user, "id", 0) or 0)
     # Se o usuário não está vinculado à empresa, é tentativa de troca de tenant.
     stmt = select(usuario_empresa.c.empresa_id).where(
         usuario_empresa.c.usuario_id == user_id,
         usuario_empresa.c.empresa_id == empresa_id,
     )
     ok = db.execute(stmt).first()
+    if ok:
+        return
+
+    # Fallback: se existirem permissões do usuário nessa empresa, considera acesso válido
+    # (evita 403 em setups onde o vínculo não foi persistido, mas as permissões sim).
+    has_perm = db.execute(
+        select(UserPermissionModel.permission_id).where(
+            UserPermissionModel.user_id == user_id,
+            UserPermissionModel.empresa_id == empresa_id,
+        ).limit(1)
+    ).first()
+    if has_perm:
+        return
+
     if not ok:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -139,7 +167,7 @@ def get_authz_context(
             detail="empresa_id é obrigatório (use X-Empresa-Id ou query empresa_id)",
         )
 
-    _assert_user_has_empresa_access(db, user_id=current_user.id, empresa_id=empresa_id)
+    _assert_user_has_empresa_access(db, user=current_user, empresa_id=empresa_id)
     keys = _load_user_permission_keys(db, user_id=current_user.id, empresa_id=empresa_id)
     return AuthzContext(user=current_user, empresa_id=empresa_id, permission_keys=keys)
 
