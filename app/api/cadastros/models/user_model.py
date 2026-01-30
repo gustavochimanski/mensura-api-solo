@@ -20,3 +20,12 @@ class UserModel(Base):
         secondary=usuario_empresa,
         back_populates="usuarios",
     )
+
+    @property
+    def empresa_ids(self) -> list[int]:
+        """
+        Exposto para serialização no `UserResponse` (pydantic from_attributes=True).
+        """
+        if not self.empresas:
+            return []
+        return [int(e.id) for e in self.empresas if getattr(e, "id", None) is not None]
