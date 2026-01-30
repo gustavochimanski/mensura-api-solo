@@ -1013,13 +1013,36 @@ async def send_notification(request: Request, db: Session = Depends(get_db)):
                 # Salva mensagem no histórico COM o message_id do WhatsApp
                 # IMPORTANTE: Salva o message_id para que o webhook possa identificar que foi o atendente que enviou
                 whatsapp_message_id = result.get("message_id") if isinstance(result, dict) else None
-                chatbot_db.create_message(
-                    db=db,
-                    conversation_id=conversation_id,
-                    role="assistant",
-                    content=message,
-                    whatsapp_message_id=whatsapp_message_id
-                )
+                try:
+                    from app.api.chatbot.adapters.message_persistence_adapter import ChatMessagePersistenceAdapter
+                    from app.api.chatbot.contracts.message_persistence_contract import (
+                        ChatMessageSenderType,
+                        ChatMessageSourceType,
+                        PersistChatMessageCommand,
+                    )
+
+                    persistence = ChatMessagePersistenceAdapter(db)
+                    persistence.persist_message(
+                        PersistChatMessageCommand(
+                            conversation_id=conversation_id,
+                            role="assistant",
+                            content=message,
+                            empresa_id=int(empresa_id) if empresa_id is not None else None,
+                            whatsapp_message_id=whatsapp_message_id,
+                            source_type=ChatMessageSourceType.WHATSAPP_NOTIFICATION,
+                            sender_type=ChatMessageSenderType.HUMAN,
+                            metadata={"source": "send-notification"},
+                        )
+                    )
+                except Exception:
+                    chatbot_db.create_message(
+                        db=db,
+                        conversation_id=conversation_id,
+                        role="assistant",
+                        content=message,
+                        whatsapp_message_id=whatsapp_message_id,
+                        extra_metadata={"sender": "human", "source": "send-notification"},
+                    )
                 logger.info(f"💾 Mensagem do atendente salva no banco via /send-notification - conversation_id: {conversation_id}, message_id: {whatsapp_message_id}")
             except Exception as e:
                 logger.warning(f"⚠️ Erro ao buscar/salvar conversa: {e}", exc_info=True)
@@ -1772,14 +1795,36 @@ async def process_webhook_background(body: dict, headers_info: Optional[dict] = 
                                             )
 
                                         # Salva o conteúdo real enviado pelo humano (WhatsApp Web)
-                                        chatbot_db.create_message(
-                                            db=db,
-                                            conversation_id=conversation_id,
-                                            role="assistant",
-                                            content=message_text,
-                                            whatsapp_message_id=message_id,
-                                            extra_metadata={"sender": "human", "source": "whatsapp_web"},
-                                        )
+                                        try:
+                                            from app.api.chatbot.adapters.message_persistence_adapter import ChatMessagePersistenceAdapter
+                                            from app.api.chatbot.contracts.message_persistence_contract import (
+                                                ChatMessageSenderType,
+                                                ChatMessageSourceType,
+                                                PersistChatMessageCommand,
+                                            )
+
+                                            persistence = ChatMessagePersistenceAdapter(db)
+                                            persistence.persist_message(
+                                                PersistChatMessageCommand(
+                                                    conversation_id=conversation_id,
+                                                    role="assistant",
+                                                    content=message_text,
+                                                    empresa_id=empresa_id_int,
+                                                    whatsapp_message_id=message_id,
+                                                    source_type=ChatMessageSourceType.WHATSAPP_WEB,
+                                                    sender_type=ChatMessageSenderType.HUMAN,
+                                                    metadata={"source": "whatsapp_web"},
+                                                )
+                                            )
+                                        except Exception:
+                                            chatbot_db.create_message(
+                                                db=db,
+                                                conversation_id=conversation_id,
+                                                role="assistant",
+                                                content=message_text,
+                                                whatsapp_message_id=message_id,
+                                                extra_metadata={"sender": "human", "source": "whatsapp_web"},
+                                            )
 
                                         # Pausa o bot por 3h para este cliente
                                         destrava_em = chatbot_db.get_auto_pause_until()

@@ -772,24 +772,34 @@ def create_message(
 def get_messages(db: Session, conversation_id: int) -> List[Dict]:
     """Retorna todas as mensagens de uma conversa"""
     query = text(f"""
-        SELECT id, conversation_id, role, content, created_at
+        SELECT id, conversation_id, role, content, created_at, metadata
         FROM {CHATBOT_SCHEMA}.messages
         WHERE conversation_id = :conversation_id
         ORDER BY created_at ASC
     """)
     result = db.execute(query, {"conversation_id": conversation_id})
 
-    return [
-        {
-            "id": row[0],
-            "conversation_id": row[1],
-            "role": row[2],
-            "content": row[3],
-            "created_at": row[4],
-            "timestamp": row[4]  # Alias para compatibilidade com frontend
-        }
-        for row in result.fetchall()
-    ]
+    mensagens: List[Dict] = []
+    for row in result.fetchall():
+        metadata = row[5]
+        # Alguns drivers podem devolver JSONB como str
+        if isinstance(metadata, str):
+            try:
+                metadata = json.loads(metadata)
+            except Exception:
+                metadata = None
+        mensagens.append(
+            {
+                "id": row[0],
+                "conversation_id": row[1],
+                "role": row[2],
+                "content": row[3],
+                "created_at": row[4],
+                "timestamp": row[4],  # Alias para compatibilidade com frontend
+                "metadata": metadata,
+            }
+        )
+    return mensagens
 
 
 def get_conversation_with_messages(db: Session, conversation_id: int) -> Optional[Dict]:

@@ -4685,6 +4685,10 @@ REGRA PARA COMPLEMENTOS:
         Retorna True se NÃO for um nome, False se pode ser um nome.
         """
         mensagem_lower = mensagem.lower().strip()
+
+        # Heurística rápida: perguntas comuns sem "?"
+        if mensagem_lower.startswith(("voces", "vocês", "vc", "vcs", "você", "voce")):
+            return True
         
         # Lista de palavras/frases que indicam que NÃO é um nome
         palavras_nao_nome = [
@@ -4696,7 +4700,12 @@ REGRA PARA COMPLEMENTOS:
             "sim", "não", "nao", "ok", "tudo certo", "beleza", "blz",
             "quero", "gostaria", "preciso", "tem", "você tem", "voce tem",
             "quanto", "qual", "onde", "como", "quando", "por favor",
-            "obrigado", "obrigada", "valeu", "tchau", "até", "ate"
+            "obrigado", "obrigada", "valeu", "tchau", "até", "ate",
+            # Dúvidas comuns que aparecem muito no WhatsApp (sem "?")
+            "entrega", "entregam", "entregue", "delivery", "retirada", "retirar",
+            "taxa", "frete", "cardápio", "cardapio", "menu", "promoção", "promocao",
+            "horário", "horario", "aberto", "fechado", "abre", "fecha",
+            "endereço", "endereco", "localização", "localizacao",
         ]
         
         # Verifica se contém palavras que indicam que não é um nome
@@ -7529,13 +7538,36 @@ async def processar_mensagem_groq(
     except Exception:
         extra_metadata = None
 
-    assistant_message_id = chatbot_db.create_message(
-        db,
-        conversation_id,
-        "assistant",
-        resposta,
-        extra_metadata=extra_metadata,
-    )
+    try:
+        from app.api.chatbot.adapters.message_persistence_adapter import ChatMessagePersistenceAdapter
+        from app.api.chatbot.contracts.message_persistence_contract import (
+            ChatMessageSenderType,
+            ChatMessageSourceType,
+            PersistChatMessageCommand,
+        )
+
+        persistence = ChatMessagePersistenceAdapter(db)
+        assistant_message_id = persistence.persist_message(
+            PersistChatMessageCommand(
+                conversation_id=conversation_id,
+                role="assistant",
+                content=str(resposta),
+                empresa_id=int(empresa_id) if empresa_id is not None else None,
+                whatsapp_message_id=None,  # será vinculado depois no router quando enviar pelo WhatsApp
+                source_type=ChatMessageSourceType.IA,
+                sender_type=ChatMessageSenderType.AI,
+                metadata=extra_metadata,
+            )
+        )
+    except Exception:
+        # fallback compatível
+        assistant_message_id = chatbot_db.create_message(
+            db,
+            conversation_id,
+            "assistant",
+            resposta,
+            extra_metadata=extra_metadata,
+        )
     
     # 4.1. Envia notificação WebSocket de resposta do bot
     try:
