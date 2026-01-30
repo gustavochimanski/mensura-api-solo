@@ -30,6 +30,13 @@ from .application.conversacao_service import ConversacaoService
 from .infrastructure.pagamento_repository import PagamentoRepository
 from .utils.config_loader import ConfigLoader
 from .utils.mensagem_formatters import MensagemFormatters
+from .llm_policy import (
+    build_system_prompt,
+    clamp_temperature,
+    extract_first_json_object,
+    make_json_repair_prompt,
+    validate_action_json,
+)
 from app.api.chatbot.services.service_carrinho import CarrinhoService
 from app.api.chatbot.schemas.schema_carrinho import (
     AdicionarItemCarrinhoRequest,
@@ -1306,6 +1313,8 @@ class GroqSalesHandler:
             produtos_lista=produtos_lista,
             carrinho_atual=carrinho_atual
         )
+        # Guardrails anti-alucinação para reduzir escolhas erradas de função
+        prompt_sistema = build_system_prompt(prompt_sistema, require_json_object=False)
 
         # FASE 2 (RAG): injeta contexto do catálogo baseado na mensagem para melhorar entendimento
         contexto_catalogo = self._buscar_contexto_catalogo_rag(mensagem, limit=8)
@@ -2656,6 +2665,9 @@ REGRA PARA COMPLEMENTOS:
 - complementos_selecionados deve SEMPRE ter os nomes EXATOS como aparecem na lista de COMPLEMENTOS DISPONÍVEIS
 - IMPORTANTE: Se o cliente especificar QUANTIDADE (ex: "2 maionese", "3 queijo extra"), inclua a quantidade no formato "Nx Nome" (ex: "2x Maionese 30 ml")"""
 
+        # Injeta guardrails anti-alucinação (sem mudar o prompt funcional existente)
+        system_prompt = build_system_prompt(system_prompt, require_json_object=True)
+
         # FASE 3: Memória curta resumida - resumir histórico quando muito longo
         historico_resumido = self._resumir_historico_para_ia(historico, max_mensagens=8)
         
@@ -2679,7 +2691,7 @@ REGRA PARA COMPLEMENTOS:
                 payload = {
                     "model": MODEL_NAME,
                     "messages": messages,
-                    "temperature": 0.7,
+                    "temperature": clamp_temperature(0.7),
                     "max_tokens": 500,
                     "response_format": {"type": "json_object"},  # Força resposta JSON
                 }
@@ -2702,23 +2714,69 @@ REGRA PARA COMPLEMENTOS:
 
                     # Tenta parsear JSON
                     try:
-                        # Remove possíveis marcadores de código
-                        resposta_limpa = resposta_ia.replace("```json", "").replace("```", "").strip()
-                        print(f"📨 Resposta IA (primeiros 200 chars): {resposta_limpa[:200]}")
+                        ALLOWED_ACOES = (
+                            "nenhuma",
+                            "adicionar",
+                            "remover",
+                            "prosseguir_entrega",
+                            "selecionar_complementos",
+                            "pular_complementos",
+                        )
 
-                        # Tenta extrair JSON da resposta (pode ter texto antes/depois)
-                        json_str = resposta_limpa
-                        if not resposta_limpa.startswith('{'):
-                            # Procura o início do JSON
-                            json_start = resposta_limpa.find('{')
-                            if json_start != -1:
-                                # Encontra o final do JSON (último })
-                                json_end = resposta_limpa.rfind('}')
-                                if json_end != -1 and json_end > json_start:
-                                    json_str = resposta_limpa[json_start:json_end + 1]
-                                    print(f"🔍 JSON extraído do meio do texto")
+                        # 1) Extrai JSON (mesmo que venha com lixo antes/depois)
+                        resposta_json, _json_str = extract_first_json_object(resposta_ia)
 
-                        resposta_json = json.loads(json_str)
+                        # 2) Se falhou ou veio inválido, tenta 1 "repair" controlado (JSON-only)
+                        async def _try_repair_json(bad_text: str) -> Optional[Dict[str, Any]]:
+                            try:
+                                repair_messages = [
+                                    {"role": "system", "content": make_json_repair_prompt(allowed_actions=ALLOWED_ACOES)},
+                                    {
+                                        "role": "user",
+                                        "content": (
+                                            "Corrija para o formato esperado.\n\n"
+                                            f"Mensagem do cliente: {mensagem_resolvida}\n\n"
+                                            "Texto inválido/ambíguo do modelo:\n"
+                                            f"{bad_text}"
+                                        ),
+                                    },
+                                ]
+                                repair_payload = {
+                                    "model": MODEL_NAME,
+                                    "messages": repair_messages,
+                                    "temperature": 0.0,
+                                    "max_tokens": 350,
+                                    "response_format": {"type": "json_object"},
+                                }
+                                repair_resp = await client.post(GROQ_API_URL, json=repair_payload, headers=headers)
+                                if repair_resp.status_code != 200:
+                                    return None
+                                repair_result = repair_resp.json()
+                                repair_text = repair_result["choices"][0]["message"]["content"].strip()
+                                repaired, _ = extract_first_json_object(repair_text)
+                                return repaired
+                            except Exception:
+                                return None
+
+                        if not isinstance(resposta_json, dict):
+                            repaired = await _try_repair_json(resposta_ia)
+                            if isinstance(repaired, dict):
+                                resposta_json = repaired
+
+                        if isinstance(resposta_json, dict):
+                            ok, motivo = validate_action_json(resposta_json, allowed_actions=ALLOWED_ACOES)
+                            if not ok:
+                                print(f"⚠️ JSON inválido ({motivo}) — tentando corrigir")
+                                repaired = await _try_repair_json(resposta_ia)
+                                if isinstance(repaired, dict):
+                                    resposta_json = repaired
+
+                        # Gate final: se ainda não for JSON válido, cai no fallback atual
+                        if not isinstance(resposta_json, dict):
+                            raise json.JSONDecodeError("Resposta não é um objeto JSON", resposta_ia, 0)
+                        ok_final, motivo_final = validate_action_json(resposta_json, allowed_actions=ALLOWED_ACOES)
+                        if not ok_final:
+                            raise json.JSONDecodeError(f"JSON inválido: {motivo_final}", resposta_ia, 0)
 
                         resposta_texto = resposta_json.get("resposta", resposta_ia)
                         acao = resposta_json.get("acao", "nenhuma")

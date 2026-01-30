@@ -17,6 +17,7 @@ from app.database.db_connection import get_db
 from ..core import database as chatbot_db
 from ..core.notifications import OrderNotification, ORDER_STATUS_TEMPLATES
 from ..core.groq_sales_handler import GroqSalesHandler, GROQ_API_URL, GROQ_API_KEY, MODEL_NAME
+from ..core.llm_policy import build_system_prompt, clamp_temperature
 from app.api.notifications.repositories.whatsapp_config_repository import WhatsAppConfigRepository
 from app.api.empresas.repositories.empresa_repo import EmpresaRepository
 from app.api.chatbot.repositories.repo_chatbot_config import ChatbotConfigRepository
@@ -449,7 +450,9 @@ async def chat(request: ChatRequest, db: Session = Depends(get_db)):
         actual_model = DEFAULT_MODEL
 
     # Usa o system prompt customizado se fornecido, caso contrário usa o padrão
-    system_prompt = request.system_prompt if request.system_prompt else SYSTEM_PROMPT
+    # e injeta guardrails anti-alucinação para reduzir "chutes".
+    system_prompt_raw = request.system_prompt if request.system_prompt else SYSTEM_PROMPT
+    system_prompt = build_system_prompt(system_prompt_raw, require_json_object=False)
 
     # Monta as mensagens com o system prompt
     messages = [
@@ -470,7 +473,7 @@ async def chat(request: ChatRequest, db: Session = Depends(get_db)):
                 "model": actual_model or MODEL_NAME,
                 "messages": messages,
                 "stream": False,
-                "temperature": request.temperature,
+                "temperature": clamp_temperature(request.temperature),
                 "top_p": 0.9,
             }
             headers = {"Authorization": f"Bearer {GROQ_API_KEY}"}
