@@ -1182,6 +1182,15 @@ async def enviar_resumo_pedido_whatsapp(
         distancia_km = float(pedido[15]) if pedido[15] is not None else None
         previsao_entrega = pedido[16]
 
+        # Usa empresa_id do pedido se não foi fornecido
+        empresa_id_final = empresa_id_pedido or empresa_id
+        empresa_id_int: Optional[int] = None
+        if empresa_id_final:
+            try:
+                empresa_id_int = int(str(empresa_id_final))
+            except (ValueError, TypeError):
+                empresa_id_int = None
+
         # Usa o telefone fornecido ou busca do banco
         telefone_cadastro = phone_number or cliente_telefone_db
 
@@ -1204,15 +1213,6 @@ async def enviar_resumo_pedido_whatsapp(
                 "success": False,
                 "error": "Telefone do cliente não encontrado"
             }
-
-        # Usa empresa_id do pedido se não foi fornecido
-        empresa_id_final = empresa_id_pedido or empresa_id
-        empresa_id_int: Optional[int] = None
-        if empresa_id_final:
-            try:
-                empresa_id_int = int(str(empresa_id_final))
-            except (ValueError, TypeError):
-                empresa_id_int = None
 
         # Busca os itens do pedido com seus IDs
         itens_query = text("""
@@ -1398,8 +1398,91 @@ async def enviar_resumo_pedido_whatsapp(
                     mensagem += f"\n⏱️ *Tempo estimado:* ~{_formatar_tempo_minutos(tempo_estimado_min)}"
 
         # Envia via WhatsApp (se conseguir). Mesmo que falhe, NÃO deixamos de salvar no chat interno.
-        notifier = OrderNotification()
-        result = await notifier.send_whatsapp_message(telefone_final, mensagem, empresa_id=empresa_id_final)
+        result: Dict = {}
+        try:
+            import os
+            from app.api.notifications.channels.whatsapp_channel import WhatsAppChannel
+            from app.api.chatbot.core.config_whatsapp import load_whatsapp_config
+
+            # Template de fallback (fora da janela 24h). Dentro da janela, o contract converte automaticamente para texto.
+            tpl_name = (os.getenv("WHATSAPP_TEMPLATE_PEDIDO_RESUMO") or "").strip()
+            tpl_lang = (os.getenv("WHATSAPP_TEMPLATE_PEDIDO_RESUMO_LANGUAGE") or "pt_BR").strip() or "pt_BR"
+
+            if tpl_name:
+                cfg = load_whatsapp_config(empresa_id_final)
+                channel = WhatsAppChannel(cfg)
+
+                title = f"Resumo do pedido #{numero_pedido}"
+                channel_metadata = {
+                    "_empresa_id": str(empresa_id_final) if empresa_id_final is not None else None,
+                    "whatsapp": {
+                        "mode": "template",
+                        "template": {
+                            "name": tpl_name,
+                            "language": tpl_lang,
+                            # Tentativa 1: template com 1 variável (body). Se o template não tiver variáveis,
+                            # fazemos retry abaixo sem parâmetros.
+                            "body_parameters": [f"*{title}*\n\n{mensagem}"],
+                        },
+                    },
+                }
+
+                wa_result = await channel.send(
+                    telefone_final,
+                    title=title,
+                    message=mensagem,
+                    channel_metadata=channel_metadata,
+                )
+
+                if not wa_result.success:
+                    # Retry: template sem parâmetros (para templates "secos"/sem variáveis)
+                    channel_metadata2 = {
+                        "_empresa_id": str(empresa_id_final) if empresa_id_final is not None else None,
+                        "whatsapp": {
+                            "mode": "template",
+                            "template": {
+                                "name": tpl_name,
+                                "language": tpl_lang,
+                                "components": None,
+                                "body_parameters": None,
+                            },
+                        },
+                    }
+                    wa_result2 = await channel.send(
+                        telefone_final,
+                        title=title,
+                        message=mensagem,
+                        channel_metadata=channel_metadata2,
+                    )
+                    wa_result = wa_result2 if wa_result2.success else wa_result
+
+                if wa_result.success:
+                    result = {
+                        "success": True,
+                        "provider": "notifications.contract",
+                        "phone": telefone_final,
+                        "message_id": wa_result.external_id,
+                        "status": "sent",
+                    }
+                else:
+                    result = {
+                        "success": False,
+                        "provider": "notifications.contract",
+                        "phone": telefone_final,
+                        "error": wa_result.message or "Erro ao enviar WhatsApp",
+                        "details": wa_result.error_details,
+                    }
+            else:
+                # Sem template configurado: fallback para envio de texto legado (pode falhar fora da janela 24h).
+                notifier = OrderNotification()
+                result = await notifier.send_whatsapp_message(telefone_final, mensagem, empresa_id=empresa_id_final)
+        except Exception as e:
+            # Último fallback: tenta envio de texto legado
+            logger.warning(
+                f"[enviar_resumo_pedido] Falha no envio via contract; tentando legado. Erro: {e}"
+            )
+            notifier = OrderNotification()
+            result = await notifier.send_whatsapp_message(telefone_final, mensagem, empresa_id=empresa_id_final)
 
         if result.get("success"):
             logger.info(

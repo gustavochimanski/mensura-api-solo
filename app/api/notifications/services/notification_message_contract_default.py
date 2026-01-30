@@ -106,13 +106,16 @@ class DefaultNotificationMessageContract(INotificationMessageContract):
             if not is_360:
                 payload["messaging_product"] = "whatsapp"
             else:
-                # 360dialog costuma aceitar o campo também; manter não atrapalha compatibilidade
+                # 360dialog (WABA v2): manter payload compatível com o endpoint /messages
                 payload.setdefault("messaging_product", "whatsapp")
+                payload.setdefault("recipient_type", "individual")
             return payload
 
         # mode == "text"
         if is_360:
             return {
+                "messaging_product": "whatsapp",
+                "recipient_type": "individual",
                 "to": recipient_phone,
                 "type": "text",
                 "text": {"body": full_message},

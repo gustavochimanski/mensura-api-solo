@@ -27,7 +27,8 @@ class WhatsAppChannel(BaseNotificationChannel):
         
         # Monta a URL da API conforme o provedor
         if self.is_360:
-            self.api_url = f"{self.base_url.rstrip('/')}/v1/messages"
+            # 360dialog (WABA v2): endpoint padrão é /messages (sem /v1)
+            self.api_url = f"{self.base_url.rstrip('/')}/messages"
         else:
             self.api_url = f"https://graph.facebook.com/{self.api_version}/{self.phone_number_id}/messages"
     
