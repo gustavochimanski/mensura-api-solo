@@ -11,8 +11,8 @@ from app.database.db_connection import get_db
 router = APIRouter(
     prefix="/api/relatorios/admin/relatorios",
     tags=["Admin - Relatórios - Panorâmico Diário"],
-    # Permissão do domínio Relatórios (com equivalência para route:/dashboard e route:/relatorios)
-    dependencies=[Depends(require_permissions(["relatorios:*"]))],
+    # Permissão por rota (direto com a tela do Supervisor)
+    dependencies=[Depends(require_permissions(["route:/relatorios"]))],
 )
 
 

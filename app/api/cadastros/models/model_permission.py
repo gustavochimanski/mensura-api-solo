@@ -9,8 +9,8 @@ class PermissionModel(Base):
     """
     Permissões canônicas do sistema (catálogo).
 
-    - key: string estável usada no código (ex: "route:/dashboard", "financeiro:*", "pedidos:*")
-    - domain: primeiro segmento da key (ex: "pedidos")
+    - key: string estável usada no código (ex: "route:/dashboard", "route:/configuracoes:usuarios")
+    - domain: agrupador para listagem/UX (ex: "routes")
     """
 
     __tablename__ = "permissions"

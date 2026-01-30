@@ -15,29 +15,9 @@ def get_default_permissions() -> List[PermissionDef]:
     """
     Catálogo canônico de permissões.
 
-    Formatos suportados:
-    - **route:* **: permissões por tela/rota do Supervisor (frontend)
-    - **<dominio>:***: permissões por domínio (sem read/write)
+    Formato suportado:
+    - **route:/...**: permissões por tela/rota do Supervisor (frontend)
     """
-
-    # Domínios (somente wildcard)
-    domains = [
-        "pedidos",
-        "relatorios",
-        "financeiro",
-        "cadastros",
-        "cardapio",
-        "catalogo",
-        "empresas",
-        "notifications",
-        "chatbot",
-        "caixa",
-        "mesas",
-    ]
-
-    perms: List[PermissionDef] = [
-        PermissionDef(key=f"{d}:*", domain=d, description=f"Acesso total ao domínio {d}") for d in domains
-    ]
 
     # Rotas (Supervisor)
     routes = [
@@ -73,6 +53,5 @@ def get_default_permissions() -> List[PermissionDef]:
         ("route:/empresas", "Empresas"),
     ]
 
-    perms.extend([PermissionDef(key=k, domain="routes", description=desc) for (k, desc) in routes])
-    return perms
+    return [PermissionDef(key=k, domain="routes", description=desc) for (k, desc) in routes]
 

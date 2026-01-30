@@ -121,33 +121,9 @@ def _is_satisfied(required_key: str, user_keys: Set[str]) -> bool:
             return f"{key}/" in user_keys
         return False
 
-    # Aliases de permissões (tratadas como equivalentes).
-    # No frontend "Dashboard" e "Relatórios" são uma única área.
-    if required_key in ("route:/dashboard", "route:/relatorios"):
-        # Compatibilidade: alguns setups usam chaves por domínio "relatorios:*"
-        # (não no formato "route:/..."). Se existir, considera equivalente.
-        if "relatorios:*" in user_keys or "relatorios:read" in user_keys:
-            return True
-
-        if _has_key("route:/dashboard") or _has_key("route:/relatorios"):
-            return True
-
-    # Equivalência inversa: se o backend exigir permissão por domínio `relatorios:*`,
-    # aceitar também as permissões por rota (Dashboard/Relatórios).
-    if required_key == "relatorios:*":
-        if "relatorios:*" in user_keys:
-            return True
-        if _has_key("route:/dashboard") or _has_key("route:/relatorios"):
-            return True
-
-    if _has_key(required_key):
-        return True
-    # wildcard por domínio: "<domain>:*"
-    if ":" in required_key:
-        domain = required_key.split(":", 1)[0]
-        if f"{domain}:*" in user_keys:
-            return True
-    return False
+    # A partir de agora, só existem permissões no formato route:/...
+    # Portanto, o matching é direto (com normalização de barra final).
+    return _has_key(required_key)
 
 
 def get_authz_context(
@@ -221,9 +197,12 @@ def require_domain(domain: str, action: str = "read"):
     """
     Atalho por domínio.
 
-    **IMPORTANTE**: o sistema não diferencia mais `:read`/`:write`.
-    O backend trabalha apenas com wildcard por domínio (`<dominio>:*`).
-    O parâmetro `action` é mantido só por compatibilidade.
+    **DEPRECATED**: o sistema agora trabalha apenas com permissões por rota (`route:/...`).
+    Mantido apenas por compatibilidade de imports antigos.
+
+    Correlaciona domínio -> rota padrão: `route:/{domain}`.
+    (Ex.: domain="pedidos" -> `route:/pedidos`)
     """
-    return require_permissions([f"{domain}:*"])
+    _ = action  # compat: ignorado
+    return require_permissions([f"route:/{domain}"])
 

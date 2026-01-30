@@ -373,6 +373,13 @@ def criar_permissoes_padrao():
         rows = [{"key": p.key, "domain": p.domain, "description": p.description} for p in defaults]
 
         with SessionLocal() as session:
+            # A partir de agora, o catálogo deve conter APENAS permissões por rota (route:/...).
+            # Remove permissões antigas por domínio (<dominio>:*) e legados (ex: relatorios:read).
+            # Observação: isso pode remover grants antigos (CASCADE via FK em user_permissions).
+            session.query(PermissionModel).filter(~PermissionModel.key.like("route:%")).delete(
+                synchronize_session=False
+            )
+
             for row in rows:
                 stmt = (
                     insert(PermissionModel)

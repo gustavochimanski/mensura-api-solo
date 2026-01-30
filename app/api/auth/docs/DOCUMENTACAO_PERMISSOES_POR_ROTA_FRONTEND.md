@@ -9,13 +9,10 @@ Este documento define como o frontend (Supervisor) deve **exibir menus/telas** e
 ## 1) Conceitos
 
 - **Empresa (tenant)**: permissões são concedidas por **usuário + empresa**.
-- **Permissões (formatos suportados)**:
+- **Permissões (formato suportado)**:
   - **Permissão por rota**: chave que representa uma **tela/área do Supervisor**.
   - **Formato base**: `route:<pathname>`
   - **Formato por aba**: `route:<pathname>:<tab>`
-  - **Permissão por domínio (backend)**: chave técnica por domínio, **somente wildcard**:
-    - Formato: `<dominio>:*` (ex.: `pedidos:*`, `relatorios:*`)
-    - **Não existe mais** `:read` / `:write`.
 
 Exemplos:
 - `route:/dashboard`
@@ -138,7 +135,7 @@ Exemplo:
 {
   "user_id": 10,
   "empresa_id": 3,
-  "permission_keys": ["route:/dashboard", "route:/pedidos", "pedidos:*"]
+  "permission_keys": ["route:/dashboard", "route:/pedidos"]
 }
 ```
 
@@ -238,8 +235,7 @@ Padronize sempre para **uma única chave**:
 
 ---
 
-## 9) Regra especial: Dashboard e Relatórios são equivalentes
+## 9) Observação: autorização é por rota (direto)
 
-No backend, `route:/dashboard` e `route:/relatorios` são tratados como **equivalentes** para autorização.
-Recomendação pro frontend: trate ambos como a mesma área (se tiver um, pode liberar o outro no menu/guard).
+No backend, a autorização é feita **diretamente** pela permissão de rota exigida pelo endpoint (ex.: endpoints de relatórios exigem `route:/relatorios`).
 
