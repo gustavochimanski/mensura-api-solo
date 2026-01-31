@@ -50,14 +50,10 @@ class WhatsAppChannel(BaseNotificationChannel):
         Formata número de telefone para o formato do WhatsApp
         Remove caracteres especiais e garante que tenha o código do país
         """
-        # Remove todos os caracteres não numéricos
-        phone = ''.join(filter(str.isdigit, phone))
-        
-        # Se não começa com código do país, assume Brasil (55)
-        if not phone.startswith('55'):
-            phone = '55' + phone
-        
-        return phone
+        # Unificação BR: garante 55 + DDD + 9 dígitos (quando parecer celular)
+        from app.utils.telefone import normalizar_telefone_para_armazenar
+
+        return normalizar_telefone_para_armazenar(phone) or ""
     
     def _get_headers(self) -> Dict[str, str]:
         """Retorna os headers para requisições à API do WhatsApp"""

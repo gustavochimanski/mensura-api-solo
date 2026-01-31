@@ -406,8 +406,13 @@ router = APIRouter(
 # Incluir router de configurações do chatbot
 from .router_chatbot_config import router as router_chatbot_config
 from .router_gestor_admin import router as router_gestor_admin
+from app.core.admin_dependencies import require_admin
+from app.core.authorization import require_permissions
 router.include_router(router_chatbot_config)
-router.include_router(router_gestor_admin)
+router.include_router(
+    router_gestor_admin,
+    dependencies=[Depends(require_admin), Depends(require_permissions(["route:/chatbot"]))],
+)
 
 # Incluir router do carrinho
 from .router_carrinho import router as router_carrinho
@@ -2402,7 +2407,8 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
         # Se config existe e aceita_pedidos_whatsapp é explicitamente False, então não aceita
         # Caso contrário (config None ou aceita_pedidos_whatsapp True/None), aceita por padrão
         aceita_pedidos_whatsapp = True  # Padrão: aceita pedidos
-        if config is not None and config.aceita_pedidos_whatsapp is False:
+        # OBS: não use `is False` aqui; em alguns drivers/bancos o valor pode vir como 0/1.
+        if config is not None and not config.aceita_pedidos_whatsapp:
             aceita_pedidos_whatsapp = False
         
         # Log para debug
@@ -3198,9 +3204,63 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
         else:
             prompt_content = SYSTEM_PROMPT  # fallback para o padrão
 
-        # 5. Chama a IA (Groq)
-        from ..core.groq_sales_handler import processar_mensagem_groq
         empresa_id_int = int(empresa_id) if empresa_id else 1
+
+        # 5. Chama a IA
+        # CRÍTICO: quando NÃO aceita pedidos no WhatsApp, NÃO pode usar o GroqSalesHandler (ele possui tool-calling
+        # e pode acionar fluxo de checkout). Neste modo usamos apenas chat "texto puro".
+        if not aceita_pedidos_whatsapp:
+            if not GROQ_API_KEY:
+                # Sem chave de LLM: fallback para redirecionamento (modo seguro)
+                ai_response = _montar_mensagem_redirecionamento(db, empresa_id_int, config)
+            else:
+                try:
+                    system_prompt = build_system_prompt(prompt_content or SYSTEM_PROMPT, require_json_object=False)
+                    messages = [{"role": "system", "content": system_prompt}]
+                    for msg in messages_history:
+                        role = (msg.get("role") if isinstance(msg, dict) else None) or "user"
+                        content = (msg.get("content") if isinstance(msg, dict) else None) or ""
+                        if role in ("user", "assistant") and content:
+                            messages.append({"role": role, "content": content})
+
+                    async with httpx.AsyncClient(timeout=60.0) as client:
+                        payload = {
+                            "model": DEFAULT_MODEL or MODEL_NAME,
+                            "messages": messages,
+                            "stream": False,
+                            "temperature": 0.2,
+                            "top_p": 0.9,
+                        }
+                        headers = {"Authorization": f"Bearer {GROQ_API_KEY}"}
+                        response = await client.post(GROQ_API_URL, json=payload, headers=headers)
+                        if response.status_code != 200:
+                            raise HTTPException(status_code=response.status_code, detail=f"Erro na Groq: {response.text}")
+                        result = response.json()
+                        ai_response = result["choices"][0]["message"]["content"]
+                except Exception:
+                    # Falhou LLM: fallback para redirecionamento (modo seguro)
+                    ai_response = _montar_mensagem_redirecionamento(db, empresa_id_int, config)
+
+            if not ai_response or not str(ai_response).strip():
+                return
+
+            # 6. Envia resposta via WhatsApp
+            notifier = OrderNotification()
+            result = await notifier.send_whatsapp_message(phone_number, ai_response, empresa_id=empresa_id)
+
+            # Salva resposta do bot JÁ com whatsapp_message_id para o webhook de status não pausar achando que foi humano.
+            whatsapp_message_id = result.get("message_id") if isinstance(result, dict) and result.get("success") else None
+            chatbot_db.create_message(
+                db=db,
+                conversation_id=conversation_id,
+                role="assistant",
+                content=ai_response,
+                whatsapp_message_id=whatsapp_message_id,
+            )
+            return
+
+        # Caso aceite pedidos, mantém o handler de vendas
+        from ..core.groq_sales_handler import processar_mensagem_groq
         ai_response = await processar_mensagem_groq(
             db=db,
             user_id=phone_number,

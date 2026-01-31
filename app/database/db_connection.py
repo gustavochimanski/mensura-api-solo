@@ -1,6 +1,8 @@
 # app/database/db_connection.py
 
 import logging
+import re
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, declarative_base
 from ..config.settings import DB_CONFIG, DB_SSL_MODE
@@ -12,6 +14,73 @@ Base = declarative_base()
 # Logger básico
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Segurança: redige segredos em URLs logadas (ex.: httpx com querystring key=...)
+_SENSITIVE_QUERY_KEYS = {
+    "key",  # Google Maps
+    "access_token",
+    "token",
+    "api_key",
+    "apikey",
+    "secret",
+    "password",
+}
+
+
+def _redact_url_query(url: str) -> str:
+    try:
+        parts = urlsplit(url)
+        if not parts.query:
+            return url
+        q = []
+        changed = False
+        for k, v in parse_qsl(parts.query, keep_blank_values=True):
+            if k.lower() in _SENSITIVE_QUERY_KEYS:
+                q.append((k, "[REDACTED]"))
+                changed = True
+            else:
+                q.append((k, v))
+        if not changed:
+            return url
+        new_query = urlencode(q, doseq=True)
+        return urlunsplit((parts.scheme, parts.netloc, parts.path, new_query, parts.fragment))
+    except Exception:
+        return url
+
+
+class _RedactSensitiveDataFilter(logging.Filter):
+    _url_re = re.compile(r"https?://[^\s\"']+")
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            msg = record.getMessage()
+            # Atalho: só tenta sanitizar se parecer conter URL + segredo
+            if "http" not in msg:
+                return True
+            if not any(k in msg.lower() for k in ("key=", "access_token=", "token=", "api_key=", "apikey=", "secret=", "password=")):
+                return True
+
+            def _repl(m: re.Match) -> str:
+                return _redact_url_query(m.group(0))
+
+            sanitized = self._url_re.sub(_repl, msg)
+            if sanitized != msg:
+                # Substitui a mensagem final (evita manter args com segredo)
+                record.msg = sanitized
+                record.args = ()
+        except Exception:
+            pass
+        return True
+
+
+# Aplica o filtro nos handlers do logger raiz (basicConfig)
+try:
+    _root = logging.getLogger()
+    _f = _RedactSensitiveDataFilter()
+    for _h in list(getattr(_root, "handlers", []) or []):
+        _h.addFilter(_f)
+except Exception:
+    pass
 
 # Validação mínima de config
 missing = [k for k in ('database', 'user', 'password', 'host', 'port') if not DB_CONFIG.get(k)]

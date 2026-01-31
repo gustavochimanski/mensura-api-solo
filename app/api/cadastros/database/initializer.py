@@ -3,13 +3,9 @@ Inicializador do domínio Cadastros.
 Responsável por criar tabelas e dados iniciais do domínio.
 """
 import logging
-from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy.exc import IntegrityError
 
 from app.database.domain.base import DomainInitializer
 from app.database.domain.registry import register_domain
-from app.database.db_connection import SessionLocal
-from app.core.security import hash_password
 
 # Importar models do domínio
 from app.api.empresas.models.empresa_model import EmpresaModel
@@ -46,36 +42,8 @@ class CadastrosInitializer(DomainInitializer):
     
     def initialize_data(self) -> None:
         """Popula dados iniciais do domínio Cadastros."""
-        self._criar_usuario_admin_padrao()
-    
-    def _criar_usuario_admin_padrao(self) -> None:
-        """Cria o usuário 'super' com senha padrão caso não exista."""
-        try:
-            with SessionLocal() as session:
-                stmt = (
-                    insert(UserModel)
-                    .values(
-                        username="super",
-                        hashed_password=hash_password("171717"),#
-                        type_user="super",
-                    )
-                    .on_conflict_do_nothing(index_elements=[UserModel.username])
-                )
-                result = session.execute(stmt)
-                session.commit()
-                if hasattr(result, "rowcount") and result.rowcount == 0:
-                    logger.info("  ℹ️ Usuário super já existe. Pulando criação.")
-                else:
-                    logger.info("  ✅ Usuário super criado com sucesso (senha padrão: 171717).")
-        except IntegrityError:
-            # Em caso de corrida entre múltiplos processos
-            try:
-                session.rollback()
-            except Exception:
-                pass
-            logger.info("  ℹ️ Usuário super já existe (detectado por integridade).")
-        except Exception as e:
-            logger.error(f"  ❌ Erro ao criar usuário super: {e}", exc_info=True)
+        # Não cria mais usuário `super`/`admin` automaticamente.
+        return
 
 
 # Cria e registra a instância do inicializador

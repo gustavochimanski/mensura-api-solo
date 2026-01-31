@@ -820,174 +820,19 @@ def criar_tabelas_chatbot():
         logger.error(f"❌ Erro ao criar tabelas do chatbot: {e}", exc_info=True)
 
 def criar_usuario_super_padrao():
-    """Cria o usuário 'super' com senha padrão caso não exista."""
-    try:
-        with engine.connect() as conn:
-            exists = conn.execute(
-                text(
-                    """
-                    SELECT 1
-                    FROM information_schema.tables
-                    WHERE table_schema = 'cadastros' AND table_name = 'usuarios'
-                    """
-                )
-            ).scalar()
-            if not exists:
-                logger.warning("⚠️ Tabela cadastros.usuarios não existe; pulando criação do usuário super padrão.")
-                return
-
-        with SessionLocal() as session:
-            stmt = (
-                insert(UserModel)
-                .values(
-                    username="super",
-                    hashed_password=hash_password("171717"),
-                    type_user="super",
-                )
-                .on_conflict_do_nothing(index_elements=[UserModel.username])
-            )
-            result = session.execute(stmt)
-            session.commit()
-            if hasattr(result, "rowcount") and result.rowcount == 0:
-                logger.info("🔹 Usuário super já existe. Pulando criação.")
-            else:
-                logger.info("✅ Usuário super criado com sucesso.")
-    except IntegrityError:
-        # Em caso de corrida entre múltiplos processos
-        try:
-            session.rollback()
-        except Exception:
-            pass
-        logger.info("🔹 Usuário super já existe (detectado por integridade).")
-    except Exception as e:
-        logger.error(f"❌ Erro ao criar usuário super: {e}", exc_info=True)
+    """
+    DEPRECATED: o projeto não usa mais usuário `super`/bypass por `type_user`.
+    Mantido apenas para compatibilidade (não faz nada).
+    """
+    return
 
 
 def vincular_todas_permissoes_ao_usuario_super():
     """
-    Garante que o usuário 'super' possua TODAS as permissões do catálogo
-    para TODAS as empresas existentes (vínculo usuário<->empresa + grants).
-
-    Observação: permissões são por (user_id, empresa_id). Se não houver empresas,
-    apenas loga e não faz nada.
+    DEPRECATED: o projeto não usa mais usuário `super`/bypass por `type_user`.
+    Mantido apenas para compatibilidade (não faz nada).
     """
-    try:
-        from app.api.cadastros.models.model_user_permission import UserPermissionModel
-        from app.api.cadastros.models.model_permission import PermissionModel
-
-        # Tabelas existem?
-        with engine.connect() as conn:
-            has_users = conn.execute(
-                text(
-                    """
-                    SELECT 1
-                    FROM information_schema.tables
-                    WHERE table_schema = 'cadastros' AND table_name = 'usuarios'
-                    """
-                )
-            ).scalar()
-            has_emp = conn.execute(
-                text(
-                    """
-                    SELECT 1
-                    FROM information_schema.tables
-                    WHERE table_schema = 'cadastros' AND table_name = 'empresas'
-                    """
-                )
-            ).scalar()
-            has_perm = conn.execute(
-                text(
-                    """
-                    SELECT 1
-                    FROM information_schema.tables
-                    WHERE table_schema = 'cadastros' AND table_name = 'permissions'
-                    """
-                )
-            ).scalar()
-            has_user_perm = conn.execute(
-                text(
-                    """
-                    SELECT 1
-                    FROM information_schema.tables
-                    WHERE table_schema = 'cadastros' AND table_name = 'user_permissions'
-                    """
-                )
-            ).scalar()
-            has_usuario_empresa = conn.execute(
-                text(
-                    """
-                    SELECT 1
-                    FROM information_schema.tables
-                    WHERE table_schema = 'cadastros' AND table_name = 'usuario_empresa'
-                    """
-                )
-            ).scalar()
-
-        if not (has_users and has_emp and has_perm and has_user_perm and has_usuario_empresa):
-            logger.warning("⚠️ Tabelas de RBAC não estão prontas; pulando vínculo de permissões do usuário super.")
-            return
-
-        with SessionLocal() as session:
-            # Busca user_id do super
-            super_user_id = session.execute(
-                text("SELECT id FROM cadastros.usuarios WHERE username = :u LIMIT 1"),
-                {"u": "super"},
-            ).scalar()
-            if not super_user_id:
-                logger.warning("⚠️ Usuário 'super' não encontrado; pulando vínculo de permissões.")
-                return
-
-            empresa_ids = [r[0] for r in session.execute(text("SELECT id FROM cadastros.empresas ORDER BY id")).all()]
-            if not empresa_ids:
-                logger.info("ℹ️ Nenhuma empresa encontrada; não há como vincular permissões do super por empresa ainda.")
-                return
-
-            permission_ids = [r[0] for r in session.query(PermissionModel.id).order_by(PermissionModel.id.asc()).all()]
-            if not permission_ids:
-                logger.warning("⚠️ Catálogo de permissões vazio; nada para vincular ao usuário super.")
-                return
-
-            # 1) Garante vínculo usuario_empresa (idempotente via NOT EXISTS)
-            for empresa_id in empresa_ids:
-                session.execute(
-                    text(
-                        """
-                        INSERT INTO cadastros.usuario_empresa (usuario_id, empresa_id)
-                        SELECT :user_id, :empresa_id
-                        WHERE NOT EXISTS (
-                          SELECT 1
-                          FROM cadastros.usuario_empresa ue
-                          WHERE ue.usuario_id = :user_id AND ue.empresa_id = :empresa_id
-                        )
-                        """
-                    ),
-                    {"user_id": int(super_user_id), "empresa_id": int(empresa_id)},
-                )
-
-            # 2) Grants: (user_id, empresa_id, permission_id)
-            total = 0
-            for empresa_id in empresa_ids:
-                rows = [
-                    {"user_id": int(super_user_id), "empresa_id": int(empresa_id), "permission_id": int(pid)}
-                    for pid in permission_ids
-                ]
-                if rows:
-                    stmt = insert(UserPermissionModel).values(rows).on_conflict_do_nothing(
-                        constraint="pk_user_permissions"
-                    )
-                    result = session.execute(stmt)
-                    # rowcount pode ser None dependendo do driver; por isso usamos contagem esperada só como métrica.
-                    total += len(rows)
-
-            session.commit()
-            logger.info(
-                "✅ Permissões do usuário super garantidas (empresas=%s, permissoes=%s, tentativas_insercao=%s).",
-                len(empresa_ids),
-                len(permission_ids),
-                total,
-            )
-    except Exception as e:
-        logger.error(f"❌ Erro ao vincular permissões do usuário super: {e}", exc_info=True)
+    return
 
 
 def criar_meios_pagamento_padrao():
@@ -1054,27 +899,57 @@ def criar_meios_pagamento_padrao():
     except Exception as e:
         logger.error(f"❌ Erro ao criar meios de pagamento padrão: {e}", exc_info=True)
 
+
+def normalizar_tipos_usuario():
+    """
+    Normaliza usuários legados que ainda tenham `type_user` antigo.
+
+    - admin/super -> funcionario
+    """
+    try:
+        with engine.begin() as conn:
+            if not _table_exists(conn, "cadastros", "usuarios"):
+                logger.warning("⚠️ Tabela cadastros.usuarios não existe; pulando normalização de type_user.")
+                return
+            result = conn.execute(
+                text(
+                    """
+                    UPDATE cadastros.usuarios
+                    SET type_user = 'funcionario'
+                    WHERE type_user IN ('admin', 'super')
+                    """
+                )
+            )
+            # rowcount pode ser -1 dependendo do driver, então apenas loga quando disponível
+            if getattr(result, "rowcount", None) not in (None, -1):
+                logger.info("✅ Normalização de type_user aplicada (linhas=%s).", result.rowcount)
+            else:
+                logger.info("✅ Normalização de type_user aplicada.")
+    except Exception as e:
+        logger.error("❌ Erro ao normalizar type_user em cadastros.usuarios: %s", e, exc_info=True)
+
+
 def inicializar_banco():
     logger.info("🚀 Iniciando processo de inicialização do banco de dados...")
     
     # Configura timezone primeiro
-    logger.info("📦 Passo 1/8: Configurando timezone do banco...")
+    logger.info("📦 Passo 1/7: Configurando timezone do banco...")
     configurar_timezone()
     
     # Habilita PostGIS primeiro (necessário para tipos geography)
-    logger.info("📦 Passo 2/8: Habilitando extensão PostGIS...")
+    logger.info("📦 Passo 2/7: Habilitando extensão PostGIS...")
     postgis_disponivel = habilitar_postgis()
     
     # SEMPRE cria/verifica os schemas primeiro
-    logger.info("📦 Passo 3/8: Criando/verificando schemas...")
+    logger.info("📦 Passo 3/7: Criando/verificando schemas...")
     criar_schemas()
     
     # Cria os ENUMs antes de criar as tabelas
-    logger.info("📦 Passo 4/8: Criando/verificando ENUMs...")
+    logger.info("📦 Passo 4/7: Criando/verificando ENUMs...")
     criar_enums()
     
     # SEMPRE cria as tabelas (criar_tabelas usa checkfirst=True, então não sobrescreve)
-    logger.info("📋 Passo 5/8: Criando/verificando todas as tabelas...")
+    logger.info("📋 Passo 5/7: Criando/verificando todas as tabelas...")
     criar_tabelas(postgis_disponivel=postgis_disponivel)
 
     # Se as tabelas essenciais não existirem, não adianta seguir com seed.
@@ -1082,23 +957,20 @@ def inicializar_banco():
         logger.error("❌ Banco não está inicializado (tabelas principais ausentes). Abortando passos 6-8.")
         return
     
+    # Normaliza types legados (admin/super -> funcionario)
+    logger.info("👥 Passo 6/7: Normalizando type_user (legado)...")
+    normalizar_tipos_usuario()
+
     # Cria tabelas do chatbot (que não usam modelos SQLAlchemy)
-    logger.info("🤖 Passo 6/8: Criando/verificando tabelas do chatbot...")
+    logger.info("🤖 (extra) Criando/verificando tabelas do chatbot...")
     criar_tabelas_chatbot()
     
-    logger.info("👤 Passo 7/8: Garantindo usuário super padrão...")
-    criar_usuario_super_padrao()
-    
     # Dados iniciais de meios de pagamento
-    logger.info("💳 Passo 8/8: Criando/verificando meios de pagamento padrão...")
+    logger.info("💳 Passo 7/7: Criando/verificando meios de pagamento padrão...")
     criar_meios_pagamento_padrao()
 
     # Catálogo de permissões (idempotente)
     logger.info("🔐 Seed: Criando/verificando permissões padrão...")
     criar_permissoes_padrao()
 
-    # Super: vincula todas as permissões em todas as empresas existentes
-    logger.info("🛡️ Seed: Vinculando permissões completas ao usuário super...")
-    vincular_todas_permissoes_ao_usuario_super()
-    
     logger.info("✅ Banco inicializado com sucesso.")

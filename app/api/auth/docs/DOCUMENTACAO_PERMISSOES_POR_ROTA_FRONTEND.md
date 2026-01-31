@@ -54,7 +54,7 @@ Body:
 
 Resposta:
 ```json
-{ "type_user": "admin|cliente|funcionario", "access_token": "JWT...", "token_type": "Bearer" }
+{ "type_user": "cliente|funcionario", "access_token": "JWT...", "token_type": "Bearer" }
 ```
 
 ### 3.2) Headers para chamadas admin
@@ -77,14 +77,15 @@ Observações:
 - WebSocket de notificações usa `empresa_id` na query (ex.: `/api/notifications/ws/notifications?empresa_id=1`).
 
 Observações:
-- Usuário `type_user="admin"` é bypass operacional (não bloqueia).
-- Usuário não-admin precisa estar vinculado à empresa e possuir permissões nessa empresa.
+- Não existe mais bypass por `type_user` (não há mais `admin/super`).
+- Usuário precisa estar vinculado à empresa e possuir permissões nessa empresa.
 
 ---
 
 ## 4) Catálogo de permissões e gestão (para a tela “Configurações → Permissões”)
 
-> Os endpoints abaixo são **admin** (somente `type_user="admin"`).
+> Os endpoints abaixo são **admin** e devem ser acessados por **funcionário** com permissão
+> `route:/configuracoes:permissoes` (ou `route:/configuracoes`).
 
 ### 4.1) Listar catálogo de permissões
 - `GET /api/mensura/admin/permissoes`

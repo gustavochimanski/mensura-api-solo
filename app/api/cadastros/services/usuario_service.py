@@ -34,7 +34,7 @@ class UserService:
         if self.repo.get_by_username(data.username):
             raise HTTPException(400, "Já existe um usuário com este username")
 
-        if data.type_user not in ["admin", "cliente", "funcionario"]:
+        if data.type_user not in ["cliente", "funcionario"]:
             raise HTTPException(400, "Tipo de usuário inválido")
 
         empresas = []
@@ -61,6 +61,9 @@ class UserService:
         update_data = data.model_dump(exclude_unset=True, exclude={"empresa_ids", "password"})
         if data.password:
             update_data["hashed_password"] = hash_password(data.password)
+
+        if data.type_user is not None and data.type_user not in ["cliente", "funcionario"]:
+            raise HTTPException(400, "Tipo de usuário inválido")
 
         if data.empresa_ids is not None:
             empresas = self.repo_emp.list_by_ids(data.empresa_ids)

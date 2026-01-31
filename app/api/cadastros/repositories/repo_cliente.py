@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from app.api.cadastros.models.model_cliente_dv import ClienteModel
-from app.utils.telefone import normalizar_telefone, variantes_celular_para_busca
+from app.utils.telefone import variantes_telefone_para_busca
 
 class ClienteRepository:
     def __init__(self, db: Session):
@@ -13,23 +13,15 @@ class ClienteRepository:
         return self.db.query(ClienteModel).filter_by(super_token=token).first()
 
     def get_by_telefone(self, telefone: str) -> Optional[ClienteModel]:
-        telefone_norm = normalizar_telefone(telefone)
-        if not telefone_norm:
+        candidatos = variantes_telefone_para_busca(telefone)
+        if not candidatos:
             return None
-
-        # Lista de candidatos: número exato + variantes com/sem o "9" de celular
-        candidatos = variantes_celular_para_busca(telefone_norm)
-        for tel in candidatos:
-            cliente = self.db.query(ClienteModel).filter_by(telefone=tel).first()
-            if cliente:
-                return cliente
-            # Compatibilidade: bases antigas podem ter salvo sem o prefixo 55
-            if tel.startswith("55") and len(tel) > 2:
-                cliente = self.db.query(ClienteModel).filter_by(telefone=tel[2:]).first()
-                if cliente:
-                    return cliente
-
-        return None
+        # 1 query só (inclui com/sem 55 e com/sem 9 quando aplicável)
+        return (
+            self.db.query(ClienteModel)
+            .filter(ClienteModel.telefone.in_(candidatos))
+            .first()
+        )
 
     def get_by_email(self, email: str) -> Optional[ClienteModel]:
         return self.db.query(ClienteModel).filter_by(email=email).first()

@@ -16,6 +16,18 @@ class IngredientesService:
         self.db = db
         self.empresa_id = empresa_id
 
+    def _rollback_silencioso(self) -> None:
+        """
+        Importante: várias rotinas deste serviço capturam exceções e retornam []/None.
+        Se a exceção veio do banco, a transação pode ficar "abortada" e quebrar
+        chamadas seguintes com `InFailedSqlTransaction`. Então fazemos rollback
+        antes de seguir o fluxo.
+        """
+        try:
+            self.db.rollback()
+        except Exception:
+            pass
+
     def buscar_ingredientes_receita(self, receita_id: int) -> List[Dict[str, Any]]:
         """
         Busca todos os itens de uma receita (produtos, sub-receitas e combos)
@@ -68,6 +80,7 @@ class IngredientesService:
             return ingredientes
 
         except Exception as e:
+            self._rollback_silencioso()
             print(f"Erro ao buscar ingredientes: {e}")
             return []
 
@@ -94,6 +107,7 @@ class IngredientesService:
             return []
 
         except Exception as e:
+            self._rollback_silencioso()
             print(f"Erro ao buscar ingredientes por nome: {e}")
             return []
 
@@ -178,6 +192,7 @@ class IngredientesService:
             return None
 
         except Exception as e:
+            self._rollback_silencioso()
             print(f"Erro ao verificar ingrediente por nome da receita: {e}")
             return None
 
@@ -213,11 +228,11 @@ class IngredientesService:
                     ) as preco
                 FROM catalogo.complemento_vinculo_item cvi
                 LEFT JOIN catalogo.produtos p ON cvi.produto_cod_barras = p.cod_barras
-                LEFT JOIN catalogo.produto_emp pe ON cvi.produto_cod_barras = pe.cod_barras AND pe.empresa_id = :empresa_id
+                LEFT JOIN catalogo.produtos_empresa pe ON cvi.produto_cod_barras = pe.cod_barras AND pe.empresa_id = :empresa_id
                 LEFT JOIN catalogo.receitas r ON cvi.receita_id = r.id
                 LEFT JOIN catalogo.combos c ON cvi.combo_id = c.id
                 WHERE (
-                    (cvi.produto_cod_barras IS NOT NULL AND pe.ativo = true AND pe.disponivel = true)
+                    (cvi.produto_cod_barras IS NOT NULL AND p.ativo = true AND pe.disponivel = true)
                     OR (cvi.receita_id IS NOT NULL AND r.ativo = true AND r.empresa_id = :empresa_id)
                     OR (cvi.combo_id IS NOT NULL AND c.ativo = true AND c.empresa_id = :empresa_id)
                 )
@@ -238,6 +253,7 @@ class IngredientesService:
             return adicionais
 
         except Exception as e:
+            self._rollback_silencioso()
             print(f"Erro ao buscar todos os adicionais: {e}")
             return []
 
@@ -307,6 +323,7 @@ class IngredientesService:
             return combos
 
         except Exception as e:
+            self._rollback_silencioso()
             print(f"Erro ao buscar combos: {e}")
             return []
 
@@ -349,6 +366,7 @@ class IngredientesService:
             return None
 
         except Exception as e:
+            self._rollback_silencioso()
             print(f"Erro ao buscar combo por nome: {e}")
             return None
 
@@ -393,6 +411,7 @@ class IngredientesService:
             return itens
 
         except Exception as e:
+            self._rollback_silencioso()
             print(f"Erro ao buscar itens do combo: {e}")
             return []
 
@@ -504,7 +523,7 @@ class IngredientesService:
                             END
                         ) as preco,
                         COALESCE(
-                            CASE WHEN cvi.produto_cod_barras IS NOT NULL THEN pe.ativo ELSE NULL END,
+                            CASE WHEN cvi.produto_cod_barras IS NOT NULL THEN (p.ativo = true AND pe.disponivel = true) ELSE NULL END,
                             CASE WHEN cvi.receita_id IS NOT NULL THEN r.ativo ELSE NULL END,
                             CASE WHEN cvi.combo_id IS NOT NULL THEN c.ativo ELSE NULL END,
                             true
@@ -512,7 +531,7 @@ class IngredientesService:
                         cvi.ordem
                     FROM catalogo.complemento_vinculo_item cvi
                     LEFT JOIN catalogo.produtos p ON cvi.produto_cod_barras = p.cod_barras
-                    LEFT JOIN catalogo.produto_emp pe ON cvi.produto_cod_barras = pe.cod_barras AND pe.empresa_id = :empresa_id
+                    LEFT JOIN catalogo.produtos_empresa pe ON cvi.produto_cod_barras = pe.cod_barras AND pe.empresa_id = :empresa_id
                     LEFT JOIN catalogo.receitas r ON cvi.receita_id = r.id
                     LEFT JOIN catalogo.combos c ON cvi.combo_id = c.id
                     WHERE cvi.complemento_id = :comp_id
@@ -546,6 +565,7 @@ class IngredientesService:
 
             return complementos
         except Exception as e:
+            self._rollback_silencioso()
             print(f"Erro ao buscar complementos da receita: {e}")
             return []
 

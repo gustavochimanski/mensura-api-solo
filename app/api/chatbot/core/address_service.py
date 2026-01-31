@@ -5,10 +5,11 @@ Usa SQL direto para evitar problemas de mapper do SQLAlchemy
 """
 from typing import List, Dict, Any, Optional, Tuple
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, bindparam
 
 from app.api.localizacao.adapters.google_maps_adapter import GoogleMapsAdapter
 from app.utils.logger import logger
+from app.utils.telefone import normalizar_telefone_para_armazenar, variantes_telefone_para_busca
 
 
 class ChatbotAddressService:
@@ -33,20 +34,15 @@ class ChatbotAddressService:
             Dict com dados do cliente ou None se não encontrar
         """
         telefone_limpo = self._normalizar_telefone(telefone)
+        candidatos = variantes_telefone_para_busca(telefone_limpo) or [telefone_limpo]
 
         query = text("""
             SELECT id, nome, telefone, email, ativo, super_token
             FROM cadastros.clientes
-            WHERE telefone = :telefone
+            WHERE telefone IN :telefones
             LIMIT 1
-        """)
-        result = self.db.execute(query, {"telefone": telefone_limpo}).fetchone()
-
-        if not result:
-            # Tenta sem o código do país
-            if telefone_limpo.startswith("55") and len(telefone_limpo) > 10:
-                telefone_sem_pais = telefone_limpo[2:]
-                result = self.db.execute(query, {"telefone": telefone_sem_pais}).fetchone()
+        """).bindparams(bindparam("telefones", expanding=True))
+        result = self.db.execute(query, {"telefones": candidatos}).fetchone()
 
         if result:
             return {
@@ -472,41 +468,10 @@ class ChatbotAddressService:
         - Mantém consistência entre cadastro, conversa e envio de mensagem.
         - Usa o número EXATAMENTE como recebido, sem adicionar dígitos.
         """
-        import re
-        telefone_limpo = re.sub(r"[^\d]", "", telefone or "")
-        
-        if not telefone_limpo:
-            return telefone_limpo
-
-        # Remove prefixo internacional "00" quando presente (ex.: 0055...)
-        if telefone_limpo.startswith("00") and len(telefone_limpo) > 2:
-            telefone_limpo = telefone_limpo[2:]
-        
-        # Remove zeros à esquerda que podem vir de formatação incorreta
-        # Mas preserva o número original se já começar com 55
-        if telefone_limpo.startswith("0") and not telefone_limpo.startswith("55"):
-            # Remove apenas zeros à esquerda se o número tiver mais de 11 dígitos
-            # Isso evita remover zeros válidos de números que começam com 0
-            if len(telefone_limpo) > 11:
-                telefone_limpo = telefone_limpo.lstrip("0")
-        
-        # Se o telefone não começar com 55, adiciona o prefixo
-        # Considera números brasileiros (10 ou 11 dígitos sem o 55)
-        # IMPORTANTE: NÃO adiciona "9" para números de 10 dígitos - usa exatamente como recebido
-        if not telefone_limpo.startswith("55"):
-            # Se tem 10 ou 11 dígitos (formato brasileiro sem código do país)
-            if len(telefone_limpo) == 10 or len(telefone_limpo) == 11:
-                telefone_limpo = "55" + telefone_limpo
-            # Se tem menos de 10 dígitos, pode ser um número incompleto, mas adiciona 55 mesmo assim
-            elif len(telefone_limpo) < 10:
-                telefone_limpo = "55" + telefone_limpo
-
-        # Se veio com um "9" duplicado após o DDD (ex.: 55DD99XXXXXXXX), remove o excesso.
-        # Isso evita criar conversas/históricos diferentes por erro de normalização.
-        if telefone_limpo.startswith("55") and len(telefone_limpo) == 14 and telefone_limpo[4:6] == "99":
-            telefone_limpo = telefone_limpo[:5] + telefone_limpo[6:]
-        
-        return telefone_limpo
+        # Unificação:
+        # - salva e trabalha com 55+DDD+9 dígitos quando for celular (WhatsApp)
+        # - ainda assim, as consultas aceitam variações via variantes_telefone_para_busca()
+        return normalizar_telefone_para_armazenar(telefone) or ""
 
     def formatar_lista_enderecos_para_chat(self, enderecos: List[Dict[str, Any]]) -> str:
         """

@@ -21,7 +21,7 @@ from app.api.pedidos.models.model_pedido_unificado import (
     CanalPedido,
 )
 from app.api.empresas.models.empresa_model import EmpresaModel
-from app.utils.telefone import normalizar_telefone
+from app.utils.telefone import normalizar_telefone_para_armazenar
 
 
 class ClienteService:
@@ -32,9 +32,9 @@ class ClienteService:
     def _normalizar_telefone(self, telefone: str) -> str:
         """
         Compatibilidade: mantém a API interna existente, mas delega para
-        `app.utils.telefone.normalizar_telefone`.
+        `app.utils.telefone.normalizar_telefone_para_armazenar`.
         """
-        return normalizar_telefone(telefone) or ""
+        return normalizar_telefone_para_armazenar(telefone) or ""
 
     def get_current(self, token: str):
         cli = self.repo.get_by_token(token)

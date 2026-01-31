@@ -89,8 +89,8 @@ def require_type_user(allowed_types: list[str]):
     Dependency factory para restringir acesso por tipo de usuário.
     Exemplo de uso em rota:
 
-        @router.get(..., dependencies=[Depends(require_type_user(['admin']))])
-        def rota_somente_admin(...):
+        @router.get(..., dependencies=[Depends(require_type_user(['funcionario']))])
+        def rota_somente_funcionario(...):
             ...
     """
 
@@ -110,9 +110,12 @@ def require_type_user(allowed_types: list[str]):
 def require_admin(current_user: UserModel = Depends(get_current_user)) -> UserModel:
     """
     Atalho para rotas administrativas.
-    Permite usuários type_user='admin' e type_user='super'.
+    Agora, `type_user` só diferencia **funcionário** vs **cliente**.
+    Rotas administrativas devem ser acessadas apenas por funcionários
+    (a autorização fina é feita por permissões `route:*`).
     """
-    if current_user.type_user not in ("admin", "super"):
+    # Compatibilidade: existe usuário "super" (seed) que deve acessar rotas admin.
+    if current_user.type_user not in {"funcionario", "super"}:
         logger.warning(
             "[AUTH] Acesso negado. type_user=%s tentou acessar rota admin.",
             current_user.type_user,
