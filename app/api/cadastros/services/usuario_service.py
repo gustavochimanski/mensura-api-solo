@@ -5,6 +5,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.cadastros.repositories.usuarios_repo import UsuarioRepository
+from app.api.cadastros.models.association_tables import usuario_empresa
+from app.api.cadastros.models.model_user_permission import UserPermissionModel
 from app.api.empresas.repositories.empresa_repo import EmpresaRepository
 from app.api.cadastros.schemas.schema_usuario import UserCreate, UserUpdate
 from app.api.cadastros.models.user_model import UserModel
@@ -102,6 +104,14 @@ class UserService:
             )
 
         try:
+            # Cleanup explícito de vínculos (para garantir remoção mesmo se o DB não estiver com CASCADE aplicado).
+            # - Usuario ↔ Empresa (cadastros.usuario_empresa)
+            # - Permissões por usuário/empresa (cadastros.user_permissions)
+            self.db.query(UserPermissionModel).filter(UserPermissionModel.user_id == id).delete(
+                synchronize_session=False
+            )
+            self.db.execute(usuario_empresa.delete().where(usuario_empresa.c.usuario_id == id))
+
             self.repo.delete(user)
         except IntegrityError as e:
             # Garante rollback para evitar sessão em estado inválido e retorna erro amigável.
