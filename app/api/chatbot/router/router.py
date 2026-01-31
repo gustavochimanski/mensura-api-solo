@@ -1898,6 +1898,182 @@ async def process_webhook_background(body: dict, headers_info: Optional[dict] = 
                                 # Processa a mensagem com a IA (passa o nome do contato, empresa_id, message_id e button_id)
                                 await process_whatsapp_message(db, from_number, message_text, contact_name, empresa_id, message_id, button_id)
 
+                    # Processa MESSAGE ECHOES (360dialog coexistence) - mensagens OUTGOING que saíram do número da empresa
+                    # Esse payload costuma chegar como field="smb_message_echoes" com value.message_echoes[]
+                    # Objetivo: detectar quando foi HUMANO respondendo pelo WhatsApp (app/web) e PAUSAR o bot.
+                    message_echoes = value.get("message_echoes", [])
+                    if message_echoes:
+                        for echo in message_echoes:
+                            try:
+                                import logging
+                                from sqlalchemy import text
+                                from datetime import datetime as dt
+
+                                logger = logging.getLogger(__name__)
+
+                                echo_id = echo.get("id")
+                                echo_type = (echo.get("type") or "").lower()
+                                echo_from = echo.get("from")
+                                echo_to = echo.get("to")  # cliente
+                                echo_timestamp = echo.get("timestamp")
+
+                                # Conteúdo (prioriza texto)
+                                echo_text = None
+                                if echo_type == "text":
+                                    echo_text = echo.get("text", {}).get("body")
+                                elif echo.get("text", {}).get("body"):
+                                    # fallback defensivo: alguns payloads ainda trazem text.body
+                                    echo_text = echo.get("text", {}).get("body")
+                                else:
+                                    # Sem texto: registra algo mínimo para auditoria
+                                    echo_text = f"[mensagem_outgoing tipo={echo_type or 'desconhecido'}]"
+
+                                # Determina o cliente (destinatário)
+                                cliente_phone = _digits_only(echo_to) or (str(echo_to).strip() if echo_to else None)
+                                if not cliente_phone:
+                                    logger.warning(
+                                        f"⚠️ smb_message_echoes recebido, mas sem destinatário (to). "
+                                        f"id={echo_id}, from={echo_from}, to={echo_to}, empresa_id={empresa_id}"
+                                    )
+                                    continue
+
+                                # Identifica se o echo foi do chatbot (pelo whatsapp_message_id persistido)
+                                foi_chatbot = False
+                                if echo_id:
+                                    try:
+                                        query_check_bot = text("""
+                                            SELECT m.id
+                                            FROM chatbot.messages m
+                                            JOIN chatbot.conversations c ON m.conversation_id = c.id
+                                            WHERE m.metadata->>'whatsapp_message_id' = :message_id
+                                            AND m.role = 'assistant'
+                                            AND (m.metadata->>'sender' IS NULL OR m.metadata->>'sender' = 'chatbot')
+                                            AND c.user_id = :recipient_id
+                                            ORDER BY m.created_at DESC
+                                            LIMIT 1
+                                        """)
+                                        result = db.execute(query_check_bot, {
+                                            "message_id": echo_id,
+                                            "recipient_id": cliente_phone,
+                                        })
+                                        foi_chatbot = bool(result.fetchone())
+                                    except Exception as e:
+                                        logger.warning(
+                                            f"⚠️ Erro ao verificar smb_message_echoes no banco (assumindo humano): {e}",
+                                            exc_info=True,
+                                        )
+                                        foi_chatbot = False
+
+                                if foi_chatbot:
+                                    logger.info(
+                                        f"🤖 smb_message_echoes do CHATBOT (message_id: {echo_id}) - NÃO pausando"
+                                    )
+                                    continue
+
+                                # Se chegou aqui: é HUMANO respondendo pelo WhatsApp (coexistence)
+                                logger.info(
+                                    f"👤 smb_message_echoes de HUMANO - PAUSANDO. "
+                                    f"cliente={cliente_phone}, message_id={echo_id}, ts={echo_timestamp}"
+                                )
+
+                                empresa_id_int = int(empresa_id) if empresa_id else 1
+
+                                # Busca ou cria conversa do cliente
+                                conversations = chatbot_db.get_conversations_by_user(db, cliente_phone, empresa_id=empresa_id_int)
+                                if not conversations:
+                                    conversations = chatbot_db.get_conversations_by_user(db, cliente_phone)
+
+                                conversation_id = None
+                                if conversations:
+                                    conversation_id = conversations[0]["id"]
+                                else:
+                                    prompt_key = "atendimento-pedido-whatsapp"
+                                    if not chatbot_db.get_prompt(db, prompt_key, empresa_id=empresa_id_int):
+                                        chatbot_db.create_prompt(
+                                            db=db,
+                                            key=prompt_key,
+                                            name="Atendimento WhatsApp",
+                                            content="Atendimento via WhatsApp",
+                                            is_default=False,
+                                            empresa_id=empresa_id_int,
+                                        )
+                                    conversation_id = chatbot_db.create_conversation(
+                                        db=db,
+                                        session_id=f"whatsapp_{cliente_phone}_{dt.now().strftime('%Y%m%d%H%M%S')}",
+                                        user_id=cliente_phone,
+                                        prompt_key=prompt_key,
+                                        model="groq-sales",
+                                        empresa_id=empresa_id_int,
+                                    )
+
+                                # Persiste a mensagem humana enviada pelo WhatsApp (coexistence echo)
+                                try:
+                                    from app.api.chatbot.adapters.message_persistence_adapter import ChatMessagePersistenceAdapter
+                                    from app.api.chatbot.contracts.message_persistence_contract import (
+                                        ChatMessageSenderType,
+                                        ChatMessageSourceType,
+                                        PersistChatMessageCommand,
+                                    )
+
+                                    persistence = ChatMessagePersistenceAdapter(db)
+                                    persistence.persist_message(
+                                        PersistChatMessageCommand(
+                                            conversation_id=conversation_id,
+                                            role="assistant",
+                                            content=echo_text or "",
+                                            empresa_id=empresa_id_int,
+                                            whatsapp_message_id=echo_id,
+                                            source_type=ChatMessageSourceType.WHATSAPP_WEB,
+                                            sender_type=ChatMessageSenderType.HUMAN,
+                                            metadata={
+                                                "source": "smb_message_echoes",
+                                                "from": str(echo_from) if echo_from is not None else None,
+                                                "to": str(echo_to) if echo_to is not None else None,
+                                                "type": echo_type,
+                                                "timestamp": str(echo_timestamp) if echo_timestamp is not None else None,
+                                            },
+                                        )
+                                    )
+                                except Exception:
+                                    chatbot_db.create_message(
+                                        db=db,
+                                        conversation_id=conversation_id,
+                                        role="assistant",
+                                        content=echo_text or "",
+                                        whatsapp_message_id=echo_id,
+                                        extra_metadata={
+                                            "sender": "human",
+                                            "source": "smb_message_echoes",
+                                            "from": str(echo_from) if echo_from is not None else None,
+                                            "to": str(echo_to) if echo_to is not None else None,
+                                            "type": echo_type,
+                                            "timestamp": str(echo_timestamp) if echo_timestamp is not None else None,
+                                        },
+                                    )
+
+                                # Pausa o bot por AUTO_PAUSE_HOURS para este cliente
+                                destrava_em = chatbot_db.get_auto_pause_until()
+                                pause_result = chatbot_db.set_bot_status(
+                                    db=db,
+                                    phone_number=cliente_phone,
+                                    paused_by="atendente_respondeu",
+                                    empresa_id=empresa_id_int,
+                                    desativa_chatbot_em=destrava_em,
+                                )
+                                if pause_result.get("success"):
+                                    logger.info(
+                                        f"⏸️ Chatbot pausado por {chatbot_db.AUTO_PAUSE_HOURS}h após smb_message_echoes humano - "
+                                        f"cliente={cliente_phone}, empresa_id={empresa_id_int}, chatbot_destrava_em={destrava_em}"
+                                    )
+                                else:
+                                    logger.error(
+                                        f"❌ Falha ao pausar chatbot após smb_message_echoes humano: {pause_result.get('error')}"
+                                    )
+                            except Exception as e:
+                                import logging
+                                logger = logging.getLogger(__name__)
+                                logger.error(f"❌ Erro ao processar smb_message_echoes: {e}", exc_info=True)
+
                     # Processa STATUSES (status de mensagens enviadas: sent, delivered, read)
                     # IMPORTANTE: Este bloco só processa quando a EMPRESA envia mensagem para o cliente
                     # Quando o CLIENTE envia mensagem, vem no bloco "messages" acima (linha 1618)
