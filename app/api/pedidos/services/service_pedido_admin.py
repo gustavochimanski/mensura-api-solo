@@ -21,6 +21,7 @@ from app.api.pedidos.schemas import (
     PedidoCreateRequest,
     PedidoEntregadorRequest,
     PedidoFecharContaRequest,
+    PedidoMarcarPedidoPagoRequest,
     PedidoItemMutationAction,
     PedidoItemMutationRequest,
     PedidoObservacaoPatchRequest,
@@ -402,6 +403,73 @@ class PedidoAdminService:
             status.HTTP_400_BAD_REQUEST,
             "Fechamento de conta não suportado para este tipo de pedido.",
         )
+
+    def marcar_pedido_pago(
+        self,
+        pedido_id: int,
+        payload: PedidoMarcarPedidoPagoRequest | None,
+        *,
+        user_id: Optional[int] = None,
+    ) -> PedidoResponseCompleto:
+        """
+        Marca um pedido como pago sem alterar o status.
+
+        Regra:
+        - Só permite marcar como pago se existir meio de pagamento no pedido
+          (pedido.meio_pagamento_id ou transação associada), OU se `meio_pagamento_id`
+          vier no payload (opcional).
+        """
+        from app.api.pedidos.models.model_pedido_historico_unificado import TipoOperacaoPedido
+
+        pedido = self._get_pedido(pedido_id)
+
+        # Se veio meio_pagamento_id no payload, valida e persiste.
+        meio_pagamento_id_payload = getattr(payload, "meio_pagamento_id", None) if payload is not None else None
+        if meio_pagamento_id_payload is not None:
+            from app.api.cadastros.services.service_meio_pagamento import MeioPagamentoService
+
+            meio_pagamento = MeioPagamentoService(self.db).get(meio_pagamento_id_payload)
+            if not meio_pagamento or not getattr(meio_pagamento, "ativo", False):
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, "Meio de pagamento inválido ou inativo")
+            pedido.meio_pagamento_id = int(meio_pagamento_id_payload)
+
+        # Validação: precisa ter meio de pagamento (no pedido ou em alguma transação) após possível atualização.
+        meio_pagamento_id_ref = getattr(pedido, "meio_pagamento_id", None)
+        if meio_pagamento_id_ref is None:
+            tx = getattr(pedido, "transacao", None)
+            if tx is not None:
+                meio_pagamento_id_ref = getattr(tx, "meio_pagamento_id", None)
+        if meio_pagamento_id_ref is None:
+            txs = getattr(pedido, "transacoes", None) or []
+            for tx in txs:
+                mp_id = getattr(tx, "meio_pagamento_id", None)
+                if mp_id is not None:
+                    meio_pagamento_id_ref = mp_id
+                    break
+
+        if meio_pagamento_id_ref is None:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "Não é possível marcar como pago sem meio de pagamento. Informe meio_pagamento_id no payload ou defina no pedido antes.",
+            )
+
+        # Marca como pago (idempotente)
+        pedido.pago = True
+
+        # Histórico detalhado (sem mudança de status)
+        meio_pagamento_nome = pedido.meio_pagamento.nome if getattr(pedido, "meio_pagamento", None) else None
+        observacoes = f"Meio de pagamento: {meio_pagamento_nome or meio_pagamento_id_ref}"
+        self.repo.add_historico(
+            pedido_id=pedido.id,
+            tipo_operacao=TipoOperacaoPedido.PAGAMENTO_REALIZADO,
+            descricao="Pedido marcado como pago",
+            observacoes=observacoes,
+            usuario_id=user_id,
+        )
+
+        self.db.commit()
+        pedido_atualizado = self.repo.get_pedido(pedido_id)
+        return self.pedido_service.response_builder.pedido_to_response_completo(pedido_atualizado)
     
     def _fechar_conta_delivery(self, pedido_id: int, payload: PedidoFecharContaRequest | None) -> PedidoResponseCompleto:
         """Fecha conta de pedido delivery/retirada marcando como pago e entregue."""

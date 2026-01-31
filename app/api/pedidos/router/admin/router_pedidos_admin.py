@@ -12,6 +12,7 @@ from app.api.pedidos.schemas import (
     PedidoCreateRequest,
     PedidoEntregadorRequest,
     PedidoFecharContaRequest,
+    PedidoMarcarPedidoPagoRequest,
     PedidoItemMutationAction,
     PedidoItemMutationRequest,
     PedidoObservacaoPatchRequest,
@@ -223,6 +224,31 @@ def fechar_conta(
     svc: PedidoAdminService = Depends(get_pedido_admin_service),
 ):
     return svc.fechar_conta(pedido_id, payload)
+
+
+@router.patch(
+    "/{pedido_id}/marcar-pedido-pago",
+    response_model=PedidoResponseCompleto,
+    status_code=status.HTTP_200_OK,
+)
+def marcar_pedido_pago(
+    pedido_id: int = Path(..., gt=0),
+    payload: Optional[PedidoMarcarPedidoPagoRequest] = Body(None),
+    current_user: UserModel = Depends(get_current_user),
+    svc: PedidoAdminService = Depends(get_pedido_admin_service),
+):
+    """
+    Marca o pedido como pago sem alterar o status.
+
+    Regras:
+    - Só é permitido se o pedido já tiver um meio de pagamento definido, OU se
+      `meio_pagamento_id` vier no payload (opcional).
+    """
+    return svc.marcar_pedido_pago(
+        pedido_id,
+        payload,
+        user_id=current_user.id if current_user else None,
+    )
 
 
 @router.patch(

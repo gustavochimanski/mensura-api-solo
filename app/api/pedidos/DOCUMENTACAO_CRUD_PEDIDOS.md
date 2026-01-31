@@ -949,6 +949,44 @@ PATCH /api/pedidos/admin/{pedido_id}/reabrir
 
 ---
 
+### 5.4. Marcar Pedido como Pago - Admin
+
+Marca um pedido como **pago** sem alterar o **status** do pedido.
+
+**Endpoint:**
+```
+PATCH /api/pedidos/admin/{pedido_id}/marcar-pedido-pago
+```
+
+**Body Request (opcional):**
+```json
+{
+  "meio_pagamento_id": 1
+}
+```
+
+**Regras / Validações:**
+- Se `meio_pagamento_id` vier no body, o backend **valida** (ativo) e salva no pedido.
+- Se o body vier **vazio/omitido**, o pedido **precisa já ter** um meio de pagamento definido (ex.: `meio_pagamento_id` no pedido).
+- Se não houver meio de pagamento no pedido e também não vier no payload → **400 Bad Request**.
+
+**Response (200 OK):**
+```json
+{
+  "id": 789,
+  "status": "P",
+  "pago": true,
+  "meio_pagamento": {
+    "id": 1,
+    "nome": "Dinheiro",
+    "tipo": "DINHEIRO"
+  },
+  ...
+}
+```
+
+---
+
 ## 6. Cancelar Pedido (DELETE)
 
 ### 6.1. Cancelar Pedido - Admin

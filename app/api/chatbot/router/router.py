@@ -1328,6 +1328,18 @@ async def serve_file(filename: str):
 
 # ==================== WEBHOOKS DO WHATSAPP ====================
 
+def _pretty_json_for_log(data) -> str:
+    """
+    Serializa JSON "bonitinho" para log (multi-linha).
+    Mantém acentos (ensure_ascii=False) e ordena chaves para facilitar diffs.
+    """
+    try:
+        return json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True)
+    except Exception:
+        # Fallback defensivo: não quebra o webhook por causa de log
+        return str(data)
+
+
 @router.get("/webhook-test")
 async def webhook_test(request: Request):
     """
@@ -1572,29 +1584,21 @@ async def webhook_handler(request: Request, background_tasks: BackgroundTasks, d
     - Processa mensagens de forma assíncrona em background
     - Processa messages, statuses e errors conforme documentação
     """
-    # PRIMEIRA VERIFICAÇÃO: Status global do bot (antes de qualquer log ou processamento)
-    try:
-        global_status = chatbot_db.get_global_bot_status(db)
-        if not global_status.get("is_active", True):
-            # Bot desligado: retorna OK sem processar nada
-            return {"status": "ok", "message": "Chatbot desligado"}
-    except Exception as e:
-        # Se falhar ao verificar status, assume que está ligado para não bloquear webhooks
-        pass
-    
+    import logging
+    logger = logging.getLogger(__name__)
+
     try:
         # Lê o body de forma segura
         try:
             body_bytes = await request.body()
         except Exception as e:
-            import logging
-            logger = logging.getLogger(__name__)
             logger.error(f"Erro ao ler body da requisição: {e}")
             # Retorna 200 OK imediatamente mesmo com erro (requisito da 360Dialog)
             return {"status": "ok", "message": "Erro ao ler body, mas webhook recebido"}
         
         # Verifica se há body
         if not body_bytes or len(body_bytes) == 0:
+            logger.info("Webhook 360dialog recebido sem body.")
             # Retorna 200 OK imediatamente (requisito da 360Dialog)
             return {"status": "ok", "message": "Webhook recebido sem body"}
         
@@ -1602,15 +1606,41 @@ async def webhook_handler(request: Request, background_tasks: BackgroundTasks, d
         try:
             body_text = body_bytes.decode('utf-8')
             if not body_text.strip():
+                logger.info("Webhook 360dialog recebido com body vazio.")
                 # Retorna 200 OK imediatamente (requisito da 360Dialog)
                 return {"status": "ok", "message": "Webhook recebido com body vazio"}
             body = json.loads(body_text)
         except json.JSONDecodeError as e:
-            import logging
-            logger = logging.getLogger(__name__)
             logger.error(f"Erro ao parsear JSON do webhook: {e}")
+            # Loga o body cru para investigação (pode não ser JSON)
+            try:
+                raw_preview = body_bytes.decode("utf-8", errors="replace")
+            except Exception:
+                raw_preview = str(body_bytes)
+            logger.info("Webhook 360dialog body (raw):\n%s", raw_preview)
             # Retorna 200 OK imediatamente mesmo com erro de JSON (requisito da 360Dialog)
             return {"status": "ok", "message": "Webhook recebido (JSON inválido, mas processado)"}
+
+        # Loga o JSON COMPLETO recebido do 360dialog (formatado)
+        headers_info = {
+            "x_cliente": request.headers.get("x-cliente"),
+            "host": request.headers.get("host"),
+        }
+        logger.info(
+            "Webhook 360dialog recebido.\nheaders=\n%s\npayload=\n%s",
+            _pretty_json_for_log(headers_info),
+            _pretty_json_for_log(body),
+        )
+
+        # Verifica status global do bot (depois do log do webhook)
+        try:
+            global_status = chatbot_db.get_global_bot_status(db)
+            if not global_status.get("is_active", True):
+                # Bot desligado: retorna OK sem processar nada
+                return {"status": "ok", "message": "Chatbot desligado"}
+        except Exception:
+            # Se falhar ao verificar status, assume que está ligado para não bloquear webhooks
+            pass
 
         # CRÍTICO: Retorna 200 OK IMEDIATAMENTE antes de processar
         # Conforme documentação 360Dialog: "acknowledge immediately after receiving the webhook"
@@ -1618,10 +1648,6 @@ async def webhook_handler(request: Request, background_tasks: BackgroundTasks, d
         
         # Adiciona processamento em background
         # IMPORTANTE: Não passa a sessão do banco diretamente, cria nova sessão na função
-        headers_info = {
-            "x_cliente": request.headers.get("x-cliente"),
-            "host": request.headers.get("host"),
-        }
         background_tasks.add_task(process_webhook_background, body, headers_info)
 
         # Retorna 200 OK imediatamente (requisito crítico da 360Dialog)
