@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 from typing import Any, Iterable, Optional
 
 try:
@@ -245,5 +245,148 @@ def formatar_horarios_funcionamento_mensagem(horarios_funcionamento: Any, apenas
         mensagem += "\n💬 Retornaremos em breve quando estivermos abertos!"
     
     return mensagem
+
+
+def proxima_abertura(
+    *,
+    horarios_funcionamento: Any,
+    timezone: str | None = "America/Sao_Paulo",
+    now: datetime | None = None,
+) -> Optional[datetime]:
+    """
+    Calcula a próxima abertura (datetime local) a partir de agora.
+
+    Returns:
+        - datetime (tz-aware quando possível): início do próximo intervalo de abertura
+        - None: quando não há horários configurados/validáveis
+    """
+    if not horarios_funcionamento or not isinstance(horarios_funcionamento, list):
+        return None
+
+    now = now or datetime.now()
+    local_now = _to_local(now, timezone)
+    base_date = local_now.date()
+    dow_now = _weekday_sun0(local_now)
+
+    def iter_day_entries(entries: Iterable[dict], day: int) -> Iterable[dict]:
+        for e in entries:
+            if not isinstance(e, dict):
+                continue
+            if e.get("dia_semana") == day:
+                yield e
+
+    def iter_starts_for_day(day_entries: Iterable[dict]) -> Iterable[time]:
+        for e in day_entries:
+            intervals = e.get("intervalos") or []
+            if not isinstance(intervals, list):
+                continue
+            for it in intervals:
+                if not isinstance(it, dict):
+                    continue
+                start = _parse_hhmm(it.get("inicio"))
+                end = _parse_hhmm(it.get("fim"))
+                if start and end:
+                    # Para "próxima abertura", só precisamos do start.
+                    yield start
+
+    candidates: list[datetime] = []
+    entries = horarios_funcionamento
+
+    # Procura nos próximos 7 dias (inclui hoje)
+    for offset in range(0, 7):
+        day = (dow_now + offset) % 7
+        day_date = base_date + timedelta(days=offset)
+        for start_t in iter_starts_for_day(iter_day_entries(entries, day)):
+            candidate = datetime.combine(day_date, start_t)
+            # Preserva tzinfo quando local_now tem tz
+            if local_now.tzinfo is not None and candidate.tzinfo is None:
+                candidate = candidate.replace(tzinfo=local_now.tzinfo)
+
+            if offset == 0:
+                # Hoje: só considera se ainda vai abrir
+                if candidate <= local_now:
+                    continue
+            candidates.append(candidate)
+
+        if candidates:
+            break
+
+    if not candidates:
+        return None
+    return min(candidates)
+
+
+def formatar_proxima_abertura_mensagem(
+    proxima: datetime,
+    *,
+    timezone: str | None = "America/Sao_Paulo",
+    now: datetime | None = None,
+) -> str:
+    """
+    Formata a próxima abertura como texto curto em PT-BR.
+    Ex.: "hoje às 18:00" / "amanhã às 11:00" / "na Segunda-feira às 08:00"
+    """
+    now = now or datetime.now()
+    local_now = _to_local(now, timezone)
+    local_prox = _to_local(proxima, timezone)
+
+    dias_semana = {
+        0: "Domingo",
+        1: "Segunda-feira",
+        2: "Terça-feira",
+        3: "Quarta-feira",
+        4: "Quinta-feira",
+        5: "Sexta-feira",
+        6: "Sábado",
+    }
+
+    delta_days = (local_prox.date() - local_now.date()).days
+    hhmm = local_prox.strftime("%H:%M")
+
+    if delta_days == 0:
+        return f"hoje às {hhmm}"
+    if delta_days == 1:
+        return f"amanhã às {hhmm}"
+
+    dow = _weekday_sun0(local_prox)
+    return f"na {dias_semana.get(dow, 'próxima abertura')} às {hhmm}"
+
+
+def montar_mensagem_status_funcionamento(
+    *,
+    nome_empresa: str,
+    esta_aberta: Optional[bool],
+    horarios_funcionamento: Any,
+    timezone: str | None = "America/Sao_Paulo",
+    now: datetime | None = None,
+    incluir_horarios: bool = True,
+) -> str:
+    """
+    Monta uma mensagem curta e clara para perguntas do tipo "tá aberto?".
+    """
+    now = now or datetime.now()
+    nome_empresa = (nome_empresa or "").strip() or "[Nome da Empresa]"
+
+    if esta_aberta is True:
+        msg = f"✅ *Sim!* A {nome_empresa} está *aberta agora*.\n\n"
+        msg += "Quer fazer um pedido? 🙂"
+        return msg
+
+    if esta_aberta is False:
+        prox = proxima_abertura(horarios_funcionamento=horarios_funcionamento, timezone=timezone, now=now)
+        msg = f"❌ No momento, a {nome_empresa} está *fechada*.\n"
+        if prox:
+            msg += f"⏰ *Próxima abertura:* {formatar_proxima_abertura_mensagem(prox, timezone=timezone, now=now)}\n"
+        msg += "\n"
+        if incluir_horarios:
+            horarios_txt = formatar_horarios_funcionamento_mensagem(horarios_funcionamento, apenas_horarios=True)
+            msg += "🕐 *Horário de funcionamento:*\n"
+            msg += horarios_txt
+        return msg.strip()
+
+    # Sem horário configurado / não foi possível avaliar
+    msg = f"ℹ️ Não tenho o horário de funcionamento configurado para a {nome_empresa}.\n\n"
+    msg += "Se você quiser, posso te ajudar com o cardápio e com o pedido."
+    return msg
 
 

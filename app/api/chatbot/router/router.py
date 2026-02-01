@@ -2448,8 +2448,239 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 db.commit()
             
             return
-        
-        # VERIFICA SE CLIENTE JÁ ESTÁ CADASTRADO (primeira coisa a fazer)
+
+        # CONTEXTO BASE (precisa existir ANTES de qualquer fluxo que retorne)
+        empresa_id_int = int(empresa_id) if empresa_id else 1
+        user_id = phone_number
+        conversations = chatbot_db.get_conversations_by_user(db, user_id, empresa_id_int)
+
+        # VERIFICA DUPLICAÇÃO: Usa message_id do WhatsApp (único por mensagem) para detectar duplicatas reais
+        # Se não tiver message_id, usa verificação por conteúdo apenas para mensagens longas (>3 chars)
+        # para evitar bloquear respostas curtas legítimas como "1", "sim", "ok"
+        if conversations:
+            from sqlalchemy import text
+            duplicate = None
+
+            # Se tiver message_id do WhatsApp, usa ele para detectar duplicatas reais
+            if message_id:
+                check_duplicate_by_id = text("""
+                    SELECT id, content, created_at
+                    FROM chatbot.messages
+                    WHERE conversation_id = :conversation_id
+                    AND role = 'user'
+                    AND metadata->>'whatsapp_message_id' = :message_id
+                    AND created_at > NOW() - INTERVAL '30 seconds'
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                """)
+                result = db.execute(check_duplicate_by_id, {
+                    "conversation_id": conversations[0]['id'],
+                    "message_id": message_id
+                })
+                duplicate = result.fetchone()
+
+                if duplicate:
+                    return  # Ignora mensagem duplicada
+
+            # Se não tiver message_id E a mensagem for longa (>3 caracteres), verifica por conteúdo
+            # Mensagens curtas como "1", "sim", "ok" podem ser respostas legítimas repetidas
+            elif len(message_text.strip()) > 3:
+                check_duplicate_by_content = text("""
+                    SELECT id, content, created_at
+                    FROM chatbot.messages
+                    WHERE conversation_id = :conversation_id
+                    AND role = 'user'
+                    AND content = :content
+                    AND created_at > NOW() - INTERVAL '5 seconds'
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                """)
+                result = db.execute(check_duplicate_by_content, {
+                    "conversation_id": conversations[0]['id'],
+                    "content": message_text
+                })
+                duplicate = result.fetchone()
+
+                if duplicate:
+                    return  # Ignora mensagem duplicada
+
+        # CARREGA CONFIGURAÇÃO DO CHATBOT (para separar agentes)
+        repo_config = ChatbotConfigRepository(db)
+        config = repo_config.get_by_empresa_id(empresa_id_int)
+        # Se config existe e aceita_pedidos_whatsapp é explicitamente False, então não aceita
+        # Caso contrário (config None ou aceita_pedidos_whatsapp True/None), aceita por padrão
+        aceita_pedidos_whatsapp = True  # Padrão: aceita pedidos
+        # OBS: não use `is False` aqui; em alguns drivers/bancos o valor pode vir como 0/1.
+        if config is not None and not config.aceita_pedidos_whatsapp:
+            aceita_pedidos_whatsapp = False
+
+        # Log para debug
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"🔧 Config chatbot - empresa_id: {empresa_id_int}, aceita_pedidos_whatsapp: {aceita_pedidos_whatsapp}, config existe: {config is not None}, config.aceita_pedidos_whatsapp: {config.aceita_pedidos_whatsapp if config else 'N/A'}")
+
+        prompt_key_sales = PROMPT_ATENDIMENTO_PEDIDO_WHATSAPP
+        prompt_key_support = PROMPT_ATENDIMENTO
+
+        # DETECTA PERGUNTA "TÁ ABERTO?" (deve responder SEM pedir nome antes)
+        def _eh_pergunta_aberto_fechado(txt: str) -> bool:
+            import re
+
+            s = (txt or "").strip().lower()
+            if not s:
+                return False
+            # Padrões comuns no WhatsApp
+            padroes = [
+                r"\bta\s+aberto\b",
+                r"\btá\s+aberto\b",
+                r"\besta\s+aberto\b",
+                r"\bestá\s+aberto\b",
+                r"\bvoc[eê]s\s+tao\s+abertos\b",
+                r"\bvoc[eê]s\s+t[aã]o\s+abertos\b",
+                r"\bvoc[eê]s\s+est[aã]o\s+abertos\b",
+                r"\best[aá]\s+aberto\s+agora\b",
+                r"\baberto\s+agora\b",
+                r"\best[aá]\s+fechado\b",
+                r"\bta\s+fechado\b",
+                r"\btá\s+fechado\b",
+                r"\bfechado\s+agora\b",
+            ]
+            return any(re.search(p, s, re.IGNORECASE) for p in padroes)
+
+        perguntou_aberto = _eh_pergunta_aberto_fechado(message_text)
+
+        # VERIFICA SE A LOJA ESTÁ ABERTA (prioridade máxima, antes de cadastro)
+        esta_aberta = None  # Variável para verificar depois se precisa enviar boas-vindas
+        try:
+            from app.api.empresas.models.empresa_model import EmpresaModel
+            from app.utils.horarios_funcionamento import (
+                empresa_esta_aberta_agora,
+                montar_mensagem_status_funcionamento,
+            )
+            from datetime import datetime
+
+            empresa = db.query(EmpresaModel).filter(EmpresaModel.id == empresa_id_int).first()
+            nome_empresa = empresa.nome if empresa and empresa.nome else "[Nome da Empresa]"
+            timezone_empresa = (empresa.timezone if empresa and getattr(empresa, "timezone", None) else None) or "America/Sao_Paulo"
+
+            if empresa and empresa.horarios_funcionamento:
+                esta_aberta = empresa_esta_aberta_agora(
+                    horarios_funcionamento=empresa.horarios_funcionamento,
+                    timezone=timezone_empresa
+                )
+
+            # Resposta curta e direta para "tá aberto?"
+            if perguntou_aberto:
+                prompt_key_em_uso = prompt_key_sales if aceita_pedidos_whatsapp else prompt_key_support
+                model_em_uso = "groq-sales" if aceita_pedidos_whatsapp else DEFAULT_MODEL
+
+                # Cria conversa se não existir
+                if conversations:
+                    conversation_id = conversations[0]['id']
+                else:
+                    conversation_id = chatbot_db.create_conversation(
+                        db=db,
+                        session_id=f"whatsapp_{user_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                        user_id=user_id,
+                        prompt_key=prompt_key_em_uso,
+                        model=model_em_uso,
+                        contact_name=contact_name,
+                        empresa_id=empresa_id_int
+                    )
+
+                chatbot_db.create_message(
+                    db=db,
+                    conversation_id=conversation_id,
+                    role="user",
+                    content=message_text,
+                    whatsapp_message_id=message_id,
+                )
+
+                msg_status = montar_mensagem_status_funcionamento(
+                    nome_empresa=nome_empresa,
+                    esta_aberta=esta_aberta,
+                    horarios_funcionamento=getattr(empresa, "horarios_funcionamento", None),
+                    timezone=timezone_empresa,
+                    now=datetime.now(),
+                    incluir_horarios=True,
+                )
+
+                notifier = OrderNotification()
+                result = await notifier.send_whatsapp_message(phone_number, msg_status, empresa_id=empresa_id)
+
+                whatsapp_message_id = None
+                if isinstance(result, dict) and result.get("success"):
+                    whatsapp_message_id = result.get("message_id")
+                chatbot_db.create_message(
+                    db=db,
+                    conversation_id=conversation_id,
+                    role="assistant",
+                    content=msg_status,
+                    whatsapp_message_id=whatsapp_message_id,
+                )
+
+                return
+
+            # Se a loja estiver fechada, responde imediatamente e NÃO inicia cadastro
+            if esta_aberta is False:
+                prompt_key_em_uso = prompt_key_sales if aceita_pedidos_whatsapp else prompt_key_support
+                model_em_uso = "groq-sales" if aceita_pedidos_whatsapp else DEFAULT_MODEL
+
+                if conversations:
+                    conversation_id = conversations[0]['id']
+                else:
+                    conversation_id = chatbot_db.create_conversation(
+                        db=db,
+                        session_id=f"whatsapp_{user_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                        user_id=user_id,
+                        prompt_key=prompt_key_em_uso,
+                        model=model_em_uso,
+                        contact_name=contact_name,
+                        empresa_id=empresa_id_int
+                    )
+
+                chatbot_db.create_message(
+                    db=db,
+                    conversation_id=conversation_id,
+                    role="user",
+                    content=message_text,
+                    whatsapp_message_id=message_id
+                )
+
+                msg_fechado = montar_mensagem_status_funcionamento(
+                    nome_empresa=nome_empresa,
+                    esta_aberta=False,
+                    horarios_funcionamento=getattr(empresa, "horarios_funcionamento", None),
+                    timezone=timezone_empresa,
+                    now=datetime.now(),
+                    incluir_horarios=True,
+                )
+
+                notifier = OrderNotification()
+                result = await notifier.send_whatsapp_message(phone_number, msg_fechado, empresa_id=empresa_id)
+
+                whatsapp_message_id = None
+                if isinstance(result, dict) and result.get("success"):
+                    whatsapp_message_id = result.get("message_id")
+                chatbot_db.create_message(
+                    db=db,
+                    conversation_id=conversation_id,
+                    role="assistant",
+                    content=msg_fechado,
+                    whatsapp_message_id=whatsapp_message_id,
+                )
+
+                if not isinstance(result, dict) or not result.get("success"):
+                    error_msg = result.get("error") if isinstance(result, dict) else str(result)
+                    logger.error(f"Erro ao enviar mensagem de horários: {error_msg}")
+
+                return
+
+        except Exception as e:
+            logger.error(f"Erro ao verificar horário de funcionamento: {e}", exc_info=True)
+            # Continua processando normalmente em caso de erro
+
+        # VERIFICA SE CLIENTE JÁ ESTÁ CADASTRADO
         from ..core.address_service import ChatbotAddressService
         address_service = ChatbotAddressService(db, empresa_id_int)
         cliente = address_service.get_cliente_by_telefone(phone_number)
@@ -2616,167 +2847,6 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 logger = logging.getLogger(__name__)
                 logger.error(f"Erro ao verificar pedidos em aberto: {e}", exc_info=True)
 
-        # VERIFICA DUPLICAÇÃO: Usa message_id do WhatsApp (único por mensagem) para detectar duplicatas reais
-        # Se não tiver message_id, usa verificação por conteúdo apenas para mensagens longas (>3 chars)
-        # para evitar bloquear respostas curtas legítimas como "1", "sim", "ok"
-        empresa_id_int = int(empresa_id) if empresa_id else 1
-        user_id = phone_number
-        conversations = chatbot_db.get_conversations_by_user(db, user_id, empresa_id_int)
-        
-        if conversations:
-            from sqlalchemy import text
-            duplicate = None
-            
-            # Se tiver message_id do WhatsApp, usa ele para detectar duplicatas reais
-            if message_id:
-                check_duplicate_by_id = text("""
-                    SELECT id, content, created_at
-                    FROM chatbot.messages
-                    WHERE conversation_id = :conversation_id
-                    AND role = 'user'
-                    AND metadata->>'whatsapp_message_id' = :message_id
-                    AND created_at > NOW() - INTERVAL '30 seconds'
-                    ORDER BY created_at DESC
-                    LIMIT 1
-                """)
-                result = db.execute(check_duplicate_by_id, {
-                    "conversation_id": conversations[0]['id'],
-                    "message_id": message_id
-                })
-                duplicate = result.fetchone()
-                
-                if duplicate:
-                    return  # Ignora mensagem duplicada
-            
-            # Se não tiver message_id E a mensagem for longa (>3 caracteres), verifica por conteúdo
-            # Mensagens curtas como "1", "sim", "ok" podem ser respostas legítimas repetidas
-            elif len(message_text.strip()) > 3:
-                check_duplicate_by_content = text("""
-                    SELECT id, content, created_at
-                    FROM chatbot.messages
-                    WHERE conversation_id = :conversation_id
-                    AND role = 'user'
-                    AND content = :content
-                    AND created_at > NOW() - INTERVAL '5 seconds'
-                    ORDER BY created_at DESC
-                    LIMIT 1
-                """)
-                result = db.execute(check_duplicate_by_content, {
-                    "conversation_id": conversations[0]['id'],
-                    "content": message_text
-                })
-                duplicate = result.fetchone()
-                
-                if duplicate:
-                    return  # Ignora mensagem duplicada
-
-        # CARREGA CONFIGURAÇÃO DO CHATBOT (para separar agentes)
-        repo_config = ChatbotConfigRepository(db)
-        config = repo_config.get_by_empresa_id(empresa_id_int)
-        # Se config existe e aceita_pedidos_whatsapp é explicitamente False, então não aceita
-        # Caso contrário (config None ou aceita_pedidos_whatsapp True/None), aceita por padrão
-        aceita_pedidos_whatsapp = True  # Padrão: aceita pedidos
-        # OBS: não use `is False` aqui; em alguns drivers/bancos o valor pode vir como 0/1.
-        if config is not None and not config.aceita_pedidos_whatsapp:
-            aceita_pedidos_whatsapp = False
-        
-        # Log para debug
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.info(f"🔧 Config chatbot - empresa_id: {empresa_id_int}, aceita_pedidos_whatsapp: {aceita_pedidos_whatsapp}, config existe: {config is not None}, config.aceita_pedidos_whatsapp: {config.aceita_pedidos_whatsapp if config else 'N/A'}")
-        
-        prompt_key_sales = PROMPT_ATENDIMENTO_PEDIDO_WHATSAPP
-        prompt_key_support = PROMPT_ATENDIMENTO
-
-        # VERIFICA SE A LOJA ESTÁ ABERTA
-        esta_aberta = None  # Variável para verificar depois se precisa enviar boas-vindas
-        try:
-            from app.api.empresas.models.empresa_model import EmpresaModel
-            from app.utils.horarios_funcionamento import empresa_esta_aberta_agora, formatar_horarios_funcionamento_mensagem
-            from datetime import datetime
-            
-            empresa_id_int = int(empresa_id) if empresa_id else 1
-            empresa = db.query(EmpresaModel).filter(EmpresaModel.id == empresa_id_int).first()
-            
-            if empresa and empresa.horarios_funcionamento:
-                # Logs para debug
-                agora = datetime.now()
-                timezone_empresa = empresa.timezone or "America/Sao_Paulo"
-                
-                esta_aberta = empresa_esta_aberta_agora(
-                    horarios_funcionamento=empresa.horarios_funcionamento,
-                    timezone=timezone_empresa
-                )
-                
-                # Se a loja estiver fechada (False), envia mensagem com horários
-                if esta_aberta is False:
-                    prompt_key_em_uso = prompt_key_sales if aceita_pedidos_whatsapp else prompt_key_support
-                    model_em_uso = "groq-sales" if aceita_pedidos_whatsapp else DEFAULT_MODEL
-                    
-                    # Salva a mensagem do usuário no histórico
-                    if conversations:
-                        conversation_id = conversations[0]['id']
-                    else:
-                        # Cria conversa temporária para salvar a mensagem
-                        conversation_id = chatbot_db.create_conversation(
-                            db=db,
-                            session_id=f"whatsapp_{user_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
-                            user_id=user_id,
-                            prompt_key=prompt_key_em_uso,
-                            model=model_em_uso,
-                            contact_name=contact_name,
-                            empresa_id=empresa_id_int
-                        )
-                    
-                    # Salva mensagem do usuário (com whatsapp_message_id para detectar duplicatas)
-                    chatbot_db.create_message(
-                        db=db,
-                        conversation_id=conversation_id,
-                        role="user",
-                        content=message_text,
-                        whatsapp_message_id=message_id  # Passa message_id do WhatsApp para detectar duplicatas
-                    )
-                    
-                    # Formata mensagem bonita com horários
-                    nome_empresa = empresa.nome if empresa and empresa.nome else "[Nome da Empresa]"
-                    horarios_formatados = formatar_horarios_funcionamento_mensagem(empresa.horarios_funcionamento, apenas_horarios=True)
-                    
-                    mensagem_horarios = f"😊 Olá! Seja bem-vindo(a) à {nome_empresa}!\n"
-                    mensagem_horarios += "Obrigado por entrar em contato 💙\n\n"
-                    mensagem_horarios += "⏰ No momento, estamos fechados, mas já já estaremos prontos para te atender!\n\n"
-                    mensagem_horarios += "🕐 Horário de Funcionamento:\n"
-                    mensagem_horarios += horarios_formatados
-                    mensagem_horarios += "\n💬 Assim que estivermos abertos, retornaremos sua mensagem o mais rápido possível.\n\n"
-                    
-                    # Envia mensagem via WhatsApp
-                    notifier = OrderNotification()
-                    result = await notifier.send_whatsapp_message(phone_number, mensagem_horarios, empresa_id=empresa_id)
-                    
-                    # Salva resposta do bot já com o message_id do WhatsApp (quando houver),
-                    # para o webhook de status "sent" NÃO pausar achando que foi humano.
-                    whatsapp_message_id = None
-                    if isinstance(result, dict) and result.get("success"):
-                        whatsapp_message_id = result.get("message_id")
-                    chatbot_db.create_message(
-                        db=db,
-                        conversation_id=conversation_id,
-                        role="assistant",
-                        content=mensagem_horarios,
-                        whatsapp_message_id=whatsapp_message_id,
-                    )
-
-                    if not isinstance(result, dict) or not result.get("success"):
-                        import logging
-                        logger = logging.getLogger(__name__)
-                        error_msg = result.get("error") if isinstance(result, dict) else str(result)
-                        logger.error(f"Erro ao enviar mensagem de horários: {error_msg}")
-                    
-                    return  # Não processa a mensagem normalmente
-        except Exception as e:
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.error(f"Erro ao verificar horário de funcionamento: {e}", exc_info=True)
-            # Continua processando normalmente em caso de erro
 
         # VERIFICA SE O BOT ESTÁ ATIVO PARA ESTE NÚMERO
         if not chatbot_db.is_bot_active_for_phone(db, phone_number):
