@@ -138,7 +138,7 @@ class ChatbotAddressService:
     def buscar_enderecos_google(self, texto: str, max_results: int = 3) -> List[Dict[str, Any]]:
         """
         Busca endereços diretamente no Google Maps (sem passar pela API HTTP interna)
-        Sempre tenta retornar pelo menos 3 resultados para o usuário escolher
+        Faz uma única consulta por texto (sem "buscas extras") para evitar múltiplos GETs.
 
         Args:
             texto: Texto do endereço digitado pelo cliente
@@ -147,43 +147,11 @@ class ChatbotAddressService:
         Returns:
             Lista de endereços encontrados no Google Maps
         """
-        import re
-
         try:
             logger.info(f"[ChatbotAddress] Buscando endereço no Google Maps: {texto}")
 
             # Busca direta no Google Maps (sem HTTP interno)
             resultados = self.google_maps.buscar_enderecos(texto, max_results=max_results)
-
-            # Se retornou menos de 3 resultados, busca endereços similares
-            if len(resultados) < 3:
-                logger.info(f"[ChatbotAddress] Apenas {len(resultados)} resultado(s), buscando similares...")
-                enderecos_existentes = {r.get("endereco_formatado") for r in resultados}
-
-                # Estratégia 1: Remove o número para buscar a rua inteira
-                texto_sem_numero = re.sub(r'\b\d+\b', '', texto).strip()
-                texto_sem_numero = re.sub(r'\s+', ' ', texto_sem_numero)
-
-                # Estratégia 2: Pega só as primeiras palavras (nome da rua)
-                palavras = texto.split()
-                texto_rua_apenas = ' '.join(palavras[:3]) if len(palavras) > 3 else texto_sem_numero
-
-                # Faz buscas adicionais
-                buscas_extras = [texto_sem_numero, texto_rua_apenas]
-                buscas_extras = [b for b in buscas_extras if b and b != texto and len(b) > 3]
-
-                for busca in buscas_extras:
-                    if len(resultados) >= 3:
-                        break
-
-                    resultados_similares = self.google_maps.buscar_enderecos(busca, max_results=5)
-
-                    for r in resultados_similares:
-                        if r.get("endereco_formatado") not in enderecos_existentes:
-                            resultados.append(r)
-                            enderecos_existentes.add(r.get("endereco_formatado"))
-                        if len(resultados) >= 3:
-                            break
 
             if not resultados:
                 logger.info(f"[ChatbotAddress] Nenhum endereço encontrado para: {texto}")
