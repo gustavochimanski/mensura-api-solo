@@ -710,11 +710,17 @@ def criar_tabelas(postgis_disponivel: bool = True):
                               WHERE id IS NULL;
 
                               -- ajusta sequência para MAX(id)
-                              PERFORM setval(
-                                'catalogo.produtos_id_seq',
-                                (SELECT COALESCE(MAX(id), 0) FROM catalogo.produtos),
-                                true
-                              );
+                              -- IMPORTANTE: `setval(..., 0, true)` quebra (sequence não aceita 0).
+                              -- Se a tabela estiver vazia, posiciona em 1 com is_called=false.
+                              DECLARE max_id bigint;
+                              BEGIN
+                                SELECT MAX(id) INTO max_id FROM catalogo.produtos;
+                                IF max_id IS NULL OR max_id < 1 THEN
+                                  PERFORM setval('catalogo.produtos_id_seq', 1, false);
+                                ELSE
+                                  PERFORM setval('catalogo.produtos_id_seq', max_id, true);
+                                END IF;
+                              END;
 
                               -- garante NOT NULL
                               BEGIN
