@@ -733,47 +733,13 @@ def criar_tabelas(postgis_disponivel: bool = True):
                         )
                     )
 
-                    # Drop PK antigo (em cod_barras) e cria PK em id
-                    conn.execute(
-                        text(
-                            """
-                            DO $$
-                            DECLARE pk_name text;
-                            DECLARE pk_def text;
-                            BEGIN
-                              SELECT c.conname, pg_get_constraintdef(c.oid)
-                              INTO pk_name, pk_def
-                              FROM pg_constraint c
-                              JOIN pg_class t ON t.oid = c.conrelid
-                              JOIN pg_namespace n ON n.oid = t.relnamespace
-                              WHERE n.nspname = 'catalogo'
-                                AND t.relname = 'produtos'
-                                AND c.contype = 'p'
-                              LIMIT 1;
-
-                              -- Só derruba PK se ela NÃO for a esperada (id)
-                              IF pk_name IS NOT NULL AND (pk_def IS NULL OR pk_def NOT ILIKE '%(id)%') THEN
-                                EXECUTE format('ALTER TABLE catalogo.produtos DROP CONSTRAINT IF EXISTS %I', pk_name);
-                              END IF;
-
-                              IF NOT EXISTS (
-                                SELECT 1
-                                FROM pg_constraint c
-                                JOIN pg_class t ON t.oid = c.conrelid
-                                JOIN pg_namespace n ON n.oid = t.relnamespace
-                                WHERE n.nspname = 'catalogo'
-                                  AND t.relname = 'produtos'
-                                  AND c.contype = 'p'
-                              ) THEN
-                                ALTER TABLE catalogo.produtos
-                                  ADD CONSTRAINT produtos_pkey PRIMARY KEY (id);
-                              END IF;
-                            END$$;
-                            """
-                        )
-                    )
-
-                    # Unicidade do código de barras (substitui o papel de PK)
+                    # IMPORTANTE:
+                    # - Neste ponto ainda podem existir FKs legadas apontando para produtos(cod_barras),
+                    #   que dependem do índice/constraint da PK atual (geralmente em cod_barras).
+                    # - Para conseguir criar as FKs novas (produto_id -> produtos.id) sem derrubar
+                    #   a PK antiga ainda, garantimos UMA UNIQUE em (id).
+                    # - A troca efetiva da PK para (id) é feita no final da migração, após remover
+                    #   as FKs legadas em cod_barras.
                     conn.execute(
                         text(
                             """
@@ -786,10 +752,10 @@ def criar_tabelas(postgis_disponivel: bool = True):
                                 JOIN pg_namespace n ON n.oid = t.relnamespace
                                 WHERE n.nspname = 'catalogo'
                                   AND t.relname = 'produtos'
-                                  AND c.conname = 'uq_produtos_cod_barras'
+                                  AND c.conname = 'uq_produtos_id'
                               ) THEN
                                 ALTER TABLE catalogo.produtos
-                                  ADD CONSTRAINT uq_produtos_cod_barras UNIQUE (cod_barras);
+                                  ADD CONSTRAINT uq_produtos_id UNIQUE (id);
                               END IF;
                             END$$;
                             """
@@ -1495,6 +1461,73 @@ def criar_tabelas(postgis_disponivel: bool = True):
                               LIMIT 1;
                               IF fk_old IS NOT NULL THEN
                                 EXECUTE format('ALTER TABLE catalogo.complemento_vinculo_item DROP CONSTRAINT IF EXISTS %I', fk_old);
+                              END IF;
+                            END$$;
+                            """
+                        )
+                    )
+
+                # 6) Finaliza: troca PK de produtos para (id) e garante unicidade de cod_barras
+                # Somente agora é seguro mexer na PK antiga, pois as FKs legadas em cod_barras
+                # já foram removidas/atualizadas nas tabelas dependentes.
+                if _table_exists(conn, "catalogo", "produtos"):
+                    # Drop PK antigo (em cod_barras) e cria PK em id
+                    conn.execute(
+                        text(
+                            """
+                            DO $$
+                            DECLARE pk_name text;
+                            DECLARE pk_def text;
+                            BEGIN
+                              SELECT c.conname, pg_get_constraintdef(c.oid)
+                              INTO pk_name, pk_def
+                              FROM pg_constraint c
+                              JOIN pg_class t ON t.oid = c.conrelid
+                              JOIN pg_namespace n ON n.oid = t.relnamespace
+                              WHERE n.nspname = 'catalogo'
+                                AND t.relname = 'produtos'
+                                AND c.contype = 'p'
+                              LIMIT 1;
+
+                              -- Só derruba PK se ela NÃO for a esperada (id)
+                              IF pk_name IS NOT NULL AND (pk_def IS NULL OR pk_def NOT ILIKE '%(id)%') THEN
+                                EXECUTE format('ALTER TABLE catalogo.produtos DROP CONSTRAINT IF EXISTS %I', pk_name);
+                              END IF;
+
+                              IF NOT EXISTS (
+                                SELECT 1
+                                FROM pg_constraint c
+                                JOIN pg_class t ON t.oid = c.conrelid
+                                JOIN pg_namespace n ON n.oid = t.relnamespace
+                                WHERE n.nspname = 'catalogo'
+                                  AND t.relname = 'produtos'
+                                  AND c.contype = 'p'
+                              ) THEN
+                                ALTER TABLE catalogo.produtos
+                                  ADD CONSTRAINT produtos_pkey PRIMARY KEY (id);
+                              END IF;
+                            END$$;
+                            """
+                        )
+                    )
+
+                    # Unicidade do código de barras (substitui o papel de PK)
+                    conn.execute(
+                        text(
+                            """
+                            DO $$
+                            BEGIN
+                              IF NOT EXISTS (
+                                SELECT 1
+                                FROM pg_constraint c
+                                JOIN pg_class t ON t.oid = c.conrelid
+                                JOIN pg_namespace n ON n.oid = t.relnamespace
+                                WHERE n.nspname = 'catalogo'
+                                  AND t.relname = 'produtos'
+                                  AND c.conname = 'uq_produtos_cod_barras'
+                              ) THEN
+                                ALTER TABLE catalogo.produtos
+                                  ADD CONSTRAINT uq_produtos_cod_barras UNIQUE (cod_barras);
                               END IF;
                             END$$;
                             """
