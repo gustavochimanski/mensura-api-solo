@@ -7,8 +7,12 @@ Integrado com o sistema de DB do Mensura
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from typing import List, Dict, Optional
+import logging
 import json
 from datetime import datetime, timedelta, timezone
+
+# Logger do módulo
+logger = logging.getLogger(__name__)
 
 # Schema do chatbot
 CHATBOT_SCHEMA = "chatbot"
@@ -365,11 +369,11 @@ def init_database(db: Session):
         db.execute(text(f"CREATE INDEX IF NOT EXISTS idx_bot_status_phone ON {CHATBOT_SCHEMA}.bot_status(phone_number)"))
 
         db.commit()
-        print("✅ Schema e tabelas do chatbot criadas no PostgreSQL!")
+        logger.info("Schema e tabelas do chatbot criadas no PostgreSQL.")
         return True
     except Exception as e:
         db.rollback()
-        print(f"❌ Erro ao inicializar banco do chatbot: {e}")
+        logger.exception(f"Erro ao inicializar banco do chatbot: {e}")
         return False
 
 
@@ -404,7 +408,7 @@ def create_prompt(db: Session, key: str, name: str, content: str, is_default: bo
         return None
     except Exception as e:
         db.rollback()
-        print(f"Erro ao criar prompt: {e}")
+        logger.exception(f"Erro ao criar prompt: {e}")
         return None
 
 
@@ -532,7 +536,7 @@ def update_conversation_contact_name(db: Session, conversation_id: int, contact_
         return True
     except Exception as e:
         db.rollback()
-        print(f"Erro ao atualizar contact_name: {e}")
+        logger.exception(f"Erro ao atualizar contact_name: {e}")
         return False
 
 
@@ -549,7 +553,7 @@ def update_conversation_profile_picture(db: Session, conversation_id: int, profi
         return True
     except Exception as e:
         db.rollback()
-        print(f"Erro ao atualizar profile_picture_url: {e}")
+        logger.exception(f"Erro ao atualizar profile_picture_url: {e}")
         return False
 
 
@@ -945,7 +949,7 @@ Tom de conversa:
                 content=prompt_data["content"],
                 is_default=True
             )
-            print(f"✅ Prompt padrão '{prompt_data['name']}' inserido")
+            logger.info(f"Prompt padrão inserido: {prompt_data['name']}")
 
 
 # ==================== BOT STATUS (PAUSAR/ATIVAR) ====================
@@ -1020,7 +1024,7 @@ def get_bot_status(db: Session, phone_number: str) -> Optional[Dict]:
         # Se não existe registro, o bot está ativo por padrão
         return {"phone_number": phone_normalized, "is_active": True}
     except Exception as e:
-        print(f"Erro ao verificar status do bot: {e}")
+        logger.exception(f"Erro ao verificar status do bot: {e}")
         return {"phone_number": phone_number, "is_active": True}
 
 
@@ -1065,7 +1069,7 @@ def is_bot_active_for_phone(db: Session, phone_number: str) -> bool:
             return True
         return False
     except Exception as e:
-        print(f"Erro ao verificar desativa_chatbot_em: {e}")
+        logger.exception(f"Erro ao verificar desativa_chatbot_em: {e}")
         # fallback conservador: se der erro, assume ativo para não travar atendimento
         return True
 
@@ -1169,7 +1173,7 @@ def set_bot_status(
         }
     except Exception as e:
         db.rollback()
-        print(f"Erro ao definir status do bot: {e}")
+        logger.exception(f"Erro ao definir status do bot: {e}")
         return {"success": False, "error": str(e)}
 
 
@@ -1206,7 +1210,7 @@ def get_all_bot_statuses(db: Session, empresa_id: int = None) -> List[Dict]:
             for row in result.fetchall()
         ]
     except Exception as e:
-        print(f"Erro ao listar status do bot: {e}")
+        logger.exception(f"Erro ao listar status do bot: {e}")
         return []
 
 
@@ -1242,7 +1246,7 @@ def get_global_bot_status(db: Session, empresa_id: int = None) -> Dict:
         # Se não existe registro, o bot global está ativo por padrão
         return {"phone_number": GLOBAL_BOT_PHONE, "is_active": True}
     except Exception as e:
-        print(f"Erro ao verificar status global do bot: {e}")
+        logger.exception(f"Erro ao verificar status global do bot: {e}")
         return {"phone_number": GLOBAL_BOT_PHONE, "is_active": True}
 
 
@@ -1313,7 +1317,7 @@ def set_global_bot_status(db: Session, paused_by: str = None, empresa_id: int = 
         }
     except Exception as e:
         db.rollback()
-        print(f"Erro ao definir status global do bot: {e}")
+        logger.exception(f"Erro ao definir status global do bot: {e}")
         return {"success": False, "error": str(e)}
 
 
