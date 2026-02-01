@@ -9,6 +9,7 @@ class GoogleMapsAdapter:
     
     BASE_URL = "https://maps.googleapis.com/maps/api/geocode/json"
     DISTANCE_MATRIX_URL = "https://maps.googleapis.com/maps/api/distancematrix/json"
+    DIRECTIONS_URL = "https://maps.googleapis.com/maps/api/directions/json"
     PLACES_AUTOCOMPLETE_URL = "https://maps.googleapis.com/maps/api/place/autocomplete/json"
     PLACES_DETAILS_URL = "https://maps.googleapis.com/maps/api/place/details/json"
     
@@ -101,7 +102,11 @@ class GoogleMapsAdapter:
         mode: str = "driving"
     ) -> Optional[float]:
         """
-        Calcula distância em km entre dois pontos usando Google Maps Distance Matrix API.
+        Calcula distância em km entre dois pontos, escolhendo sempre a menor rota.
+
+        Estratégia:
+        - Usa Google Maps Directions API com alternatives=true e escolhe a rota com menor distance.value.
+        - Faz fallback para Distance Matrix API se Directions falhar (robustez para o checkout).
         
         Args:
             origem: Tupla (latitude, longitude) do ponto de origem
@@ -124,6 +129,12 @@ class GoogleMapsAdapter:
         destinations = f"{lat2},{lon2}"
 
         try:
+            # 1) Preferência: menor distância via Directions (rotas alternativas)
+            distancia_directions = self._calcular_distancia_km_directions(origins, destinations, mode=mode)
+            if distancia_directions is not None:
+                return distancia_directions
+
+            # 2) Fallback: Distance Matrix (uma única rota "recomendada")
             with httpx.Client(timeout=15.0) as client:
                 response = client.get(
                     self.DISTANCE_MATRIX_URL,
@@ -166,6 +177,84 @@ class GoogleMapsAdapter:
             return None
         except Exception as e:
             logger.error(f"[GoogleMapsAdapter] Erro ao calcular distância para {origins} -> {destinations}: {e}")
+            return None
+
+    def _calcular_distancia_km_directions(
+        self,
+        origin: str,
+        destination: str,
+        *,
+        mode: str = "driving",
+    ) -> Optional[float]:
+        """
+        Calcula a menor distância (km) usando Google Directions com rotas alternativas.
+
+        Retorna None se não conseguir determinar uma rota válida.
+        """
+        try:
+            with httpx.Client(timeout=15.0) as client:
+                response = client.get(
+                    self.DIRECTIONS_URL,
+                    params={
+                        "origin": origin,
+                        "destination": destination,
+                        "mode": mode,
+                        "alternatives": "true",
+                        "key": self.api_key,
+                        "language": "pt-BR",
+                        "units": "metric",
+                        "region": "br",
+                    },
+                )
+            response.raise_for_status()
+            data = response.json()
+
+            if data.get("status") != "OK":
+                # Exemplos: ZERO_RESULTS, NOT_FOUND, OVER_QUERY_LIMIT, REQUEST_DENIED...
+                logger.warning(
+                    "[GoogleMapsAdapter] Directions status=%s origin=%s destination=%s",
+                    data.get("status"),
+                    origin,
+                    destination,
+                )
+                return None
+
+            routes = data.get("routes") or []
+            if not routes:
+                return None
+
+            menor_metros: Optional[int] = None
+            for route in routes:
+                legs = route.get("legs") or []
+                if not legs:
+                    continue
+
+                total_metros = 0
+                ok = True
+                for leg in legs:
+                    dist_val = (leg.get("distance") or {}).get("value")
+                    if dist_val is None:
+                        ok = False
+                        break
+                    total_metros += int(dist_val)
+
+                if not ok:
+                    continue
+
+                if menor_metros is None or total_metros < menor_metros:
+                    menor_metros = total_metros
+
+            if menor_metros is None:
+                return None
+
+            return float(menor_metros) / 1000.0
+        except Exception as e:
+            logger.warning(
+                "[GoogleMapsAdapter] Falha ao calcular menor distância via Directions (%s -> %s): %s",
+                origin,
+                destination,
+                e,
+            )
             return None
     
     def buscar_enderecos(self, texto: str, max_results: int = 5) -> List[Dict]:

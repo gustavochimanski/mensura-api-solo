@@ -1896,7 +1896,7 @@ async def process_webhook_background(body: dict, headers_info: Optional[dict] = 
                                                     whatsapp_message_id=message_id,
                                                     source_type=ChatMessageSourceType.WHATSAPP_WEB,
                                                     sender_type=ChatMessageSenderType.HUMAN,
-                                                    metadata={"source": "whatsapp_web"},
+                                                    metadata={"source": "whatsapp_web", "sender": "human"},
                                                 )
                                             )
                                         except Exception:
@@ -2088,6 +2088,7 @@ async def process_webhook_background(body: dict, headers_info: Optional[dict] = 
                                             source_type=ChatMessageSourceType.WHATSAPP_WEB,
                                             sender_type=ChatMessageSenderType.HUMAN,
                                             metadata={
+                                                "sender": "human",
                                                 "source": "smb_message_echoes",
                                                 "from": str(echo_from) if echo_from is not None else None,
                                                 "to": str(echo_to) if echo_to is not None else None,
