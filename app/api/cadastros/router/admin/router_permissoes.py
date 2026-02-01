@@ -26,13 +26,14 @@ def _empresa_id_openapi(
         alias="X-Empresa-Id",
         description="ID da empresa (tenant). Recomendado enviar por header.",
     ),
-    empresa_id: int | None = Query(
+    empresa_id_query: int | None = Query(
         default=None,
+        alias="empresa_id",
         description="Alternativa ao header X-Empresa-Id.",
     ),
 ) -> int | None:
     # Não valida aqui; a validação/obrigatoriedade é feita em `get_authz_context`.
-    return x_empresa_id or empresa_id
+    return x_empresa_id or empresa_id_query
 
 router = APIRouter(
     prefix="/api/mensura/admin/permissoes",
