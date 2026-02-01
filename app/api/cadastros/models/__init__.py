@@ -15,6 +15,8 @@ from app.api.cardapio.models.model_categoria_dv import CategoriaDeliveryModel
 from app.api.cadastros.models.model_meio_pagamento import MeioPagamentoModel
 from app.api.cadastros.models.model_parceiros import ParceiroModel, BannerParceiroModel
 from app.api.cardapio.models.model_vitrine import VitrinesModel
+from app.api.cadastros.models.model_permission import PermissionModel
+from app.api.cadastros.models.model_user_permission import UserPermissionModel
 from app.api.cadastros.models.association_tables import (
     VitrineCategoriaLink,
     VitrineProdutoLink,

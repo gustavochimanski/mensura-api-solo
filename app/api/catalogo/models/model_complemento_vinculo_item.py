@@ -32,13 +32,26 @@ class ComplementoVinculoItemModel(Base):
     __tablename__ = "complemento_vinculo_item"
     __table_args__ = (
         CheckConstraint(
-            "(CASE WHEN produto_cod_barras IS NOT NULL THEN 1 ELSE 0 END + "
+            "(CASE WHEN (produto_id IS NOT NULL OR produto_cod_barras IS NOT NULL) THEN 1 ELSE 0 END + "
             "CASE WHEN receita_id IS NOT NULL THEN 1 ELSE 0 END + "
             "CASE WHEN combo_id IS NOT NULL THEN 1 ELSE 0 END) = 1",
             name="ck_complemento_vinculo_item_exatamente_um_tipo",
         ),
-        Index("uq_comp_vinc_produto", "complemento_id", "produto_cod_barras", unique=True,
-              postgresql_where=text("produto_cod_barras IS NOT NULL")),
+        # Novo: unicidade por produto_id
+        Index(
+            "uq_comp_vinc_produto",
+            "complemento_id",
+            "produto_id",
+            unique=True,
+            postgresql_where=text("produto_id IS NOT NULL"),
+        ),
+        # Legado/compatibilidade: índice por cod_barras (não-único)
+        Index(
+            "idx_comp_vinc_produto_cod_barras",
+            "complemento_id",
+            "produto_cod_barras",
+            postgresql_where=text("produto_cod_barras IS NOT NULL"),
+        ),
         Index("uq_comp_vinc_receita", "complemento_id", "receita_id", unique=True,
               postgresql_where=text("receita_id IS NOT NULL")),
         Index("uq_comp_vinc_combo", "complemento_id", "combo_id", unique=True,
@@ -56,12 +69,15 @@ class ComplementoVinculoItemModel(Base):
     )
 
     # Exatamente um desses 3 campos deve estar preenchido
-    produto_cod_barras = Column(
-        String,
-        ForeignKey("catalogo.produtos.cod_barras", ondelete="RESTRICT"),
+    # Novo: FK técnica para produto
+    produto_id = Column(
+        Integer,
+        ForeignKey("catalogo.produtos.id", ondelete="RESTRICT"),
         nullable=True,
         index=True,
     )
+    # Legado/compatibilidade: código de barras armazenado como atributo (sem FK)
+    produto_cod_barras = Column(String, nullable=True, index=True)
     receita_id = Column(
         Integer,
         ForeignKey("catalogo.receitas.id", ondelete="RESTRICT"),
@@ -86,7 +102,7 @@ class ComplementoVinculoItemModel(Base):
 
     # Relacionamentos
     complemento = relationship("ComplementoModel", back_populates="vinculos_itens")
-    produto = relationship("ProdutoModel", foreign_keys=[produto_cod_barras])
+    produto = relationship("ProdutoModel", foreign_keys=[produto_id])
     receita = relationship("ReceitaModel", foreign_keys=[receita_id])
     combo = relationship("ComboModel", foreign_keys=[combo_id])
 

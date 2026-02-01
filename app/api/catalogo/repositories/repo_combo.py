@@ -93,6 +93,7 @@ class ComboRepository:
                     raise ValueError(f"Produto inexistente: {it['produto_cod_barras']}")
                 self.db.add(ComboItemModel(
                     combo_id=combo.id,
+                    produto_id=prod.id,
                     produto_cod_barras=it["produto_cod_barras"],
                     receita_id=None,
                     quantidade=it["quantidade"],
@@ -149,6 +150,7 @@ class ComboRepository:
                         raise ValueError(f"Produto inexistente: {it['produto_cod_barras']}")
                     self.db.add(ComboItemModel(
                         combo_id=combo.id,
+                        produto_id=prod.id,
                         produto_cod_barras=it["produto_cod_barras"],
                         receita_id=None,
                         quantidade=it["quantidade"],

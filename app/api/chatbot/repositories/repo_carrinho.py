@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import and_, desc
 from datetime import datetime, timedelta
 
+from app.api.catalogo.models.model_produto import ProdutoModel
 from app.api.chatbot.models.model_carrinho import CarrinhoTemporarioModel
 from app.api.chatbot.models.model_carrinho_item import CarrinhoItemModel
 from app.api.chatbot.models.model_carrinho_item_complemento import CarrinhoItemComplementoModel
@@ -112,6 +113,16 @@ class CarrinhoRepository:
 
     def add_item(self, carrinho_id: int, **item_data) -> CarrinhoItemModel:
         """Adiciona um item ao carrinho"""
+        # Backfill de produto_id quando vier apenas cod_barras (compatibilidade)
+        if item_data.get("produto_id") is None and item_data.get("produto_cod_barras"):
+            cod_barras = str(item_data.get("produto_cod_barras"))
+            produto_id = (
+                self.db.query(ProdutoModel.id)
+                .filter(ProdutoModel.cod_barras == cod_barras)
+                .scalar()
+            )
+            item_data["produto_id"] = produto_id
+
         item = CarrinhoItemModel(carrinho_id=carrinho_id, **item_data)
         self.db.add(item)
         self.db.commit()

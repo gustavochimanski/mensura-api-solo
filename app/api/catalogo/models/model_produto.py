@@ -1,5 +1,5 @@
 from pydantic import ConfigDict
-from sqlalchemy import Column, Integer, String, DateTime, Date, ForeignKey, Boolean, Numeric, func, JSON
+from sqlalchemy import Column, Integer, String, DateTime, Date, Boolean, func
 from sqlalchemy.orm import relationship
 from app.database.db_connection import Base
 
@@ -7,7 +7,9 @@ class ProdutoModel(Base):
     __tablename__ = "produtos"
     __table_args__ = {"schema": "catalogo"}
 
-    cod_barras = Column(String, primary_key=True, unique=True, nullable=False)
+    # PK técnica (estável). `cod_barras` vira atributo de negócio.
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    cod_barras = Column(String, unique=True, index=True, nullable=False)
     descricao = Column(String(255), nullable=False)
     imagem = Column(String(255), nullable=True)
     data_cadastro = Column(Date, nullable=True)
@@ -17,7 +19,7 @@ class ProdutoModel(Base):
     unidade_medida = Column(String(10), nullable=True)  # ex: "UN", "KG"
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
-	    # diretivas removido
+    # diretivas removido
 
     # Relacionamentos
     produtos_empresa = relationship("ProdutoEmpModel", back_populates="produto", cascade="all, delete-orphan")

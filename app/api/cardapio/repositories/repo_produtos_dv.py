@@ -43,7 +43,7 @@ class ProdutoDeliveryRepository:
     ) -> List[ProdutoModel]:
         qry = (
             self.db.query(ProdutoModel)
-            .join(ProdutoEmpModel, ProdutoModel.cod_barras == ProdutoEmpModel.cod_barras)
+            .join(ProdutoEmpModel, ProdutoModel.id == ProdutoEmpModel.produto_id)
             .filter(ProdutoEmpModel.empresa_id == empresa_id)
             .options(
                 joinedload(ProdutoModel.produtos_empresa),
@@ -85,8 +85,8 @@ class ProdutoDeliveryRepository:
         apenas_delivery: bool = True,
     ) -> int:
         qry = (
-            self.db.query(func.count(ProdutoModel.cod_barras))
-            .join(ProdutoEmpModel, ProdutoModel.cod_barras == ProdutoEmpModel.cod_barras)
+            self.db.query(func.count(ProdutoModel.id))
+            .join(ProdutoEmpModel, ProdutoModel.id == ProdutoEmpModel.produto_id)
             .filter(ProdutoEmpModel.empresa_id == empresa_id)
         )
 
@@ -152,6 +152,8 @@ class ProdutoDeliveryRepository:
     def get_produto_emp(self, empresa_id: int, cod_barras: str) -> Optional[ProdutoEmpModel]:
         return (
             self.db.query(ProdutoEmpModel)
-            .filter_by(empresa_id=empresa_id, cod_barras=cod_barras)
+            .join(ProdutoModel, ProdutoModel.id == ProdutoEmpModel.produto_id)
+            .filter(ProdutoEmpModel.empresa_id == empresa_id)
+            .filter(ProdutoModel.cod_barras == cod_barras)
             .first()
         )

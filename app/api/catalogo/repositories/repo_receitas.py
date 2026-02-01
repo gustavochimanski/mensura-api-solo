@@ -239,6 +239,7 @@ class ReceitasRepository:
             obj = ReceitaIngredienteModel(
                 receita_id=data.receita_id,
                 receita_ingrediente_id=None,
+                produto_id=produto.id,
                 produto_cod_barras=data.produto_cod_barras,
                 combo_id=None,
                 quantidade=data.quantidade,
@@ -526,6 +527,7 @@ class ReceitasRepository:
             novo_ingrediente = ReceitaIngredienteModel(
                 receita_id=receita_destino_id,
                 receita_ingrediente_id=ingrediente_origem.receita_ingrediente_id,
+                produto_id=getattr(ingrediente_origem, "produto_id", None),
                 produto_cod_barras=ingrediente_origem.produto_cod_barras,
                 combo_id=ingrediente_origem.combo_id,
                 quantidade=ingrediente_origem.quantidade,

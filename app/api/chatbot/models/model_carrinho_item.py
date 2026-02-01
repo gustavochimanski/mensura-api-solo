@@ -22,15 +22,17 @@ class CarrinhoItemModel(Base):
     __tablename__ = "carrinho_itens"
     __table_args__ = (
         Index("idx_carrinho_itens_carrinho", "carrinho_id"),
-        Index("idx_carrinho_itens_produto", "produto_cod_barras"),
+        # Índices de item-produto (novo: produto_id; legado: produto_cod_barras)
+        Index("idx_carrinho_itens_produto_id", "produto_id"),
+        Index("idx_carrinho_itens_produto_cod_barras", "produto_cod_barras"),
         Index("idx_carrinho_itens_combo", "combo_id"),
         Index("idx_carrinho_itens_receita", "receita_id"),
         # Constraint CHECK para garantir que apenas um tipo está preenchido
         CheckConstraint(
             """
-            (produto_cod_barras IS NOT NULL AND combo_id IS NULL AND receita_id IS NULL) OR
-            (produto_cod_barras IS NULL AND combo_id IS NOT NULL AND receita_id IS NULL) OR
-            (produto_cod_barras IS NULL AND combo_id IS NULL AND receita_id IS NOT NULL)
+            ((produto_id IS NOT NULL OR produto_cod_barras IS NOT NULL) AND combo_id IS NULL AND receita_id IS NULL) OR
+            ((produto_id IS NULL AND produto_cod_barras IS NULL) AND combo_id IS NOT NULL AND receita_id IS NULL) OR
+            ((produto_id IS NULL AND produto_cod_barras IS NULL) AND combo_id IS NULL AND receita_id IS NOT NULL)
             """,
             name="chk_carrinho_item_tipo_unico"
         ),
@@ -48,12 +50,15 @@ class CarrinhoItemModel(Base):
     carrinho = relationship("CarrinhoTemporarioModel", back_populates="itens")
     
     # Identificação do item (apenas um deve estar preenchido)
-    produto_cod_barras = Column(
-        String,
-        ForeignKey("catalogo.produtos.cod_barras", ondelete="RESTRICT"),
-        nullable=True
+    # Novo: FK técnica para produto
+    produto_id = Column(
+        Integer,
+        ForeignKey("catalogo.produtos.id", ondelete="RESTRICT"),
+        nullable=True,
     )
-    produto = relationship("ProdutoModel", lazy="select")
+    # Legado/compatibilidade: código de barras armazenado como atributo (sem FK)
+    produto_cod_barras = Column(String, nullable=True)
+    produto = relationship("ProdutoModel", lazy="select", foreign_keys=[produto_id])
     
     combo_id = Column(
         Integer,

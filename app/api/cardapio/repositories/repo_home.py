@@ -104,12 +104,12 @@ class HomeRepository:
             )
             .join(
                 ProdutoModel,
-                ProdutoModel.cod_barras == VitrineProdutoLink.cod_barras,
+                ProdutoModel.id == VitrineProdutoLink.produto_id,
             )
             .join(
                 ProdutoEmpModel,
                 and_(
-                    ProdutoEmpModel.cod_barras == ProdutoModel.cod_barras,
+                    ProdutoEmpModel.produto_id == ProdutoModel.id,
                     ProdutoEmpModel.empresa_id == empresa_id,
                 ),
             )
@@ -146,12 +146,12 @@ class HomeRepository:
             )
             .join(
                 ProdutoModel,
-                ProdutoModel.cod_barras == VitrineLandingProdutoLink.cod_barras,
+                ProdutoModel.id == VitrineLandingProdutoLink.produto_id,
             )
             .join(
                 ProdutoEmpModel,
                 and_(
-                    ProdutoEmpModel.cod_barras == ProdutoModel.cod_barras,
+                    ProdutoEmpModel.produto_id == ProdutoModel.id,
                     ProdutoEmpModel.empresa_id == empresa_id,
                 ),
             )
@@ -190,12 +190,12 @@ class HomeRepository:
             )
             .join(
                 ProdutoModel,
-                ProdutoModel.cod_barras == VitrineProdutoLink.cod_barras,
+                ProdutoModel.id == VitrineProdutoLink.produto_id,
             )
             .join(
                 ProdutoEmpModel,
                 and_(
-                    ProdutoEmpModel.cod_barras == ProdutoModel.cod_barras,
+                    ProdutoEmpModel.produto_id == ProdutoModel.id,
                     ProdutoEmpModel.empresa_id == empresa_id,
                 ),
             )

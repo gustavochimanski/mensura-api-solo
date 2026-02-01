@@ -30,7 +30,7 @@ class ProdutoMensuraRepository:
     ) -> List[ProdutoModel]:
         q = (
             self.db.query(ProdutoModel)
-            .join(ProdutoEmpModel, ProdutoModel.cod_barras == ProdutoEmpModel.cod_barras)
+            .join(ProdutoEmpModel, ProdutoModel.id == ProdutoEmpModel.produto_id)
             .filter(ProdutoEmpModel.empresa_id == empresa_id)
             .options(
                 joinedload(ProdutoModel.produtos_empresa),
@@ -45,8 +45,8 @@ class ProdutoMensuraRepository:
 
     def contar_total(self, empresa_id: int, apenas_disponiveis: bool = False, apenas_delivery: bool = True) -> int:
         q = (
-            self.db.query(func.count(ProdutoModel.cod_barras))
-            .join(ProdutoEmpModel, ProdutoModel.cod_barras == ProdutoEmpModel.cod_barras)
+            self.db.query(func.count(ProdutoModel.id))
+            .join(ProdutoEmpModel, ProdutoModel.id == ProdutoEmpModel.produto_id)
             .filter(ProdutoEmpModel.empresa_id == empresa_id)
         )
         if apenas_disponiveis:
@@ -59,7 +59,9 @@ class ProdutoMensuraRepository:
     def get_produto_emp(self, empresa_id: int, cod_barras: str) -> Optional[ProdutoEmpModel]:
         return (
             self.db.query(ProdutoEmpModel)
-            .filter_by(empresa_id=empresa_id, cod_barras=cod_barras)
+            .join(ProdutoModel, ProdutoModel.id == ProdutoEmpModel.produto_id)
+            .filter(ProdutoEmpModel.empresa_id == empresa_id)
+            .filter(ProdutoModel.cod_barras == cod_barras)
             .first()
         )
 
@@ -85,9 +87,13 @@ class ProdutoMensuraRepository:
             if exibir_delivery is not None:
                 pe.exibir_delivery = exibir_delivery
         else:
+            produto = self.buscar_por_cod_barras(cod_barras)
+            if not produto:
+                raise ValueError("Produto não encontrado para o código de barras informado.")
             pe = ProdutoEmpModel(
                 empresa_id=empresa_id,
-                cod_barras=cod_barras,
+                produto_id=produto.id,
+                cod_barras=cod_barras,  # compatibilidade
                 preco_venda=preco_venda,
                 custo=custo,
                 sku_empresa=sku_empresa,
@@ -133,7 +139,7 @@ class ProdutoMensuraRepository:
         """Busca produtos por termo (código de barras, descrição ou SKU)"""
         q = (
             self.db.query(ProdutoModel)
-            .join(ProdutoEmpModel, ProdutoModel.cod_barras == ProdutoEmpModel.cod_barras)
+            .join(ProdutoEmpModel, ProdutoModel.id == ProdutoEmpModel.produto_id)
             .filter(ProdutoEmpModel.empresa_id == empresa_id)
             .options(
                 joinedload(ProdutoModel.produtos_empresa),
@@ -154,8 +160,8 @@ class ProdutoMensuraRepository:
     def contar_busca_total(self, empresa_id: int, termo: str, apenas_disponiveis: bool = False, apenas_delivery: bool = True) -> int:
         """Conta total de produtos encontrados na busca"""
         q = (
-            self.db.query(func.count(ProdutoModel.cod_barras))
-            .join(ProdutoEmpModel, ProdutoModel.cod_barras == ProdutoEmpModel.cod_barras)
+            self.db.query(func.count(ProdutoModel.id))
+            .join(ProdutoEmpModel, ProdutoModel.id == ProdutoEmpModel.produto_id)
             .filter(ProdutoEmpModel.empresa_id == empresa_id)
             .filter(
                 (ProdutoModel.cod_barras.ilike(f"%{termo}%")) |

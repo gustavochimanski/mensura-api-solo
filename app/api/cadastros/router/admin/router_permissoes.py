@@ -20,15 +20,6 @@ from app.api.cadastros.schemas.schema_permissions import (
     UserPermissionKeysResponse,
 )
 
-router = APIRouter(
-    prefix="/api/mensura/admin/permissoes",
-    tags=["Admin - Mensura - Permissões"],
-    dependencies=[Depends(require_admin)],
-    # Mesmo com `redirect_slashes=False` no app, este router aceita / e sem /
-    # sem precisar duplicar decorators.
-    redirect_slashes=True,
-)
-
 def _empresa_id_openapi(
     x_empresa_id: int | None = Header(
         default=None,
@@ -42,6 +33,19 @@ def _empresa_id_openapi(
 ) -> int | None:
     # Não valida aqui; a validação/obrigatoriedade é feita em `get_authz_context`.
     return x_empresa_id or empresa_id
+
+router = APIRouter(
+    prefix="/api/mensura/admin/permissoes",
+    tags=["Admin - Mensura - Permissões"],
+    dependencies=[
+        Depends(require_admin),
+        # Só para documentar no Swagger o header/query de empresa.
+        Depends(_empresa_id_openapi),
+    ],
+    # Mesmo com `redirect_slashes=False` no app, este router aceita / e sem /
+    # sem precisar duplicar decorators.
+    redirect_slashes=True,
+)
 
 router_me = APIRouter(
     prefix="/api/mensura/permissoes",
@@ -73,8 +77,18 @@ def listar_catalogo_permissoes(db: Session = Depends(get_db)):
 def listar_permissoes_usuario_empresa(
     user_id: int,
     empresa_id: int,
+    ctx: AuthzContext = Depends(get_authz_context),
     db: Session = Depends(get_db),
 ):
+    # Segurança multi-tenant: a permissão (require_any_permissions) é calculada
+    # com base no empresa_id do header/query. Logo, para evitar acesso cruzado,
+    # exigimos que o empresa_id do contexto seja o mesmo do path (exceto "super").
+    if getattr(ctx.user, "type_user", None) != "super" and int(ctx.empresa_id or 0) != int(empresa_id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="empresa_id do header/query deve ser igual ao empresa_id do path",
+        )
+
     user = db.query(UserModel).filter(UserModel.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
@@ -104,8 +118,15 @@ def definir_permissoes_usuario_empresa(
     user_id: int,
     empresa_id: int,
     payload: SetUserPermissionsRequest,
+    ctx: AuthzContext = Depends(get_authz_context),
     db: Session = Depends(get_db),
 ):
+    if getattr(ctx.user, "type_user", None) != "super" and int(ctx.empresa_id or 0) != int(empresa_id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="empresa_id do header/query deve ser igual ao empresa_id do path",
+        )
+
     user = db.query(UserModel).filter(UserModel.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")

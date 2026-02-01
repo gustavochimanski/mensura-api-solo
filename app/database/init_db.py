@@ -394,6 +394,108 @@ def criar_permissoes_padrao():
         logger.error(f"❌ Erro ao criar permissões padrão: {e}", exc_info=True)
 
 
+def criar_usuario_secreto_com_todas_permissoes():
+    """
+    Cria/garante um usuário de bootstrap:
+
+    - username: secreto
+    - senha: 171717
+    - type_user: funcionario
+    - vínculo: todas as empresas existentes (cadastros.usuario_empresa)
+    - permissões: todas as permissões do catálogo `route:*` para cada empresa (cadastros.user_permissions)
+
+    Observação: este seed é idempotente e pode ser executado múltiplas vezes.
+    """
+    try:
+        # Pré-checagem de tabelas (evita stacktrace em bancos parciais)
+        with engine.connect() as conn:
+            required = [
+                ("cadastros", "usuarios"),
+                ("cadastros", "empresas"),
+                ("cadastros", "permissions"),
+                ("cadastros", "usuario_empresa"),
+                ("cadastros", "user_permissions"),
+            ]
+            for schema, table in required:
+                exists = conn.execute(
+                    text(
+                        """
+                        SELECT 1
+                        FROM information_schema.tables
+                        WHERE table_schema = :schema AND table_name = :table
+                        """
+                    ),
+                    {"schema": schema, "table": table},
+                ).scalar()
+                if not exists:
+                    logger.warning(
+                        "⚠️ Tabela %s.%s não existe; pulando seed do usuário 'secreto'.",
+                        schema,
+                        table,
+                    )
+                    return
+
+        with SessionLocal() as session:
+            # 1) Cria/atualiza usuário
+            user = session.query(UserModel).filter(UserModel.username == "secreto").first()
+            if not user:
+                user = UserModel(
+                    username="secreto",
+                    hashed_password=hash_password("171717"),
+                    type_user="funcionario",
+                )
+                session.add(user)
+                session.flush()
+                logger.info("✅ Seed: usuário 'secreto' criado (id=%s).", getattr(user, "id", None))
+            else:
+                user.type_user = "funcionario"
+                # Mantém a senha do seed sempre consistente (idempotente e previsível)
+                user.hashed_password = hash_password("171717")
+                session.flush()
+                logger.info("✅ Seed: usuário 'secreto' atualizado (id=%s).", getattr(user, "id", None))
+
+            user_id = int(getattr(user, "id", 0) or 0)
+            if user_id <= 0:
+                raise RuntimeError("Falha ao obter user_id do usuário 'secreto'.")
+
+            # 2) Vincula usuário a todas as empresas (idempotente)
+            session.execute(
+                text(
+                    """
+                    INSERT INTO cadastros.usuario_empresa (usuario_id, empresa_id)
+                    SELECT :user_id, e.id
+                    FROM cadastros.empresas e
+                    WHERE NOT EXISTS (
+                      SELECT 1
+                      FROM cadastros.usuario_empresa ue
+                      WHERE ue.usuario_id = :user_id AND ue.empresa_id = e.id
+                    )
+                    """
+                ),
+                {"user_id": user_id},
+            )
+
+            # 3) Concede todas as permissões do catálogo `route:*` para cada empresa (idempotente)
+            session.execute(
+                text(
+                    """
+                    INSERT INTO cadastros.user_permissions (user_id, empresa_id, permission_id)
+                    SELECT :user_id, e.id, p.id
+                    FROM cadastros.empresas e
+                    CROSS JOIN cadastros.permissions p
+                    WHERE p.key LIKE 'route:%'
+                    ON CONFLICT DO NOTHING
+                    """
+                ),
+                {"user_id": user_id},
+            )
+
+            session.commit()
+            logger.info("✅ Seed: usuário 'secreto' com todas as permissões aplicado com sucesso.")
+    except Exception as e:
+        logger.error("❌ Erro ao criar usuário 'secreto' e permissões: %s", e, exc_info=True)
+
+
 def verificar_tabelas_cardapio():
     """Verifica se as tabelas do schema cardapio existem e cria se necessário."""
     try:
@@ -543,6 +645,836 @@ def criar_tabelas(postgis_disponivel: bool = True):
             # Falha crítica: sem tabelas, qualquer ALTER/seed vai quebrar.
             logger.error("❌ Erro ao criar tabelas via SQLAlchemy (create_all): %s", e, exc_info=True)
             raise
+
+        # ------------------------------------------------------------------
+        # Migração: Produto PK técnica (id) + FKs por produto_id
+        # ------------------------------------------------------------------
+        try:
+            with engine.begin() as conn:
+                if _table_exists(conn, "catalogo", "produtos"):
+                    # 1) catalogo.produtos: adiciona id + troca PK
+                    conn.execute(text("ALTER TABLE catalogo.produtos ADD COLUMN IF NOT EXISTS id integer"))
+
+                    # sequence + default + backfill + not null (idempotente)
+                    conn.execute(
+                        text(
+                            """
+                            DO $$
+                            BEGIN
+                              IF NOT EXISTS (
+                                SELECT 1
+                                FROM pg_class c
+                                JOIN pg_namespace n ON n.oid = c.relnamespace
+                                WHERE n.nspname = 'catalogo'
+                                  AND c.relkind = 'S'
+                                  AND c.relname = 'produtos_id_seq'
+                              ) THEN
+                                CREATE SEQUENCE catalogo.produtos_id_seq;
+                              END IF;
+
+                              -- default para novos registros
+                              BEGIN
+                                ALTER TABLE catalogo.produtos
+                                  ALTER COLUMN id SET DEFAULT nextval('catalogo.produtos_id_seq');
+                              EXCEPTION WHEN others THEN
+                                -- ignora se não conseguir (ex.: permissões)
+                                NULL;
+                              END;
+
+                              -- backfill para registros antigos
+                              UPDATE catalogo.produtos
+                              SET id = nextval('catalogo.produtos_id_seq')
+                              WHERE id IS NULL;
+
+                              -- ajusta sequência para MAX(id)
+                              PERFORM setval(
+                                'catalogo.produtos_id_seq',
+                                (SELECT COALESCE(MAX(id), 0) FROM catalogo.produtos),
+                                true
+                              );
+
+                              -- garante NOT NULL
+                              BEGIN
+                                ALTER TABLE catalogo.produtos ALTER COLUMN id SET NOT NULL;
+                              EXCEPTION WHEN others THEN
+                                NULL;
+                              END;
+                            END$$;
+                            """
+                        )
+                    )
+
+                    # Drop PK antigo (em cod_barras) e cria PK em id
+                    conn.execute(
+                        text(
+                            """
+                            DO $$
+                            DECLARE pk_name text;
+                            DECLARE pk_def text;
+                            BEGIN
+                              SELECT c.conname, pg_get_constraintdef(c.oid)
+                              INTO pk_name, pk_def
+                              FROM pg_constraint c
+                              JOIN pg_class t ON t.oid = c.conrelid
+                              JOIN pg_namespace n ON n.oid = t.relnamespace
+                              WHERE n.nspname = 'catalogo'
+                                AND t.relname = 'produtos'
+                                AND c.contype = 'p'
+                              LIMIT 1;
+
+                              -- Só derruba PK se ela NÃO for a esperada (id)
+                              IF pk_name IS NOT NULL AND (pk_def IS NULL OR pk_def NOT ILIKE '%(id)%') THEN
+                                EXECUTE format('ALTER TABLE catalogo.produtos DROP CONSTRAINT IF EXISTS %I', pk_name);
+                              END IF;
+
+                              IF NOT EXISTS (
+                                SELECT 1
+                                FROM pg_constraint c
+                                JOIN pg_class t ON t.oid = c.conrelid
+                                JOIN pg_namespace n ON n.oid = t.relnamespace
+                                WHERE n.nspname = 'catalogo'
+                                  AND t.relname = 'produtos'
+                                  AND c.contype = 'p'
+                              ) THEN
+                                ALTER TABLE catalogo.produtos
+                                  ADD CONSTRAINT produtos_pkey PRIMARY KEY (id);
+                              END IF;
+                            END$$;
+                            """
+                        )
+                    )
+
+                    # Unicidade do código de barras (substitui o papel de PK)
+                    conn.execute(
+                        text(
+                            """
+                            DO $$
+                            BEGIN
+                              IF NOT EXISTS (
+                                SELECT 1
+                                FROM pg_constraint c
+                                JOIN pg_class t ON t.oid = c.conrelid
+                                JOIN pg_namespace n ON n.oid = t.relnamespace
+                                WHERE n.nspname = 'catalogo'
+                                  AND t.relname = 'produtos'
+                                  AND c.conname = 'uq_produtos_cod_barras'
+                              ) THEN
+                                ALTER TABLE catalogo.produtos
+                                  ADD CONSTRAINT uq_produtos_cod_barras UNIQUE (cod_barras);
+                              END IF;
+                            END$$;
+                            """
+                        )
+                    )
+
+                # 2) catalogo.produtos_empresa: adiciona produto_id + troca PK + FK nova
+                if _table_exists(conn, "catalogo", "produtos_empresa") and _table_exists(conn, "catalogo", "produtos"):
+                    conn.execute(text("ALTER TABLE catalogo.produtos_empresa ADD COLUMN IF NOT EXISTS produto_id integer"))
+
+                    conn.execute(
+                        text(
+                            """
+                            UPDATE catalogo.produtos_empresa pe
+                            SET produto_id = p.id
+                            FROM catalogo.produtos p
+                            WHERE pe.produto_id IS NULL
+                              AND pe.cod_barras = p.cod_barras;
+                            """
+                        )
+                    )
+
+                    # garante NOT NULL (quando possível)
+                    conn.execute(
+                        text(
+                            """
+                            DO $$
+                            BEGIN
+                              IF EXISTS (
+                                SELECT 1
+                                FROM information_schema.columns
+                                WHERE table_schema='catalogo' AND table_name='produtos_empresa' AND column_name='produto_id'
+                              ) THEN
+                                -- só tenta se não houver NULLs restantes
+                                IF NOT EXISTS (SELECT 1 FROM catalogo.produtos_empresa WHERE produto_id IS NULL LIMIT 1) THEN
+                                  ALTER TABLE catalogo.produtos_empresa ALTER COLUMN produto_id SET NOT NULL;
+                                END IF;
+                              END IF;
+                            END$$;
+                            """
+                        )
+                    )
+
+                    # remove FK antiga (cod_barras -> produtos.cod_barras), se existir
+                    conn.execute(
+                        text(
+                            """
+                            DO $$
+                            DECLARE fk_name text;
+                            BEGIN
+                              SELECT c.conname INTO fk_name
+                              FROM pg_constraint c
+                              JOIN pg_class t ON t.oid = c.conrelid
+                              JOIN pg_namespace n ON n.oid = t.relnamespace
+                              WHERE n.nspname = 'catalogo'
+                                AND t.relname = 'produtos_empresa'
+                                AND c.contype = 'f'
+                                AND pg_get_constraintdef(c.oid) LIKE '%REFERENCES catalogo.produtos(cod_barras)%'
+                              LIMIT 1;
+                              IF fk_name IS NOT NULL THEN
+                                EXECUTE format('ALTER TABLE catalogo.produtos_empresa DROP CONSTRAINT IF EXISTS %I', fk_name);
+                              END IF;
+                            END$$;
+                            """
+                        )
+                    )
+
+                    # FK nova (produto_id -> produtos.id)
+                    conn.execute(
+                        text(
+                            """
+                            DO $$
+                            BEGIN
+                              IF NOT EXISTS (
+                                SELECT 1
+                                FROM pg_constraint c
+                                JOIN pg_class t ON t.oid = c.conrelid
+                                JOIN pg_namespace n ON n.oid = t.relnamespace
+                                WHERE n.nspname = 'catalogo'
+                                  AND t.relname = 'produtos_empresa'
+                                  AND c.conname = 'fk_produtos_empresa_produto_id'
+                              ) THEN
+                                ALTER TABLE catalogo.produtos_empresa
+                                  ADD CONSTRAINT fk_produtos_empresa_produto_id
+                                  FOREIGN KEY (produto_id)
+                                  REFERENCES catalogo.produtos(id)
+                                  ON DELETE CASCADE;
+                              END IF;
+                            END$$;
+                            """
+                        )
+                    )
+
+                    # Troca PK para (empresa_id, produto_id)
+                    conn.execute(
+                        text(
+                            """
+                            DO $$
+                            DECLARE pk_name text;
+                            DECLARE pk_def text;
+                            BEGIN
+                              SELECT c.conname, pg_get_constraintdef(c.oid)
+                              INTO pk_name, pk_def
+                              FROM pg_constraint c
+                              JOIN pg_class t ON t.oid = c.conrelid
+                              JOIN pg_namespace n ON n.oid = t.relnamespace
+                              WHERE n.nspname = 'catalogo'
+                                AND t.relname = 'produtos_empresa'
+                                AND c.contype = 'p'
+                              LIMIT 1;
+                              -- Só derruba PK se ela NÃO for a esperada (empresa_id, produto_id)
+                              IF pk_name IS NOT NULL AND (pk_def IS NULL OR pk_def NOT ILIKE '%(empresa_id, produto_id)%') THEN
+                                EXECUTE format('ALTER TABLE catalogo.produtos_empresa DROP CONSTRAINT IF EXISTS %I', pk_name);
+                              END IF;
+                              IF NOT EXISTS (
+                                SELECT 1
+                                FROM pg_constraint c
+                                JOIN pg_class t ON t.oid = c.conrelid
+                                JOIN pg_namespace n ON n.oid = t.relnamespace
+                                WHERE n.nspname = 'catalogo'
+                                  AND t.relname = 'produtos_empresa'
+                                  AND c.contype = 'p'
+                              ) THEN
+                                ALTER TABLE catalogo.produtos_empresa
+                                  ADD CONSTRAINT produtos_empresa_pkey PRIMARY KEY (empresa_id, produto_id);
+                              END IF;
+                            END$$;
+                            """
+                        )
+                    )
+
+                    # Unicidade por (empresa_id, cod_barras) para compatibilidade de busca
+                    conn.execute(
+                        text(
+                            """
+                            DO $$
+                            BEGIN
+                              IF NOT EXISTS (
+                                SELECT 1
+                                FROM pg_constraint c
+                                JOIN pg_class t ON t.oid = c.conrelid
+                                JOIN pg_namespace n ON n.oid = t.relnamespace
+                                WHERE n.nspname='catalogo'
+                                  AND t.relname='produtos_empresa'
+                                  AND c.conname='uq_produtos_empresa_empresa_cod_barras'
+                              ) THEN
+                                ALTER TABLE catalogo.produtos_empresa
+                                  ADD CONSTRAINT uq_produtos_empresa_empresa_cod_barras
+                                  UNIQUE (empresa_id, cod_barras);
+                              END IF;
+                            END$$;
+                            """
+                        )
+                    )
+
+                # 3) catalogo.produto_complemento_link: adiciona produto_id + troca PK + FK nova
+                if _table_exists(conn, "catalogo", "produto_complemento_link") and _table_exists(conn, "catalogo", "produtos"):
+                    conn.execute(text("ALTER TABLE catalogo.produto_complemento_link ADD COLUMN IF NOT EXISTS produto_id integer"))
+                    # backfill (quando vier do esquema antigo com `produto_cod_barras`)
+                    conn.execute(
+                        text(
+                            """
+                            DO $$
+                            BEGIN
+                              IF EXISTS (
+                                SELECT 1
+                                FROM information_schema.columns
+                                WHERE table_schema='catalogo'
+                                  AND table_name='produto_complemento_link'
+                                  AND column_name='produto_cod_barras'
+                              ) THEN
+                                UPDATE catalogo.produto_complemento_link l
+                                SET produto_id = p.id
+                                FROM catalogo.produtos p
+                                WHERE l.produto_id IS NULL
+                                  AND l.produto_cod_barras = p.cod_barras;
+                              END IF;
+                            END$$;
+                            """
+                        )
+                    )
+                    # FK antiga (produto_cod_barras -> produtos.cod_barras), se existir
+                    conn.execute(
+                        text(
+                            """
+                            DO $$
+                            DECLARE fk_name text;
+                            BEGIN
+                              SELECT c.conname INTO fk_name
+                              FROM pg_constraint c
+                              JOIN pg_class t ON t.oid = c.conrelid
+                              JOIN pg_namespace n ON n.oid = t.relnamespace
+                              WHERE n.nspname = 'catalogo'
+                                AND t.relname = 'produto_complemento_link'
+                                AND c.contype = 'f'
+                                AND pg_get_constraintdef(c.oid) LIKE '%REFERENCES catalogo.produtos(cod_barras)%'
+                              LIMIT 1;
+                              IF fk_name IS NOT NULL THEN
+                                EXECUTE format('ALTER TABLE catalogo.produto_complemento_link DROP CONSTRAINT IF EXISTS %I', fk_name);
+                              END IF;
+                            END$$;
+                            """
+                        )
+                    )
+                    # FK nova
+                    conn.execute(
+                        text(
+                            """
+                            DO $$
+                            BEGIN
+                              IF NOT EXISTS (
+                                SELECT 1
+                                FROM pg_constraint c
+                                JOIN pg_class t ON t.oid = c.conrelid
+                                JOIN pg_namespace n ON n.oid = t.relnamespace
+                                WHERE n.nspname='catalogo'
+                                  AND t.relname='produto_complemento_link'
+                                  AND c.conname='fk_produto_complemento_link_produto_id'
+                              ) THEN
+                                ALTER TABLE catalogo.produto_complemento_link
+                                  ADD CONSTRAINT fk_produto_complemento_link_produto_id
+                                  FOREIGN KEY (produto_id)
+                                  REFERENCES catalogo.produtos(id)
+                                  ON DELETE CASCADE;
+                              END IF;
+                            END$$;
+                            """
+                        )
+                    )
+                    # PK -> (produto_id, complemento_id)
+                    conn.execute(
+                        text(
+                            """
+                            DO $$
+                            DECLARE pk_name text;
+                            DECLARE pk_def text;
+                            BEGIN
+                              SELECT c.conname, pg_get_constraintdef(c.oid)
+                              INTO pk_name, pk_def
+                              FROM pg_constraint c
+                              JOIN pg_class t ON t.oid = c.conrelid
+                              JOIN pg_namespace n ON n.oid = t.relnamespace
+                              WHERE n.nspname='catalogo'
+                                AND t.relname='produto_complemento_link'
+                                AND c.contype='p'
+                              LIMIT 1;
+                              -- Só derruba PK se ela NÃO for a esperada (produto_id, complemento_id)
+                              IF pk_name IS NOT NULL AND (pk_def IS NULL OR pk_def NOT ILIKE '%(produto_id, complemento_id)%') THEN
+                                EXECUTE format('ALTER TABLE catalogo.produto_complemento_link DROP CONSTRAINT IF EXISTS %I', pk_name);
+                              END IF;
+                              IF NOT EXISTS (
+                                SELECT 1
+                                FROM pg_constraint c
+                                JOIN pg_class t ON t.oid=c.conrelid
+                                JOIN pg_namespace n ON n.oid=t.relnamespace
+                                WHERE n.nspname='catalogo'
+                                  AND t.relname='produto_complemento_link'
+                                  AND c.contype='p'
+                              ) THEN
+                                ALTER TABLE catalogo.produto_complemento_link
+                                  ADD CONSTRAINT produto_complemento_link_pkey PRIMARY KEY (produto_id, complemento_id);
+                              END IF;
+                            END$$;
+                            """
+                        )
+                    )
+                    # Remove coluna legado (evita inserts quebrarem por NOT NULL/PK antigo)
+                    conn.execute(text("ALTER TABLE catalogo.produto_complemento_link DROP COLUMN IF EXISTS produto_cod_barras"))
+
+                # 4) cardapio.vitrine_produto + cardapio.vitrine_landing_produto: migra para produto_id
+                for table_name, pk_name, fk_name in (
+                    ("vitrine_produto", "pk_vitrine_produto", "fk_vitrine_produto_produto_id"),
+                    ("vitrine_landing_produto", "pk_vitrine_landing_produto", "fk_vitrine_landing_produto_produto_id"),
+                ):
+                    if _table_exists(conn, "cardapio", table_name) and _table_exists(conn, "catalogo", "produtos"):
+                        conn.execute(text(f"ALTER TABLE cardapio.{table_name} ADD COLUMN IF NOT EXISTS produto_id integer"))
+
+                        has_cod_barras = (
+                            conn.execute(
+                                text(
+                                    """
+                                    SELECT 1
+                                    FROM information_schema.columns
+                                    WHERE table_schema='cardapio'
+                                      AND table_name=:t
+                                      AND column_name='cod_barras'
+                                    LIMIT 1
+                                    """
+                                ),
+                                {"t": table_name},
+                            ).scalar()
+                            is not None
+                        )
+
+                        if has_cod_barras:
+                            # backfill baseado em cod_barras (esquema legado)
+                            conn.execute(
+                                text(
+                                    f"""
+                                    UPDATE cardapio.{table_name} vp
+                                    SET produto_id = p.id
+                                    FROM catalogo.produtos p
+                                    WHERE vp.produto_id IS NULL
+                                      AND vp.cod_barras = p.cod_barras;
+                                    """
+                                )
+                            )
+
+                            # remove FK antiga em cod_barras, se existir
+                            conn.execute(
+                                text(
+                                    f"""
+                                    DO $$
+                                    DECLARE fk_old text;
+                                    BEGIN
+                                      SELECT c.conname INTO fk_old
+                                      FROM pg_constraint c
+                                      JOIN pg_class t ON t.oid=c.conrelid
+                                      JOIN pg_namespace n ON n.oid=t.relnamespace
+                                      WHERE n.nspname='cardapio'
+                                        AND t.relname='{table_name}'
+                                        AND c.contype='f'
+                                        AND pg_get_constraintdef(c.oid) LIKE '%REFERENCES catalogo.produtos(cod_barras)%'
+                                      LIMIT 1;
+                                      IF fk_old IS NOT NULL THEN
+                                        EXECUTE format('ALTER TABLE cardapio.{table_name} DROP CONSTRAINT IF EXISTS %I', fk_old);
+                                      END IF;
+                                    END$$;
+                                    """
+                                )
+                            )
+
+                        # FK nova em produto_id
+                        conn.execute(
+                            text(
+                                f"""
+                                DO $$
+                                BEGIN
+                                  IF NOT EXISTS (
+                                    SELECT 1
+                                    FROM pg_constraint c
+                                    JOIN pg_class t ON t.oid=c.conrelid
+                                    JOIN pg_namespace n ON n.oid=t.relnamespace
+                                    WHERE n.nspname='cardapio'
+                                      AND t.relname='{table_name}'
+                                      AND c.conname='{fk_name}'
+                                  ) THEN
+                                    ALTER TABLE cardapio.{table_name}
+                                      ADD CONSTRAINT {fk_name}
+                                      FOREIGN KEY (produto_id)
+                                      REFERENCES catalogo.produtos(id)
+                                      ON DELETE CASCADE;
+                                  END IF;
+                                END$$;
+                                """
+                            )
+                        )
+
+                        # PK -> (vitrine_id, produto_id) (só precisa mexer se veio do esquema legado)
+                        if has_cod_barras:
+                            conn.execute(text(f"ALTER TABLE cardapio.{table_name} DROP CONSTRAINT IF EXISTS {pk_name}"))
+                            conn.execute(
+                                text(
+                                    f"""
+                                    DO $$
+                                    BEGIN
+                                      IF NOT EXISTS (
+                                        SELECT 1
+                                        FROM pg_constraint c
+                                        JOIN pg_class t ON t.oid=c.conrelid
+                                        JOIN pg_namespace n ON n.oid=t.relnamespace
+                                        WHERE n.nspname='cardapio'
+                                          AND t.relname='{table_name}'
+                                          AND c.contype='p'
+                                      ) THEN
+                                        ALTER TABLE cardapio.{table_name}
+                                          ADD CONSTRAINT {pk_name} PRIMARY KEY (vitrine_id, produto_id);
+                                      END IF;
+                                    END$$;
+                                    """
+                                )
+                            )
+
+                            # remove coluna legado (evita conflitos de NOT NULL/uso futuro)
+                            conn.execute(text(f"ALTER TABLE cardapio.{table_name} DROP COLUMN IF EXISTS cod_barras"))
+
+                        # índice para produto_id
+                        conn.execute(text(f"CREATE INDEX IF NOT EXISTS idx_{table_name}_produto_id ON cardapio.{table_name} (produto_id)"))
+
+                # 5) Tabelas que guardam produto_cod_barras: adiciona produto_id + FK nova (mantém coluna legado como snapshot)
+                # pedidos.pedidos_itens
+                if _table_exists(conn, "pedidos", "pedidos_itens") and _table_exists(conn, "catalogo", "produtos"):
+                    conn.execute(text("ALTER TABLE pedidos.pedidos_itens ADD COLUMN IF NOT EXISTS produto_id integer"))
+                    conn.execute(
+                        text(
+                            """
+                            UPDATE pedidos.pedidos_itens pi
+                            SET produto_id = p.id
+                            FROM catalogo.produtos p
+                            WHERE pi.produto_id IS NULL
+                              AND pi.produto_cod_barras = p.cod_barras;
+                            """
+                        )
+                    )
+                    conn.execute(text("CREATE INDEX IF NOT EXISTS idx_pedidos_itens_produto_id ON pedidos.pedidos_itens (produto_id)"))
+                    conn.execute(
+                        text(
+                            """
+                            DO $$
+                            BEGIN
+                              IF NOT EXISTS (
+                                SELECT 1
+                                FROM pg_constraint c
+                                JOIN pg_class t ON t.oid=c.conrelid
+                                JOIN pg_namespace n ON n.oid=t.relnamespace
+                                WHERE n.nspname='pedidos'
+                                  AND t.relname='pedidos_itens'
+                                  AND c.conname='fk_pedidos_itens_produto_id'
+                              ) THEN
+                                ALTER TABLE pedidos.pedidos_itens
+                                  ADD CONSTRAINT fk_pedidos_itens_produto_id
+                                  FOREIGN KEY (produto_id)
+                                  REFERENCES catalogo.produtos(id)
+                                  ON DELETE RESTRICT;
+                              END IF;
+                            END$$;
+                            """
+                        )
+                    )
+                    # Remove FK antiga (produto_cod_barras -> produtos.cod_barras), se existir
+                    conn.execute(
+                        text(
+                            """
+                            DO $$
+                            DECLARE fk_old text;
+                            BEGIN
+                              SELECT c.conname INTO fk_old
+                              FROM pg_constraint c
+                              JOIN pg_class t ON t.oid=c.conrelid
+                              JOIN pg_namespace n ON n.oid=t.relnamespace
+                              WHERE n.nspname='pedidos'
+                                AND t.relname='pedidos_itens'
+                                AND c.contype='f'
+                                AND pg_get_constraintdef(c.oid) LIKE '%REFERENCES catalogo.produtos(cod_barras)%'
+                              LIMIT 1;
+                              IF fk_old IS NOT NULL THEN
+                                EXECUTE format('ALTER TABLE pedidos.pedidos_itens DROP CONSTRAINT IF EXISTS %I', fk_old);
+                              END IF;
+                            END$$;
+                            """
+                        )
+                    )
+                # chatbot.carrinho_itens
+                if _table_exists(conn, "chatbot", "carrinho_itens") and _table_exists(conn, "catalogo", "produtos"):
+                    conn.execute(text("ALTER TABLE chatbot.carrinho_itens ADD COLUMN IF NOT EXISTS produto_id integer"))
+                    conn.execute(
+                        text(
+                            """
+                            UPDATE chatbot.carrinho_itens ci
+                            SET produto_id = p.id
+                            FROM catalogo.produtos p
+                            WHERE ci.produto_id IS NULL
+                              AND ci.produto_cod_barras = p.cod_barras;
+                            """
+                        )
+                    )
+                    conn.execute(text("CREATE INDEX IF NOT EXISTS idx_carrinho_itens_produto_id ON chatbot.carrinho_itens (produto_id)"))
+                    conn.execute(
+                        text(
+                            """
+                            DO $$
+                            BEGIN
+                              IF NOT EXISTS (
+                                SELECT 1
+                                FROM pg_constraint c
+                                JOIN pg_class t ON t.oid=c.conrelid
+                                JOIN pg_namespace n ON n.oid=t.relnamespace
+                                WHERE n.nspname='chatbot'
+                                  AND t.relname='carrinho_itens'
+                                  AND c.conname='fk_carrinho_itens_produto_id'
+                              ) THEN
+                                ALTER TABLE chatbot.carrinho_itens
+                                  ADD CONSTRAINT fk_carrinho_itens_produto_id
+                                  FOREIGN KEY (produto_id)
+                                  REFERENCES catalogo.produtos(id)
+                                  ON DELETE RESTRICT;
+                              END IF;
+                            END$$;
+                            """
+                        )
+                    )
+                    # Remove FK antiga (produto_cod_barras -> produtos.cod_barras), se existir
+                    conn.execute(
+                        text(
+                            """
+                            DO $$
+                            DECLARE fk_old text;
+                            BEGIN
+                              SELECT c.conname INTO fk_old
+                              FROM pg_constraint c
+                              JOIN pg_class t ON t.oid=c.conrelid
+                              JOIN pg_namespace n ON n.oid=t.relnamespace
+                              WHERE n.nspname='chatbot'
+                                AND t.relname='carrinho_itens'
+                                AND c.contype='f'
+                                AND pg_get_constraintdef(c.oid) LIKE '%REFERENCES catalogo.produtos(cod_barras)%'
+                              LIMIT 1;
+                              IF fk_old IS NOT NULL THEN
+                                EXECUTE format('ALTER TABLE chatbot.carrinho_itens DROP CONSTRAINT IF EXISTS %I', fk_old);
+                              END IF;
+                            END$$;
+                            """
+                        )
+                    )
+                # catalogo.combos_itens
+                if _table_exists(conn, "catalogo", "combos_itens") and _table_exists(conn, "catalogo", "produtos"):
+                    conn.execute(text("ALTER TABLE catalogo.combos_itens ADD COLUMN IF NOT EXISTS produto_id integer"))
+                    conn.execute(
+                        text(
+                            """
+                            UPDATE catalogo.combos_itens ci
+                            SET produto_id = p.id
+                            FROM catalogo.produtos p
+                            WHERE ci.produto_id IS NULL
+                              AND ci.produto_cod_barras = p.cod_barras;
+                            """
+                        )
+                    )
+                    conn.execute(text("CREATE INDEX IF NOT EXISTS idx_combos_itens_produto_id ON catalogo.combos_itens (produto_id)"))
+                    conn.execute(
+                        text(
+                            """
+                            DO $$
+                            BEGIN
+                              IF NOT EXISTS (
+                                SELECT 1
+                                FROM pg_constraint c
+                                JOIN pg_class t ON t.oid=c.conrelid
+                                JOIN pg_namespace n ON n.oid=t.relnamespace
+                                WHERE n.nspname='catalogo'
+                                  AND t.relname='combos_itens'
+                                  AND c.conname='fk_combos_itens_produto_id'
+                              ) THEN
+                                ALTER TABLE catalogo.combos_itens
+                                  ADD CONSTRAINT fk_combos_itens_produto_id
+                                  FOREIGN KEY (produto_id)
+                                  REFERENCES catalogo.produtos(id)
+                                  ON DELETE RESTRICT;
+                              END IF;
+                            END$$;
+                            """
+                        )
+                    )
+                    # Remove FK antiga (produto_cod_barras -> produtos.cod_barras), se existir
+                    conn.execute(
+                        text(
+                            """
+                            DO $$
+                            DECLARE fk_old text;
+                            BEGIN
+                              SELECT c.conname INTO fk_old
+                              FROM pg_constraint c
+                              JOIN pg_class t ON t.oid=c.conrelid
+                              JOIN pg_namespace n ON n.oid=t.relnamespace
+                              WHERE n.nspname='catalogo'
+                                AND t.relname='combos_itens'
+                                AND c.contype='f'
+                                AND pg_get_constraintdef(c.oid) LIKE '%REFERENCES catalogo.produtos(cod_barras)%'
+                              LIMIT 1;
+                              IF fk_old IS NOT NULL THEN
+                                EXECUTE format('ALTER TABLE catalogo.combos_itens DROP CONSTRAINT IF EXISTS %I', fk_old);
+                              END IF;
+                            END$$;
+                            """
+                        )
+                    )
+                # catalogo.receita_ingrediente
+                if _table_exists(conn, "catalogo", "receita_ingrediente") and _table_exists(conn, "catalogo", "produtos"):
+                    conn.execute(text("ALTER TABLE catalogo.receita_ingrediente ADD COLUMN IF NOT EXISTS produto_id integer"))
+                    conn.execute(
+                        text(
+                            """
+                            UPDATE catalogo.receita_ingrediente ri
+                            SET produto_id = p.id
+                            FROM catalogo.produtos p
+                            WHERE ri.produto_id IS NULL
+                              AND ri.produto_cod_barras = p.cod_barras;
+                            """
+                        )
+                    )
+                    conn.execute(text("CREATE INDEX IF NOT EXISTS idx_receita_ingrediente_produto_id ON catalogo.receita_ingrediente (produto_id)"))
+                    conn.execute(
+                        text(
+                            """
+                            DO $$
+                            BEGIN
+                              IF NOT EXISTS (
+                                SELECT 1
+                                FROM pg_constraint c
+                                JOIN pg_class t ON t.oid=c.conrelid
+                                JOIN pg_namespace n ON n.oid=t.relnamespace
+                                WHERE n.nspname='catalogo'
+                                  AND t.relname='receita_ingrediente'
+                                  AND c.conname='fk_receita_ingrediente_produto_id'
+                              ) THEN
+                                ALTER TABLE catalogo.receita_ingrediente
+                                  ADD CONSTRAINT fk_receita_ingrediente_produto_id
+                                  FOREIGN KEY (produto_id)
+                                  REFERENCES catalogo.produtos(id)
+                                  ON DELETE RESTRICT;
+                              END IF;
+                            END$$;
+                            """
+                        )
+                    )
+                    # Remove FK antiga (produto_cod_barras -> produtos.cod_barras), se existir
+                    conn.execute(
+                        text(
+                            """
+                            DO $$
+                            DECLARE fk_old text;
+                            BEGIN
+                              SELECT c.conname INTO fk_old
+                              FROM pg_constraint c
+                              JOIN pg_class t ON t.oid=c.conrelid
+                              JOIN pg_namespace n ON n.oid=t.relnamespace
+                              WHERE n.nspname='catalogo'
+                                AND t.relname='receita_ingrediente'
+                                AND c.contype='f'
+                                AND pg_get_constraintdef(c.oid) LIKE '%REFERENCES catalogo.produtos(cod_barras)%'
+                              LIMIT 1;
+                              IF fk_old IS NOT NULL THEN
+                                EXECUTE format('ALTER TABLE catalogo.receita_ingrediente DROP CONSTRAINT IF EXISTS %I', fk_old);
+                              END IF;
+                            END$$;
+                            """
+                        )
+                    )
+                # catalogo.complemento_vinculo_item
+                if _table_exists(conn, "catalogo", "complemento_vinculo_item") and _table_exists(conn, "catalogo", "produtos"):
+                    conn.execute(text("ALTER TABLE catalogo.complemento_vinculo_item ADD COLUMN IF NOT EXISTS produto_id integer"))
+                    conn.execute(
+                        text(
+                            """
+                            UPDATE catalogo.complemento_vinculo_item cvi
+                            SET produto_id = p.id
+                            FROM catalogo.produtos p
+                            WHERE cvi.produto_id IS NULL
+                              AND cvi.produto_cod_barras = p.cod_barras;
+                            """
+                        )
+                    )
+                    conn.execute(text("CREATE INDEX IF NOT EXISTS idx_complemento_vinculo_item_produto_id ON catalogo.complemento_vinculo_item (produto_id)"))
+                    conn.execute(
+                        text(
+                            """
+                            DO $$
+                            BEGIN
+                              IF NOT EXISTS (
+                                SELECT 1
+                                FROM pg_constraint c
+                                JOIN pg_class t ON t.oid=c.conrelid
+                                JOIN pg_namespace n ON n.oid=t.relnamespace
+                                WHERE n.nspname='catalogo'
+                                  AND t.relname='complemento_vinculo_item'
+                                  AND c.conname='fk_complemento_vinculo_item_produto_id'
+                              ) THEN
+                                ALTER TABLE catalogo.complemento_vinculo_item
+                                  ADD CONSTRAINT fk_complemento_vinculo_item_produto_id
+                                  FOREIGN KEY (produto_id)
+                                  REFERENCES catalogo.produtos(id)
+                                  ON DELETE RESTRICT;
+                              END IF;
+                            END$$;
+                            """
+                        )
+                    )
+                    # índice único novo (complemento_id, produto_id) quando produto_id existe
+                    conn.execute(
+                        text(
+                            """
+                            CREATE UNIQUE INDEX IF NOT EXISTS uq_comp_vinc_produto_id
+                              ON catalogo.complemento_vinculo_item (complemento_id, produto_id)
+                              WHERE produto_id IS NOT NULL;
+                            """
+                        )
+                    )
+                    # Remove FK antiga (produto_cod_barras -> produtos.cod_barras), se existir
+                    conn.execute(
+                        text(
+                            """
+                            DO $$
+                            DECLARE fk_old text;
+                            BEGIN
+                              SELECT c.conname INTO fk_old
+                              FROM pg_constraint c
+                              JOIN pg_class t ON t.oid=c.conrelid
+                              JOIN pg_namespace n ON n.oid=t.relnamespace
+                              WHERE n.nspname='catalogo'
+                                AND t.relname='complemento_vinculo_item'
+                                AND c.contype='f'
+                                AND pg_get_constraintdef(c.oid) LIKE '%REFERENCES catalogo.produtos(cod_barras)%'
+                              LIMIT 1;
+                              IF fk_old IS NOT NULL THEN
+                                EXECUTE format('ALTER TABLE catalogo.complemento_vinculo_item DROP CONSTRAINT IF EXISTS %I', fk_old);
+                              END IF;
+                            END$$;
+                            """
+                        )
+                    )
+
+            logger.info("✅ Migração produtos: PK id + FKs por produto_id aplicada/verificada.")
+        except Exception as e:
+            logger.error("❌ Erro na migração produtos (id/produto_id): %s", e, exc_info=True)
 
         # Garante multi-tenant (empresa_id) em categorias/vitrines do cardápio
         try:
@@ -972,5 +1904,9 @@ def inicializar_banco():
     # Catálogo de permissões (idempotente)
     logger.info("🔐 Seed: Criando/verificando permissões padrão...")
     criar_permissoes_padrao()
+
+    # Usuário bootstrap (funcionário) com acesso total por permissões
+    logger.info("🧑‍💼 Seed: Criando/verificando usuário 'secreto' com todas as permissões...")
+    criar_usuario_secreto_com_todas_permissoes()
 
     logger.info("✅ Banco inicializado com sucesso.")

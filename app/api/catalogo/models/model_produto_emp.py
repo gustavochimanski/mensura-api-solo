@@ -9,13 +9,17 @@ from app.database.db_connection import Base
 class ProdutoEmpModel(Base):
     __tablename__ = "produtos_empresa"
     __table_args__ = (
+        # Mantém índice por empresa + cod_barras (busca/compatibilidade)
         Index("idx_empresa_produto", "empresa_id", "cod_barras"),
         {"schema": "catalogo"}
     )
 
-    # PK composta (empresa + produto)
+    # PK composta (empresa + produto_id)
     empresa_id  = Column(Integer, ForeignKey("cadastros.empresas.id", ondelete="RESTRICT"), primary_key=True)
-    cod_barras  = Column(String,  ForeignKey("catalogo.produtos.cod_barras", ondelete="CASCADE"), primary_key=True, nullable=False)
+    produto_id  = Column(Integer, ForeignKey("catalogo.produtos.id", ondelete="CASCADE"), primary_key=True, nullable=False)
+
+    # Atributo de negócio (não é FK). Mantido para compatibilidade e buscas.
+    cod_barras  = Column(String, nullable=False)
 
     sku_empresa = Column(String(60), nullable=True)
     custo       = Column(Numeric(18, 5), nullable=True)

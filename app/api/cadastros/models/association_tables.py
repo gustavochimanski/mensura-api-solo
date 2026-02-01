@@ -19,6 +19,7 @@ usuario_empresa = Table(
     Base.metadata,
     Column("usuario_id", Integer, ForeignKey("cadastros.usuarios.id", ondelete="CASCADE")),
     Column("empresa_id", Integer, ForeignKey("cadastros.empresas.id", ondelete="CASCADE")),
+    UniqueConstraint("usuario_id", "empresa_id", name="uq_usuario_empresa"),
     schema="cadastros",
 )
 
@@ -41,16 +42,16 @@ class VitrineCategoriaLink(Base):
 # Classe de associação Vitrine-Produto (global, sem separação por empresa)
 class VitrineProdutoLink(Base):
     """
-    Liga Produto (cod_barras) a vitrines (N:N) com ordenação.
+    Liga Produto (produto_id) a vitrines (N:N) com ordenação.
     Vitrines agora são globais, não mais separadas por empresa.
     """
     __tablename__ = "vitrine_produto"
     __table_args__ = (
-        PrimaryKeyConstraint("vitrine_id", "cod_barras", name="pk_vitrine_produto"),
+        PrimaryKeyConstraint("vitrine_id", "produto_id", name="pk_vitrine_produto"),
         # FK para o produto base
         ForeignKeyConstraint(
-            ["cod_barras"],
-            ["catalogo.produtos.cod_barras"],
+            ["produto_id"],
+            ["catalogo.produtos.id"],
             ondelete="CASCADE",
         ),
         # FK simples para a vitrine
@@ -60,12 +61,12 @@ class VitrineProdutoLink(Base):
             ondelete="CASCADE",
         ),
         Index("idx_vitprod_vitrine", "vitrine_id"),
-        Index("idx_vitprod_cod_barras", "cod_barras"),
+        Index("idx_vitprod_produto_id", "produto_id"),
         {"schema": "cardapio"},
     )
 
     vitrine_id  = Column(Integer, nullable=False)
-    cod_barras  = Column(String,  nullable=False)
+    produto_id  = Column(Integer, nullable=False)
 
     posicao     = Column(Integer, nullable=False, default=0)
     destaque    = Column(Boolean, nullable=False, default=False)
@@ -140,14 +141,14 @@ class VitrineReceitaLink(Base):
 # Classe de associação VitrineLanding-Produto
 class VitrineLandingProdutoLink(Base):
     """
-    Liga Produto (cod_barras) a vitrines de landingpage_store (N:N) com ordenação.
+    Liga Produto (produto_id) a vitrines de landingpage_store (N:N) com ordenação.
     """
     __tablename__ = "vitrine_landing_produto"
     __table_args__ = (
-        PrimaryKeyConstraint("vitrine_id", "cod_barras", name="pk_vitrine_landing_produto"),
+        PrimaryKeyConstraint("vitrine_id", "produto_id", name="pk_vitrine_landing_produto"),
         ForeignKeyConstraint(
-            ["cod_barras"],
-            ["catalogo.produtos.cod_barras"],
+            ["produto_id"],
+            ["catalogo.produtos.id"],
             ondelete="CASCADE",
         ),
         ForeignKeyConstraint(
@@ -156,12 +157,12 @@ class VitrineLandingProdutoLink(Base):
             ondelete="CASCADE",
         ),
         Index("idx_vitlandprod_vitrine", "vitrine_id"),
-        Index("idx_vitlandprod_cod_barras", "cod_barras"),
+        Index("idx_vitlandprod_produto_id", "produto_id"),
         {"schema": "cardapio"},
     )
 
     vitrine_id = Column(Integer, nullable=False)
-    cod_barras = Column(String, nullable=False)
+    produto_id = Column(Integer, nullable=False)
     posicao = Column(Integer, nullable=False, default=0)
     destaque = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

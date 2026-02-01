@@ -53,7 +53,7 @@ class BuscaGlobalService:
         # Busca produtos
         produtos_query = (
             self.db.query(ProdutoModel, ProdutoEmpModel)
-            .join(ProdutoEmpModel, ProdutoModel.cod_barras == ProdutoEmpModel.cod_barras)
+            .join(ProdutoEmpModel, ProdutoModel.id == ProdutoEmpModel.produto_id)
             .filter(ProdutoEmpModel.empresa_id == empresa_id)
         )
 
@@ -77,20 +77,20 @@ class BuscaGlobalService:
             
             subquery = (
                 select(
-                    ProdutoModel.cod_barras,
+                    ProdutoModel.id,
                     func.row_number().over(
                         order_by=ProdutoModel.created_at.asc()
                     ).label('row_num')
                 )
                 .select_from(ProdutoModel)
-                .join(ProdutoEmpModel, ProdutoModel.cod_barras == ProdutoEmpModel.cod_barras)
+                .join(ProdutoEmpModel, ProdutoModel.id == ProdutoEmpModel.produto_id)
                 .where(and_(*subquery_filters))
                 .subquery()
             )
             produtos_query = (
                 self.db.query(ProdutoModel, ProdutoEmpModel)
-                .join(ProdutoEmpModel, ProdutoModel.cod_barras == ProdutoEmpModel.cod_barras)
-                .join(subquery, ProdutoModel.cod_barras == subquery.c.cod_barras)
+                .join(ProdutoEmpModel, ProdutoModel.id == ProdutoEmpModel.produto_id)
+                .join(subquery, ProdutoModel.id == subquery.c.id)
                 .filter(
                     and_(
                         subquery.c.row_num > offset_id,

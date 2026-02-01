@@ -59,7 +59,10 @@ class ReceitaIngredienteModel(Base):
     
     # Tipos de itens (mutuamente exclusivos - exatamente um deve ser preenchido)
     receita_ingrediente_id = Column(Integer, ForeignKey("catalogo.receitas.id", ondelete="RESTRICT"), nullable=True)
-    produto_cod_barras = Column(String, ForeignKey("catalogo.produtos.cod_barras", ondelete="RESTRICT"), nullable=True)
+    # Novo: FK técnica para produto
+    produto_id = Column(Integer, ForeignKey("catalogo.produtos.id", ondelete="RESTRICT"), nullable=True)
+    # Legado/compatibilidade: código de barras armazenado como atributo (sem FK)
+    produto_cod_barras = Column(String, nullable=True)
     combo_id = Column(Integer, ForeignKey("catalogo.combos.id", ondelete="RESTRICT"), nullable=True)
     
     quantidade = Column(Numeric(18, 4), nullable=True)
@@ -67,7 +70,7 @@ class ReceitaIngredienteModel(Base):
     # Relacionamentos
     receita = relationship("ReceitaModel", foreign_keys=[receita_id], back_populates="ingredientes")
     receita_ingrediente = relationship("ReceitaModel", foreign_keys=[receita_ingrediente_id])
-    produto = relationship("ProdutoModel", foreign_keys=[produto_cod_barras])
+    produto = relationship("ProdutoModel", foreign_keys=[produto_id])
     combo = relationship("ComboModel", foreign_keys=[combo_id])
 
 

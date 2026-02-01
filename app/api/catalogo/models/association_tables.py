@@ -20,7 +20,7 @@ from app.database.db_connection import Base
 produto_complemento_link = Table(
     "produto_complemento_link",
     Base.metadata,
-    Column("produto_cod_barras", String, ForeignKey("catalogo.produtos.cod_barras", ondelete="CASCADE"), primary_key=True),
+    Column("produto_id", Integer, ForeignKey("catalogo.produtos.id", ondelete="CASCADE"), primary_key=True),
     Column("complemento_id", Integer, ForeignKey("catalogo.complemento_produto.id", ondelete="CASCADE"), primary_key=True),
     Column("ordem", Integer, nullable=False, default=0),
     # Configurações específicas da vinculação (podem ser diferentes para cada produto)

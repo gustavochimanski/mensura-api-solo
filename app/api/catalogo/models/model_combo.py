@@ -53,13 +53,16 @@ class ComboItemModel(Base):
     combo_id = Column(Integer, ForeignKey("catalogo.combos.id", ondelete="CASCADE"), nullable=False)
     
     # Tipos de itens (mutuamente exclusivos - exatamente um deve ser preenchido)
-    produto_cod_barras = Column(String, ForeignKey("catalogo.produtos.cod_barras", ondelete="RESTRICT"), nullable=True)
+    # Novo: FK técnica para produto
+    produto_id = Column(Integer, ForeignKey("catalogo.produtos.id", ondelete="RESTRICT"), nullable=True)
+    # Legado/compatibilidade: código de barras armazenado como atributo (sem FK)
+    produto_cod_barras = Column(String, nullable=True)
     receita_id = Column(Integer, ForeignKey("catalogo.receitas.id", ondelete="RESTRICT"), nullable=True)
     
     quantidade = Column(Integer, nullable=False, default=1)
 
     combo = relationship("ComboModel", back_populates="itens")
-    produto = relationship("ProdutoModel", foreign_keys=[produto_cod_barras])
+    produto = relationship("ProdutoModel", foreign_keys=[produto_id])
     receita = relationship("ReceitaModel", foreign_keys=[receita_id])
 
     model_config = ConfigDict(from_attributes=True)

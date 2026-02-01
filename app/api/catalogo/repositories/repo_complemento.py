@@ -36,6 +36,10 @@ class ComplementoRepository:
         """
         from app.api.catalogo.models.association_tables import produto_complemento_link
         from sqlalchemy import select
+
+        produto = self.db.query(ProdutoModel).filter_by(cod_barras=cod_barras).first()
+        if not produto:
+            return []
         
         query = (
             select(
@@ -47,7 +51,7 @@ class ComplementoRepository:
                 produto_complemento_link.c.maximo_itens
             )
             .join(produto_complemento_link, ComplementoModel.id == produto_complemento_link.c.complemento_id)
-            .where(produto_complemento_link.c.produto_cod_barras == cod_barras)
+            .where(produto_complemento_link.c.produto_id == produto.id)
         )
         if apenas_ativos:
             query = query.where(ComplementoModel.ativo == True)
@@ -113,7 +117,7 @@ class ComplementoRepository:
         # Remove vinculações existentes
         self.db.execute(
             produto_complemento_link.delete().where(
-                produto_complemento_link.c.produto_cod_barras == cod_barras
+                produto_complemento_link.c.produto_id == produto.id
             )
         )
         
@@ -141,7 +145,7 @@ class ComplementoRepository:
             if complemento:
                 self.db.execute(
                     produto_complemento_link.insert().values(
-                        produto_cod_barras=cod_barras,
+                        produto_id=produto.id,
                         complemento_id=complemento.id,
                         ordem=ordens[idx],
                         obrigatorio=obrigatorios[idx],
@@ -156,10 +160,14 @@ class ComplementoRepository:
     def desvincular_complemento_produto(self, cod_barras: str, complemento_id: int):
         """Remove a vinculação de um complemento com um produto."""
         from app.api.catalogo.models.association_tables import produto_complemento_link
+
+        produto = self.db.query(ProdutoModel).filter_by(cod_barras=cod_barras).first()
+        if not produto:
+            return
         
         self.db.execute(
             produto_complemento_link.delete().where(
-                produto_complemento_link.c.produto_cod_barras == cod_barras,
+                produto_complemento_link.c.produto_id == produto.id,
                 produto_complemento_link.c.complemento_id == complemento_id
             )
         )

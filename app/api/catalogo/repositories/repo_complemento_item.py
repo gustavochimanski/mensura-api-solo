@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.api.catalogo.models.model_complemento import ComplementoModel
 from app.api.catalogo.models.model_complemento_vinculo_item import ComplementoVinculoItemModel
+from app.api.catalogo.models.model_produto import ProdutoModel
 from app.api.catalogo.models.model_produto_emp import ProdutoEmpModel
 
 
@@ -102,8 +103,17 @@ class ComplementoItemRepository:
             # Garante que o preço do adicional seja definido no vínculo
             preco = precos[i] if precos and i < len(precos) else None
 
+            produto_id: int | None = None
+            if pid is not None:
+                produto_id = (
+                    self.db.query(ProdutoModel.id)
+                    .filter(ProdutoModel.cod_barras == str(pid))
+                    .scalar()
+                )
+
             vinculo = ComplementoVinculoItemModel(
                 complemento_id=complemento_id,
+                produto_id=produto_id,
                 produto_cod_barras=pid,
                 receita_id=rid,
                 combo_id=cid,
@@ -130,11 +140,22 @@ class ComplementoItemRepository:
             raise ValueError("Informe exatamente um de: produto_cod_barras, receita_id, combo_id")
 
         if produto_cod_barras is not None:
+            produto_id = (
+                self.db.query(ProdutoModel.id)
+                .filter(ProdutoModel.cod_barras == produto_cod_barras)
+                .scalar()
+            )
             existing = (
                 self.db.query(ComplementoVinculoItemModel)
                 .filter(
                     ComplementoVinculoItemModel.complemento_id == complemento_id,
-                    ComplementoVinculoItemModel.produto_cod_barras == produto_cod_barras,
+                    (
+                        (ComplementoVinculoItemModel.produto_id == produto_id)
+                        | (
+                            (ComplementoVinculoItemModel.produto_id.is_(None))
+                            & (ComplementoVinculoItemModel.produto_cod_barras == produto_cod_barras)
+                        )
+                    ),
                 )
                 .first()
             )
@@ -177,6 +198,13 @@ class ComplementoItemRepository:
 
         v = ComplementoVinculoItemModel(
             complemento_id=complemento_id,
+            produto_id=(
+                self.db.query(ProdutoModel.id)
+                .filter(ProdutoModel.cod_barras == produto_cod_barras)
+                .scalar()
+            )
+            if produto_cod_barras is not None
+            else None,
             produto_cod_barras=produto_cod_barras,
             receita_id=receita_id,
             combo_id=combo_id,

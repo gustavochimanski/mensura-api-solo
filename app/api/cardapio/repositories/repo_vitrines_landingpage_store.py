@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.cardapio.models.model_vitrine import VitrinesLandingpageStoreModel
+from app.api.catalogo.models.model_produto import ProdutoModel
 from app.api.catalogo.models.model_produto_emp import ProdutoEmpModel
 from app.api.cadastros.models.association_tables import (
     VitrineLandingProdutoLink,
@@ -189,18 +190,26 @@ class VitrineLandingpageStoreRepository:
 
     # --------------------- VÍNCULOS PRODUTO ↔ VITRINE ---------------------
     def vincular_produto(self, *, vitrine_id: int, cod_barras: str) -> bool:
+        produto_id = (
+            self.db.query(ProdutoModel.id)
+            .filter(ProdutoModel.cod_barras == cod_barras)
+            .scalar()
+        )
+        if not produto_id:
+            return False
+
         exists = (
             self.db.query(VitrineLandingProdutoLink)
             .filter(
                 VitrineLandingProdutoLink.vitrine_id == vitrine_id,
-                VitrineLandingProdutoLink.cod_barras == cod_barras,
+                VitrineLandingProdutoLink.produto_id == produto_id,
             )
             .first()
         )
         if exists:
             return True
 
-        link = VitrineLandingProdutoLink(vitrine_id=vitrine_id, cod_barras=cod_barras)
+        link = VitrineLandingProdutoLink(vitrine_id=vitrine_id, produto_id=produto_id)
         self.db.add(link)
         try:
             self.db.commit()
@@ -210,11 +219,19 @@ class VitrineLandingpageStoreRepository:
             return False
 
     def desvincular_produto(self, *, vitrine_id: int, cod_barras: str) -> bool:
+        produto_id = (
+            self.db.query(ProdutoModel.id)
+            .filter(ProdutoModel.cod_barras == cod_barras)
+            .scalar()
+        )
+        if not produto_id:
+            return False
+
         deleted = (
             self.db.query(VitrineLandingProdutoLink)
             .filter(
                 VitrineLandingProdutoLink.vitrine_id == vitrine_id,
-                VitrineLandingProdutoLink.cod_barras == cod_barras,
+                VitrineLandingProdutoLink.produto_id == produto_id,
             )
             .delete(synchronize_session=False)
         )

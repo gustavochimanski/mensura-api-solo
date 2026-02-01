@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session, joinedload, defer, selectinload
 from sqlalchemy.exc import IntegrityError
 
 from app.api.cadastros.models.model_mesa import MesaModel
+from app.api.catalogo.models.model_produto import ProdutoModel
 from app.api.catalogo.models.model_produto_emp import ProdutoEmpModel
 from app.api.pedidos.models.model_pedido_unificado import (
     PedidoUnificadoModel,
@@ -697,10 +698,19 @@ class PedidoRepository:
         
         # Calcula preco_total
         preco_total = preco_unitario * Decimal(str(quantidade))
+
+        produto_id: int | None = None
+        if cod_barras is not None:
+            produto_id = (
+                self.db.query(ProdutoModel.id)
+                .filter(ProdutoModel.cod_barras == cod_barras)
+                .scalar()
+            )
         
         # ⚠️ Evitar passar o objeto pedido E o pedido_id juntos.
         item = PedidoItemUnificadoModel(
             pedido_id=pedido_id,
+            produto_id=produto_id,
             produto_cod_barras=cod_barras,
             receita_id=receita_id,
             combo_id=combo_id,

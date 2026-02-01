@@ -6,6 +6,7 @@ from sqlalchemy import func, or_, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
+from app.api.catalogo.models.model_produto import ProdutoModel
 from app.api.catalogo.models.model_produto_emp import ProdutoEmpModel
 from app.api.cardapio.models.model_categoria_dv import CategoriaDeliveryModel
 from app.api.cardapio.models.model_vitrine import VitrinesModel
@@ -222,12 +223,20 @@ class VitrineRepository:
 
     # --------------------- VÍNCULOS PRODUTO ↔ VITRINE ---------------------
     def vincular_produto(self, *, vitrine_id: int, cod_barras: str) -> bool:
+        produto_id = (
+            self.db.query(ProdutoModel.id)
+            .filter(ProdutoModel.cod_barras == cod_barras)
+            .scalar()
+        )
+        if not produto_id:
+            return False
+
         # evita duplicidade
         exists = (
             self.db.query(VitrineProdutoLink)
             .filter(
                 VitrineProdutoLink.vitrine_id == vitrine_id,
-                VitrineProdutoLink.cod_barras == cod_barras,
+                VitrineProdutoLink.produto_id == produto_id,
             )
             .first()
         )
@@ -236,7 +245,7 @@ class VitrineRepository:
 
         link = VitrineProdutoLink(
             vitrine_id=vitrine_id,
-            cod_barras=cod_barras,
+            produto_id=produto_id,
         )
         self.db.add(link)
         try:
@@ -247,11 +256,19 @@ class VitrineRepository:
             return False
 
     def desvincular_produto(self, *, vitrine_id: int, cod_barras: str) -> bool:
+        produto_id = (
+            self.db.query(ProdutoModel.id)
+            .filter(ProdutoModel.cod_barras == cod_barras)
+            .scalar()
+        )
+        if not produto_id:
+            return False
+
         deleted = (
             self.db.query(VitrineProdutoLink)
             .filter(
                 VitrineProdutoLink.vitrine_id == vitrine_id,
-                VitrineProdutoLink.cod_barras == cod_barras,
+                VitrineProdutoLink.produto_id == produto_id,
             )
             .delete(synchronize_session=False)
         )
