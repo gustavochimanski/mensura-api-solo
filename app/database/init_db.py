@@ -11,6 +11,29 @@ logger = logging.getLogger(__name__)
 SCHEMAS = ["notifications", "cadastros", "cardapio", "catalogo", "financeiro", "pedidos", "chatbot"]
 
 #
+def _table_exists(conn, schema: str, table_name: str) -> bool:
+    """
+    Helper global para checar existência de tabela.
+
+    Importante: várias rotinas de seed/migração são chamadas fora do escopo de `criar_tabelas()`,
+    então este helper precisa existir no módulo (não apenas como função interna).
+    """
+    return (
+        conn.execute(
+            text(
+                """
+                SELECT 1
+                FROM information_schema.tables
+                WHERE table_schema = :schema
+                  AND table_name = :table
+                """
+            ),
+            {"schema": schema, "table": table_name},
+        ).scalar()
+        is not None
+    )
+
+
 def verificar_banco_inicializado():
     """Verifica se o banco já foi inicializado consultando se as tabelas principais existem"""
     try:
