@@ -147,6 +147,46 @@ def _is_pedido_intent(message_text: Optional[str]) -> bool:
     return False
 
 
+def _is_chamar_atendente_intent(message_text: Optional[str], button_id: Optional[str] = None) -> bool:
+    """
+    Detecta intenção explícita de falar com um atendente humano.
+
+    IMPORTANTE:
+    - Deve vir ANTES de `_is_pedido_intent`, pois frases como "quero falar com um atendente"
+      contém "quero" e acabam sendo classificadas como tentativa de pedido.
+    """
+    try:
+        if button_id and str(button_id).strip().lower() == "chamar_atendente":
+            return True
+        if not message_text:
+            return False
+        msg = str(message_text).lower().strip()
+        if not msg:
+            return False
+
+        # Normaliza variações comuns do WhatsApp (id do botão pode chegar como texto)
+        if msg == "chamar_atendente" or "chamar_atendente" in msg:
+            return True
+
+        # Regex mais permissivo (compatível com o GroqSalesHandler)
+        return bool(
+            re.search(
+                r"(chamar\s+atendente|"
+                r"quero\s+falar\s+com\s+(algu[eé]m|atendente|humano)|"
+                r"preciso\s+de\s+(um\s+)?(humano|atendente)|"
+                r"atendente\s+humano|"
+                r"quero\s+atendimento\s+humano|"
+                r"falar\s+com\s+atendente|"
+                r"ligar\s+atendente|"
+                r"chama\s+(algu[eé]m|atendente)\s+para\s+mi)",
+                msg,
+                re.IGNORECASE,
+            )
+        )
+    except Exception:
+        return False
+
+
 def _is_pedido_cardapio(message_text: Optional[str]) -> bool:
     """
     Detecta se a mensagem é um pedido explícito de cardápio.
@@ -2955,6 +2995,51 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
         # Intenções simples para roteamento rápido
         is_saudacao = _is_saudacao_intent(message_text)
 
+        # Prioridade: "chamar atendente" deve ser tratado mesmo com pedidos via WhatsApp desativados
+        if _is_chamar_atendente_intent(message_text, button_id):
+            await _enviar_notificacao_empresa(
+                db=db,
+                empresa_id=empresa_id,
+                empresa_id_int=empresa_id_int,
+                cliente_phone=phone_number,
+                cliente_nome=contact_name,
+                tipo_solicitacao="chamar_atendente",
+            )
+
+            # PAUSA O CHATBOT PARA ESTE CLIENTE (por conta própria - 3 horas)
+            try:
+                if chatbot_db.is_bot_active_for_phone(db, phone_number):
+                    destrava_em = chatbot_db.get_auto_pause_until()
+                    chatbot_db.set_bot_status(
+                        db=db,
+                        phone_number=phone_number,
+                        paused_by="cliente_chamou_atendente",
+                        empresa_id=empresa_id_int,
+                        desativa_chatbot_em=destrava_em,
+                    )
+            except Exception as e:
+                logger.error(f"❌ Erro ao pausar chatbot (chamar_atendente): {e}", exc_info=True)
+
+            resposta = (
+                "✅ *Solicitação enviada!*\n\n"
+                "Nossa equipe foi notificada e entrará em contato com você em breve.\n\n"
+                "Enquanto isso, posso te ajudar com alguma dúvida? 😊"
+            )
+            await _send_whatsapp_and_log(
+                db=db,
+                phone_number=phone_number,
+                contact_name=contact_name,
+                empresa_id=empresa_id,
+                empresa_id_int=empresa_id_int,
+                user_message=message_text,
+                response_message=resposta,
+                prompt_key=prompt_key_support,
+                model=DEFAULT_MODEL,
+                message_id=message_id,
+                buttons=None,
+            )
+            return
+
         # Se não aceita pedidos pelo WhatsApp, uma saudação deve responder com o link/cardápio (sem cair em IA/vendas)
         if not aceita_pedidos_whatsapp and is_saudacao:
             resposta = _montar_mensagem_redirecionamento(db, empresa_id_int, config)
@@ -3495,6 +3580,62 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
             content=message_text,
             whatsapp_message_id=message_id  # Passa message_id do WhatsApp para detectar duplicatas
         )
+
+        # 2.4. Prioridade absoluta: chamar atendente (não deve cair em redirecionamento/IA)
+        # Nota: aqui a mensagem do usuário JÁ foi salva acima, então NÃO podemos reutilizar
+        # `_send_whatsapp_and_log` (ele salvaria a mensagem do usuário de novo e pode gerar duplicata).
+        if _is_chamar_atendente_intent(message_text, button_id):
+            await _enviar_notificacao_empresa(
+                db=db,
+                empresa_id=empresa_id,
+                empresa_id_int=empresa_id_int,
+                cliente_phone=phone_number,
+                cliente_nome=contact_name,
+                tipo_solicitacao="chamar_atendente",
+            )
+            try:
+                if chatbot_db.is_bot_active_for_phone(db, phone_number):
+                    destrava_em = chatbot_db.get_auto_pause_until()
+                    chatbot_db.set_bot_status(
+                        db=db,
+                        phone_number=phone_number,
+                        paused_by="cliente_chamou_atendente",
+                        empresa_id=empresa_id_int,
+                        desativa_chatbot_em=destrava_em,
+                    )
+            except Exception as e:
+                logger.error(f"❌ Erro ao pausar chatbot (chamar_atendente - fluxo antigo): {e}", exc_info=True)
+
+            resposta = (
+                "✅ *Solicitação enviada!*\n\n"
+                "Nossa equipe foi notificada e entrará em contato com você em breve.\n\n"
+                "Enquanto isso, posso te ajudar com alguma dúvida? 😊"
+            )
+            notifier = OrderNotification()
+            result = await notifier.send_whatsapp_message(phone_number, resposta, empresa_id=empresa_id)
+
+            whatsapp_response_message_id = (
+                result.get("message_id") if isinstance(result, dict) and result.get("success") else None
+            )
+            chatbot_db.create_message(
+                db=db,
+                conversation_id=conversation_id,
+                role="assistant",
+                content=resposta,
+                whatsapp_message_id=whatsapp_response_message_id,
+            )
+
+            _log_whatsapp_out(
+                sender="chatbot",
+                recipient=phone_number,
+                empresa_id=empresa_id,
+                body={
+                    "message": resposta,
+                    "buttons": None,
+                    "whatsapp_message_id": whatsapp_response_message_id,
+                },
+            )
+            return
 
         # 2.5. VERIFICA SE NÃO ACEITA PEDIDOS E INTERCEPTA TENTATIVAS DE PEDIDO
         # (mesma verificação do fluxo principal para garantir consistência)

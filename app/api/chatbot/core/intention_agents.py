@@ -111,6 +111,53 @@ class IniciarPedidoAgent(IntentionAgent):
         return None
 
 
+class ChamarAtendenteAgent(IntentionAgent):
+    """Agente especializado em detectar intenção de CHAMAR ATENDENTE humano"""
+
+    def __init__(self):
+        # Prioridade muito alta: deve vir antes de cardápio e iniciar pedido
+        super().__init__(priority=200)
+
+    def detect(self, mensagem: str, mensagem_normalizada: str, context: Dict[str, Any] = None) -> Optional[Dict[str, Any]]:
+        """
+        Detecta intenção de chamar atendente humano.
+
+        IMPORTANTE:
+        - Deve ser avaliado antes de detecções genéricas como "quero ..." (pedido),
+          pois o cliente pode dizer "quero falar com um atendente".
+        """
+        msg = (mensagem_normalizada or "").strip()
+        if not msg:
+            return None
+
+        # Suporta casos em que o frontend/WhatsApp envia o ID do botão como texto
+        if msg == "chamar_atendente" or "chamar_atendente" in msg:
+            return {
+                "intention": IntentionType.CHAMAR_ATENDENTE,
+                "funcao": "chamar_atendente",
+                "params": {},
+            }
+
+        padrao = (
+            r"(chamar\s+atendente|"
+            r"quero\s+falar\s+com\s+(algu[eé]m|atendente|humano)|"
+            r"preciso\s+de\s+(um\s+)?(humano|atendente)|"
+            r"atendente\s+humano|"
+            r"quero\s+atendimento\s+humano|"
+            r"falar\s+com\s+atendente|"
+            r"ligar\s+atendente|"
+            r"chama\s+(algu[eé]m|atendente)\s+para\s+mi)"
+        )
+        if re.search(padrao, msg, re.IGNORECASE):
+            print(f"📞 [Agente ChamarAtendente] Detectado: '{mensagem}'")
+            return {
+                "intention": IntentionType.CHAMAR_ATENDENTE,
+                "funcao": "chamar_atendente",
+                "params": {},
+            }
+        return None
+
+
 class AdicionarProdutoAgent(IntentionAgent):
     """Agente especializado em detectar intenção de ADICIONAR produto ao carrinho"""
     
@@ -339,6 +386,7 @@ class IntentionRouter:
     def __init__(self):
         # Lista de agentes ordenada por prioridade (maior primeiro)
         self.agents: List[IntentionAgent] = [
+            ChamarAtendenteAgent(),    # Prioridade 200 - deve ser o PRIMEIRO
             VerCardapioAgent(),        # Prioridade 150 - verificado PRIMEIRO (antes de cadastro)
             IniciarPedidoAgent(),      # Prioridade 100 - verificado segundo
             AdicionarProdutoAgent(),  # Prioridade 50
