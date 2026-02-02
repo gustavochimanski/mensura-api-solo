@@ -28,6 +28,9 @@ router = APIRouter(prefix="/api/cadastros/admin/clientes", tags=["Admin - Cadast
 @router.get("/", response_model=List[ClienteOut], status_code=status.HTTP_200_OK)
 def listar_clientes(
     ativo: Optional[bool] = Query(None, description="Filtrar por status ativo/inativo"),
+    search: Optional[str] = Query(None, description="Busca por nome, telefone, email ou CPF (contains)"),
+    skip: int = Query(0, ge=0, description="Offset para paginação"),
+    limit: int = Query(50, ge=1, le=200, description="Limite de registros (máx 200)"),
     current_user = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -38,7 +41,7 @@ def listar_clientes(
     logger.info(f"[Cliente Admin] Listar clientes - admin={current_user.id}, ativo={ativo}")
     
     repo = ClienteRepository(db)
-    clientes = repo.list(ativo=ativo)
+    clientes = repo.list(ativo=ativo, search=search, skip=skip, limit=limit)
     
     return [ClienteOut.model_validate(cliente) for cliente in clientes]
 

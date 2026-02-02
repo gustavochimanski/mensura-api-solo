@@ -1,6 +1,6 @@
 from typing import Optional, List
 from sqlalchemy.orm import Session
-from sqlalchemy import select
+from sqlalchemy import select, or_
 from sqlalchemy.exc import IntegrityError
 from app.api.cadastros.models.model_cliente_dv import ClienteModel
 from app.utils.telefone import variantes_telefone_para_busca
@@ -32,10 +32,38 @@ class ClienteRepository:
     def get_by_id(self, id: int) -> Optional[ClienteModel]:
         return self.db.query(ClienteModel).filter(ClienteModel.id == id).first()
 
-    def list(self, ativo: Optional[bool] = None) -> List[ClienteModel]:
+    def list(
+        self,
+        ativo: Optional[bool] = None,
+        search: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 50,
+    ) -> List[ClienteModel]:
         stmt = select(ClienteModel)
         if ativo is not None:
             stmt = stmt.where(ClienteModel.ativo.is_(ativo))
+
+        if search is not None:
+            s = search.strip()
+            if s:
+                like = f"%{s}%"
+                conditions = [
+                    ClienteModel.nome.ilike(like),
+                    ClienteModel.email.ilike(like),
+                    ClienteModel.cpf.ilike(like),
+                    ClienteModel.telefone.ilike(like),
+                ]
+
+                # Se o usuário digitar telefone (com/sem 55, com/sem 9),
+                # tentamos bater também via conjunto de variantes.
+                candidatos = variantes_telefone_para_busca(s)
+                if candidatos:
+                    conditions.append(ClienteModel.telefone.in_(candidatos))
+
+                stmt = stmt.where(or_(*conditions))
+
+        # Ordenação estável e paginação
+        stmt = stmt.order_by(ClienteModel.id.desc()).offset(int(skip)).limit(int(limit))
         return self.db.execute(stmt).scalars().all()
 
     def create(self, **data) -> ClienteModel:
