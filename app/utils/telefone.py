@@ -166,53 +166,71 @@ def variantes_telefone_para_busca(telefone: Optional[str]) -> List[str]:
     if telefone is None:
         return []
 
-    digits = re.sub(r"[^\d]", "", str(telefone))
-    if not digits:
+    digits_raw = re.sub(r"[^\d]", "", str(telefone))
+    if not digits_raw:
         return []
 
     # Base normalizada (mantém compatibilidade com comportamento antigo)
-    base = normalizar_telefone(str(telefone)) or digits
+    base = normalizar_telefone(str(telefone)) or digits_raw
+
+    # Aceita caso comum de "9" duplicado após o DDD:
+    # - sem país: DDD + 99 + 8 dígitos  -> 12 dígitos (ex.: 119999999999)
+    # - com país: 55 + DDD + 99 + 8 dígitos -> 14 dígitos (ex.: 55119999999999)
+    #
+    # Gera uma versão "corrigida" removendo 1 dos 9 duplicados (compatível com o que é salvo no banco).
+    digits_candidates: Set[str] = {digits_raw}
+    if len(digits_raw) == 12 and digits_raw[2:4] == "99":
+        digits_candidates.add(digits_raw[:3] + digits_raw[4:])
+    if len(digits_raw) == 14 and digits_raw.startswith("55") and digits_raw[4:6] == "99":
+        digits_candidates.add(digits_raw[:5] + digits_raw[6:])
 
     out: Set[str] = set()
     out.add(base)
-    out.add(digits)
+    out.add(digits_raw)
 
-    split = _split_br_ddd_assinante(digits)
-    if not split:
-        # fallback: se já estiver com 55, tenta também sem 55 (bases antigas)
-        if base.startswith("55") and len(base) > 2:
-            out.add(base[2:])
-        return [x for x in out if x]
-
-    ddd, assinante, tem_55 = split
-
-    # Deriva assinante com e sem 9
-    assinante_8: Optional[str] = None
-    assinante_9: Optional[str] = None
-
-    if len(assinante) == 9:
-        assinante_9 = assinante
-        if assinante.startswith("9"):
-            assinante_8 = assinante[1:]
-    elif len(assinante) == 8:
-        assinante_8 = assinante
-        if _pode_inserir_nono_digito(assinante):
-            assinante_9 = "9" + assinante
-
-    # Monta variantes com/sem 55
-    def _add(v: Optional[str]) -> None:
-        if v:
-            out.add(v)
-
-    for a in (assinante_8, assinante_9):
-        if not a:
+    any_split = False
+    for digits in list(digits_candidates):
+        out.add(digits)
+        split = _split_br_ddd_assinante(digits)
+        if not split:
             continue
-        _add("55" + ddd + a)
-        _add(ddd + a)
+        any_split = True
+
+        ddd, assinante, _tem_55 = split
+
+        # Deriva assinante com e sem 9
+        assinante_8: Optional[str] = None
+        assinante_9: Optional[str] = None
+
+        if len(assinante) == 9:
+            assinante_9 = assinante
+            if assinante.startswith("9"):
+                assinante_8 = assinante[1:]
+        elif len(assinante) == 8:
+            assinante_8 = assinante
+            if _pode_inserir_nono_digito(assinante):
+                assinante_9 = "9" + assinante
+
+        # Monta variantes com/sem 55
+        def _add(v: Optional[str]) -> None:
+            if v:
+                out.add(v)
+
+        for a in (assinante_8, assinante_9):
+            if not a:
+                continue
+            _add("55" + ddd + a)
+            _add(ddd + a)
 
     # Compatibilidade: se base veio com 55, tenta sem 55 também
     if base.startswith("55") and len(base) > 2:
         out.add(base[2:])
+
+    if not any_split:
+        # fallback: se já estiver com 55, tenta também sem 55 (bases antigas)
+        if base.startswith("55") and len(base) > 2:
+            out.add(base[2:])
+        return [x for x in out if x]
 
     # Retorna estável (mas sem garantir ordem específica além de determinística)
     return sorted([x for x in out if x], key=lambda s: (len(s), s))
