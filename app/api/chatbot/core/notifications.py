@@ -137,6 +137,7 @@ class OrderNotification:
                 get_headers,
                 format_phone_number,
             )
+            from app.utils.telefone import variantes_telefone_para_envio_whatsapp
 
             config = load_whatsapp_config(empresa_id)
             provider = (config.get("provider") or "").lower()
@@ -200,35 +201,19 @@ class OrderNotification:
             # Payload da mensagem conforme documentação 360Dialog
             # https://docs.360dialog.com/docs/waba-messaging/messaging
             if is_360:
-                # Para 360Dialog, tenta diferentes formatos de número se o primeiro falhar
-                # Formato 1: Com código do país (padrão)
-                phone_to_use = phone_formatted
+                # 360dialog: tentamos variantes de telefone para maximizar entregabilidade
+                # (com/sem 55 e com/sem 9 quando aplicável).
+                candidates = variantes_telefone_para_envio_whatsapp(phone_formatted or phone)
+                if not candidates:
+                    candidates = [''.join(filter(str.isdigit, phone_formatted or phone))]
 
-                # Validação rigorosa do número
-                phone_clean = ''.join(filter(str.isdigit, phone_to_use))
-
-                # Garante que tem código do país
-                if not phone_clean.startswith('55'):
-                    phone_clean = '55' + phone_clean
-
-                # Validação final: deve ter exatamente 13 dígitos para Brasil (55 + 2 DDD + 8 número)
-                if len(phone_clean) != 13:
-                    logger.warning(f"[WhatsApp] Número tem {len(phone_clean)} dígitos, esperado 13 para Brasil: {phone_clean}")
-
-                phone_to_use = phone_clean
-
-                # Payload conforme documentação oficial da 360Dialog
-                # https://docs.360dialog.com/docs/waba-messaging/messaging
-                payload = {
+                # Payload base
+                payload_base = {
                     "messaging_product": "whatsapp",
                     "recipient_type": "individual",
-                    "to": phone_to_use,
                     "type": "text",
                     "text": {"body": message},
                 }
-                
-                # Não precisamos adicionar "context" ou "message_id" - o 360dialog detecta automaticamente
-                # se é uma resposta dentro da janela de conversa baseado no número e timestamp
             else:
                 payload = {
                     "messaging_product": "whatsapp",
@@ -242,38 +227,35 @@ class OrderNotification:
 
             # Envia a mensagem (Cloud API) - compatível com modo de coexistência
             async with httpx.AsyncClient(timeout=30.0) as client:
-                # Primeira tentativa com o formato padrão
-                response = await client.post(url, json=payload, headers=headers)
-                
-                # Se falhar com 400 e for 360Dialog, tenta formato alternativo do número
-                if response.status_code == 400 and is_360:
-                    # Tenta sem código do país (apenas DDD + número)
-                    if phone_to_use.startswith('55') and len(phone_to_use) > 11:
-                        phone_alt = phone_to_use[2:]  # Remove o 55
-                        payload_alt = {
-                            "messaging_product": "whatsapp",
-                            "recipient_type": "individual",
-                            "to": phone_alt,
-                            "type": "text",
-                            "text": {"body": message},
-                        }
-
-                        response = await client.post(url, json=payload_alt, headers=headers)
-
-                        if response.status_code == 200:
-                            # Sucesso com formato alternativo
-                            result = response.json()
+                phone_used = phone_formatted
+                if is_360:
+                    last_response = None
+                    for cand in candidates:
+                        phone_used = cand
+                        payload = dict(payload_base)
+                        payload["to"] = cand
+                        last_response = await client.post(url, json=payload, headers=headers)
+                        # Sucesso
+                        if last_response.status_code == 200:
+                            result = last_response.json()
                             message_id = result.get("messages", [{}])[0].get("id") if result.get("messages") else None
-                            logger.info(f"[WhatsApp] Mensagem enviada com sucesso (formato alternativo). Message ID: {message_id}")
+                            logger.info(f"[WhatsApp] Mensagem enviada com sucesso. Message ID: {message_id}")
                             return {
                                 "success": True,
                                 "provider": "360dialog",
-                                "phone": phone_alt,
+                                "phone": phone_used,
                                 "message_id": message_id,
                                 "status": "sent",
                                 "response": result,
-                                "note": "Enviado com formato alternativo (sem código do país)"
+                                "note": "Enviado com fallback de variantes (telefone normalizado)",
                             }
+                        # Para 360dialog, só faz sentido tentar outras variantes quando o provedor rejeita o 'to'
+                        if last_response.status_code != 400:
+                            break
+
+                    response = last_response
+                else:
+                    response = await client.post(url, json=payload, headers=headers)
                 
                 if response.status_code != 200:
                     # Log completo do erro
@@ -293,7 +275,7 @@ class OrderNotification:
                     return {
                         "success": True,
                         "provider": "360dialog" if is_360 else "WhatsApp Business API (Meta)",
-                        "phone": phone_formatted,
+                        "phone": phone_used if is_360 else phone_formatted,
                         "message_id": message_id,
                         "status": "sent",
                         "response": result
@@ -390,6 +372,7 @@ class OrderNotification:
                 get_headers,
                 format_phone_number,
             )
+            from app.utils.telefone import variantes_telefone_para_envio_whatsapp
 
             config = load_whatsapp_config(empresa_id)
             provider = (config.get("provider") or "").lower()
@@ -435,25 +418,20 @@ class OrderNotification:
 
             # Payload para mensagem interativa com botões
             if is_360:
-                # 360Dialog usa formato similar ao Meta
-                phone_clean = ''.join(filter(str.isdigit, phone_formatted))
-                if not phone_clean.startswith('55'):
-                    phone_clean = '55' + phone_clean
+                # 360Dialog usa formato similar ao Meta. Vamos tentar com variantes do telefone.
+                candidates = variantes_telefone_para_envio_whatsapp(phone_formatted or phone)
+                if not candidates:
+                    candidates = [''.join(filter(str.isdigit, phone_formatted or phone))]
 
-                payload = {
+                payload_base = {
                     "messaging_product": "whatsapp",
                     "recipient_type": "individual",
-                    "to": phone_clean,
                     "type": "interactive",
                     "interactive": {
                         "type": "button",
-                        "body": {
-                            "text": message
-                        },
-                        "action": {
-                            "buttons": button_list
-                        }
-                    }
+                        "body": {"text": message},
+                        "action": {"buttons": button_list},
+                    },
                 }
             else:
                 # Meta Cloud API
@@ -472,9 +450,32 @@ class OrderNotification:
                     }
                 }
 
-            # Envia a mensagem
+            # Envia a mensagem (com fallback para 360dialog quando rejeitar o 'to')
             async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.post(url, json=payload, headers=headers)
+                phone_used = phone_formatted
+                if is_360:
+                    last_response = None
+                    for cand in candidates:
+                        phone_used = cand
+                        payload_try = dict(payload_base)
+                        payload_try["to"] = cand
+                        last_response = await client.post(url, json=payload_try, headers=headers)
+                        if last_response.status_code == 200:
+                            result = last_response.json()
+                            message_id = result.get("messages", [{}])[0].get("id") if result.get("messages") else None
+                            logger.info(f"[WhatsApp] Mensagem com botões enviada com sucesso. Message ID: {message_id}")
+                            return {
+                                "success": True,
+                                "provider": "360dialog",
+                                "message_id": message_id,
+                                "phone": phone_used,
+                                "note": "Enviado com fallback de variantes (telefone normalizado)",
+                            }
+                        if last_response.status_code != 400:
+                            break
+                    response = last_response
+                else:
+                    response = await client.post(url, json=payload, headers=headers)
                 
                 if response.status_code == 200:
                     result = response.json()
@@ -484,7 +485,7 @@ class OrderNotification:
                         "success": True,
                         "provider": "360dialog" if is_360 else "WhatsApp Business API (Meta)",
                         "message_id": message_id,
-                        "phone": phone_formatted
+                        "phone": phone_used if is_360 else phone_formatted
                     }
                 else:
                     error_data = response.json() if response.text else {}
@@ -495,7 +496,7 @@ class OrderNotification:
                         "provider": "360dialog" if is_360 else "WhatsApp Business API (Meta)",
                         "error": error_message,
                         "status_code": response.status_code,
-                        "phone": phone_formatted
+                        "phone": phone_used if is_360 else phone_formatted
                     }
 
         except Exception as e:

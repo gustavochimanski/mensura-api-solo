@@ -22,20 +22,31 @@ class DefaultNotificationMessageContract(INotificationMessageContract):
             from sqlalchemy import text
             from app.database.db_connection import SessionLocal
             from app.api.chatbot.core.config_whatsapp import format_phone_number
+            from app.utils.telefone import variantes_telefone_para_busca
 
             phone_norm = format_phone_number(phone)
+            variants = variantes_telefone_para_busca(phone_norm) or [phone_norm]
             cutoff = datetime.utcnow() - timedelta(hours=24)
 
             db = SessionLocal()
             try:
                 # Considera interação do cliente como mensagem "user" recente
+                in_params = {}
+                placeholders = []
+                for i, v in enumerate(variants):
+                    k = f"u{i}"
+                    placeholders.append(f":{k}")
+                    in_params[k] = v
+                if not placeholders:
+                    return False
+
                 q = text(
-                    """
+                    f"""
                     SELECT 1
                     FROM chatbot.messages m
                     JOIN chatbot.conversations c ON c.id = m.conversation_id
-                    WHERE c.user_id = :user_id
-                      AND c.empresa_id = :empresa_id
+                    WHERE c.user_id IN ({", ".join(placeholders)})
+                      AND (c.empresa_id = :empresa_id OR c.empresa_id IS NULL)
                       AND m.role = 'user'
                       AND m.created_at >= :cutoff
                     LIMIT 1
@@ -43,7 +54,7 @@ class DefaultNotificationMessageContract(INotificationMessageContract):
                 )
                 row = db.execute(
                     q,
-                    {"user_id": phone_norm, "empresa_id": int(empresa_id), "cutoff": cutoff},
+                    {**in_params, "empresa_id": int(empresa_id), "cutoff": cutoff},
                 ).fetchone()
                 return row is not None
             finally:

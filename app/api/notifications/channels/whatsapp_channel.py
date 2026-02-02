@@ -78,6 +78,7 @@ class WhatsAppChannel(BaseNotificationChannel):
         try:
             # Formata o número para o padrão WhatsApp
             phone_formatted = self._format_phone_number(recipient)
+            from app.utils.telefone import variantes_telefone_para_envio_whatsapp
 
             # Contract de mensagem: permite template (necessário sem interação/janela 24h)
             contract = DefaultNotificationMessageContract()
@@ -92,9 +93,30 @@ class WhatsAppChannel(BaseNotificationChannel):
             # Headers com token de autorização
             headers = self._get_headers()
             
-            # Envia a mensagem
+            # Envia a mensagem (com fallback de variantes para 360dialog quando rejeitar o 'to')
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(self.api_url, json=payload, headers=headers)
+
+                # 360dialog pode rejeitar o telefone dependendo do formato (com/sem 55 e/ou 9).
+                # Se for erro 400, tentamos variantes antes de desistir.
+                if self.is_360 and response.status_code == 400:
+                    try:
+                        candidates = variantes_telefone_para_envio_whatsapp(phone_formatted or recipient)
+                        # O primeiro candidato geralmente já foi tentado (phone_formatted). Vamos tentar os demais.
+                        for cand in candidates[1:]:
+                            if isinstance(payload, dict):
+                                payload_try = dict(payload)
+                                payload_try["to"] = cand
+                            else:
+                                payload_try = payload
+                            response = await client.post(self.api_url, json=payload_try, headers=headers)
+                            if response.status_code == 200:
+                                break
+                            if response.status_code != 400:
+                                break
+                    except Exception:
+                        # fallback silencioso: mantém o response original
+                        pass
                 
                 if response.status_code == 200:
                     result = response.json()

@@ -235,3 +235,66 @@ def variantes_telefone_para_busca(telefone: Optional[str]) -> List[str]:
     # Retorna estável (mas sem garantir ordem específica além de determinística)
     return sorted([x for x in out if x], key=lambda s: (len(s), s))
 
+
+def variantes_telefone_para_envio_whatsapp(telefone: Optional[str]) -> List[str]:
+    """
+    Retorna candidatos (priorizados) para envio via WhatsApp.
+
+    Motivação:
+    - Alguns provedores (ex.: 360dialog) podem aceitar "to" com ou sem código do país
+      dependendo do modo/coexistência/ambiente.
+    - No BR, histórico pode existir com/sem o nono dígito; para envio tentamos o canônico
+      e, em caso de rejeição, caímos para variantes.
+
+    Ordem típica:
+    1) Canônico: 55 + DDD + 9 dígitos (quando celular)
+    2) Sem país: DDD + 9 dígitos
+    3) Sem o 9 (quando aplicável)
+    4) Sem país e sem o 9 (quando aplicável)
+    5) Valor bruto (digits-only) como último fallback
+    """
+    if telefone is None:
+        return []
+
+    raw = str(telefone).strip()
+    digits_raw = re.sub(r"[^\d]", "", raw)
+    if not digits_raw:
+        return []
+
+    canonical = normalizar_telefone_para_armazenar(raw) or digits_raw
+
+    def _strip_non_digits(v: str) -> str:
+        return re.sub(r"[^\d]", "", str(v or ""))
+
+    out: List[str] = []
+    seen: Set[str] = set()
+
+    def _add(v: Optional[str]) -> None:
+        if not v:
+            return
+        d = _strip_non_digits(v)
+        if not d:
+            return
+        if d in seen:
+            return
+        seen.add(d)
+        out.append(d)
+
+    # Base canônica
+    _add(canonical)
+    if canonical.startswith("55") and len(canonical) > 2:
+        _add(canonical[2:])
+
+    # Variante sem o 9 (quando for celular BR no formato 55DD9XXXXXXXX)
+    if canonical.startswith("55") and len(canonical) == 13:
+        # 55 + DDD(2) + assinante(9). Se assinante começa com 9, remove.
+        if canonical[4] == "9":
+            no9 = canonical[:4] + canonical[5:]
+            _add(no9)
+            if no9.startswith("55") and len(no9) > 2:
+                _add(no9[2:])
+
+    # Último fallback: digits-only original
+    _add(digits_raw)
+    return out
+

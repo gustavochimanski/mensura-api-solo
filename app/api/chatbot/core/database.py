@@ -6,7 +6,7 @@ Integrado com o sistema de DB do Mensura
 """
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any, Tuple
 import logging
 import json
 from datetime import datetime, timedelta, timezone
@@ -16,6 +16,92 @@ logger = logging.getLogger(__name__)
 
 # Schema do chatbot
 CHATBOT_SCHEMA = "chatbot"
+
+# ==================== NORMALIZAÇÃO / UNIFICAÇÃO DE TELEFONE (user_id) ====================
+
+def _user_id_canonical(phone_number: str) -> Optional[str]:
+    """
+    Retorna o user_id canônico para conversas:
+    - remove máscara
+    - prefixa 55 quando BR
+    - para celular BR com 8 dígitos, INSERE o 9 (55 + DDD + 9 dígitos)
+
+    Objetivo: evitar histórico separado por "com 9" vs "sem 9".
+    """
+    if not phone_number or not str(phone_number).strip():
+        return None
+    try:
+        from app.utils.telefone import normalizar_telefone_para_armazenar
+
+        canonical = normalizar_telefone_para_armazenar(str(phone_number).strip())
+        return canonical or None
+    except Exception:
+        # fallback legado
+        try:
+            return _normalize_phone_number(str(phone_number).strip())
+        except Exception:
+            return str(phone_number).strip()
+
+
+def _user_id_variants(phone_number: str) -> List[str]:
+    """
+    Variantes aceitas para buscar conversas/mensagens do mesmo cliente:
+    - com/sem 55
+    - com/sem 9 (celular)
+    - corrige caso de "99" duplicado
+    """
+    if not phone_number or not str(phone_number).strip():
+        return []
+    raw = str(phone_number).strip()
+    out: List[str] = []
+    try:
+        from app.utils.telefone import variantes_telefone_para_busca
+
+        out.extend(variantes_telefone_para_busca(raw))
+    except Exception:
+        # fallback mínimo: normalização antiga
+        try:
+            out.append(_normalize_phone_number(raw))
+        except Exception:
+            out.append(raw)
+
+    canonical = _user_id_canonical(raw)
+    if canonical:
+        out.append(canonical)
+
+    # uniq mantendo ordem
+    seen = set()
+    uniq: List[str] = []
+    for v in out:
+        if not v:
+            continue
+        if v in seen:
+            continue
+        seen.add(v)
+        uniq.append(v)
+    return uniq
+
+
+def _build_in_params(values: List[str], prefix: str = "v") -> Tuple[str, Dict[str, Any]]:
+    """Monta placeholders :v0,:v1,... + dict de params para IN (...) em queries text()."""
+    uniq = []
+    seen = set()
+    for v in values or []:
+        if not v:
+            continue
+        if v in seen:
+            continue
+        seen.add(v)
+        uniq.append(v)
+
+    params: Dict[str, Any] = {}
+    ph: List[str] = []
+    for i, v in enumerate(uniq):
+        k = f"{prefix}{i}"
+        ph.append(f":{k}")
+        params[k] = v
+    return ", ".join(ph), params
+
 
 # ==================== JANELA DE CONVERSA (WHATSAPP 24H) ====================
 
@@ -37,8 +123,11 @@ def cliente_conversou_nas_ultimas_horas(
         if not phone_number or not str(phone_number).strip():
             return False
 
-        user_id = _normalize_phone_number(str(phone_number).strip())
-        if not user_id:
+        user_ids = _user_id_variants(str(phone_number).strip())
+        if not user_ids:
+            return False
+        in_clause, in_params = _build_in_params(user_ids, prefix="uid")
+        if not in_clause:
             return False
 
         # Se empresa_id for informado, tentamos respeitar o escopo da empresa.
@@ -49,23 +138,24 @@ def cliente_conversou_nas_ultimas_horas(
                 SELECT MAX(m.created_at) AS last_user_message_at
                 FROM {CHATBOT_SCHEMA}.conversations c
                 JOIN {CHATBOT_SCHEMA}.messages m ON m.conversation_id = c.id
-                WHERE c.user_id = :user_id
+                WHERE c.user_id IN ({in_clause})
                   AND (c.empresa_id = :empresa_id OR c.empresa_id IS NULL)
                   AND m.role = 'user'
                 """
             )
-            row = db.execute(q, {"user_id": user_id, "empresa_id": int(empresa_id)}).fetchone()
+            params = {**in_params, "empresa_id": int(empresa_id)}
+            row = db.execute(q, params).fetchone()
         else:
             q = text(
                 f"""
                 SELECT MAX(m.created_at) AS last_user_message_at
                 FROM {CHATBOT_SCHEMA}.conversations c
                 JOIN {CHATBOT_SCHEMA}.messages m ON m.conversation_id = c.id
-                WHERE c.user_id = :user_id
+                WHERE c.user_id IN ({in_clause})
                   AND m.role = 'user'
                 """
             )
-            row = db.execute(q, {"user_id": user_id}).fetchone()
+            row = db.execute(q, in_params).fetchone()
 
         last_at = row[0] if row else None
         last_dt = _parse_timestamp(last_at)
@@ -504,6 +594,8 @@ def delete_prompt(db: Session, key: str, empresa_id: Optional[int] = None) -> bo
 
 def create_conversation(db: Session, session_id: str, user_id: str, prompt_key: str, model: str, empresa_id: Optional[int] = None, contact_name: Optional[str] = None, profile_picture_url: Optional[str] = None) -> Optional[int]:
     """Cria uma nova conversa"""
+    # Normaliza user_id (telefone) para o formato canônico (evita histórico separado com/sem 9)
+    user_id_canon = _user_id_canonical(user_id) or user_id
     query = text(f"""
         INSERT INTO {CHATBOT_SCHEMA}.conversations (session_id, user_id, prompt_key, model, empresa_id, contact_name, profile_picture_url)
         VALUES (:session_id, :user_id, :prompt_key, :model, :empresa_id, :contact_name, :profile_picture_url)
@@ -511,7 +603,7 @@ def create_conversation(db: Session, session_id: str, user_id: str, prompt_key: 
     """)
     result = db.execute(query, {
         "session_id": session_id,
-        "user_id": user_id,
+        "user_id": user_id_canon,
         "prompt_key": prompt_key,
         "model": model,
         "empresa_id": empresa_id,
@@ -618,22 +710,35 @@ def get_conversations_by_session(db: Session, session_id: str, empresa_id: Optio
 
 def get_conversations_by_user(db: Session, user_id: str, empresa_id: Optional[int] = None) -> List[Dict]:
     """Retorna todas as conversas de um usuário"""
+    # Aceita variantes com/sem 9 e com/sem 55, mas mantém user_id canônico para novos registros.
+    user_ids = _user_id_variants(user_id)
+    if not user_ids:
+        return []
+    in_clause, in_params = _build_in_params(user_ids, prefix="uid")
+    if not in_clause:
+        return []
+
     if empresa_id:
-        query = text(f"""
+        query = text(
+            f"""
             SELECT id, session_id, user_id, contact_name, prompt_key, model, empresa_id, profile_picture_url, created_at, updated_at
             FROM {CHATBOT_SCHEMA}.conversations
-            WHERE user_id = :user_id AND empresa_id = :empresa_id
+            WHERE user_id IN ({in_clause}) AND empresa_id = :empresa_id
             ORDER BY updated_at DESC
-        """)
-        result = db.execute(query, {"user_id": user_id, "empresa_id": empresa_id})
+            """
+        )
+        params = {**in_params, "empresa_id": empresa_id}
+        result = db.execute(query, params)
     else:
-        query = text(f"""
+        query = text(
+            f"""
             SELECT id, session_id, user_id, contact_name, prompt_key, model, empresa_id, profile_picture_url, created_at, updated_at
             FROM {CHATBOT_SCHEMA}.conversations
-            WHERE user_id = :user_id
+            WHERE user_id IN ({in_clause})
             ORDER BY updated_at DESC
-        """)
-        result = db.execute(query, {"user_id": user_id})
+            """
+        )
+        result = db.execute(query, in_params)
 
     return [
         {
