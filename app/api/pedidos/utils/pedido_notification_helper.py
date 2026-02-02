@@ -10,6 +10,79 @@ from app.api.pedidos.models.model_pedido_unificado import PedidoUnificadoModel
 
 logger = logging.getLogger(__name__)
 
+def _to_float(value: Any) -> float:
+    if value is None:
+        return 0.0
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, Decimal):
+        return float(value)
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _extrair_adicionais_do_item(item: Any) -> list[Dict[str, Any]]:
+    """
+    Extrai adicionais (com quantidade/preço) a partir do modelo relacional:
+    item.complementos -> complemento.adicionais -> adicional.nome.
+    """
+    adicionais_out: list[Dict[str, Any]] = []
+
+    complementos_rel = getattr(item, "complementos", None) or []
+    for comp in complementos_rel:
+        comp_nome = None
+        comp_catalogo = getattr(comp, "complemento", None)
+        if comp_catalogo is not None:
+            comp_nome = getattr(comp_catalogo, "nome", None)
+
+        adicionais_rel = getattr(comp, "adicionais", None) or []
+        for ad_rel in adicionais_rel:
+            catalogo_ad = getattr(ad_rel, "adicional", None)
+            nome = getattr(catalogo_ad, "nome", None) if catalogo_ad is not None else None
+            adicionais_out.append(
+                {
+                    "nome": nome or "Adicional",
+                    "quantidade": int(getattr(ad_rel, "quantidade", 1) or 1),
+                    "preco_unitario": _to_float(getattr(ad_rel, "preco_unitario", 0)),
+                    "total": _to_float(getattr(ad_rel, "total", 0)),
+                    "complemento_nome": comp_nome,
+                }
+            )
+
+    return adicionais_out
+
+
+def _montar_sufixo_adicionais(adicionais: list[Dict[str, Any]]) -> str:
+    """
+    Monta texto no formato: "+ AdicionalX + 2x AdicionalY".
+    """
+    if not adicionais:
+        return ""
+
+    # Agrupa por nome (e complemento, se quiser distinguir) para evitar repetição na renderização
+    agrupado: dict[tuple[str, str | None], Dict[str, Any]] = {}
+    for ad in adicionais:
+        nome = str(ad.get("nome") or "Adicional")
+        comp_nome = ad.get("complemento_nome")
+        key = (nome, comp_nome)
+        if key not in agrupado:
+            agrupado[key] = {**ad}
+            agrupado[key]["quantidade"] = int(ad.get("quantidade") or 1)
+        else:
+            agrupado[key]["quantidade"] = int(agrupado[key].get("quantidade") or 1) + int(ad.get("quantidade") or 1)
+
+    partes: list[str] = []
+    for (nome, _comp_nome), ad in agrupado.items():
+        qtd = int(ad.get("quantidade") or 1)
+        if qtd > 1:
+            partes.append(f"+ {qtd}x {nome}")
+        else:
+            partes.append(f"+ {nome}")
+
+    return " " + " ".join(partes) if partes else ""
+
 
 async def notificar_novo_pedido(pedido: PedidoUnificadoModel) -> None:
     """
@@ -51,12 +124,20 @@ async def notificar_novo_pedido(pedido: PedidoUnificadoModel) -> None:
         itens = []
         if hasattr(pedido, "itens") and pedido.itens:
             for item in pedido.itens:
+                descricao_base = getattr(item, "produto_descricao_snapshot", None) or "Produto"
+                adicionais = _extrair_adicionais_do_item(item)
+                descricao_render = descricao_base + _montar_sufixo_adicionais(adicionais)
                 item_data = {
                     "id": item.id,
-                    "produto_descricao": getattr(item, "produto_descricao_snapshot", None) or "Produto",
+                    # Mantém o base e também entrega uma versão "render" com adicionais no formato "+ adicionalX"
+                    "produto_descricao_base": descricao_base,
+                    "produto_descricao": descricao_render,
                     "quantidade": getattr(item, "quantidade", 1),
                     "preco_unitario": float(getattr(item, "preco_unitario", 0) or 0),
                     "preco_total": float(getattr(item, "preco_unitario", 0) or 0) * getattr(item, "quantidade", 1),
+                    "adicionais": adicionais,
+                    # compat: mesmo campo, nome explícito para o frontend usar se preferir
+                    "adicionais_render": _montar_sufixo_adicionais(adicionais).strip(),
                 }
                 itens.append(item_data)
         
@@ -156,12 +237,18 @@ async def notificar_pedido_impresso(pedido_id: int, empresa_id: Optional[int] = 
         itens = []
         if hasattr(pedido, "itens") and pedido.itens:
             for item in pedido.itens:
+                descricao_base = getattr(item, "produto_descricao_snapshot", None) or "Produto"
+                adicionais = _extrair_adicionais_do_item(item)
+                descricao_render = descricao_base + _montar_sufixo_adicionais(adicionais)
                 item_data = {
                     "id": item.id,
-                    "produto_descricao": getattr(item, "produto_descricao_snapshot", None) or "Produto",
+                    "produto_descricao_base": descricao_base,
+                    "produto_descricao": descricao_render,
                     "quantidade": getattr(item, "quantidade", 1),
                     "preco_unitario": float(getattr(item, "preco_unitario", 0) or 0),
                     "preco_total": float(getattr(item, "preco_unitario", 0) or 0) * getattr(item, "quantidade", 1),
+                    "adicionais": adicionais,
+                    "adicionais_render": _montar_sufixo_adicionais(adicionais).strip(),
                 }
                 itens.append(item_data)
         
@@ -262,13 +349,19 @@ async def notificar_pedido_cancelado(
         itens = []
         if hasattr(pedido, "itens") and pedido.itens:
             for item in pedido.itens:
+                descricao_base = getattr(item, "produto_descricao_snapshot", None) or "Produto"
+                adicionais = _extrair_adicionais_do_item(item)
+                descricao_render = descricao_base + _montar_sufixo_adicionais(adicionais)
                 itens.append(
                     {
                         "id": item.id,
-                        "produto_descricao": getattr(item, "produto_descricao_snapshot", None) or "Produto",
+                        "produto_descricao_base": descricao_base,
+                        "produto_descricao": descricao_render,
                         "quantidade": getattr(item, "quantidade", 1),
                         "preco_unitario": float(getattr(item, "preco_unitario", 0) or 0),
                         "preco_total": float(getattr(item, "preco_unitario", 0) or 0) * getattr(item, "quantidade", 1),
+                        "adicionais": adicionais,
+                        "adicionais_render": _montar_sufixo_adicionais(adicionais).strip(),
                     }
                 )
 

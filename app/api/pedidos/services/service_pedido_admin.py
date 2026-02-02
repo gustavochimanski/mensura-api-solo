@@ -241,8 +241,19 @@ class PedidoAdminService:
             
             return self.pedido_service.response_builder.pedido_to_response_completo(pedido_atualizado)
 
-        itens_payload = payload.produtos.itens if payload.produtos and payload.produtos.itens is not None else (
-            payload.itens or []
+        # Extrai itens/receitas/combos do payload (novo formato `produtos.*` ou legado na raiz)
+        produtos_payload = payload.produtos if getattr(payload, "produtos", None) is not None else None
+        itens_payload = (
+            (produtos_payload.itens if produtos_payload and produtos_payload.itens is not None else payload.itens)
+            or []
+        )
+        receitas_payload = (
+            (produtos_payload.receitas if produtos_payload and produtos_payload.receitas is not None else payload.receitas)
+            or []
+        )
+        combos_payload = (
+            (produtos_payload.combos if produtos_payload and produtos_payload.combos is not None else payload.combos)
+            or []
         )
 
         if tipo == TipoPedidoCheckoutEnum.MESA:
@@ -256,14 +267,21 @@ class PedidoAdminService:
                 cliente_id=payload.cliente_id,
                 observacoes=payload.observacao_geral,
                 num_pessoas=payload.num_pessoas,
-                itens=[
-                    ItemPedidoRequest(
-                        produto_cod_barras=item.produto_cod_barras,
-                        quantidade=item.quantidade,
-                        observacao=item.observacao,
-                    )
-                    for item in itens_payload
-                ],
+                itens=(
+                    [
+                        ItemPedidoRequest(
+                            produto_cod_barras=item.produto_cod_barras,
+                            quantidade=item.quantidade,
+                            observacao=item.observacao,
+                            complementos=getattr(item, "complementos", None),
+                        )
+                        for item in itens_payload
+                    ]
+                    if itens_payload
+                    else None
+                ),
+                receitas=receitas_payload if receitas_payload else None,
+                combos=combos_payload if combos_payload else None,
             )
             resultado = self.mesa_service.criar_pedido(mesa_payload)
             
@@ -290,14 +308,21 @@ class PedidoAdminService:
                 mesa_id=mesa_codigo,
                 cliente_id=payload.cliente_id,
                 observacoes=payload.observacao_geral,
-                itens=[
-                    ItemPedidoRequest(
-                        produto_cod_barras=item.produto_cod_barras,
-                        quantidade=item.quantidade,
-                        observacao=item.observacao,
-                    )
-                    for item in itens_payload
-                ],
+                itens=(
+                    [
+                        ItemPedidoRequest(
+                            produto_cod_barras=item.produto_cod_barras,
+                            quantidade=item.quantidade,
+                            observacao=item.observacao,
+                            complementos=getattr(item, "complementos", None),
+                        )
+                        for item in itens_payload
+                    ]
+                    if itens_payload
+                    else None
+                ),
+                receitas=receitas_payload if receitas_payload else None,
+                combos=combos_payload if combos_payload else None,
             )
             resultado = self.balcao_service.criar_pedido(balcao_payload)
             

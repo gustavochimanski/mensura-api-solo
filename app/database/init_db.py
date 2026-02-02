@@ -403,14 +403,51 @@ def criar_permissoes_padrao():
                 synchronize_session=False
             )
 
-            for row in rows:
-                stmt = (
-                    insert(PermissionModel)
-                    .values(**row)
-                    .on_conflict_do_nothing(index_elements=[PermissionModel.key])
+            # Preferimos UPSERT (atualiza domain/description) quando o banco tiver constraint/índice adequado.
+            # Para bancos legados que ainda não têm UNIQUE em `permissions.key`, caímos num fallback sem ON CONFLICT.
+            try:
+                for row in rows:
+                    stmt = insert(PermissionModel).values(**row)
+                    stmt = stmt.on_conflict_do_update(
+                        index_elements=[PermissionModel.key],
+                        set_={
+                            "domain": stmt.excluded.domain,
+                            "description": stmt.excluded.description,
+                        },
+                    )
+                    session.execute(stmt)
+                session.commit()
+            except Exception as e:
+                session.rollback()
+                logger.warning(
+                    "⚠️ Seed de permissões: UPSERT falhou; aplicando fallback sem ON CONFLICT. Motivo: %s",
+                    e,
                 )
-                session.execute(stmt)
-            session.commit()
+                if rows:
+                    values_sql = []
+                    params: dict = {}
+                    for i, r in enumerate(rows):
+                        values_sql.append(f"(:key{i}, :domain{i}, :description{i})")
+                        params[f"key{i}"] = r["key"]
+                        params[f"domain{i}"] = r["domain"]
+                        params[f"description{i}"] = r.get("description")
+
+                    session.execute(
+                        text(
+                            f"""
+                            WITH data(key, domain, description) AS (
+                              VALUES {", ".join(values_sql)}
+                            )
+                            INSERT INTO cadastros.permissions (key, domain, description)
+                            SELECT d.key, d.domain, d.description
+                            FROM data d
+                            LEFT JOIN cadastros.permissions p ON p.key = d.key
+                            WHERE p.key IS NULL
+                            """
+                        ),
+                        params,
+                    )
+                    session.commit()
 
         logger.info("✅ Permissões padrão criadas/verificadas com sucesso (%s).", len(rows))
     except Exception as e:
@@ -507,7 +544,13 @@ def criar_usuario_secreto_com_todas_permissoes():
                     FROM cadastros.empresas e
                     CROSS JOIN cadastros.permissions p
                     WHERE p.key LIKE 'route:%'
-                    ON CONFLICT DO NOTHING
+                    AND NOT EXISTS (
+                      SELECT 1
+                      FROM cadastros.user_permissions up
+                      WHERE up.user_id = :user_id
+                        AND up.empresa_id = e.id
+                        AND up.permission_id = p.id
+                    )
                     """
                 ),
                 {"user_id": user_id},
