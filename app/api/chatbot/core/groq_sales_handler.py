@@ -5569,7 +5569,8 @@ Sua única função é ajudar a ESCOLHER PRODUTOS. Nada mais!
         3. Desativa o chatbot para esse cliente
         """
         from . import database as chatbot_db
-        from sqlalchemy import text
+        from sqlalchemy import text, bindparam
+        from app.utils.telefone import variantes_telefone_para_busca, normalizar_telefone_para_armazenar
         
         # Busca nome do cliente (em transação separada para evitar problemas)
         cliente_nome = None
@@ -5577,15 +5578,23 @@ Sua única função é ajudar a ESCOLHER PRODUTOS. Nada mais!
             # Faz rollback de qualquer transação anterior que possa ter falhado
             self.db.rollback()
             
-            cliente_query = text("""
-                SELECT nome
-                FROM cadastros.clientes
-                WHERE telefone = :telefone
-                LIMIT 1
-            """)
-            result = self.db.execute(cliente_query, {
-                "telefone": user_id
-            })
+            candidatos = variantes_telefone_para_busca(user_id)
+            if not candidatos:
+                telefone_canon = normalizar_telefone_para_armazenar(user_id)
+                candidatos = [telefone_canon or user_id]
+
+            cliente_query = (
+                text(
+                    """
+                    SELECT nome
+                    FROM cadastros.clientes
+                    WHERE telefone IN :telefones
+                    LIMIT 1
+                    """
+                )
+                .bindparams(bindparam("telefones", expanding=True))
+            )
+            result = self.db.execute(cliente_query, {"telefones": candidatos})
             cliente_row = result.fetchone()
             if cliente_row:
                 cliente_nome = cliente_row[0]
@@ -5702,19 +5711,30 @@ Sua única função é ajudar a ESCOLHER PRODUTOS. Nada mais!
         Envia notificação para a empresa quando cliente pede para chamar atendente.
         Usa WebSocket para notificar o dashboard/frontend em tempo real.
         """
-        from sqlalchemy import text
+        from sqlalchemy import text, bindparam
+        from app.utils.telefone import variantes_telefone_para_busca, normalizar_telefone_para_armazenar
         
         # Busca nome do cliente
         cliente_nome = None
         try:
             self.db.rollback()
-            cliente_query = text("""
-                SELECT nome
-                FROM cadastros.clientes
-                WHERE telefone = :telefone
-                LIMIT 1
-            """)
-            result = self.db.execute(cliente_query, {"telefone": user_id})
+            candidatos = variantes_telefone_para_busca(user_id)
+            if not candidatos:
+                telefone_canon = normalizar_telefone_para_armazenar(user_id)
+                candidatos = [telefone_canon or user_id]
+
+            cliente_query = (
+                text(
+                    """
+                    SELECT nome
+                    FROM cadastros.clientes
+                    WHERE telefone IN :telefones
+                    LIMIT 1
+                    """
+                )
+                .bindparams(bindparam("telefones", expanding=True))
+            )
+            result = self.db.execute(cliente_query, {"telefones": candidatos})
             cliente_row = result.fetchone()
             if cliente_row:
                 cliente_nome = cliente_row[0]

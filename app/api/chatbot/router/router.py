@@ -4152,40 +4152,39 @@ async def get_orders_by_phone(phone_number: str, db: Session = Depends(get_db)):
     Retorna pedidos ativos (não cancelados) ordenados por data.
     """
     try:
-        from sqlalchemy import text
+        from sqlalchemy import text, bindparam
+        from app.utils.telefone import (
+            variantes_telefone_para_busca,
+            normalizar_telefone_para_armazenar,
+        )
 
-        # Normaliza o número de telefone
-        phone_clean = ''.join(filter(str.isdigit, phone_number))
+        # Unificação BR: aceita com/sem 55 e com/sem 9 (celular) na busca,
+        # mas mantém o telefone armazenado no formato canônico (55 + DDD + 9 dígitos quando aplicável).
+        candidatos = variantes_telefone_para_busca(phone_number)
+        if not candidatos:
+            telefone_canon = normalizar_telefone_para_armazenar(phone_number)
+            if telefone_canon:
+                candidatos = [telefone_canon]
 
-        # Remove o código do país (55) se presente para busca
-        phone_without_country = phone_clean
-        if phone_clean.startswith('55') and len(phone_clean) > 11:
-            phone_without_country = phone_clean[2:]
+        if not candidatos:
+            return {
+                "success": False,
+                "message": "Telefone inválido",
+                "pedidos": [],
+            }
 
-        # Busca o cliente pelo telefone
-        cliente_query = text("""
-            SELECT id, nome, telefone FROM cadastros.clientes
-            WHERE telefone LIKE :phone_pattern
-            LIMIT 1
-        """)
-
-        # Tenta com diferentes formatos de telefone
-        patterns = [
-            phone_clean,                         # Número completo como recebido
-            phone_without_country,               # Sem código do país
-            f"%{phone_clean[-9:]}",              # Últimos 9 dígitos
-            f"%{phone_clean[-8:]}",              # Últimos 8 dígitos
-            f"55{phone_without_country}",        # Com código do país adicionado
-            f"%{phone_without_country[-9:]}",    # Últimos 9 dígitos sem código
-        ]
-
-        cliente = None
-        for pattern in patterns:
-            result = db.execute(cliente_query, {"phone_pattern": pattern})
-            cliente = result.fetchone()
-            if cliente:
-                logger.debug(f"[pedidos-debug] cliente encontrado com padrão: {pattern}")
-                break
+        cliente_query = (
+            text(
+                """
+                SELECT id, nome, telefone
+                FROM cadastros.clientes
+                WHERE telefone IN :telefones
+                LIMIT 1
+                """
+            )
+            .bindparams(bindparam("telefones", expanding=True))
+        )
+        cliente = db.execute(cliente_query, {"telefones": candidatos}).fetchone()
 
         if not cliente:
             return {
@@ -4339,10 +4338,20 @@ async def criar_pedidos_teste(phone_number: str, db: Session = Depends(get_db)):
     Endpoint temporário para criar pedidos de teste com todos os status disponíveis.
     """
     import random
+    from sqlalchemy import bindparam, text
+    from app.utils.telefone import (
+        normalizar_telefone_para_armazenar,
+        variantes_telefone_para_busca,
+    )
 
-    # Limpar telefone
-    phone_clean = ''.join(filter(str.isdigit, phone_number))
-    phone_without_country = phone_clean[2:] if phone_clean.startswith('55') and len(phone_clean) > 11 else phone_clean
+    # Unificação BR: sempre criar/usar cliente com telefone canônico (55 + DDD + 9 dígitos quando aplicável),
+    # mas aceitar lookup com/sem o 9 e com/sem 55.
+    phone_canon = normalizar_telefone_para_armazenar(phone_number)
+    if not phone_canon:
+        phone_canon = "".join(filter(str.isdigit, str(phone_number or "")))
+
+    # Para nome de teste (sufixo), usamos os últimos 4 dígitos do número nacional (sem 55).
+    phone_without_country = phone_canon[2:] if phone_canon.startswith("55") and len(phone_canon) > 2 else phone_canon
 
     # Status codes disponíveis
     STATUS_CODES = ['P', 'I', 'R', 'S', 'E', 'C', 'A', 'D', 'X']
@@ -4361,18 +4370,19 @@ async def criar_pedidos_teste(phone_number: str, db: Session = Depends(get_db)):
 
     try:
         # Buscar cliente pelo telefone
-        patterns = [phone_clean, phone_without_country, f"%{phone_clean[-9:]}", f"%{phone_clean[-8:]}"]
-        cliente = None
-
-        for pattern in patterns:
-            result = db.execute(text("""
-                SELECT id, nome, telefone FROM cadastros.clientes
-                WHERE telefone LIKE :pattern
+        candidatos = variantes_telefone_para_busca(phone_number) or [phone_canon]
+        cliente_query = (
+            text(
+                """
+                SELECT id, nome, telefone
+                FROM cadastros.clientes
+                WHERE telefone IN :telefones
                 LIMIT 1
-            """), {"pattern": pattern})
-            cliente = result.fetchone()
-            if cliente:
-                break
+                """
+            )
+            .bindparams(bindparam("telefones", expanding=True))
+        )
+        cliente = db.execute(cliente_query, {"telefones": candidatos}).fetchone()
 
         if not cliente:
             # Criar cliente se não existir
@@ -4380,7 +4390,7 @@ async def criar_pedidos_teste(phone_number: str, db: Session = Depends(get_db)):
                 INSERT INTO cadastros.clientes (nome, telefone, created_at, updated_at)
                 VALUES (:nome, :telefone, NOW(), NOW())
                 RETURNING id, nome, telefone
-            """), {"nome": f"Cliente Teste {phone_without_country[-4:]}", "telefone": phone_without_country})
+            """), {"nome": f"Cliente Teste {phone_without_country[-4:]}", "telefone": phone_canon})
             cliente = result.fetchone()
             db.commit()
             logger.debug(f"[criar-pedidos-teste] cliente criado: id={cliente[0]} nome={cliente[1]}")
