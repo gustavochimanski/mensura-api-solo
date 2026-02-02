@@ -624,12 +624,24 @@ _Obrigado pela preferência!_"""
                 )
 
             # Cria ou busca conversa existente para esse usuário
-            # Se empresa_id foi fornecido, busca apenas conversas dessa empresa
-            conversations = chatbot_db.get_conversations_by_user(db, user_id, empresa_id=empresa_id)
-            
+            # Se empresa_id foi fornecido, tenta escopar por empresa primeiro.
+            # IMPORTANTE: conversas legadas podem ter empresa_id NULL; se não achar no escopo,
+            # fazemos fallback global e, se necessário, atualizamos a conversa com empresa_id.
+            if empresa_id is not None:
+                conversations = chatbot_db.get_conversations_by_user(db, user_id, empresa_id=empresa_id)
+                if not conversations:
+                    conversations = chatbot_db.get_conversations_by_user(db, user_id)
+            else:
+                conversations = chatbot_db.get_conversations_by_user(db, user_id)
+
             # Se não encontrou conversa e o telefone foi normalizado, tenta buscar com o telefone original também
             if not conversations and phone != phone_normalized:
-                conversations = chatbot_db.get_conversations_by_user(db, phone, empresa_id=empresa_id)
+                if empresa_id is not None:
+                    conversations = chatbot_db.get_conversations_by_user(db, phone, empresa_id=empresa_id)
+                    if not conversations:
+                        conversations = chatbot_db.get_conversations_by_user(db, phone)
+                else:
+                    conversations = chatbot_db.get_conversations_by_user(db, phone)
 
             if conversations:
                 # Usa a conversa mais recente

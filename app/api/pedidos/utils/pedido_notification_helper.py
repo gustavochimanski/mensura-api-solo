@@ -404,6 +404,25 @@ async def notificar_cliente_pedido_cancelado(
             empresa_id=str(empresa_id_val),
         )
 
+        # Salva no chat interno para manter histórico (apenas quando houve envio com sucesso)
+        try:
+            if isinstance(result, dict) and result.get("success"):
+                whatsapp_message_id = result.get("message_id")
+                await OrderNotification.send_notification_async(
+                    db=db_session,
+                    phone=telefone,
+                    message=mensagem,
+                    order_type="cancelado",
+                    empresa_id=int(empresa_id_val) if empresa_id_val is not None else None,
+                    whatsapp_message_id=whatsapp_message_id,
+                )
+        except Exception as e:
+            logger.warning(
+                "[Cancelado] WhatsApp enviado, mas falhou ao salvar mensagem no chat (pedido %s): %s",
+                pedido_id,
+                e,
+            )
+
         if result.get("success"):
             logger.info(
                 "[Cancelado] Notificação de cancelamento enviada ao cliente (pedido #%s)",
