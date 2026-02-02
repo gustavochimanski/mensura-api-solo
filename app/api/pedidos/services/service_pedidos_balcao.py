@@ -747,6 +747,8 @@ class PedidoBalcaoService:
         pedido_antes = self.repo.get(pedido_id, TipoEntrega.BALCAO)
         status_anterior = self._status_value(pedido_antes.status)
         mesa_id = pedido_antes.mesa_id  # Guarda mesa_id antes de fechar
+        # Fechar conta implica marcar como pago (regra: só aqui e no marcar-pago).
+        pedido_antes.pago = True
         
         # Se receber payload, salva dados de pagamento nos campos diretos
         if payload is not None:

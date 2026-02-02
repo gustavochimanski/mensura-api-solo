@@ -836,7 +836,10 @@ class PedidoService:
                         gateway=gateway.value,
                         metodo=metodo.value,
                         valor=valor_parcial,
-                        status="PAGO" if not is_pix_online_meio_pagamento(mp_obj) else "PENDENTE",
+                        # Ter meio de pagamento no checkout NÃO significa pago.
+                        # Pagamento só deve ser confirmado via gateway (quando aplicável) ou via
+                        # fechar-conta / marcar-pago.
+                        status="PENDENTE",
                         provider_transaction_id=f"direct_{pedido.id}_{metodo.value}_{len(meios_pagamento_list)}" if not is_pix_online_meio_pagamento(mp_obj) else None
                     )
                     

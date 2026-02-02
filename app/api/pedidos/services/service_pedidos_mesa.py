@@ -704,6 +704,8 @@ class PedidoMesaService:
         status_anterior = (
             pedido_antes.status.value if hasattr(pedido_antes.status, "value") else str(pedido_antes.status)
         )
+        # Fechar conta implica marcar como pago (regra: só aqui e no marcar-pago).
+        pedido_antes.pago = True
         
         # Se receber payload, salva dados de pagamento nos campos diretos
         if payload is not None:
@@ -796,6 +798,8 @@ class PedidoMesaService:
         if pedido.cliente_id and pedido.cliente_id != cliente_id:
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Pedido não pertence ao cliente")
         status_anterior = pedido.status.value if hasattr(pedido.status, "value") else str(pedido.status)
+        # Fechar conta (cliente) implica marcar como pago (regra: só aqui e no marcar-pago).
+        pedido.pago = True
 
         # Salva dados de pagamento nos campos diretos
         if payload.troco_para is not None:

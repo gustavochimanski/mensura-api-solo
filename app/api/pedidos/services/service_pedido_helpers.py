@@ -69,7 +69,14 @@ def build_pagamento_resumo(pedido: PedidoUnificadoModel) -> PedidoPagamentoResum
             or getattr(transacao, "created_at", None)
         )
 
-    esta_pago = status in {PagamentoStatusEnum.PAGO, PagamentoStatusEnum.AUTORIZADO} if status else False
+    # Regra de negócio:
+    # - Ter meio de pagamento NÃO implica que está pago.
+    # - Considera "pago" quando:
+    #   (a) o pedido foi explicitamente marcado como pago (fechar-conta / marcar-pago), ou
+    #   (b) existe transação com status PAGO/AUTORIZADO (gateway confirmou).
+    pedido_pago = bool(getattr(pedido, "pago", False))
+    tx_pago = status in {PagamentoStatusEnum.PAGO, PagamentoStatusEnum.AUTORIZADO} if status else False
+    esta_pago = pedido_pago or tx_pago
 
     meio_pagamento_nome = None
     if meio_pagamento_rel is not None:
