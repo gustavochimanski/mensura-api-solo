@@ -68,7 +68,7 @@ class BuscaGlobalService:
             termo: Termo de busca (opcional - se vazio, retorna primeiros itens)
             apenas_disponiveis: Filtrar apenas itens disponíveis (produtos/receitas)
             apenas_ativos: Filtrar apenas itens ativos
-            limit: Limite de resultados por tipo (padrão: 50)
+            limit: Limite de resultados por tipo (padrão: 50, máximo sugerido: 200)
             page: Número da página para paginação (padrão: 1)
         """
         termo_lower = termo.lower().strip() if termo else ""
