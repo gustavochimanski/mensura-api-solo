@@ -718,7 +718,8 @@ def get_conversations_by_user(
     """Retorna todas as conversas de um usuário.
 
     Filtros opcionais:
-    - data_inicio / data_fim (YYYY-MM-DD): filtra por janela de `updated_at` (última atividade da conversa).
+    - data_inicio / data_fim (YYYY-MM-DD): filtra por janela de **última mensagem** (`MAX(messages.created_at)`),
+      com fallback para `conversations.updated_at` quando não há mensagens.
       `data_fim` é inclusiva (implementado como < próximo-dia 00:00).
     """
     # Aceita variantes com/sem 9 e com/sem 55, mas mantém user_id canônico para novos registros.
@@ -751,21 +752,37 @@ def get_conversations_by_user(
         params["empresa_id"] = empresa_id
 
     if dt_inicio is not None:
-        where_clauses.append("c.updated_at >= :dt_inicio")
         params["dt_inicio"] = dt_inicio
 
     if dt_fim_exclusivo is not None:
-        where_clauses.append("c.updated_at < :dt_fim_exclusivo")
         params["dt_fim_exclusivo"] = dt_fim_exclusivo
+
+    # Definição de "última atividade" para o filtro/ordenação:
+    # - Usa a data da última mensagem quando existir (mais estável do que `c.updated_at`, que pode ser alterado
+    #   por rotas administrativas/salvar estado).
+    # - Fallback para `c.updated_at` quando não houver mensagens.
+    last_activity_expr = "COALESCE(MAX(m.created_at), c.updated_at)"
+
+    having_clauses: List[str] = []
+    if dt_inicio is not None:
+        having_clauses.append(f"{last_activity_expr} >= :dt_inicio")
+    if dt_fim_exclusivo is not None:
+        having_clauses.append(f"{last_activity_expr} < :dt_fim_exclusivo")
 
     query = text(
         f"""
         SELECT
             c.id, c.session_id, c.user_id, c.contact_name, c.prompt_key, c.model, c.empresa_id,
-            c.profile_picture_url, c.created_at, c.updated_at
+            c.profile_picture_url, c.created_at, c.updated_at,
+            MAX(m.created_at) AS last_message_at
         FROM {CHATBOT_SCHEMA}.conversations c
+        LEFT JOIN {CHATBOT_SCHEMA}.messages m ON m.conversation_id = c.id
         WHERE {' AND '.join(where_clauses)}
-        ORDER BY c.updated_at DESC
+        GROUP BY
+            c.id, c.session_id, c.user_id, c.contact_name, c.prompt_key, c.model, c.empresa_id,
+            c.profile_picture_url, c.created_at, c.updated_at
+        {('HAVING ' + ' AND '.join(having_clauses)) if having_clauses else ''}
+        ORDER BY {last_activity_expr} DESC
         """
     )
     result = db.execute(query, params)
@@ -781,7 +798,8 @@ def get_conversations_by_user(
             "empresa_id": row[6],
             "profile_picture_url": row[7],
             "created_at": row[8],
-            "updated_at": row[9]
+            "updated_at": row[9],
+            "last_message_at": row[10],
         }
         for row in result.fetchall()
     ]

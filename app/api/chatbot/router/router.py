@@ -722,11 +722,11 @@ async def get_user_conversations(
     empresa_id: Optional[int] = None,
     data_inicio: Optional[date] = Query(
         default=None,
-        description="Data inicial (YYYY-MM-DD) para filtrar por updated_at (última atividade).",
+        description="Data inicial (YYYY-MM-DD) para filtrar por última mensagem (MAX(messages.created_at)).",
     ),
     data_fim: Optional[date] = Query(
         default=None,
-        description="Data final (YYYY-MM-DD) para filtrar por updated_at (última atividade). Inclusiva.",
+        description="Data final (YYYY-MM-DD) para filtrar por última mensagem (MAX(messages.created_at)). Inclusiva.",
     ),
 ):
     """Lista todas as conversas de um usuário (com filtro opcional por data)."""

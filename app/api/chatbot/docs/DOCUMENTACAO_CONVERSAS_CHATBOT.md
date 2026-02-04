@@ -13,10 +13,10 @@ Este documento descreve os endpoints de **conversas** do módulo `chatbot`, incl
 #### Query params
 
 - **empresa_id** (opcional, int): filtra por empresa.
-- **data_inicio** (opcional, `YYYY-MM-DD`): filtra por `updated_at` (última atividade) a partir desta data (inclusivo).
-- **data_fim** (opcional, `YYYY-MM-DD`): filtra por `updated_at` (última atividade) até esta data (inclusivo).
+- **data_inicio** (opcional, `YYYY-MM-DD`): filtra por **data da última mensagem** (`MAX(messages.created_at)`) a partir desta data (inclusivo). Se não houver mensagens, usa `conversations.updated_at` como fallback.
+- **data_fim** (opcional, `YYYY-MM-DD`): filtra por **data da última mensagem** (`MAX(messages.created_at)`) até esta data (inclusivo). Se não houver mensagens, usa `conversations.updated_at` como fallback.
 
-> Observação: o filtro por data é aplicado sobre `updated_at` na tabela `chatbot.conversations`, que é atualizado quando novas mensagens são inseridas.
+> Observação: o filtro por data é aplicado sobre a **data da última mensagem** na tabela `chatbot.messages` (via `MAX(created_at)`), pois `updated_at` em `chatbot.conversations` pode ser alterado por outras ações além de novas mensagens.
 
 #### Exemplo
 
