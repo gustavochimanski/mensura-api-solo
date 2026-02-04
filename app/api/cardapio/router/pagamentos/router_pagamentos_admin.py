@@ -33,3 +33,25 @@ async def atualizar_status_pagamento(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
 
     return await svc.atualizar_status_pagamento(pedido_id=pedido_id, payload=payload)
+
+
+@router.post(
+    "/transacoes/{transacao_id}/status",
+    response_model=PedidoResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def atualizar_status_pagamento_por_transacao(
+    transacao_id: int = Path(..., description="ID da transação", gt=0),
+    payload: TransacaoStatusUpdateRequest = Body(...),
+    db: Session = Depends(get_db),
+    svc: PedidoService = Depends(get_pedido_service),
+):
+    """
+    Atualiza o status de uma transação específica (novo padrão).
+
+    Necessário quando o pedido possui múltiplas transações.
+    """
+    logger.info(
+        f"[Pagamentos][Admin] Atualizar status transacao - transacao_id={transacao_id} status={payload.status}"
+    )
+    return await svc.atualizar_status_pagamento_por_transacao_id(transacao_id=transacao_id, payload=payload)

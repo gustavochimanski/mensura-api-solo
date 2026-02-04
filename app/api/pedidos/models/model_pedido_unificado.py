@@ -159,9 +159,6 @@ class PedidoUnificadoModel(Base):
     acertado_entregador = Column(Boolean, nullable=False, default=False)
     acertado_entregador_em = Column(DateTime(timezone=True), nullable=True)
     
-    # Status de pagamento
-    pago = Column(Boolean, nullable=False, default=False)
-    
     # Timestamps
     created_at = Column(DateTime(timezone=True), default=now_trimmed, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=now_trimmed, onupdate=now_trimmed, nullable=False)

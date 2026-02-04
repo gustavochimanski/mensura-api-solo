@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import func, case
+from sqlalchemy import func, case, exists, and_
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException, status
@@ -20,6 +20,7 @@ from app.api.pedidos.models.model_pedido_unificado import (
     TipoEntrega,
     CanalPedido,
 )
+from app.api.cardapio.models.model_transacao_pagamento_dv import TransacaoPagamentoModel
 from app.api.empresas.models.empresa_model import EmpresaModel
 from app.utils.telefone import normalizar_telefone_para_armazenar
 
@@ -126,6 +127,13 @@ class ClienteService:
             PedidoUnificadoModel.created_at < fim_exclusive,
         ]
 
+        pedido_pago_expr = exists().where(
+            and_(
+                TransacaoPagamentoModel.pedido_id == PedidoUnificadoModel.id,
+                TransacaoPagamentoModel.status.in_(("PAGO", "AUTORIZADO")),
+            )
+        )
+
         # agregados gerais
         total_row = (
             self.db.query(
@@ -144,7 +152,7 @@ class ClienteService:
                 ).label("total_pedidos_cancelados"),
                 func.sum(
                     case(
-                        (PedidoUnificadoModel.pago.is_(True), 1),
+                        (pedido_pago_expr, 1),
                         else_=0,
                     )
                 ).label("total_pedidos_pagos"),
@@ -282,7 +290,7 @@ class ClienteService:
                 ).label("total_pedidos_cancelados"),
                 func.sum(
                     case(
-                        (PedidoUnificadoModel.pago.is_(True), 1),
+                        (pedido_pago_expr, 1),
                         else_=0,
                     )
                 ).label("total_pedidos_pagos"),

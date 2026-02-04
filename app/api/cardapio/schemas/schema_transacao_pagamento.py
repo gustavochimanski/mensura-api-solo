@@ -12,6 +12,7 @@ from app.api.shared.schemas.schema_shared_enums import (
 
 class TransacaoBase(BaseModel):
     pedido_id: int
+    meio_pagamento_id: int
     gateway: PagamentoGatewayEnum
     metodo: PagamentoMetodoEnum
     valor: float

@@ -29,54 +29,83 @@ def _safe_enum(enum_cls, value):
 
 def build_pagamento_resumo(pedido: PedidoUnificadoModel) -> PedidoPagamentoResumo | None:
     """Constrói resumo de pagamento a partir do pedido."""
+    transacoes = list(getattr(pedido, "transacoes", None) or [])
     transacao = getattr(pedido, "transacao", None)
+    if transacao is not None:
+        # Compat: se existir relacionamento singular preenchido, inclui na lista
+        transacoes = [transacao] + [t for t in transacoes if getattr(t, "id", None) != getattr(transacao, "id", None)]
 
-    meio_pagamento_rel = None
-    meio_pagamento_id = None
+    def _tx_sort_key(tx):
+        return (
+            getattr(tx, "pago_em", None)
+            or getattr(tx, "autorizado_em", None)
+            or getattr(tx, "updated_at", None)
+            or getattr(tx, "created_at", None)
+        )
 
-    if transacao and getattr(transacao, "meio_pagamento", None):
-        meio_pagamento_rel = transacao.meio_pagamento
-        meio_pagamento_id = getattr(transacao, "meio_pagamento_id", None)
-    else:
-        meio_pagamento_rel = getattr(pedido, "meio_pagamento", None)
-        meio_pagamento_id = getattr(pedido, "meio_pagamento_id", None)
+    # Garante uma ordenação consistente (mais recente primeiro) para o "resumo principal".
+    try:
+        transacoes.sort(key=_tx_sort_key, reverse=True)
+    except Exception:
+        pass
 
-    if not transacao and meio_pagamento_rel is None and meio_pagamento_id is None:
+    meio_pagamento_rel = getattr(pedido, "meio_pagamento", None)
+    meio_pagamento_id = getattr(pedido, "meio_pagamento_id", None)
+
+    # Se existir ao menos uma transação, usa a primeira como referência de "principal"
+    if transacoes:
+        tx0 = transacoes[0]
+        if getattr(tx0, "meio_pagamento", None) is not None:
+            meio_pagamento_rel = tx0.meio_pagamento
+        if getattr(tx0, "meio_pagamento_id", None) is not None:
+            meio_pagamento_id = tx0.meio_pagamento_id
+
+    if not transacoes and meio_pagamento_rel is None and meio_pagamento_id is None:
         return None
 
     status = None
     metodo = None
     gateway = None
     provider_transaction_id = None
-    valor = float(pedido.valor_total or 0)
+    valor_total = float(pedido.valor_total or 0)
+    valor = valor_total
     atualizado_em = getattr(pedido, "updated_at", None)
 
-    if transacao:
-        status = _safe_enum(PagamentoStatusEnum, getattr(transacao, "status", None))
-        metodo = _safe_enum(PagamentoMetodoEnum, getattr(transacao, "metodo", None))
-        gateway = _safe_enum(PagamentoGatewayEnum, getattr(transacao, "gateway", None))
-        provider_transaction_id = getattr(transacao, "provider_transaction_id", None)
+    if transacoes:
+        # Resumo "principal" = primeira transação (mais recente, conforme query)
+        tx0 = transacoes[0]
+        status = _safe_enum(PagamentoStatusEnum, getattr(tx0, "status", None))
+        metodo = _safe_enum(PagamentoMetodoEnum, getattr(tx0, "metodo", None))
+        gateway = _safe_enum(PagamentoGatewayEnum, getattr(tx0, "gateway", None))
+        provider_transaction_id = getattr(tx0, "provider_transaction_id", None)
 
-        if getattr(transacao, "valor", None) is not None:
-            valor = float(transacao.valor)
+        # valor do resumo (principal) = valor da tx0, mas mantemos cálculo total separadamente
+        if getattr(tx0, "valor", None) is not None:
+            valor = float(tx0.valor)
 
         atualizado_em = (
-            getattr(transacao, "pago_em", None)
-            or getattr(transacao, "autorizado_em", None)
-            or getattr(transacao, "cancelado_em", None)
-            or getattr(transacao, "estornado_em", None)
-            or getattr(transacao, "updated_at", None)
-            or getattr(transacao, "created_at", None)
+            getattr(tx0, "pago_em", None)
+            or getattr(tx0, "autorizado_em", None)
+            or getattr(tx0, "cancelado_em", None)
+            or getattr(tx0, "estornado_em", None)
+            or getattr(tx0, "updated_at", None)
+            or getattr(tx0, "created_at", None)
         )
 
     # Regra de negócio:
     # - Ter meio de pagamento NÃO implica que está pago.
-    # - Considera "pago" quando:
-    #   (a) o pedido foi explicitamente marcado como pago (fechar-conta / marcar-pago), ou
-    #   (b) existe transação com status PAGO/AUTORIZADO (gateway confirmou).
-    pedido_pago = bool(getattr(pedido, "pago", False))
-    tx_pago = status in {PagamentoStatusEnum.PAGO, PagamentoStatusEnum.AUTORIZADO} if status else False
-    esta_pago = pedido_pago or tx_pago
+    # - Considera "pago" APENAS via transações (status PAGO/AUTORIZADO).
+    #   O campo `pago` não é mais persistido no pedido.
+    valor_pago = Decimal("0.00")
+    for tx in transacoes:
+        st = _safe_enum(PagamentoStatusEnum, getattr(tx, "status", None))
+        if st in {PagamentoStatusEnum.PAGO, PagamentoStatusEnum.AUTORIZADO}:
+            try:
+                valor_pago += _dec(getattr(tx, "valor", 0) or 0)
+            except Exception:
+                continue
+    tx_pago_total = valor_pago >= _dec(valor_total)
+    esta_pago = tx_pago_total
 
     meio_pagamento_nome = None
     if meio_pagamento_rel is not None:

@@ -763,6 +763,12 @@ def criar_tabelas(postgis_disponivel: bool = True):
         # ------------------------------------------------------------------
         try:
             with engine.begin() as conn:
+                # ------------------------------------------------------------------
+                # Migração: remover pedidos.pedidos.pago (pagamento via transações)
+                # ------------------------------------------------------------------
+                if _table_exists(conn, "pedidos", "pedidos"):
+                    conn.execute(text("ALTER TABLE pedidos.pedidos DROP COLUMN IF EXISTS pago"))
+
                 if _table_exists(conn, "catalogo", "produtos"):
                     # 1) catalogo.produtos: adiciona id + troca PK
                     conn.execute(text("ALTER TABLE catalogo.produtos ADD COLUMN IF NOT EXISTS id integer"))

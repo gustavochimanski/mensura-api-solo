@@ -840,11 +840,12 @@ class PedidoService:
                         # Pagamento só deve ser confirmado via gateway (quando aplicável) ou via
                         # fechar-conta / marcar-pago.
                         status="PENDENTE",
-                        provider_transaction_id=f"direct_{pedido.id}_{metodo.value}_{len(meios_pagamento_list)}" if not is_pix_online_meio_pagamento(mp_obj) else None
+                        provider_transaction_id=None,
                     )
                     
                     if is_pix_online_meio_pagamento(mp_obj):
                         try:
+                            # Reutiliza a transação criada (evita duplicar registro no banco)
                             await self.pagamentos.iniciar_transacao(
                                 pedido_id=pedido.id,
                                 meio_pagamento_id=mp_obj.id,
@@ -852,6 +853,7 @@ class PedidoService:
                                 metodo=metodo,
                                 gateway=gateway,
                                 metadata={"pedido_id": pedido.id, "empresa_id": pedido.empresa_id},
+                                transacao_id=transacao.id,
                             )
                         except Exception as e:
                             logger.error(f"Erro ao iniciar transação PIX_ONLINE: {e}")
@@ -981,6 +983,58 @@ class PedidoService:
         if mudou_status:
             self.repo.commit()
             pedido = self.repo.get_pedido(pedido_id)
+
+        return self._pedido_to_response(pedido)
+
+    async def atualizar_status_pagamento_por_transacao_id(
+        self,
+        *,
+        transacao_id: int,
+        payload: TransacaoStatusUpdateRequest,
+    ) -> PedidoResponse:
+        transacao = await self.pagamentos.atualizar_status_por_transacao_id(
+            transacao_id=transacao_id,
+            payload=payload,
+        )
+
+        pedido_id = getattr(transacao, "pedido_id", None) or None
+        if pedido_id is None:
+            # Segurança: tenta recuperar pelo banco se necessário
+            pedido = None
+        else:
+            pedido = self.repo.get_pedido(int(pedido_id))
+
+        if not pedido:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
+
+        mudou_status = self._atualizar_status_pedido_por_pagamento(pedido, transacao.status)
+        if mudou_status:
+            self.repo.commit()
+            pedido = self.repo.get_pedido(pedido.id)
+
+        return self._pedido_to_response(pedido)
+
+    async def atualizar_status_pagamento_por_provider_transaction_id(
+        self,
+        *,
+        provider_transaction_id: str,
+        payload: TransacaoStatusUpdateRequest,
+    ) -> PedidoResponse:
+        transacao = await self.pagamentos.atualizar_status_por_provider_transaction_id(
+            provider_transaction_id=str(provider_transaction_id),
+            payload=payload,
+        )
+        pedido_id = getattr(transacao, "pedido_id", None)
+        if pedido_id is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
+        pedido = self.repo.get_pedido(int(pedido_id))
+        if not pedido:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
+
+        mudou_status = self._atualizar_status_pedido_por_pagamento(pedido, transacao.status)
+        if mudou_status:
+            self.repo.commit()
+            pedido = self.repo.get_pedido(pedido.id)
 
         return self._pedido_to_response(pedido)
 

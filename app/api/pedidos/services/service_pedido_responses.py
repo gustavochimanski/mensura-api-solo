@@ -39,6 +39,13 @@ class PedidoResponseBuilder:
     def pedido_to_response(pedido: PedidoUnificadoModel) -> PedidoResponse:
         """Converte pedido para PedidoResponse padrão."""
         pagamento = build_pagamento_resumo(pedido)
+        transacoes_model = getattr(pedido, "transacoes", None) or []
+        transacoes_out = [TransacaoResponse.model_validate(tx) for tx in transacoes_model]
+        transacao_out = (
+            TransacaoResponse.model_validate(pedido.transacao)
+            if getattr(pedido, "transacao", None) is not None
+            else (transacoes_out[0] if transacoes_out else None)
+        )
         return PedidoResponse(
             id=pedido.id,
             status=PedidoStatusEnum(pedido.status),
@@ -65,10 +72,11 @@ class PedidoResponseBuilder:
             endereco_geography=str(getattr(pedido, "endereco_geo", None)) if getattr(pedido, "endereco_geo", None) is not None else None,
             data_criacao=getattr(pedido, "data_criacao", getattr(pedido, "created_at", None)),
             data_atualizacao=getattr(pedido, "data_atualizacao", getattr(pedido, "updated_at", None)),
-            transacao=TransacaoResponse.model_validate(pedido.transacao) if pedido.transacao else None,
+            transacao=transacao_out,
+            transacoes=transacoes_out,
             pagamento=pagamento,
             acertado_entregador=getattr(pedido, "acertado_entregador", None),
-            pago=getattr(pedido, "pago", False),
+            pago=bool(pagamento and getattr(pagamento, "esta_pago", False)),
             produtos=PedidoResponseBuilder._build_produtos(pedido),
         )
 
@@ -102,7 +110,7 @@ class PedidoResponseBuilder:
             data_criacao=getattr(pedido, "data_criacao", getattr(pedido, "created_at", None)),
             data_atualizacao=getattr(pedido, "data_atualizacao", getattr(pedido, "updated_at", None)),
             pagamento=pagamento,
-            pago=getattr(pedido, "pago", False),
+            pago=bool(pagamento and getattr(pagamento, "esta_pago", False)),
             produtos=PedidoResponseBuilder._build_produtos(pedido),
         )
 
@@ -136,7 +144,7 @@ class PedidoResponseBuilder:
             data_criacao=getattr(pedido, "data_criacao", getattr(pedido, "created_at", None)),
             data_atualizacao=getattr(pedido, "data_atualizacao", getattr(pedido, "updated_at", None)),
             pagamento=pagamento,
-            pago=getattr(pedido, "pago", False),
+            pago=bool(pagamento and getattr(pagamento, "esta_pago", False)),
             produtos=PedidoResponseBuilder._build_produtos(pedido),
         )
 
@@ -230,6 +238,13 @@ class PedidoResponseBuilder:
     def pedido_to_response_completo_total(pedido: PedidoUnificadoModel) -> PedidoResponseCompletoTotal:
         """Converte pedido para PedidoResponseCompletoTotal com todos os relacionamentos."""
         pagamento = build_pagamento_resumo(pedido)
+        transacoes_model = getattr(pedido, "transacoes", None) or []
+        transacoes_out = [TransacaoResponse.model_validate(tx) for tx in transacoes_model]
+        transacao_out = (
+            TransacaoResponse.model_validate(pedido.transacao)
+            if getattr(pedido, "transacao", None) is not None
+            else (transacoes_out[0] if transacoes_out else None)
+        )
         return PedidoResponseCompletoTotal(
             id=pedido.id,
             status=PedidoStatusEnum(pedido.status),
@@ -260,7 +275,8 @@ class PedidoResponseBuilder:
                 empresas=[],
                 produtos=PedidoResponseBuilder._build_produtos(pedido)
             ),
-            transacao=TransacaoResponse.model_validate(pedido.transacao) if pedido.transacao else None,
+            transacao=transacao_out,
+            transacoes=transacoes_out,
             tipo_entrega=pedido.tipo_entrega if isinstance(pedido.tipo_entrega, TipoEntregaEnum)
                         else TipoEntregaEnum(pedido.tipo_entrega),
             origem=OrigemPedidoEnum(pedido.canal.value if hasattr(pedido.canal, 'value') else pedido.canal) if pedido.canal else OrigemPedidoEnum.WEB,
@@ -278,7 +294,7 @@ class PedidoResponseBuilder:
             data_criacao=getattr(pedido, "data_criacao", getattr(pedido, "created_at", None)),
             data_atualizacao=getattr(pedido, "data_atualizacao", getattr(pedido, "updated_at", None)),
             pagamento=pagamento,
-            pago=getattr(pedido, "pago", False),
+            pago=bool(pagamento and getattr(pagamento, "esta_pago", False)),
         )
 
     @staticmethod

@@ -6,7 +6,7 @@ from typing import List
 from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
-from sqlalchemy import func, case, cast, Date
+from sqlalchemy import func, case, cast, Date, exists, and_
 
 from app.api.empresas.repositories.empresa_repo import EmpresaRepository
 from app.api.cadastros.repositories.repo_entregadores import EntregadorRepository
@@ -23,6 +23,7 @@ from app.api.pedidos.models.model_pedido_unificado import (
     TipoEntrega,
     StatusPedido,
 )
+from app.api.cardapio.models.model_transacao_pagamento_dv import TransacaoPagamentoModel
 from app.utils.logger import logger
 
 class EntregadoresService:
@@ -220,6 +221,13 @@ class EntregadoresService:
             PedidoUnificadoModel.created_at < fim_exclusive,
         ]
 
+        pedido_pago_expr = exists().where(
+            and_(
+                TransacaoPagamentoModel.pedido_id == PedidoUnificadoModel.id,
+                TransacaoPagamentoModel.status.in_(("PAGO", "AUTORIZADO")),
+            )
+        )
+
         # agregados gerais
         total_row = (
             self.db.query(
@@ -238,7 +246,7 @@ class EntregadoresService:
                 ).label("total_pedidos_cancelados"),
                 func.sum(
                     case(
-                        (PedidoUnificadoModel.pago.is_(True), 1),
+                        (pedido_pago_expr, 1),
                         else_=0,
                     )
                 ).label("total_pedidos_pagos"),
@@ -434,7 +442,7 @@ class EntregadoresService:
                 ).label("total_pedidos_cancelados"),
                 func.sum(
                     case(
-                        (PedidoUnificadoModel.pago.is_(True), 1),
+                        (pedido_pago_expr, 1),
                         else_=0,
                     )
                 ).label("total_pedidos_pagos"),

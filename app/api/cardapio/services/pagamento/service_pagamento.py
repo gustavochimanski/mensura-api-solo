@@ -47,10 +47,21 @@ class PagamentoService:
 
     # ---------------- Queries ----------------
     def get_transacao(self, pedido_id: int) -> TransacaoResponse | None:
+        """
+        Compat: retorna UMA transação do pedido.
+
+        ⚠️ Com múltiplas transações por pedido, prefira buscar por `transacao_id`.
+        """
         tx = self.repo.get_by_pedido_id(pedido_id)
-        if not tx:
-            return None
-        return TransacaoResponse.model_validate(tx)
+        return TransacaoResponse.model_validate(tx) if tx else None
+
+    def get_transacao_by_id(self, transacao_id: int) -> TransacaoResponse | None:
+        tx = self.repo.get_by_id(transacao_id)
+        return TransacaoResponse.model_validate(tx) if tx else None
+
+    def get_transacao_by_provider_transaction_id(self, provider_transaction_id: str) -> TransacaoResponse | None:
+        tx = self.repo.get_by_provider_transaction_id(provider_transaction_id=str(provider_transaction_id))
+        return TransacaoResponse.model_validate(tx) if tx else None
 
     # ---------------- Commands ---------------
     async def iniciar_transacao(
@@ -66,24 +77,33 @@ class PagamentoService:
         metadata: Dict[str, Any] | None = None,
         customer: Dict[str, Any] | None = None,
         existing_payment_id: str | None = None,
+        transacao_id: int | None = None,
     ) -> TransacaoResponse:
-        transacao = self.repo.criar(
-            pedido_id=pedido_id,
-            meio_pagamento_id=meio_pagamento_id,
-            gateway=gateway.value,
-            metodo=metodo.value,
-            valor=valor,
-            moeda=moeda,
-        )
+        """
+        Inicia uma transação de pagamento.
 
-        if not self._deve_usar_gateway(metodo, gateway):
-            self.repo.atualizar(
-                transacao,
-                status=PagamentoStatusEnum.PAGO.value,
-                provider_transaction_id=f"direct_{pedido_id}_{metodo.value}",
-                payload_retorno={"metodo": metodo.value, "gateway": "DIRETO"},
+        - Se `transacao_id` for informado, reutiliza a transação (não cria duplicada).
+        - Se não houver gateway (ex.: dinheiro/cartão na entrega), a transação pode ficar PENDENTE
+          para ser confirmada depois (admin/fechamento de conta).
+        """
+        transacao = None
+        if transacao_id is not None:
+            transacao = self.repo.get_by_id(int(transacao_id))
+            if not transacao:
+                raise HTTPException(status.HTTP_404_NOT_FOUND, "Transação não encontrada")
+        else:
+            transacao = self.repo.criar(
+                pedido_id=pedido_id,
+                meio_pagamento_id=meio_pagamento_id,
+                gateway=gateway.value,
+                metodo=metodo.value,
+                valor=valor,
+                moeda=moeda,
+                status=PagamentoStatusEnum.PENDENTE.value,
             )
-            self.repo.registrar_evento(transacao, "pago_em")
+
+        # Sem gateway: mantém PENDENTE (pode ser pago depois).
+        if not self._deve_usar_gateway(metodo, gateway):
             self.repo.commit()
             return TransacaoResponse.model_validate(transacao)
 
@@ -108,7 +128,46 @@ class PagamentoService:
         pedido_id: int,
         payload: TransacaoStatusUpdateRequest,
     ) -> TransacaoResponse:
-        transacao = self.repo.get_by_pedido_id(pedido_id)
+        # Compat: tenta atualizar uma transação por pedido_id.
+        # Se existir mais de uma transação, este método é ambíguo.
+        transacoes = self.repo.list_by_pedido_id(pedido_id)
+        if not transacoes:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Transação não encontrada")
+        if len(transacoes) > 1:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Pedido possui múltiplas transações. Atualize pelo endpoint usando transacao_id.",
+            )
+        transacao = transacoes[0]
+
+        self.repo.atualizar(
+            transacao,
+            status=payload.status.value,
+            provider_transaction_id=payload.provider_transaction_id,
+            payload_retorno=payload.payload_retorno,
+            qr_code=payload.qr_code,
+            qr_code_base64=payload.qr_code_base64,
+        )
+
+        if payload.status == PagamentoStatusEnum.AUTORIZADO:
+            self.repo.registrar_evento(transacao, "autorizado_em")
+        elif payload.status == PagamentoStatusEnum.PAGO:
+            self.repo.registrar_evento(transacao, "pago_em")
+        elif payload.status == PagamentoStatusEnum.CANCELADO:
+            self.repo.registrar_evento(transacao, "cancelado_em")
+        elif payload.status == PagamentoStatusEnum.ESTORNADO:
+            self.repo.registrar_evento(transacao, "estornado_em")
+
+        self.repo.commit()
+        return TransacaoResponse.model_validate(transacao)
+
+    async def atualizar_status_por_transacao_id(
+        self,
+        *,
+        transacao_id: int,
+        payload: TransacaoStatusUpdateRequest,
+    ) -> TransacaoResponse:
+        transacao = self.repo.get_by_id(int(transacao_id))
         if not transacao:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Transação não encontrada")
 
@@ -132,6 +191,17 @@ class PagamentoService:
 
         self.repo.commit()
         return TransacaoResponse.model_validate(transacao)
+
+    async def atualizar_status_por_provider_transaction_id(
+        self,
+        *,
+        provider_transaction_id: str,
+        payload: TransacaoStatusUpdateRequest,
+    ) -> TransacaoResponse:
+        transacao = self.repo.get_by_provider_transaction_id(provider_transaction_id=str(provider_transaction_id))
+        if not transacao:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Transação não encontrada")
+        return await self.atualizar_status_por_transacao_id(transacao_id=transacao.id, payload=payload)
 
     async def consultar_gateway(
         self,

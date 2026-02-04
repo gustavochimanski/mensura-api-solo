@@ -108,6 +108,8 @@ Content-Type: application/json
 
 **`meios_pagamento`:** Array de meios de pagamento. O sistema aceita **um ou mais** meios por pedido. Cada item: `{ "id": number, "valor": number }`. A soma dos valores deve igualar o total. Ver **`app/api/pedidos/docs/DOCUMENTACAO_MULTIPLOS_MEIOS_PAGAMENTO_FRONTEND.md`** para o guia completo (Admin e Cliente).
 
+**Resposta — pagamentos/transações:** A resposta do pedido expõe `transacoes` (lista) como fonte da verdade para múltiplas formas. O campo `transacao` (singular) existe por compatibilidade e não deve ser usado quando houver múltiplas transações.
+
 **Campos Obrigatórios por Tipo:**
 
 #### Delivery

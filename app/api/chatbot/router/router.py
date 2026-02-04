@@ -4392,7 +4392,12 @@ async def get_orders_by_phone(phone_number: str, db: Session = Depends(get_db)):
                 p.taxa_entrega,
                 p.valor_total,
                 p.observacoes,
-                p.pago,
+                EXISTS (
+                    SELECT 1
+                    FROM cardapio.transacoes_pagamento_dv tx
+                    WHERE tx.pedido_id = p.id
+                      AND tx.status IN ('PAGO', 'AUTORIZADO')
+                ) AS pago,
                 p.created_at,
                 p.updated_at
             FROM pedidos.pedidos p

@@ -414,6 +414,7 @@ class PedidoResponse(BaseModel):
     data_criacao: datetime
     data_atualizacao: datetime
     transacao: Optional[TransacaoResponse] = None
+    transacoes: List[TransacaoResponse] = Field(default_factory=list)
     pagamento: PedidoPagamentoResumo | None = None
     acertado_entregador: bool | None = None
     pago: bool = False
@@ -488,6 +489,7 @@ class PedidoResponseCompletoTotal(BaseModel):
     meio_pagamento: Optional[MeioPagamentoResponse] = None
     cupom: Optional["CupomOutComProdutos"] = None
     transacao: Optional[TransacaoResponse] = None
+    transacoes: List[TransacaoResponse] = Field(default_factory=list)
     tipo_entrega: TipoEntregaEnum
     origem: OrigemPedidoEnum
     subtotal: float

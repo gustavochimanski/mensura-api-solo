@@ -60,6 +60,33 @@ async def iniciar_pagamento(
     if pedido.cliente_id != cliente.id:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Pedido não pertence ao cliente")
 
+    # Novo padrão: se o pedido já possui transações, evita criar duplicadas.
+    txs = list(getattr(pedido, "transacoes", None) or [])
+    if txs:
+        if len(txs) > 1:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Pedido possui múltiplas transações. Inicie o pagamento usando /transacoes/{transacao_id}/iniciar.",
+            )
+        tx0 = txs[0]
+        updated = await svc.pagamentos.iniciar_transacao(
+            pedido_id=pedido.id,
+            meio_pagamento_id=tx0.meio_pagamento_id,
+            valor=svc._dec(tx0.valor),
+            metodo=metodo,
+            gateway=gateway,
+            metadata={"pedido_id": pedido.id, "cliente_id": cliente.id, "transacao_id": tx0.id},
+            transacao_id=tx0.id,
+            existing_payment_id=getattr(tx0, "provider_transaction_id", None),
+        )
+        return updated
+
+    if pedido.meio_pagamento_id is None:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Pedido sem meio de pagamento/transação. Finalize o checkout informando meios_pagamento para criar transações pendentes.",
+        )
+
     transacao = await svc.pagamentos.iniciar_transacao(
         pedido_id=pedido.id,
         meio_pagamento_id=pedido.meio_pagamento_id,
@@ -69,6 +96,48 @@ async def iniciar_pagamento(
         metadata={"pedido_id": pedido.id, "cliente_id": cliente.id},
     )
     return transacao
+
+
+@router.post(
+    "/transacoes/{transacao_id}/iniciar",
+    response_model=TransacaoResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def iniciar_pagamento_por_transacao(
+    transacao_id: int = Path(..., description="ID da transação"),
+    metodo: PagamentoMetodoEnum = Query(default=PagamentoMetodoEnum.PIX_ONLINE),
+    gateway: PagamentoGatewayEnum = Query(default=PagamentoGatewayEnum.MERCADOPAGO),
+    db: Session = Depends(get_db),
+    cliente: ClienteModel = Depends(get_cliente_by_super_token),
+    svc: PedidoService = Depends(get_pedido_service),
+):
+    """
+    Inicia pagamento (gateway) para uma transação específica.
+
+    Útil quando o pedido tem múltiplas transações (ex.: parte em PIX_ONLINE, parte em dinheiro).
+    """
+    tx = svc.pagamentos.get_transacao_by_id(transacao_id)
+    if not tx:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Transação não encontrada")
+
+    pedido = svc.repo.get_pedido(tx.pedido_id)
+    if not pedido:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
+    if pedido.cliente_id != cliente.id:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Pedido não pertence ao cliente")
+
+    # Reutiliza a transação existente (não cria duplicada)
+    updated = await svc.pagamentos.iniciar_transacao(
+        pedido_id=pedido.id,
+        meio_pagamento_id=tx.meio_pagamento_id,
+        valor=svc._dec(tx.valor),
+        metodo=metodo,
+        gateway=gateway,
+        metadata={"pedido_id": pedido.id, "cliente_id": cliente.id, "transacao_id": transacao_id},
+        transacao_id=transacao_id,
+        existing_payment_id=tx.provider_transaction_id,
+    )
+    return updated
 
 
 @router.get(

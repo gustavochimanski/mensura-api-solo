@@ -1154,7 +1154,12 @@ async def enviar_resumo_pedido_whatsapp(
                 p.taxa_entrega,
                 p.valor_total,
                 p.observacoes,
-                p.pago,
+                EXISTS (
+                    SELECT 1
+                    FROM cardapio.transacoes_pagamento_dv tx
+                    WHERE tx.pedido_id = p.id
+                      AND tx.status IN ('PAGO', 'AUTORIZADO')
+                ) AS pago,
                 p.created_at,
                 c.nome as cliente_nome,
                 c.telefone as cliente_telefone,

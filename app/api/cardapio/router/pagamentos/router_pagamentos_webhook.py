@@ -128,8 +128,9 @@ async def mercadopago_webhook(
         qr_code_base64=consulta.qr_code_base64,
     )
 
-    updated_pedido = await pedido_service.atualizar_status_pagamento(
-        pedido_id=pedido_id,
+    # Novo padrão: atualiza a transação pelo provider_transaction_id (suporta múltiplas transações por pedido)
+    updated_pedido = await pedido_service.atualizar_status_pagamento_por_provider_transaction_id(
+        provider_transaction_id=str(consulta.provider_transaction_id),
         payload=update_payload,
     )
 

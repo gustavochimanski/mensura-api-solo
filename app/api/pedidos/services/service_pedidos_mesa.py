@@ -704,8 +704,16 @@ class PedidoMesaService:
         status_anterior = (
             pedido_antes.status.value if hasattr(pedido_antes.status, "value") else str(pedido_antes.status)
         )
-        # Fechar conta implica marcar como pago (regra: só aqui e no marcar-pago).
-        pedido_antes.pago = True
+        # Fechar conta: registra pagamento via transação (PAGO).
+        from app.api.cardapio.repositories.repo_pagamentos import PagamentoRepository
+        from app.api.cadastros.services.service_meio_pagamento import MeioPagamentoService
+        from app.api.cadastros.schemas.schema_meio_pagamento import MeioPagamentoTipoEnum
+        from app.api.pedidos.services.service_pedido_helpers import _dec
+        from app.api.shared.schemas.schema_shared_enums import (
+            PagamentoGatewayEnum,
+            PagamentoMetodoEnum,
+            PagamentoStatusEnum,
+        )
         
         # Se receber payload, salva dados de pagamento nos campos diretos
         if payload is not None:
@@ -715,6 +723,45 @@ class PedidoMesaService:
                 pedido_antes.meio_pagamento_id = payload.meio_pagamento_id
             self.db.commit()
             self.db.refresh(pedido_antes)
+
+        meio_pagamento_id = getattr(pedido_antes, "meio_pagamento_id", None)
+        if meio_pagamento_id is None:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Meio de pagamento é obrigatório para fechar conta.")
+
+        mp = MeioPagamentoService(self.db).get(int(meio_pagamento_id))
+        if not mp or not getattr(mp, "ativo", False):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Meio de pagamento inválido ou inativo")
+
+        if mp.tipo == MeioPagamentoTipoEnum.PIX_ONLINE or str(mp.tipo) == "PIX_ONLINE":
+            metodo = PagamentoMetodoEnum.PIX_ONLINE
+            gateway = PagamentoGatewayEnum.MERCADOPAGO
+        elif mp.tipo == MeioPagamentoTipoEnum.PIX_ENTREGA or str(mp.tipo) == "PIX_ENTREGA":
+            metodo = PagamentoMetodoEnum.PIX
+            gateway = PagamentoGatewayEnum.PIX_INTERNO
+        elif mp.tipo == MeioPagamentoTipoEnum.CARTAO_ENTREGA or str(mp.tipo) == "CARTAO_ENTREGA":
+            metodo = PagamentoMetodoEnum.CREDITO
+            gateway = PagamentoGatewayEnum.PIX_INTERNO
+        elif mp.tipo == MeioPagamentoTipoEnum.DINHEIRO or str(mp.tipo) == "DINHEIRO":
+            metodo = PagamentoMetodoEnum.DINHEIRO
+            gateway = PagamentoGatewayEnum.PIX_INTERNO
+        else:
+            metodo = PagamentoMetodoEnum.OUTRO
+            gateway = PagamentoGatewayEnum.PIX_INTERNO
+
+        pagamento_repo = PagamentoRepository(self.db)
+        txs = pagamento_repo.list_by_pedido_id(pedido_antes.id)
+        if not any(getattr(tx, "status", None) in {"PAGO", "AUTORIZADO"} for tx in txs):
+            tx_nova = pagamento_repo.criar(
+                pedido_id=pedido_antes.id,
+                meio_pagamento_id=int(meio_pagamento_id),
+                gateway=gateway.value,
+                metodo=metodo.value,
+                valor=_dec(getattr(pedido_antes, "valor_total", 0) or 0),
+                status=PagamentoStatusEnum.PAGO.value,
+                provider_transaction_id=f"manual_fechar_conta_mesa_{pedido_antes.id}_{int(meio_pagamento_id)}",
+                payload_solicitacao={"origem": "fechar_conta_mesa"},
+            )
+            pagamento_repo.registrar_evento(tx_nova, "pago_em")
 
         # Fecha o pedido (muda status para ENTREGUE)
         pedido = self.repo.fechar_conta(pedido_id)
@@ -798,14 +845,61 @@ class PedidoMesaService:
         if pedido.cliente_id and pedido.cliente_id != cliente_id:
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Pedido não pertence ao cliente")
         status_anterior = pedido.status.value if hasattr(pedido.status, "value") else str(pedido.status)
-        # Fechar conta (cliente) implica marcar como pago (regra: só aqui e no marcar-pago).
-        pedido.pago = True
+        # Fechar conta (cliente): registra pagamento via transação (PAGO).
+        from app.api.cardapio.repositories.repo_pagamentos import PagamentoRepository
+        from app.api.cadastros.services.service_meio_pagamento import MeioPagamentoService
+        from app.api.cadastros.schemas.schema_meio_pagamento import MeioPagamentoTipoEnum
+        from app.api.pedidos.services.service_pedido_helpers import _dec
+        from app.api.shared.schemas.schema_shared_enums import (
+            PagamentoGatewayEnum,
+            PagamentoMetodoEnum,
+            PagamentoStatusEnum,
+        )
 
         # Salva dados de pagamento nos campos diretos
         if payload.troco_para is not None:
             pedido.troco_para = payload.troco_para
         if payload.meio_pagamento_id is not None:
             pedido.meio_pagamento_id = payload.meio_pagamento_id
+
+        meio_pagamento_id = getattr(pedido, "meio_pagamento_id", None)
+        if meio_pagamento_id is None:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Meio de pagamento é obrigatório para fechar conta.")
+
+        mp = MeioPagamentoService(self.db).get(int(meio_pagamento_id))
+        if not mp or not getattr(mp, "ativo", False):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Meio de pagamento inválido ou inativo")
+
+        if mp.tipo == MeioPagamentoTipoEnum.PIX_ONLINE or str(mp.tipo) == "PIX_ONLINE":
+            metodo = PagamentoMetodoEnum.PIX_ONLINE
+            gateway = PagamentoGatewayEnum.MERCADOPAGO
+        elif mp.tipo == MeioPagamentoTipoEnum.PIX_ENTREGA or str(mp.tipo) == "PIX_ENTREGA":
+            metodo = PagamentoMetodoEnum.PIX
+            gateway = PagamentoGatewayEnum.PIX_INTERNO
+        elif mp.tipo == MeioPagamentoTipoEnum.CARTAO_ENTREGA or str(mp.tipo) == "CARTAO_ENTREGA":
+            metodo = PagamentoMetodoEnum.CREDITO
+            gateway = PagamentoGatewayEnum.PIX_INTERNO
+        elif mp.tipo == MeioPagamentoTipoEnum.DINHEIRO or str(mp.tipo) == "DINHEIRO":
+            metodo = PagamentoMetodoEnum.DINHEIRO
+            gateway = PagamentoGatewayEnum.PIX_INTERNO
+        else:
+            metodo = PagamentoMetodoEnum.OUTRO
+            gateway = PagamentoGatewayEnum.PIX_INTERNO
+
+        pagamento_repo = PagamentoRepository(self.db)
+        txs = pagamento_repo.list_by_pedido_id(pedido.id)
+        if not any(getattr(tx, "status", None) in {"PAGO", "AUTORIZADO"} for tx in txs):
+            tx_nova = pagamento_repo.criar(
+                pedido_id=pedido.id,
+                meio_pagamento_id=int(meio_pagamento_id),
+                gateway=gateway.value,
+                metodo=metodo.value,
+                valor=_dec(getattr(pedido, "valor_total", 0) or 0),
+                status=PagamentoStatusEnum.PAGO.value,
+                provider_transaction_id=f"manual_fechar_conta_mesa_cliente_{pedido.id}_{int(meio_pagamento_id)}",
+                payload_solicitacao={"origem": "fechar_conta_mesa_cliente", "cliente_id": cliente_id},
+            )
+            pagamento_repo.registrar_evento(tx_nova, "pago_em")
 
         self.db.commit()
         self.db.refresh(pedido)

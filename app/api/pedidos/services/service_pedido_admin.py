@@ -437,57 +437,103 @@ class PedidoAdminService:
         user_id: Optional[int] = None,
     ) -> PedidoResponseCompleto:
         """
-        Marca um pedido como pago sem alterar o status.
+        Registra pagamento do pedido via transação (sem alterar o status).
 
         Regra:
-        - Só permite marcar como pago se existir meio de pagamento no pedido
-          (pedido.meio_pagamento_id ou transação associada), OU se `meio_pagamento_id`
-          vier no payload (opcional).
+        - `meio_pagamento_id` é obrigatório.
+        - O pagamento passa a ser controlado por transações (status PAGO/AUTORIZADO).
         """
         from app.api.pedidos.models.model_pedido_historico_unificado import TipoOperacaoPedido
+        from app.api.cardapio.repositories.repo_pagamentos import PagamentoRepository
+        from app.api.shared.schemas.schema_shared_enums import (
+            PagamentoGatewayEnum,
+            PagamentoMetodoEnum,
+            PagamentoStatusEnum,
+        )
+        from app.api.cadastros.schemas.schema_meio_pagamento import MeioPagamentoTipoEnum
+        from app.api.pedidos.services.service_pedido_helpers import _dec
 
         pedido = self._get_pedido(pedido_id)
 
-        # Se veio meio_pagamento_id no payload, valida e persiste.
-        meio_pagamento_id_payload = getattr(payload, "meio_pagamento_id", None) if payload is not None else None
-        if meio_pagamento_id_payload is not None:
-            from app.api.cadastros.services.service_meio_pagamento import MeioPagamentoService
-
-            meio_pagamento = MeioPagamentoService(self.db).get(meio_pagamento_id_payload)
-            if not meio_pagamento or not getattr(meio_pagamento, "ativo", False):
-                raise HTTPException(status.HTTP_400_BAD_REQUEST, "Meio de pagamento inválido ou inativo")
-            pedido.meio_pagamento_id = int(meio_pagamento_id_payload)
-
-        # Validação: precisa ter meio de pagamento (no pedido ou em alguma transação) após possível atualização.
-        meio_pagamento_id_ref = getattr(pedido, "meio_pagamento_id", None)
-        if meio_pagamento_id_ref is None:
-            tx = getattr(pedido, "transacao", None)
-            if tx is not None:
-                meio_pagamento_id_ref = getattr(tx, "meio_pagamento_id", None)
-        if meio_pagamento_id_ref is None:
-            txs = getattr(pedido, "transacoes", None) or []
-            for tx in txs:
-                mp_id = getattr(tx, "meio_pagamento_id", None)
-                if mp_id is not None:
-                    meio_pagamento_id_ref = mp_id
-                    break
-
-        if meio_pagamento_id_ref is None:
+        if payload is None or getattr(payload, "meio_pagamento_id", None) is None:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                "Não é possível marcar como pago sem meio de pagamento. Informe meio_pagamento_id no payload ou defina no pedido antes.",
+                "meio_pagamento_id é obrigatório para marcar pedido como pago.",
             )
 
-        # Marca como pago (idempotente)
-        pedido.pago = True
+        meio_pagamento_id = int(payload.meio_pagamento_id)
+
+        # Valida meio de pagamento e persiste no pedido (para referência do checkout/UI).
+        from app.api.cadastros.services.service_meio_pagamento import MeioPagamentoService
+
+        meio_pagamento = MeioPagamentoService(self.db).get(meio_pagamento_id)
+        if not meio_pagamento or not getattr(meio_pagamento, "ativo", False):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Meio de pagamento inválido ou inativo")
+
+        pedido.meio_pagamento_id = meio_pagamento_id
+
+        # Se já existe pagamento confirmado, mantém idempotência (não duplica transação).
+        pagamento_repo = PagamentoRepository(self.db)
+        txs = pagamento_repo.list_by_pedido_id(pedido.id)
+        if any(getattr(tx, "status", None) in {"PAGO", "AUTORIZADO"} for tx in txs):
+            self.db.commit()
+            pedido_atualizado = self.repo.get_pedido(pedido_id)
+            return self.pedido_service.response_builder.pedido_to_response_completo(pedido_atualizado)
+
+        # Mapeia meio de pagamento -> (método, gateway)
+        if meio_pagamento.tipo == MeioPagamentoTipoEnum.PIX_ONLINE or str(meio_pagamento.tipo) == "PIX_ONLINE":
+            metodo = PagamentoMetodoEnum.PIX_ONLINE
+            gateway = PagamentoGatewayEnum.MERCADOPAGO
+        elif meio_pagamento.tipo == MeioPagamentoTipoEnum.PIX_ENTREGA or str(meio_pagamento.tipo) == "PIX_ENTREGA":
+            metodo = PagamentoMetodoEnum.PIX
+            gateway = PagamentoGatewayEnum.PIX_INTERNO
+        elif meio_pagamento.tipo == MeioPagamentoTipoEnum.CARTAO_ENTREGA or str(meio_pagamento.tipo) == "CARTAO_ENTREGA":
+            metodo = PagamentoMetodoEnum.CREDITO
+            gateway = PagamentoGatewayEnum.PIX_INTERNO
+        elif meio_pagamento.tipo == MeioPagamentoTipoEnum.DINHEIRO or str(meio_pagamento.tipo) == "DINHEIRO":
+            metodo = PagamentoMetodoEnum.DINHEIRO
+            gateway = PagamentoGatewayEnum.PIX_INTERNO
+        else:
+            metodo = PagamentoMetodoEnum.OUTRO
+            gateway = PagamentoGatewayEnum.PIX_INTERNO
+
+        # Atualiza transação pendente existente (mesmo meio) ou cria uma nova como PAGO.
+        tx_match = None
+        for tx in txs:
+            if int(getattr(tx, "meio_pagamento_id", 0) or 0) == meio_pagamento_id:
+                tx_match = tx
+                break
+
+        if tx_match is not None:
+            pagamento_repo.atualizar(
+                tx_match,
+                status=PagamentoStatusEnum.PAGO.value,
+                provider_transaction_id=(
+                    getattr(tx_match, "provider_transaction_id", None)
+                    or f"manual_{pedido.id}_{meio_pagamento_id}"
+                ),
+            )
+            pagamento_repo.registrar_evento(tx_match, "pago_em")
+        else:
+            tx_nova = pagamento_repo.criar(
+                pedido_id=pedido.id,
+                meio_pagamento_id=meio_pagamento_id,
+                gateway=gateway.value,
+                metodo=metodo.value,
+                valor=_dec(getattr(pedido, "valor_total", 0) or 0),
+                status=PagamentoStatusEnum.PAGO.value,
+                provider_transaction_id=f"manual_{pedido.id}_{meio_pagamento_id}",
+                payload_solicitacao={"origem": "marcar_pedido_pago", "usuario_id": user_id},
+            )
+            pagamento_repo.registrar_evento(tx_nova, "pago_em")
 
         # Histórico detalhado (sem mudança de status)
-        meio_pagamento_nome = pedido.meio_pagamento.nome if getattr(pedido, "meio_pagamento", None) else None
-        observacoes = f"Meio de pagamento: {meio_pagamento_nome or meio_pagamento_id_ref}"
+        meio_pagamento_nome = meio_pagamento.nome if getattr(meio_pagamento, "nome", None) else None
+        observacoes = f"Meio de pagamento: {meio_pagamento_nome or meio_pagamento_id}"
         self.repo.add_historico(
             pedido_id=pedido.id,
             tipo_operacao=TipoOperacaoPedido.PAGAMENTO_REALIZADO,
-            descricao="Pedido marcado como pago",
+            descricao="Pagamento registrado (transação PAGO)",
             observacoes=observacoes,
             usuario_id=user_id,
         )
@@ -497,7 +543,7 @@ class PedidoAdminService:
         return self.pedido_service.response_builder.pedido_to_response_completo(pedido_atualizado)
     
     def _fechar_conta_delivery(self, pedido_id: int, payload: PedidoFecharContaRequest | None) -> PedidoResponseCompleto:
-        """Fecha conta de pedido delivery/retirada marcando como pago e entregue."""
+        """Fecha conta de pedido delivery/retirada registrando transação PAGO e marcando como entregue."""
         pedido = self.repo.get_pedido(pedido_id)
         if not pedido:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
@@ -513,10 +559,58 @@ class PedidoAdminService:
         # Atualiza troco se fornecido
         if payload and payload.troco_para is not None:
             pedido.troco_para = payload.troco_para
-        
-        # Marca como pago
-        pedido.pago = True
-        
+
+        # Precisa ter meio de pagamento para registrar transação
+        meio_pagamento_id = getattr(pedido, "meio_pagamento_id", None)
+        if meio_pagamento_id is None:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Meio de pagamento não informado para fechamento de conta.")
+
+        # Registra pagamento via transação (idempotente)
+        from app.api.cadastros.services.service_meio_pagamento import MeioPagamentoService
+        from app.api.cadastros.schemas.schema_meio_pagamento import MeioPagamentoTipoEnum
+        from app.api.cardapio.repositories.repo_pagamentos import PagamentoRepository
+        from app.api.shared.schemas.schema_shared_enums import (
+            PagamentoGatewayEnum,
+            PagamentoMetodoEnum,
+            PagamentoStatusEnum,
+        )
+        from app.api.pedidos.services.service_pedido_helpers import _dec
+
+        mp = MeioPagamentoService(self.db).get(int(meio_pagamento_id))
+        if not mp or not getattr(mp, "ativo", False):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Meio de pagamento inválido ou inativo")
+
+        if mp.tipo == MeioPagamentoTipoEnum.PIX_ONLINE or str(mp.tipo) == "PIX_ONLINE":
+            metodo = PagamentoMetodoEnum.PIX_ONLINE
+            gateway = PagamentoGatewayEnum.MERCADOPAGO
+        elif mp.tipo == MeioPagamentoTipoEnum.PIX_ENTREGA or str(mp.tipo) == "PIX_ENTREGA":
+            metodo = PagamentoMetodoEnum.PIX
+            gateway = PagamentoGatewayEnum.PIX_INTERNO
+        elif mp.tipo == MeioPagamentoTipoEnum.CARTAO_ENTREGA or str(mp.tipo) == "CARTAO_ENTREGA":
+            metodo = PagamentoMetodoEnum.CREDITO
+            gateway = PagamentoGatewayEnum.PIX_INTERNO
+        elif mp.tipo == MeioPagamentoTipoEnum.DINHEIRO or str(mp.tipo) == "DINHEIRO":
+            metodo = PagamentoMetodoEnum.DINHEIRO
+            gateway = PagamentoGatewayEnum.PIX_INTERNO
+        else:
+            metodo = PagamentoMetodoEnum.OUTRO
+            gateway = PagamentoGatewayEnum.PIX_INTERNO
+
+        pagamento_repo = PagamentoRepository(self.db)
+        txs = pagamento_repo.list_by_pedido_id(pedido.id)
+        if not any(getattr(tx, "status", None) in {"PAGO", "AUTORIZADO"} for tx in txs):
+            tx_nova = pagamento_repo.criar(
+                pedido_id=pedido.id,
+                meio_pagamento_id=int(meio_pagamento_id),
+                gateway=gateway.value,
+                metodo=metodo.value,
+                valor=_dec(getattr(pedido, "valor_total", 0) or 0),
+                status=PagamentoStatusEnum.PAGO.value,
+                provider_transaction_id=f"manual_fechar_conta_{pedido.id}_{int(meio_pagamento_id)}",
+                payload_solicitacao={"origem": "fechar_conta_delivery"},
+            )
+            pagamento_repo.registrar_evento(tx_nova, "pago_em")
+
         # IMPORTANTE: Faz commit e refresh ANTES de acessar o relacionamento meio_pagamento
         # Isso garante que o meio_pagamento_id seja persistido e o relacionamento seja atualizado
         if payload and (payload.meio_pagamento_id is not None or payload.troco_para is not None):
@@ -577,9 +671,6 @@ class PedidoAdminService:
                 status.HTTP_400_BAD_REQUEST,
                 f"Não é possível reabrir um pedido com status '{status_atual}'. Apenas pedidos ENTREGUE ou CANCELADO podem ser reabertos."
             )
-        
-        # Reseta o campo pago para False ao reabrir
-        pedido.pago = False
         
         # Atualiza status para PENDENTE (P)
         status_anterior = pedido.status

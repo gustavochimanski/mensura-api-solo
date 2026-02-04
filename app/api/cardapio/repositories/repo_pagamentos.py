@@ -21,10 +21,39 @@ class PagamentoRepository:
         return self.db.get(TransacaoPagamentoModel, transacao_id)
 
     def get_by_pedido_id(self, pedido_id: int) -> Optional[TransacaoPagamentoModel]:
+        """
+        Compat: retorna UMA transação do pedido.
+
+        ⚠️ ATENÇÃO: o sistema agora pode ter múltiplas transações por pedido.
+        Use `list_by_pedido_id()` quando precisar de todas.
+        """
         return (
             self.db.query(TransacaoPagamentoModel)
             .filter(TransacaoPagamentoModel.pedido_id == pedido_id)
-            .one_or_none()
+            .order_by(TransacaoPagamentoModel.created_at.desc())
+            .first()
+        )
+
+    def list_by_pedido_id(self, pedido_id: int) -> list[TransacaoPagamentoModel]:
+        """Retorna todas as transações do pedido (mais recentes primeiro)."""
+        return (
+            self.db.query(TransacaoPagamentoModel)
+            .filter(TransacaoPagamentoModel.pedido_id == pedido_id)
+            .order_by(TransacaoPagamentoModel.created_at.desc())
+            .all()
+        )
+
+    def get_by_provider_transaction_id(
+        self,
+        *,
+        provider_transaction_id: str,
+    ) -> Optional[TransacaoPagamentoModel]:
+        """Busca transação pelo ID do provedor (ex.: MercadoPago payment_id)."""
+        return (
+            self.db.query(TransacaoPagamentoModel)
+            .filter(TransacaoPagamentoModel.provider_transaction_id == str(provider_transaction_id))
+            .order_by(TransacaoPagamentoModel.created_at.desc())
+            .first()
         )
 
     # ---------------- Mutations ------------------

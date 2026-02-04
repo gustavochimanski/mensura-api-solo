@@ -233,16 +233,16 @@ def fechar_conta(
 )
 def marcar_pedido_pago(
     pedido_id: int = Path(..., gt=0),
-    payload: Optional[PedidoMarcarPedidoPagoRequest] = Body(None),
+    payload: PedidoMarcarPedidoPagoRequest = Body(...),
     current_user: UserModel = Depends(get_current_user),
     svc: PedidoAdminService = Depends(get_pedido_admin_service),
 ):
     """
-    Marca o pedido como pago sem alterar o status.
+    Registra pagamento do pedido via transação (sem alterar o status).
 
     Regras:
-    - Só é permitido se o pedido já tiver um meio de pagamento definido, OU se
-      `meio_pagamento_id` vier no payload (opcional).
+    - `meio_pagamento_id` é obrigatório.
+    - O backend cria (ou atualiza) uma transação do pedido com status PAGO.
     """
     return svc.marcar_pedido_pago(
         pedido_id,
