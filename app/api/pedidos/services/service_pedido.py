@@ -1239,6 +1239,59 @@ class PedidoService:
         
         self.db.commit()
         self.db.refresh(pedido)
+
+        # Gestor App: ao mudar para status "I" (Impressão), avisa em tempo real
+        # da mesma forma que o checkout avisa (evento PEDIDO_CRIADO filtrado por rota "/gestor-app").
+        # Importante: este gatilho é propositalmente restrito APENAS ao status I.
+        if novo_status == PedidoStatusEnum.I:
+            try:
+                from app.api.notifications.core.ws_events import WSEvents
+                from app.api.notifications.core.websocket_manager import websocket_manager
+
+                empresa_id_str = str(pedido.empresa_id) if pedido.empresa_id is not None else ""
+                if empresa_id_str:
+                    tipo_entrega_val = (
+                        pedido.tipo_entrega.value
+                        if hasattr(pedido.tipo_entrega, "value")
+                        else str(pedido.tipo_entrega)
+                    )
+                    numero_pedido_val = getattr(pedido, "numero_pedido", None)
+
+                    payload = {
+                        "pedido_id": str(pedido.id),
+                        "tipo_entrega": tipo_entrega_val,
+                        "status": novo_status.value,
+                    }
+                    if numero_pedido_val:
+                        payload["numero_pedido"] = str(numero_pedido_val)
+
+                    def _emit_gestor_app_event() -> None:
+                        try:
+                            asyncio.run(
+                                websocket_manager.emit_event(
+                                    event=WSEvents.PEDIDO_CRIADO,
+                                    scope="empresa",
+                                    empresa_id=empresa_id_str,
+                                    payload=payload,
+                                    required_route="/gestor-app",
+                                )
+                            )
+                        except Exception as e:
+                            logger.error(
+                                "[WS] Erro ao avisar gestor-app (status I) pedido %s: %s",
+                                pedido.id,
+                                e,
+                                exc_info=True,
+                            )
+
+                    threading.Thread(target=_emit_gestor_app_event, daemon=True).start()
+            except Exception as e:
+                logger.error(
+                    "[WS] Erro ao agendar aviso gestor-app (status I) pedido %s: %s",
+                    pedido.id,
+                    e,
+                    exc_info=True,
+                )
         if novo_status == PedidoStatusEnum.S and pedido.entregador_id:
             schedule_entregador_rotas_notification(
                 empresa_id=int(pedido.empresa_id),
