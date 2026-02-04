@@ -3,7 +3,7 @@ Service para busca global de produtos, receitas e combos
 """
 from typing import Optional
 from sqlalchemy.orm import Session
-from sqlalchemy import or_, func, and_, select
+from sqlalchemy import or_, func, and_, select, text
 
 from app.api.catalogo.models.model_produto import ProdutoModel
 from app.api.catalogo.models.model_produto_emp import ProdutoEmpModel
@@ -16,8 +16,40 @@ from app.api.catalogo.schemas.schema_busca_global import (
 
 
 class BuscaGlobalService:
+    # ---- helper: unaccent disponível? (cache por processo) ----
+    _unaccent_checked: bool = False
+    _has_unaccent_cache: bool = False
+
     def __init__(self, db: Session):
         self.db = db
+
+    def _has_unaccent(self) -> bool:
+        """
+        Verifica se a função/extensão `unaccent` está disponível no banco.
+
+        - Em PostgreSQL, depende da extensão `unaccent` estar habilitada.
+        - Em outros bancos, esta checagem falha e retorna False (fallback sem unaccent).
+        """
+        if BuscaGlobalService._unaccent_checked:
+            return BuscaGlobalService._has_unaccent_cache
+        try:
+            # tentativa simples: se existir, retorna 1; se não existir, levanta exceção
+            self.db.execute(text("SELECT unaccent(:s)"), {"s": "teste"})
+            BuscaGlobalService._has_unaccent_cache = True
+        except Exception:
+            BuscaGlobalService._has_unaccent_cache = False
+        BuscaGlobalService._unaccent_checked = True
+        return BuscaGlobalService._has_unaccent_cache
+
+    def _ilike_sem_acento(self, expr, term: str):
+        """
+        Retorna uma condição ILIKE, removendo acentos quando possível.
+
+        `term` deve vir já com wildcards (`%...%`) quando necessário.
+        """
+        if self._has_unaccent():
+            return func.unaccent(expr).ilike(func.unaccent(term))
+        return expr.ilike(term)
 
     def buscar(
         self,
@@ -103,13 +135,21 @@ class BuscaGlobalService:
             # Busca por termo (descrição ou código de barras)
             # Normaliza removendo hífens e espaços de ambos os lados para busca mais flexível
             # "x bacon" encontra "x-bacon" e vice-versa
+            term_raw = f"%{termo_lower}%"
+            term_norm = f"%{termo_normalizado}%"
             produtos_query = produtos_query.filter(
                 or_(
-                    func.replace(func.replace(func.lower(ProdutoModel.descricao), "-", ""), " ", "").contains(termo_normalizado),
-                    func.replace(func.replace(func.lower(ProdutoModel.cod_barras), "-", ""), " ", "").contains(termo_normalizado),
+                    self._ilike_sem_acento(
+                        func.replace(func.replace(func.lower(ProdutoModel.descricao), "-", ""), " ", ""),
+                        term_norm,
+                    ),
+                    self._ilike_sem_acento(
+                        func.replace(func.replace(func.lower(ProdutoModel.cod_barras), "-", ""), " ", ""),
+                        term_norm,
+                    ),
                     # Também mantém busca original para termos que não tenham hífen/espaço
-                    func.lower(ProdutoModel.descricao).contains(termo_lower),
-                    func.lower(ProdutoModel.cod_barras).contains(termo_lower),
+                    self._ilike_sem_acento(func.lower(ProdutoModel.descricao), term_raw),
+                    self._ilike_sem_acento(func.lower(ProdutoModel.cod_barras), term_raw),
                 )
             ).order_by(ProdutoModel.created_at.asc())
 
@@ -137,23 +177,31 @@ class BuscaGlobalService:
         else:
             # Busca por termo (nome ou descrição)
             # Normaliza removendo hífens e espaços de ambos os lados para busca mais flexível
+            term_raw = f"%{termo_lower}%"
+            term_norm = f"%{termo_normalizado}%"
             condicoes = [
                 # Busca normalizada (sem hífen/espaço)
-                func.replace(func.replace(func.lower(ReceitaModel.nome), "-", ""), " ", "").contains(termo_normalizado),
+                self._ilike_sem_acento(
+                    func.replace(func.replace(func.lower(ReceitaModel.nome), "-", ""), " ", ""),
+                    term_norm,
+                ),
                 # Busca original
-                func.lower(ReceitaModel.nome).contains(termo_lower),
+                self._ilike_sem_acento(func.lower(ReceitaModel.nome), term_raw),
             ]
             # Adiciona busca na descrição apenas se o campo não for NULL
             condicoes.append(
                 and_(
                     ReceitaModel.descricao.isnot(None),
-                    func.replace(func.replace(func.lower(ReceitaModel.descricao), "-", ""), " ", "").contains(termo_normalizado)
+                    self._ilike_sem_acento(
+                        func.replace(func.replace(func.lower(ReceitaModel.descricao), "-", ""), " ", ""),
+                        term_norm,
+                    ),
                 )
             )
             condicoes.append(
                 and_(
                     ReceitaModel.descricao.isnot(None),
-                    func.lower(ReceitaModel.descricao).contains(termo_lower)
+                    self._ilike_sem_acento(func.lower(ReceitaModel.descricao), term_raw),
                 )
             )
             receitas_query = receitas_query.filter(or_(*condicoes)).order_by(ReceitaModel.id.asc())
@@ -179,25 +227,33 @@ class BuscaGlobalService:
         else:
             # Busca por termo (título ou descrição)
             # Normaliza removendo hífens e espaços de ambos os lados para busca mais flexível
+            term_raw = f"%{termo_lower}%"
+            term_norm = f"%{termo_normalizado}%"
             condicoes = []
             # Adiciona busca no título apenas se o campo não for NULL
             condicoes.append(
                 and_(
                     ComboModel.titulo.isnot(None),
-                    func.replace(func.replace(func.lower(ComboModel.titulo), "-", ""), " ", "").contains(termo_normalizado)
+                    self._ilike_sem_acento(
+                        func.replace(func.replace(func.lower(ComboModel.titulo), "-", ""), " ", ""),
+                        term_norm,
+                    ),
                 )
             )
             condicoes.append(
                 and_(
                     ComboModel.titulo.isnot(None),
-                    func.lower(ComboModel.titulo).contains(termo_lower)
+                    self._ilike_sem_acento(func.lower(ComboModel.titulo), term_raw),
                 )
             )
             # Descrição sempre existe (não é NULL)
             condicoes.append(
-                func.replace(func.replace(func.lower(ComboModel.descricao), "-", ""), " ", "").contains(termo_normalizado)
+                self._ilike_sem_acento(
+                    func.replace(func.replace(func.lower(ComboModel.descricao), "-", ""), " ", ""),
+                    term_norm,
+                )
             )
-            condicoes.append(func.lower(ComboModel.descricao).contains(termo_lower))
+            condicoes.append(self._ilike_sem_acento(func.lower(ComboModel.descricao), term_raw))
             combos_query = combos_query.filter(or_(*condicoes)).order_by(ComboModel.id.asc())
 
         combos_result = combos_query.limit(limit).all()

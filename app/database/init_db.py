@@ -183,6 +183,52 @@ def habilitar_postgis():
         logger.warning("⚠️ Funcionalidades geográficas estarão desabilitadas.")
         return False
 
+
+def habilitar_unaccent() -> bool:
+    """
+    Habilita a extensão `unaccent` (PostgreSQL) para permitir buscas sem acentuação.
+
+    Returns:
+        bool: True se `unaccent` está disponível, False caso contrário.
+    """
+    logger.info("🔤 Verificando/Habilitando extensão unaccent...")
+
+    # 1) Garante schema public
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("CREATE SCHEMA IF NOT EXISTS public"))
+    except Exception as e:
+        logger.warning(f"⚠️ Erro ao garantir schema public (unaccent): {e}")
+
+    # 2) Tenta criar a extensão explicitando o schema
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("SET search_path TO public"))
+            conn.execute(text("CREATE EXTENSION IF NOT EXISTS unaccent WITH SCHEMA public"))
+            logger.info("ℹ️ Tentativa de habilitar extensão unaccent executada")
+    except Exception as unaccent_error:
+        error_msg = str(unaccent_error)
+        if "is not available" in error_msg or "extension control file" in error_msg or "No such file" in error_msg:
+            logger.warning("⚠️ Extensão unaccent não está INSTALADA no PostgreSQL")
+            logger.warning("⚠️ Para habilitar no servidor, execute:")
+            logger.warning("⚠️   CREATE EXTENSION unaccent;")
+        else:
+            logger.warning(f"⚠️ Erro ao habilitar extensão unaccent: {unaccent_error}")
+
+    # 3) Valida em uma nova transação limpa
+    try:
+        with engine.begin() as conn:
+            ok = conn.execute(text("SELECT unaccent(:s)"), {"s": "teste"}).scalar() is not None
+        if ok:
+            logger.info("✅ unaccent disponível")
+            return True
+        logger.warning("⚠️ unaccent não disponível (validação falhou).")
+        return False
+    except Exception as e:
+        logger.warning(f"⚠️ Erro ao verificar unaccent: {e}")
+        logger.warning("⚠️ Buscas sem acento estarão desabilitadas.")
+        return False
+
 def remover_esquemas_postgis_desnecessarios():
     """Remove esquemas do PostGIS que não são necessários (topology, tiger, tiger_data)"""
     esquemas_para_remover = ["topology", "tiger", "tiger_data"]
@@ -1970,23 +2016,27 @@ def inicializar_banco():
     logger.info("🚀 Iniciando processo de inicialização do banco de dados...")
     
     # Configura timezone primeiro
-    logger.info("📦 Passo 1/7: Configurando timezone do banco...")
+    logger.info("📦 Passo 1/8: Configurando timezone do banco...")
     configurar_timezone()
     
     # Habilita PostGIS primeiro (necessário para tipos geography)
-    logger.info("📦 Passo 2/7: Habilitando extensão PostGIS...")
+    logger.info("📦 Passo 2/8: Habilitando extensão PostGIS...")
     postgis_disponivel = habilitar_postgis()
+
+    # Habilita unaccent (melhora buscas por texto)
+    logger.info("📦 Passo 3/8: Habilitando extensão unaccent...")
+    habilitar_unaccent()
     
     # SEMPRE cria/verifica os schemas primeiro
-    logger.info("📦 Passo 3/7: Criando/verificando schemas...")
+    logger.info("📦 Passo 4/8: Criando/verificando schemas...")
     criar_schemas()
     
     # Cria os ENUMs antes de criar as tabelas
-    logger.info("📦 Passo 4/7: Criando/verificando ENUMs...")
+    logger.info("📦 Passo 5/8: Criando/verificando ENUMs...")
     criar_enums()
     
     # SEMPRE cria as tabelas (criar_tabelas usa checkfirst=True, então não sobrescreve)
-    logger.info("📋 Passo 5/7: Criando/verificando todas as tabelas...")
+    logger.info("📋 Passo 6/8: Criando/verificando todas as tabelas...")
     criar_tabelas(postgis_disponivel=postgis_disponivel)
 
     # Se as tabelas essenciais não existirem, não adianta seguir com seed.
@@ -1995,7 +2045,7 @@ def inicializar_banco():
         return
     
     # Normaliza types legados (admin/super -> funcionario)
-    logger.info("👥 Passo 6/7: Normalizando type_user (legado)...")
+    logger.info("👥 Passo 7/8: Normalizando type_user (legado)...")
     normalizar_tipos_usuario()
 
     # Cria tabelas do chatbot (que não usam modelos SQLAlchemy)
@@ -2003,7 +2053,7 @@ def inicializar_banco():
     criar_tabelas_chatbot()
     
     # Dados iniciais de meios de pagamento
-    logger.info("💳 Passo 7/7: Criando/verificando meios de pagamento padrão...")
+    logger.info("💳 Passo 8/8: Criando/verificando meios de pagamento padrão...")
     criar_meios_pagamento_padrao()
 
     # Catálogo de permissões (idempotente)
