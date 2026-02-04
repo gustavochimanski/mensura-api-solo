@@ -455,13 +455,18 @@ class PedidoAdminService:
 
         pedido = self._get_pedido(pedido_id)
 
-        if payload is None or getattr(payload, "meio_pagamento_id", None) is None:
+        meio_pagamento_id: Optional[int] = None
+        if payload is not None and getattr(payload, "meio_pagamento_id", None) is not None:
+            meio_pagamento_id = int(payload.meio_pagamento_id)
+        else:
+            # Body vazio/omitido: usa o meio já salvo no pedido, se existir.
+            meio_pagamento_id = int(pedido.meio_pagamento_id) if getattr(pedido, "meio_pagamento_id", None) else None
+
+        if meio_pagamento_id is None:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                "meio_pagamento_id é obrigatório para marcar pedido como pago.",
+                "meio_pagamento_id é obrigatório para marcar pedido como pago (envie no payload ou defina no pedido).",
             )
-
-        meio_pagamento_id = int(payload.meio_pagamento_id)
 
         # Valida meio de pagamento e persiste no pedido (para referência do checkout/UI).
         from app.api.cadastros.services.service_meio_pagamento import MeioPagamentoService

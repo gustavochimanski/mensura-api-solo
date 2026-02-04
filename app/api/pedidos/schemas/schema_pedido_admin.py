@@ -92,13 +92,13 @@ class PedidoMarcarPedidoPagoRequest(BaseModel):
     Payload unificado para marcar pedido como pago.
 
     Regra:
-    - `meio_pagamento_id` é obrigatório.
+    - `meio_pagamento_id` pode vir no payload; se omitido, o backend pode usar o meio já salvo no pedido.
     - O backend valida o meio de pagamento e cria (ou atualiza) uma transação do pedido com status PAGO.
     """
 
-    meio_pagamento_id: int = Field(
-        ...,
-        description="ID do meio de pagamento utilizado para registrar a transação como PAGO.",
+    meio_pagamento_id: Optional[int] = Field(
+        default=None,
+        description="ID do meio de pagamento utilizado para registrar a transação como PAGO. Se omitido, o backend usa o meio já salvo no pedido.",
     )
 
 
