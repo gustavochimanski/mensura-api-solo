@@ -177,9 +177,13 @@ class CaixaRepository:
         )
         total_entradas = query_entradas.scalar() or Decimal("0")
         
-        # Saídas: trocos dados para pedidos entregues
+        # Saídas: trocos dados (troco real) para pedidos entregues e pagos em dinheiro
+        # Regra: quando o cliente informa "troco_para", o troco efetivo é (troco_para - valor_total),
+        # somente quando troco_para > valor_total e o pagamento é DINHEIRO.
         query_saidas = (
-            self.db.query(func.sum(PedidoUnificadoModel.troco_para))
+            self.db.query(func.sum(PedidoUnificadoModel.troco_para - PedidoUnificadoModel.valor_total))
+            .join(TransacaoPagamentoModel, TransacaoPagamentoModel.pedido_id == PedidoUnificadoModel.id)
+            .join(MeioPagamentoModel, TransacaoPagamentoModel.meio_pagamento_id == MeioPagamentoModel.id)
             .filter(
                 and_(
                     PedidoUnificadoModel.empresa_id == empresa_id,
@@ -187,7 +191,9 @@ class CaixaRepository:
                     PedidoUnificadoModel.created_at <= data_fim,
                     PedidoUnificadoModel.status == StatusPedido.ENTREGUE.value,
                     PedidoUnificadoModel.troco_para.isnot(None),
-                    PedidoUnificadoModel.troco_para > 0
+                    PedidoUnificadoModel.troco_para > PedidoUnificadoModel.valor_total,
+                    TransacaoPagamentoModel.status == PagamentoStatusEnum.PAGO.value,
+                    MeioPagamentoModel.tipo == "DINHEIRO",
                 )
             )
         )
