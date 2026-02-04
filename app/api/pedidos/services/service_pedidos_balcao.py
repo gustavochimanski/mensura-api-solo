@@ -642,6 +642,10 @@ class PedidoBalcaoService:
         if pedido.status in ("C", "E"):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Pedido fechado/cancelado")
         pedido = self.repo.remove_item(pedido_id, item_id)
+        pedido_atualizado = self.repo.get(pedido.id, TipoEntrega.BALCAO)
+        self._recalcular_totais(pedido_atualizado)
+        self.repo.commit()
+        pedido_atualizado = self.repo.get(pedido.id, TipoEntrega.BALCAO)
         # Registra histórico
         self.repo.add_historico(
             pedido_id=pedido_id,
@@ -650,7 +654,11 @@ class PedidoBalcaoService:
             usuario_id=usuario_id,
         )
         self.repo.commit()
-        return RemoverItemResponse(ok=True, pedido_id=pedido.id, valor_total=float(pedido.valor_total or 0))
+        return RemoverItemResponse(
+            ok=True,
+            pedido_id=pedido_atualizado.id,
+            valor_total=float(pedido_atualizado.valor_total or 0),
+        )
 
     def cancelar(self, pedido_id: int, usuario_id: int | None = None) -> PedidoResponseCompleto:
         pedido_antes = self.repo.get(pedido_id, TipoEntrega.BALCAO)
