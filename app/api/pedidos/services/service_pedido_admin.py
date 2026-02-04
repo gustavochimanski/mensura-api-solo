@@ -18,6 +18,8 @@ from app.api.pedidos.repositories.repo_pedidos import PedidoRepository
 from app.api.pedidos.schemas import (
     HistoricoDoPedidoResponse,
     KanbanAgrupadoResponse,
+    FinalizarPedidoRequest,
+    PreviewCheckoutResponse,
     PedidoCreateRequest,
     PedidoEntregadorRequest,
     PedidoFecharContaRequest,
@@ -156,6 +158,23 @@ class PedidoAdminService:
             limit=limit,
             tipo=tipo,
         )
+
+    # ------------------------------------------------------------------ #
+    # Checkout (preview)
+    # ------------------------------------------------------------------ #
+    def calcular_preview_checkout(
+        self,
+        payload: FinalizarPedidoRequest,
+        *,
+        cliente_id: Optional[int] = None,
+    ) -> PreviewCheckoutResponse:
+        """
+        Calcula os valores do checkout sem criar pedido no banco.
+
+        Observação:
+        - Se `cliente_id` for informado, o serviço valida se `endereco_id` pertence ao cliente.
+        """
+        return self.pedido_service.calcular_preview_checkout(payload, cliente_id=cliente_id)
 
     def obter_pedido(self, pedido_id: int, empresa_id: Optional[int] = None) -> PedidoResponseCompletoTotal:
         # Busca o modelo primeiro para validar empresa_id se necessário

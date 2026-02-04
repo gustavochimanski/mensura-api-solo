@@ -23,9 +23,10 @@ from app.api.pedidos.schemas.schema_pedido import (
     ItemComplementoRequest,
 )
 from app.api.pedidos.services.service_pedido_responses import PedidoResponseBuilder
-from app.api.shared.schemas.schema_shared_enums import PedidoStatusEnum
+from app.api.shared.schemas.schema_shared_enums import PedidoStatusEnum, TipoEntregaEnum
 from app.api.pedidos.models.model_pedido_unificado import StatusPedido
 from app.api.pedidos.models.model_pedido_historico_unificado import TipoOperacaoPedido
+from app.api.pedidos.services.service_pedido_taxas import TaxaService
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from decimal import Decimal as PyDecimal
@@ -114,6 +115,29 @@ class PedidoMesaService:
             produto_contract=produto_adapter,
             combo_contract=combo_adapter,
             complemento_contract=complemento_adapter,
+        )
+
+    def _recalcular_totais(self, pedido) -> None:
+        """
+        Recalcula subtotal/taxas/valor_total para pedidos de MESA.
+
+        IMPORTANTE: o repo._calc_total calcula apenas itens+complementos. Aqui somamos taxa de serviço
+        (e taxa_entrega apenas para DELIVERY, que não é o caso).
+        """
+        subtotal = self.repo._calc_total(pedido)
+        taxa_entrega, taxa_servico, distancia_km, _ = TaxaService(self.db).calcular_taxas(
+            tipo_entrega=TipoEntregaEnum.MESA,
+            subtotal=subtotal,
+            endereco=None,
+            empresa_id=pedido.empresa_id,
+        )
+        self.repo.atualizar_totais(
+            pedido,
+            subtotal=subtotal,
+            desconto=Decimal("0"),
+            taxa_entrega=taxa_entrega,
+            taxa_servico=taxa_servico,
+            distancia_km=distancia_km,
         )
 
     # -------- Pedido --------
@@ -334,6 +358,12 @@ class PedidoMesaService:
             logger = logging.getLogger(__name__)
             logger.error(f"Erro ao agendar notificação de novo pedido {pedido.id}: {e}")
 
+        # Recalcula totais incluindo taxa de serviço (evita divergência com /checkout/preview)
+        pedido_atualizado = self.repo.get(pedido.id, TipoEntrega.MESA)
+        self._recalcular_totais(pedido_atualizado)
+        self.repo.commit()
+        pedido = self.repo.get(pedido.id, TipoEntrega.MESA)
+
         return PedidoResponseBuilder.pedido_to_response_completo(pedido)
 
     def adicionar_item(self, pedido_id: int, body: AdicionarItemRequest) -> PedidoResponseCompleto:
@@ -346,6 +376,10 @@ class PedidoMesaService:
             quantidade=body.quantidade,
             observacao=body.observacao,
         )
+        pedido_atualizado = self.repo.get(pedido_id, TipoEntrega.MESA)
+        self._recalcular_totais(pedido_atualizado)
+        self.repo.commit()
+        pedido = self.repo.get(pedido_id, TipoEntrega.MESA)
         return PedidoResponseBuilder.pedido_to_response_completo(pedido)
 
     def adicionar_produto_generico(
@@ -455,7 +489,11 @@ class PedidoMesaService:
                 status.HTTP_400_BAD_REQUEST,
                 "Tipo de produto não suportado"
             )
-        
+
+        pedido_atualizado = self.repo.get(pedido_id, TipoEntrega.MESA)
+        self._recalcular_totais(pedido_atualizado)
+        self.repo.commit()
+        pedido = self.repo.get(pedido_id, TipoEntrega.MESA)
         return PedidoResponseBuilder.pedido_to_response_completo(pedido)
 
     def atualizar_item(
@@ -542,9 +580,7 @@ class PedidoMesaService:
         
         # Recalcula valor total do pedido incluindo complementos relacionais
         pedido_atualizado = self.repo.get(pedido_id, TipoEntrega.MESA)
-        pedido_atualizado.valor_total = self.repo._calc_total(pedido_atualizado)
-        self.db.flush()
-        
+        self._recalcular_totais(pedido_atualizado)
         self.repo.commit()
         pedido = self.repo.get(pedido_id, TipoEntrega.MESA)  # Recarrega com itens atualizados
         return PedidoResponseBuilder.pedido_to_response_completo(pedido)
@@ -554,7 +590,15 @@ class PedidoMesaService:
         if pedido.status in ("C", "E"):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Pedido fechado/cancelado")
         pedido = self.repo.remove_item(pedido_id, item_id)
-        return RemoverItemResponse(ok=True, pedido_id=pedido.id, valor_total=float(pedido.valor_total or 0))
+        pedido_atualizado = self.repo.get(pedido.id, TipoEntrega.MESA)
+        self._recalcular_totais(pedido_atualizado)
+        self.repo.commit()
+        pedido_atualizado = self.repo.get(pedido.id, TipoEntrega.MESA)
+        return RemoverItemResponse(
+            ok=True,
+            pedido_id=pedido_atualizado.id,
+            valor_total=float(pedido_atualizado.valor_total or 0),
+        )
 
     def cancelar(self, pedido_id: int) -> PedidoResponseCompleto:
         # Obtém o pedido antes de cancelar para pegar o mesa_id

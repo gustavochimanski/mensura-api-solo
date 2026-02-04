@@ -315,6 +315,15 @@ Calcula os valores do pedido sem criar no banco de dados.
 POST /api/pedidos/client/checkout/preview
 ```
 
+**Endpoint (Admin):**
+```
+POST /api/pedidos/admin/checkout/preview
+```
+
+**Autenticação/Permissões (Admin):**
+- Requer token de usuário admin (mesma autenticação dos endpoints `/api/pedidos/admin/*`).
+- Requer permissão `route:/pedidos`.
+
 **Body Request:**
 ```json
 {
@@ -383,6 +392,10 @@ POST /api/pedidos/client/checkout/preview
   "tempo_entrega_minutos": 30
 }
 ```
+
+**Observações:**
+- **Client**: o `cliente_id` é obtido automaticamente do token de autenticação.
+- **Admin**: você pode (opcionalmente) informar `cliente_id` na query `?cliente_id=123` (recomendado). Se informado, o backend valida se `endereco_id` pertence ao cliente.
 
 ---
 

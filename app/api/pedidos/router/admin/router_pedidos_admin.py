@@ -9,6 +9,8 @@ from fastapi import APIRouter, Body, Depends, Path, Query, status
 from app.api.pedidos.schemas import (
     HistoricoDoPedidoResponse,
     KanbanAgrupadoResponse,
+    FinalizarPedidoRequest,
+    PreviewCheckoutResponse,
     PedidoCreateRequest,
     PedidoEntregadorRequest,
     PedidoFecharContaRequest,
@@ -35,6 +37,36 @@ router = APIRouter(
     tags=["Admin - Pedidos Unificados"],
     dependencies=[Depends(get_current_user)],
 )
+
+
+@router.post(
+    "/checkout/preview",
+    response_model=PreviewCheckoutResponse,
+    status_code=status.HTTP_200_OK,
+)
+def preview_checkout_admin(
+    payload: FinalizarPedidoRequest = Body(...),
+    cliente_id: int | None = Query(
+        None,
+        gt=0,
+        description="(Opcional) ID do cliente para validar se o endereço pertence ao cliente.",
+    ),
+    svc: PedidoAdminService = Depends(get_pedido_admin_service),
+):
+    """
+    Calcula o preview do checkout (subtotal, taxas, desconto, total) sem criar pedido.
+
+    - Se `cliente_id` for informado (query) ou vier em `payload.cliente_id`, valida se `endereco_id` pertence ao cliente.
+    """
+    effective_cliente_id = cliente_id
+    if effective_cliente_id is None:
+        raw = getattr(payload, "cliente_id", None)
+        if raw not in (None, ""):
+            try:
+                effective_cliente_id = int(str(raw))
+            except (TypeError, ValueError):
+                effective_cliente_id = None
+    return svc.calcular_preview_checkout(payload, cliente_id=effective_cliente_id)
 
 
 @router.get(
