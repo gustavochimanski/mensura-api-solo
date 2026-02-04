@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from typing import List, Dict, Optional, Any, Tuple
 import logging
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, date
 
 # Logger do módulo
 logger = logging.getLogger(__name__)
@@ -708,8 +708,19 @@ def get_conversations_by_session(db: Session, session_id: str, empresa_id: Optio
     ]
 
 
-def get_conversations_by_user(db: Session, user_id: str, empresa_id: Optional[int] = None) -> List[Dict]:
-    """Retorna todas as conversas de um usuário"""
+def get_conversations_by_user(
+    db: Session,
+    user_id: str,
+    empresa_id: Optional[int] = None,
+    data_inicio: Optional[date] = None,
+    data_fim: Optional[date] = None,
+) -> List[Dict]:
+    """Retorna todas as conversas de um usuário.
+
+    Filtros opcionais:
+    - data_inicio / data_fim (YYYY-MM-DD): filtra por janela de `updated_at` (última atividade da conversa).
+      `data_fim` é inclusiva (implementado como < próximo-dia 00:00).
+    """
     # Aceita variantes com/sem 9 e com/sem 55, mas mantém user_id canônico para novos registros.
     user_ids = _user_id_variants(user_id)
     if not user_ids:
@@ -718,27 +729,46 @@ def get_conversations_by_user(db: Session, user_id: str, empresa_id: Optional[in
     if not in_clause:
         return []
 
-    if empresa_id:
-        query = text(
-            f"""
-            SELECT id, session_id, user_id, contact_name, prompt_key, model, empresa_id, profile_picture_url, created_at, updated_at
-            FROM {CHATBOT_SCHEMA}.conversations
-            WHERE user_id IN ({in_clause}) AND empresa_id = :empresa_id
-            ORDER BY updated_at DESC
-            """
-        )
-        params = {**in_params, "empresa_id": empresa_id}
-        result = db.execute(query, params)
-    else:
-        query = text(
-            f"""
-            SELECT id, session_id, user_id, contact_name, prompt_key, model, empresa_id, profile_picture_url, created_at, updated_at
-            FROM {CHATBOT_SCHEMA}.conversations
-            WHERE user_id IN ({in_clause})
-            ORDER BY updated_at DESC
-            """
-        )
-        result = db.execute(query, in_params)
+    # Converte datas em janela de datetimes (UTC-naive, compatível com TIMESTAMP sem timezone)
+    dt_inicio = None
+    dt_fim_exclusivo = None
+    try:
+        if data_inicio:
+            dt_inicio = datetime(data_inicio.year, data_inicio.month, data_inicio.day)
+        if data_fim:
+            fim_plus_1 = data_fim + timedelta(days=1)
+            dt_fim_exclusivo = datetime(fim_plus_1.year, fim_plus_1.month, fim_plus_1.day)
+    except Exception:
+        # Se vier algo inválido (não-date), ignora filtros para não quebrar produção
+        dt_inicio = None
+        dt_fim_exclusivo = None
+
+    where_clauses = [f"c.user_id IN ({in_clause})"]
+    params: Dict[str, Any] = {**in_params}
+
+    if empresa_id is not None:
+        where_clauses.append("c.empresa_id = :empresa_id")
+        params["empresa_id"] = empresa_id
+
+    if dt_inicio is not None:
+        where_clauses.append("c.updated_at >= :dt_inicio")
+        params["dt_inicio"] = dt_inicio
+
+    if dt_fim_exclusivo is not None:
+        where_clauses.append("c.updated_at < :dt_fim_exclusivo")
+        params["dt_fim_exclusivo"] = dt_fim_exclusivo
+
+    query = text(
+        f"""
+        SELECT
+            c.id, c.session_id, c.user_id, c.contact_name, c.prompt_key, c.model, c.empresa_id,
+            c.profile_picture_url, c.created_at, c.updated_at
+        FROM {CHATBOT_SCHEMA}.conversations c
+        WHERE {' AND '.join(where_clauses)}
+        ORDER BY c.updated_at DESC
+        """
+    )
+    result = db.execute(query, params)
 
     return [
         {
@@ -808,6 +838,30 @@ def create_message(
         whatsapp_message_id: ID único da mensagem do WhatsApp (opcional, usado para detectar duplicatas)
         extra_metadata: Metadados adicionais (opcional). Será mesclado com whatsapp_message_id.
     """
+    # Idempotência: se já existe mensagem com esse whatsapp_message_id na conversa, retorna o ID existente.
+    # Isso evita duplicações comuns (retries/webhooks/statuses duplicados).
+    try:
+        if whatsapp_message_id:
+            q_exists = text(
+                f"""
+                SELECT id
+                FROM {CHATBOT_SCHEMA}.messages
+                WHERE conversation_id = :conversation_id
+                  AND metadata->>'whatsapp_message_id' = :message_id
+                ORDER BY id DESC
+                LIMIT 1
+                """
+            )
+            row = db.execute(
+                q_exists,
+                {"conversation_id": conversation_id, "message_id": str(whatsapp_message_id)},
+            ).fetchone()
+            if row:
+                return row[0]
+    except Exception:
+        # Não bloqueia criação caso a verificação falhe por qualquer motivo.
+        pass
+
     # Prepara metadata (jsonb) se houver whatsapp_message_id e/ou extra_metadata
     metadata_json = None
     metadata_obj = {}

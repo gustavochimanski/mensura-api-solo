@@ -2,7 +2,7 @@
 Router do módulo de Chatbot
 Todas as rotas relacionadas ao chatbot com IA (Groq)
 """
-from fastapi import APIRouter, HTTPException, Request, Depends, UploadFile, File, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Request, Depends, UploadFile, File, BackgroundTasks, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -11,7 +11,7 @@ import logging
 import httpx
 import json
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import re
 
 from app.database.db_connection import get_db
@@ -716,9 +716,27 @@ async def get_session_conversations(session_id: str, db: Session = Depends(get_d
 
 
 @router.get("/conversations/user/{user_id}")
-async def get_user_conversations(user_id: str, db: Session = Depends(get_db), empresa_id: Optional[int] = None):
-    """Lista todas as conversas de um usuário"""
-    conversations = chatbot_db.get_conversations_by_user(db, user_id, empresa_id)
+async def get_user_conversations(
+    user_id: str,
+    db: Session = Depends(get_db),
+    empresa_id: Optional[int] = None,
+    data_inicio: Optional[date] = Query(
+        default=None,
+        description="Data inicial (YYYY-MM-DD) para filtrar por updated_at (última atividade).",
+    ),
+    data_fim: Optional[date] = Query(
+        default=None,
+        description="Data final (YYYY-MM-DD) para filtrar por updated_at (última atividade). Inclusiva.",
+    ),
+):
+    """Lista todas as conversas de um usuário (com filtro opcional por data)."""
+    conversations = chatbot_db.get_conversations_by_user(
+        db,
+        user_id,
+        empresa_id,
+        data_inicio=data_inicio,
+        data_fim=data_fim,
+    )
     return {"conversations": conversations}
 
 
@@ -2204,6 +2222,32 @@ async def process_webhook_background(body: dict, headers_info: Optional[dict] = 
                                     
                                     # Pega o message_id do status (é o mesmo retornado quando enviamos a mensagem)
                                     status_message_id = status.get("id")
+                                    if not status_message_id:
+                                        continue
+
+                                    # Idempotência / anti-alucinação:
+                                    # Se já existe QUALQUER mensagem no banco com esse whatsapp_message_id, então essa saída
+                                    # já foi persistida (ex.: /send-notification, envio do chatbot, ou até echo). Não devemos
+                                    # criar o placeholder "[Mensagem enviada pelo atendente...]" nem pausar de novo.
+                                    try:
+                                        q_any = text(
+                                            """
+                                            SELECT 1
+                                            FROM chatbot.messages m
+                                            WHERE m.metadata->>'whatsapp_message_id' = :message_id
+                                            LIMIT 1
+                                            """
+                                        )
+                                        already_persisted = db.execute(
+                                            q_any, {"message_id": str(status_message_id)}
+                                        ).fetchone()
+                                        if already_persisted:
+                                            continue
+                                    except Exception as e:
+                                        logger.warning(
+                                            f"⚠️ Erro ao verificar duplicidade por whatsapp_message_id (continuando): {e}",
+                                            exc_info=True,
+                                        )
                                     
                                     # Verifica se esse message_id corresponde a uma mensagem do assistente (chatbot)
                                     foi_chatbot = False
@@ -2219,7 +2263,6 @@ async def process_webhook_background(body: dict, headers_info: Optional[dict] = 
                                                 JOIN chatbot.conversations c ON m.conversation_id = c.id
                                                 WHERE m.metadata->>'whatsapp_message_id' = :message_id
                                                 AND m.role = 'assistant'
-                                                AND (m.metadata->>'sender' IS NULL OR m.metadata->>'sender' = 'chatbot')
                                                 AND c.user_id = :recipient_id
                                                 ORDER BY m.created_at DESC
                                                 LIMIT 1
