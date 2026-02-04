@@ -86,7 +86,10 @@ class BuscaGlobalResponse(BaseModel):
     produtos: list[BuscaGlobalItemOut] = Field(default_factory=list)
     receitas: list[BuscaGlobalItemOut] = Field(default_factory=list)
     combos: list[BuscaGlobalItemOut] = Field(default_factory=list)
-    total: int = Field(description="Total de resultados encontrados")
+    quantidade_produtos: int = Field(
+        description="Quantidade total de itens retornados (produtos + receitas + combos)."
+    )
+    total: int = Field(description="Total de resultados encontrados (legado).")
     
     model_config = ConfigDict(from_attributes=True)
 

@@ -320,6 +320,7 @@ class BuscaGlobalService:
             produtos=produtos_out,
             receitas=receitas_out,
             combos=combos_out,
+            quantidade_produtos=total,
             total=total,
         )
 

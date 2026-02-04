@@ -38,6 +38,13 @@ router = APIRouter(
     - `apenas_ativos`: Filtrar apenas itens ativos (padrão: true)
     - `limit`: Limite de resultados por tipo (padrão: 50, máximo: 200)
     
+    **Retorno:**
+    - `produtos`: Lista de produtos encontrados
+    - `receitas`: Lista de receitas encontradas
+    - `combos`: Lista de combos encontrados
+    - `quantidade_produtos`: Quantidade total de itens retornados (produtos + receitas + combos)
+    - `total`: Total de resultados encontrados (legado)
+    
     **Autenticação:** Requer header `X-Super-Token` com o token do cliente.
     """,
     responses={

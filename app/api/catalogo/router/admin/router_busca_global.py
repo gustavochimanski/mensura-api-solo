@@ -42,7 +42,8 @@ router = APIRouter(
     - `produtos`: Lista de produtos encontrados
     - `receitas`: Lista de receitas encontradas
     - `combos`: Lista de combos encontrados
-    - `total`: Total de resultados encontrados
+    - `quantidade_produtos`: Quantidade total de itens retornados (produtos + receitas + combos)
+    - `total`: Total de resultados encontrados (legado)
     
     **Exemplo de uso:**
     ```
