@@ -155,8 +155,11 @@ class CaixaRepository:
         
         saldo = Decimal(str(caixa.valor_inicial))
         
-        # Busca pedidos entregues e pagos em dinheiro no período da abertura
+        # Busca entradas/saídas de dinheiro no período do caixa.
+        # IMPORTANTE: usa o timestamp do pagamento (transação) e não a criação do pedido,
+        # pois balcão/mesa podem ser criados antes da abertura e pagos depois.
         data_fim = caixa.data_fechamento if caixa.data_fechamento else datetime.utcnow()
+        ts_pagamento = func.coalesce(TransacaoPagamentoModel.pago_em, TransacaoPagamentoModel.created_at)
         
         # Entradas: pedidos entregues e pagos em dinheiro através de transações
         # Busca transações com status PAGO e meio de pagamento tipo DINHEIRO
@@ -167,8 +170,8 @@ class CaixaRepository:
             .filter(
                 and_(
                     PedidoUnificadoModel.empresa_id == empresa_id,
-                    PedidoUnificadoModel.created_at >= caixa.data_abertura,
-                    PedidoUnificadoModel.created_at <= data_fim,
+                    ts_pagamento >= caixa.data_abertura,
+                    ts_pagamento <= data_fim,
                     PedidoUnificadoModel.status == StatusPedido.ENTREGUE.value,
                     TransacaoPagamentoModel.status == PagamentoStatusEnum.PAGO.value,
                     MeioPagamentoModel.tipo == "DINHEIRO"
@@ -187,8 +190,8 @@ class CaixaRepository:
             .filter(
                 and_(
                     PedidoUnificadoModel.empresa_id == empresa_id,
-                    PedidoUnificadoModel.created_at >= caixa.data_abertura,
-                    PedidoUnificadoModel.created_at <= data_fim,
+                    ts_pagamento >= caixa.data_abertura,
+                    ts_pagamento <= data_fim,
                     PedidoUnificadoModel.status == StatusPedido.ENTREGUE.value,
                     PedidoUnificadoModel.troco_para.isnot(None),
                     PedidoUnificadoModel.troco_para > PedidoUnificadoModel.valor_total,
@@ -239,6 +242,7 @@ class CaixaRepository:
             raise ValueError("Caixa não encontrado")
         
         data_fim = caixa.data_fechamento if caixa.data_fechamento else datetime.utcnow()
+        ts_pagamento = func.coalesce(TransacaoPagamentoModel.pago_em, TransacaoPagamentoModel.created_at)
         
         # Busca valores agrupados por meio de pagamento
         # Considera apenas pedidos entregues no período da abertura
@@ -261,8 +265,8 @@ class CaixaRepository:
             .filter(
                 and_(
                     PedidoUnificadoModel.empresa_id == empresa_id,
-                    PedidoUnificadoModel.created_at >= caixa.data_abertura,
-                    PedidoUnificadoModel.created_at <= data_fim,
+                    ts_pagamento >= caixa.data_abertura,
+                    ts_pagamento <= data_fim,
                     PedidoUnificadoModel.status == StatusPedido.ENTREGUE.value,
                     TransacaoPagamentoModel.status == PagamentoStatusEnum.PAGO.value
                 )
