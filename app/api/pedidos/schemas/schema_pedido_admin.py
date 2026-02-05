@@ -104,6 +104,10 @@ class PedidoMarcarPedidoPagoRequest(BaseModel):
         default=None,
         description="ID do meio de pagamento utilizado para registrar a transação como PAGO. Se omitido, o backend usa o meio já salvo no pedido.",
     )
+    pagamentos: Optional[List[MeioPagamentoParcialRequest]] = Field(
+        default=None,
+        description="Lista de meios de pagamento parciais (novo). Formato: [{id|meio_pagamento_id, valor}].",
+    )
 
 
 class PedidoItemMutationAction(str, Enum):
