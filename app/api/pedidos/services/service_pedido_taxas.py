@@ -101,7 +101,11 @@ class TaxaService:
             # Tempo estimado configurado na região (minutos)
             tempo_estimado_min = getattr(regiao_encontrada, "tempo_estimado_min", None)
 
-        taxa_servico = (subtotal * Decimal("0.01")).quantize(Decimal("0.01"))
+        # Regra de negócio: pedidos de MESA e BALCÃO não possuem taxa de serviço.
+        if tipo_entrega in {TipoEntregaEnum.MESA, TipoEntregaEnum.BALCAO}:
+            taxa_servico = _dec(0)
+        else:
+            taxa_servico = (subtotal * Decimal("0.01")).quantize(Decimal("0.01"))
         return taxa_entrega, taxa_servico, distancia_km, tempo_estimado_min
 
     def _calcular_distancia_km(self, empresa_id: int, endereco) -> Optional[Decimal]:
