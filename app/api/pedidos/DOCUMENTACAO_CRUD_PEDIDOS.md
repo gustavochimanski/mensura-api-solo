@@ -396,6 +396,7 @@ POST /api/pedidos/admin/checkout/preview
 **Observações:**
 - **Client**: o `cliente_id` é obtido automaticamente do token de autenticação.
 - **Admin**: você pode (opcionalmente) informar `cliente_id` na query `?cliente_id=123` (recomendado). Se informado, o backend valida se `endereco_id` pertence ao cliente.
+- **Mesa/Balcão**: a `taxa_servico` **não é aplicada** (sempre `0`).
 
 ---
 
