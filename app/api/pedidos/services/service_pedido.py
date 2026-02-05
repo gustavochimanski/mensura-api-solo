@@ -2190,8 +2190,24 @@ _Qualquer dúvida, entre em contato conosco._"""
         if (len(itens_normais) + len(receitas_req)) > QTD_MAX_ITENS:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Itens demais no pedido")
 
+        # IMPORTANTE (mesa/balcão no preview):
+        # O schema `FinalizarPedidoRequest` ajusta `tipo_entrega` para RETIRADA quando `tipo_pedido`
+        # é MESA/BALCAO. Para o cálculo correto de taxa de serviço (sempre 0 em mesa/balcão),
+        # precisamos derivar o tipo real a partir de `tipo_pedido`.
+        tipo_preview: TipoEntregaEnum
+        if payload.tipo_pedido == TipoPedidoCheckoutEnum.MESA:
+            tipo_preview = TipoEntregaEnum.MESA
+        elif payload.tipo_pedido == TipoPedidoCheckoutEnum.BALCAO:
+            tipo_preview = TipoEntregaEnum.BALCAO
+        else:
+            tipo_preview = (
+                payload.tipo_entrega
+                if isinstance(payload.tipo_entrega, TipoEntregaEnum)
+                else TipoEntregaEnum(payload.tipo_entrega)
+            )
+
         endereco = None
-        if payload.tipo_entrega == TipoEntregaEnum.DELIVERY:
+        if tipo_preview == TipoEntregaEnum.DELIVERY:
             if not payload.endereco_id:
                 raise HTTPException(status.HTTP_400_BAD_REQUEST, "Endereço é obrigatório para delivery")
             
@@ -2204,7 +2220,7 @@ _Qualquer dúvida, entre em contato conosco._"""
 
         empresa_id = payload.empresa_id
         empresa = None
-        if payload.tipo_entrega == TipoEntregaEnum.DELIVERY:
+        if tipo_preview == TipoEntregaEnum.DELIVERY:
             empresa, _ = self._resolver_empresa_delivery(
                 endereco=endereco,
                 empresa_id=empresa_id,
@@ -2312,8 +2328,7 @@ _Qualquer dúvida, entre em contato conosco._"""
         )
 
         taxa_entrega, taxa_servico, distancia_km, tempo_estimado_min = self._calcular_taxas(
-            tipo_entrega=payload.tipo_entrega if isinstance(payload.tipo_entrega, TipoEntregaEnum)
-                        else TipoEntregaEnum(payload.tipo_entrega),
+            tipo_entrega=tipo_preview,
             subtotal=subtotal,
             endereco=endereco,
             empresa_id=empresa_id,
