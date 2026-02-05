@@ -761,27 +761,32 @@ def get_conversations_by_user(
     # - Usa a data da última mensagem quando existir (mais estável do que `c.updated_at`, que pode ser alterado
     #   por rotas administrativas/salvar estado).
     # - Fallback para `c.updated_at` quando não houver mensagens.
-    last_activity_expr = "COALESCE(MAX(m.created_at), c.updated_at)"
+    #
+    # Importante: o filtro por data aqui é aplicado no WHERE (com `last_message_at` pré-calculado),
+    # para evitar cenários em que HAVING/AGG acabem não sendo aplicados como esperado em SQL raw.
+    last_activity_expr = "COALESCE(lm.last_message_at, c.updated_at)"
 
-    having_clauses: List[str] = []
     if dt_inicio is not None:
-        having_clauses.append(f"{last_activity_expr} >= :dt_inicio")
+        where_clauses.append(f"{last_activity_expr} >= :dt_inicio")
     if dt_fim_exclusivo is not None:
-        having_clauses.append(f"{last_activity_expr} < :dt_fim_exclusivo")
+        where_clauses.append(f"{last_activity_expr} < :dt_fim_exclusivo")
 
     query = text(
         f"""
+        WITH last_messages AS (
+            SELECT
+                conversation_id,
+                MAX(created_at) AS last_message_at
+            FROM {CHATBOT_SCHEMA}.messages
+            GROUP BY conversation_id
+        )
         SELECT
             c.id, c.session_id, c.user_id, c.contact_name, c.prompt_key, c.model, c.empresa_id,
             c.profile_picture_url, c.created_at, c.updated_at,
-            MAX(m.created_at) AS last_message_at
+            lm.last_message_at AS last_message_at
         FROM {CHATBOT_SCHEMA}.conversations c
-        LEFT JOIN {CHATBOT_SCHEMA}.messages m ON m.conversation_id = c.id
+        LEFT JOIN last_messages lm ON lm.conversation_id = c.id
         WHERE {' AND '.join(where_clauses)}
-        GROUP BY
-            c.id, c.session_id, c.user_id, c.contact_name, c.prompt_key, c.model, c.empresa_id,
-            c.profile_picture_url, c.created_at, c.updated_at
-        {('HAVING ' + ' AND '.join(having_clauses)) if having_clauses else ''}
         ORDER BY {last_activity_expr} DESC
         """
     )
