@@ -505,6 +505,16 @@ class PedidoRepository:
         taxa_servico: Decimal,
         distancia_km: Optional[Decimal] = None,
     ) -> None:
+        # Regra de negócio: pedidos de MESA e BALCÃO NÃO possuem taxa de serviço.
+        # Blindagem no nível do repositório para evitar que algum fluxo aplique taxa indevida.
+        tipo_entrega = (
+            pedido.tipo_entrega.value
+            if hasattr(pedido.tipo_entrega, "value")
+            else str(pedido.tipo_entrega)
+        )
+        if str(tipo_entrega).upper() in {"MESA", "BALCAO"}:
+            taxa_servico = Decimal("0")
+
         pedido.subtotal = subtotal
         pedido.desconto = desconto
         pedido.taxa_entrega = taxa_entrega

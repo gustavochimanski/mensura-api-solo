@@ -440,7 +440,7 @@ class PedidoAdminService:
         if tipo == TipoEntregaEnum.BALCAO:
             balcao_payload = FecharContaBalcaoRequest(**(payload.model_dump() if payload else {})) if payload else None
             return self.balcao_service.fechar_conta(pedido_id, balcao_payload)
-        # Delivery e Retirada: marca como pago sem mudar status
+        # Delivery e Retirada: fecha a conta (registra transação PAGO e muda status para ENTREGUE).
         if tipo in {TipoEntregaEnum.DELIVERY, TipoEntregaEnum.RETIRADA}:
             return self._fechar_conta_delivery(pedido_id, payload)
         raise HTTPException(
@@ -473,6 +473,12 @@ class PedidoAdminService:
         from app.api.pedidos.services.service_pedido_helpers import _dec
 
         pedido = self._get_pedido(pedido_id)
+        # Garantia explícita: este endpoint NÃO altera status do pedido.
+        status_original = (
+            pedido.status.value
+            if hasattr(pedido.status, "value")
+            else str(pedido.status)
+        )
 
         meio_pagamento_id: Optional[int] = None
         if payload is not None and getattr(payload, "meio_pagamento_id", None) is not None:
@@ -500,6 +506,8 @@ class PedidoAdminService:
         pagamento_repo = PagamentoRepository(self.db)
         txs = pagamento_repo.list_by_pedido_id(pedido.id)
         if any(getattr(tx, "status", None) in {"PAGO", "AUTORIZADO"} for tx in txs):
+            # Reforço: não alterar status por efeito colateral.
+            pedido.status = status_original
             self.db.commit()
             pedido_atualizado = self.repo.get_pedido(pedido_id)
             return self.pedido_service.response_builder.pedido_to_response_completo(pedido_atualizado)
@@ -562,8 +570,26 @@ class PedidoAdminService:
             usuario_id=user_id,
         )
 
+        # Reforço: não permitir alteração de status neste fluxo.
+        pedido.status = status_original
         self.db.commit()
         pedido_atualizado = self.repo.get_pedido(pedido_id)
+        # Caso algum gatilho/fluxo externo tenha alterado status, desfazemos aqui (best-effort).
+        status_atual = (
+            pedido_atualizado.status.value
+            if hasattr(pedido_atualizado.status, "value")
+            else str(pedido_atualizado.status)
+        )
+        if status_atual != status_original:
+            logger.warning(
+                "[marcar_pedido_pago] status alterado indevidamente; revertendo | pedido_id=%s de=%s para=%s",
+                pedido_id,
+                status_atual,
+                status_original,
+            )
+            pedido_atualizado.status = status_original
+            self.db.commit()
+            pedido_atualizado = self.repo.get_pedido(pedido_id)
         return self.pedido_service.response_builder.pedido_to_response_completo(pedido_atualizado)
     
     def _fechar_conta_delivery(self, pedido_id: int, payload: PedidoFecharContaRequest | None) -> PedidoResponseCompleto:
