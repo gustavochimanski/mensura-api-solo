@@ -81,6 +81,10 @@ class PedidoFecharContaRequest(BaseModel):
         default=None,
         description="ID do meio de pagamento utilizado no fechamento.",
     )
+    pagamentos: Optional[List[MeioPagamentoParcialRequest]] = Field(
+        default=None,
+        description="Lista de meios de pagamento parciais (novo). Formato: [{id|meio_pagamento_id, valor}].",
+    )
     troco_para: Optional[float] = Field(
         default=None,
         description="Valor informado para troco (quando aplicável).",

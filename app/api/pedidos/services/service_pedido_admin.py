@@ -598,8 +598,29 @@ class PedidoAdminService:
         if not pedido:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
         
-        # Valida e atualiza meio de pagamento se fornecido
-        if payload and payload.meio_pagamento_id is not None:
+        from app.api.pedidos.services.service_pedido_helpers import _dec
+
+        pagamentos_payload: list[dict] = []
+        if payload and getattr(payload, "pagamentos", None):
+            for pag in payload.pagamentos or []:
+                mp_id = getattr(pag, "id", None) or getattr(pag, "meio_pagamento_id", None)
+                if mp_id is None:
+                    continue
+                pagamentos_payload.append(
+                    {
+                        "meio_pagamento_id": int(mp_id),
+                        "valor": _dec(pag.valor),
+                    }
+                )
+            if pagamentos_payload:
+                pedido.meio_pagamento_id = pagamentos_payload[0]["meio_pagamento_id"]
+                if hasattr(pedido, "pagamentos_snapshot"):
+                    pedido.pagamentos_snapshot = [
+                        {"id": p["meio_pagamento_id"], "valor": float(p["valor"])}
+                        for p in pagamentos_payload
+                    ]
+        # Valida e atualiza meio de pagamento legado (1 meio) se fornecido
+        elif payload and payload.meio_pagamento_id is not None:
             from app.api.cadastros.services.service_meio_pagamento import MeioPagamentoService
             meio_pagamento = MeioPagamentoService(self.db).get(payload.meio_pagamento_id)
             if not meio_pagamento or not meio_pagamento.ativo:
@@ -624,46 +645,96 @@ class PedidoAdminService:
             PagamentoMetodoEnum,
             PagamentoStatusEnum,
         )
-        from app.api.pedidos.services.service_pedido_helpers import _dec
+        from decimal import Decimal
 
-        mp = MeioPagamentoService(self.db).get(int(meio_pagamento_id))
-        if not mp or not getattr(mp, "ativo", False):
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Meio de pagamento inválido ou inativo")
-
-        if mp.tipo == MeioPagamentoTipoEnum.PIX_ONLINE or str(mp.tipo) == "PIX_ONLINE":
-            metodo = PagamentoMetodoEnum.PIX_ONLINE
-            gateway = PagamentoGatewayEnum.MERCADOPAGO
-        elif mp.tipo == MeioPagamentoTipoEnum.PIX_ENTREGA or str(mp.tipo) == "PIX_ENTREGA":
-            metodo = PagamentoMetodoEnum.PIX
-            gateway = PagamentoGatewayEnum.PIX_INTERNO
-        elif mp.tipo == MeioPagamentoTipoEnum.CARTAO_ENTREGA or str(mp.tipo) == "CARTAO_ENTREGA":
-            metodo = PagamentoMetodoEnum.CREDITO
-            gateway = PagamentoGatewayEnum.PIX_INTERNO
-        elif mp.tipo == MeioPagamentoTipoEnum.DINHEIRO or str(mp.tipo) == "DINHEIRO":
-            metodo = PagamentoMetodoEnum.DINHEIRO
-            gateway = PagamentoGatewayEnum.PIX_INTERNO
-        else:
-            metodo = PagamentoMetodoEnum.OUTRO
-            gateway = PagamentoGatewayEnum.PIX_INTERNO
+        valor_total = _dec(getattr(pedido, "valor_total", 0) or 0)
+        pagamentos_para_fechar = pagamentos_payload or [
+            {"meio_pagamento_id": int(meio_pagamento_id), "valor": valor_total}
+        ]
+        if pagamentos_payload:
+            soma_pagamentos = sum((p["valor"] for p in pagamentos_payload), _dec(0))
+            if soma_pagamentos != valor_total:
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    detail={
+                        "code": "PAGAMENTOS_INVALIDOS",
+                        "message": "Soma dos pagamentos deve ser igual ao valor total do pedido para fechar conta.",
+                        "valor_total": float(valor_total),
+                        "soma_pagamentos": float(soma_pagamentos),
+                    },
+                )
 
         pagamento_repo = PagamentoRepository(self.db)
         txs = pagamento_repo.list_by_pedido_id(pedido.id)
-        if not any(getattr(tx, "status", None) in {"PAGO", "AUTORIZADO"} for tx in txs):
+        for p in pagamentos_para_fechar:
+            mp_id = int(p["meio_pagamento_id"])
+            valor_parcial = _dec(p["valor"])
+
+            mp = MeioPagamentoService(self.db).get(mp_id)
+            if not mp or not getattr(mp, "ativo", False):
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, "Meio de pagamento inválido ou inativo")
+
+            if mp.tipo == MeioPagamentoTipoEnum.PIX_ONLINE or str(mp.tipo) == "PIX_ONLINE":
+                metodo = PagamentoMetodoEnum.PIX_ONLINE
+                gateway = PagamentoGatewayEnum.MERCADOPAGO
+            elif mp.tipo == MeioPagamentoTipoEnum.PIX_ENTREGA or str(mp.tipo) == "PIX_ENTREGA":
+                metodo = PagamentoMetodoEnum.PIX
+                gateway = PagamentoGatewayEnum.PIX_INTERNO
+            elif mp.tipo == MeioPagamentoTipoEnum.CARTAO_ENTREGA or str(mp.tipo) == "CARTAO_ENTREGA":
+                metodo = PagamentoMetodoEnum.CREDITO
+                gateway = PagamentoGatewayEnum.PIX_INTERNO
+            elif mp.tipo == MeioPagamentoTipoEnum.DINHEIRO or str(mp.tipo) == "DINHEIRO":
+                metodo = PagamentoMetodoEnum.DINHEIRO
+                gateway = PagamentoGatewayEnum.PIX_INTERNO
+            else:
+                metodo = PagamentoMetodoEnum.OUTRO
+                gateway = PagamentoGatewayEnum.PIX_INTERNO
+
+            centavos = int((valor_parcial * Decimal("100")).quantize(Decimal("1")))
+            provider_id = f"manual_fechar_conta_delivery_{pedido.id}_{mp_id}_{centavos}"
+
+            tx_existente = next(
+                (
+                    tx
+                    for tx in txs
+                    if int(getattr(tx, "meio_pagamento_id", 0) or 0) == mp_id
+                    and _dec(getattr(tx, "valor", 0) or 0) == valor_parcial
+                    and str(getattr(tx, "status", "")).upper() not in {"PAGO", "AUTORIZADO"}
+                ),
+                None,
+            )
+            if tx_existente is not None:
+                pagamento_repo.atualizar(
+                    tx_existente,
+                    status=PagamentoStatusEnum.PAGO.value,
+                    provider_transaction_id=provider_id,
+                    payload_solicitacao={"origem": "fechar_conta_delivery"},
+                )
+                pagamento_repo.registrar_evento(tx_existente, "pago_em")
+                continue
+
+            if pagamento_repo.get_by_provider_transaction_id(provider_transaction_id=provider_id) is not None:
+                continue
+
             tx_nova = pagamento_repo.criar(
                 pedido_id=pedido.id,
-                meio_pagamento_id=int(meio_pagamento_id),
+                meio_pagamento_id=mp_id,
                 gateway=gateway.value,
                 metodo=metodo.value,
-                valor=_dec(getattr(pedido, "valor_total", 0) or 0),
+                valor=valor_parcial,
                 status=PagamentoStatusEnum.PAGO.value,
-                provider_transaction_id=f"manual_fechar_conta_{pedido.id}_{int(meio_pagamento_id)}",
+                provider_transaction_id=provider_id,
                 payload_solicitacao={"origem": "fechar_conta_delivery"},
             )
             pagamento_repo.registrar_evento(tx_nova, "pago_em")
 
         # IMPORTANTE: Faz commit e refresh ANTES de acessar o relacionamento meio_pagamento
         # Isso garante que o meio_pagamento_id seja persistido e o relacionamento seja atualizado
-        if payload and (payload.meio_pagamento_id is not None or payload.troco_para is not None):
+        if payload and (
+            payload.meio_pagamento_id is not None
+            or payload.troco_para is not None
+            or getattr(payload, "pagamentos", None)
+        ):
             self.db.commit()
             self.db.refresh(pedido)
         
