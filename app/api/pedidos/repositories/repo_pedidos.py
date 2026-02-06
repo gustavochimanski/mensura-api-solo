@@ -364,6 +364,7 @@ class PedidoRepository:
         mesa_id: Optional[int],
         cliente_id: int,
         observacoes: Optional[str],
+        meio_pagamento_id: Optional[int] = None,
     ) -> PedidoUnificadoModel:
         """Cria um pedido de balcão."""
         # Valida mesa se informada
@@ -388,6 +389,7 @@ class PedidoRepository:
             empresa_id=empresa_id,
             mesa_id=mesa_id,
             cliente_id=cliente_id,
+            meio_pagamento_id=meio_pagamento_id,
             numero_pedido=numero,
             observacoes=observacoes,
             status=StatusPedido.IMPRESSAO.value,
@@ -430,6 +432,7 @@ class PedidoRepository:
         cliente_id: Optional[int],
         observacoes: Optional[str],
         num_pessoas: Optional[int],
+        meio_pagamento_id: Optional[int] = None,
     ) -> PedidoUnificadoModel:
         """Cria um pedido de mesa."""
         mesa = (
@@ -460,6 +463,7 @@ class PedidoRepository:
             empresa_id=empresa_id,
             mesa_id=mesa_id,
             cliente_id=cliente_id,
+            meio_pagamento_id=meio_pagamento_id,
             numero_pedido=numero,
             observacoes=observacoes,
             num_pessoas=num_pessoas,

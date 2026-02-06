@@ -108,6 +108,11 @@ async def finalizar_checkout(
             cliente_id=cliente.id,
             observacoes=payload.observacao_geral,
             num_pessoas=payload.num_pessoas,
+            meio_pagamento_id=(
+                (getattr(payload.meios_pagamento[0], "id", None) or getattr(payload.meios_pagamento[0], "meio_pagamento_id", None))
+                if getattr(payload, "meios_pagamento", None)
+                else None
+            ),
             itens=[
                 ItemPedidoRequest(
                     produto_cod_barras=item.produto_cod_barras,
@@ -158,6 +163,11 @@ async def finalizar_checkout(
             mesa_id=mesa_codigo,
             cliente_id=cliente.id,
             observacoes=payload.observacao_geral,
+            meio_pagamento_id=(
+                (getattr(payload.meios_pagamento[0], "id", None) or getattr(payload.meios_pagamento[0], "meio_pagamento_id", None))
+                if getattr(payload, "meios_pagamento", None)
+                else None
+            ),
             itens=[
                 ItemPedidoRequest(
                     produto_cod_barras=item.produto_cod_barras,

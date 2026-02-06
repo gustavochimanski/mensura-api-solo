@@ -40,6 +40,7 @@ class PedidoBalcaoCreate(BaseModel):
     mesa_id: Optional[int] = None  # Código da mesa (opcional)
     cliente_id: Optional[int] = None
     observacoes: Optional[str] = None
+    meio_pagamento_id: Optional[int] = None
     itens: Optional[List[ItemPedidoRequest]] = None
     receitas: Optional[List[ReceitaPedidoRequest]] = None
     combos: Optional[List[ComboPedidoRequest]] = None
@@ -174,6 +175,7 @@ class PedidoBalcaoService:
             mesa_id=mesa_id_real,
             cliente_id=payload.cliente_id,
             observacoes=payload.observacoes,
+            meio_pagamento_id=payload.meio_pagamento_id,
         )
 
         # Registra histórico de criação

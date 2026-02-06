@@ -3434,25 +3434,26 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                     
                     resposta = "✅ *Solicitação enviada!*\n\nNossa equipe foi notificada e entrará em contato com você em breve.\n\nEnquanto isso, posso te ajudar com alguma dúvida? 😊"
                 
+                # IMPORTANTE: Salva a mensagem do usuário ANTES de enviar a resposta.
+                # Motivo: se o envio falhar (ex.: janela de 24h / re-engagement), ainda assim queremos
+                # registrar o inbound no histórico.
+                try:
+                    chatbot_db.create_message(
+                        db=db,
+                        conversation_id=conversation_id,
+                        role="user",
+                        content=message_text,
+                        whatsapp_message_id=message_id,
+                    )
+                except Exception as e:
+                    # Se já foi salva (duplicata), ignora e continua.
+                    logger.warning(f"⚠️ Mensagem do usuário pode já ter sido salva (botão): {e}")
+
                 # Envia a resposta
                 notifier = OrderNotification()
                 result = await notifier.send_whatsapp_message(phone_number, resposta, empresa_id=empresa_id)
                 
                 if isinstance(result, dict) and result.get("success"):
-                    # Salva no histórico
-                    if conversations:
-                        conversation_id = conversations[0]['id']
-                    else:
-                        conversation_id = chatbot_db.create_conversation(
-                            db=db,
-                            session_id=f"whatsapp_{phone_number}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
-                            user_id=phone_number,
-                            prompt_key=prompt_key_sales,
-                            model="llm-sales",
-                            contact_name=contact_name,
-                            empresa_id=empresa_id_int
-                        )
-                    chatbot_db.create_message(db, conversation_id, "user", message_text, whatsapp_message_id=message_id)
                     # Salva o message_id retornado pelo WhatsApp na mensagem do assistente
                     whatsapp_response_message_id = result.get("message_id")
                     chatbot_db.create_message(db, conversation_id, "assistant", resposta, whatsapp_message_id=whatsapp_response_message_id)
@@ -3507,13 +3508,25 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 
                 resposta = "✅ *Solicitação enviada!*\n\nNossa equipe foi notificada e entrará em contato com você em breve.\n\nEnquanto isso, posso te ajudar com alguma dúvida? 😊"
                 
+                # IMPORTANTE: Salva a mensagem do usuário ANTES de enviar a resposta.
+                # Motivo: se o envio falhar (ex.: janela de 24h / re-engagement), ainda assim queremos
+                # registrar o inbound no histórico.
+                try:
+                    chatbot_db.create_message(
+                        db=db,
+                        conversation_id=conversation_id,
+                        role="user",
+                        content=message_text,
+                        whatsapp_message_id=message_id,
+                    )
+                except Exception as e:
+                    logger.warning(f"⚠️ Mensagem do usuário pode já ter sido salva (chamar_atendente): {e}")
+
                 # Envia a resposta
                 notifier = OrderNotification()
                 result = await notifier.send_whatsapp_message(phone_number, resposta, empresa_id=empresa_id)
                 
                 if isinstance(result, dict) and result.get("success"):
-                    # Salva no histórico
-                    chatbot_db.create_message(db, conversation_id, "user", message_text, whatsapp_message_id=message_id)
                     whatsapp_response_message_id = result.get("message_id")
                     chatbot_db.create_message(db, conversation_id, "assistant", resposta, whatsapp_message_id=whatsapp_response_message_id)
                 

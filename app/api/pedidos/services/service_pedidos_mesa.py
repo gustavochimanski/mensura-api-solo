@@ -40,6 +40,7 @@ class PedidoMesaCreate(BaseModel):
     cliente_id: Optional[int] = None
     observacoes: Optional[str] = None
     num_pessoas: Optional[int] = None
+    meio_pagamento_id: Optional[int] = None
     itens: Optional[List[ItemPedidoRequest]] = None
     receitas: Optional[List[ReceitaPedidoRequest]] = None
     combos: Optional[List[ComboPedidoRequest]] = None
@@ -186,6 +187,7 @@ class PedidoMesaService:
             cliente_id=payload.cliente_id,
             observacoes=payload.observacoes,
             num_pessoas=payload.num_pessoas,
+            meio_pagamento_id=payload.meio_pagamento_id,
         )
 
         # itens iniciais (produtos normais)

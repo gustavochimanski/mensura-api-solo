@@ -114,9 +114,15 @@ def build_pagamento_resumo(pedido: PedidoUnificadoModel) -> PedidoPagamentoResum
             try:
                 meio_pagamento_nome = display_fn()
             except Exception:
-                meio_pagamento_nome = getattr(meio_pagamento_rel, "descricao", None)
+                meio_pagamento_nome = (
+                    getattr(meio_pagamento_rel, "nome", None)
+                    or getattr(meio_pagamento_rel, "descricao", None)
+                )
         else:
-            meio_pagamento_nome = getattr(meio_pagamento_rel, "descricao", None)
+            meio_pagamento_nome = (
+                getattr(meio_pagamento_rel, "nome", None)
+                or getattr(meio_pagamento_rel, "descricao", None)
+            )
 
     return PedidoPagamentoResumo(
         status=status,
