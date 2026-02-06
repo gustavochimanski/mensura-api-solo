@@ -2420,6 +2420,12 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
         message_id: ID único da mensagem do WhatsApp (opcional, usado para evitar duplicação)
     """
     try:
+        # IMPORTANTE:
+        # Há vários blocos dentro desta função que fazem `logger = logging.getLogger(__name__)`.
+        # Isso torna `logger` uma variável LOCAL no escopo inteiro da função em Python.
+        # Sem inicializar aqui, qualquer uso anterior de `logger` pode causar UnboundLocalError.
+        logger = logging.getLogger(__name__)
+
         empresa_id_int = int(empresa_id) if empresa_id else 1
         user_id = phone_number
         
