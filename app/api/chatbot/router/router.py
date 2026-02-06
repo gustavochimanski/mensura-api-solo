@@ -2422,9 +2422,11 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
     try:
         # IMPORTANTE:
         # Há vários blocos dentro desta função que fazem `logger = logging.getLogger(__name__)`.
-        # Isso torna `logger` uma variável LOCAL no escopo inteiro da função em Python.
-        # Sem inicializar aqui, qualquer uso anterior de `logger` pode causar UnboundLocalError.
-        logger = logging.getLogger(__name__)
+        # Além disso, há `import logging` dentro da função, o que torna `logging` uma variável LOCAL
+        # no escopo inteiro da função em Python. Por isso, aqui usamos um alias para evitar
+        # `UnboundLocalError` ao acessar `logging` antes desses imports internos.
+        import logging as py_logging
+        logger = py_logging.getLogger(__name__)
 
         empresa_id_int = int(empresa_id) if empresa_id else 1
         user_id = phone_number
