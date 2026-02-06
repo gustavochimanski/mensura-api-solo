@@ -761,20 +761,32 @@ class PedidoService:
             
             if meios_pagamento_list:
                 soma_pagamentos = sum(_dec(mp['valor']) for mp in meios_pagamento_list)
-                if soma_pagamentos < valor_total:
-                    # Ajusta automaticamente o valor do pagamento para o valor total do pedido
-                    # Isso evita erros quando o frontend/chatbot calcula incorretamente
-                    diferenca = valor_total - soma_pagamentos
+                if soma_pagamentos != valor_total:
+                    # Ajuste best-effort para tolerar payloads do frontend/chatbot.
+                    # Regra: ajusta SOMENTE o primeiro meio para fechar a conta, sem sobrescrever os demais.
+                    # Isso evita inflar o total quando há múltiplos meios.
+                    diferenca = valor_total - soma_pagamentos  # pode ser positiva (faltando) ou negativa (sobrando)
                     logger.warning(
-                        f"[finalizar_pedido] Ajustando valor do pagamento: "
+                        f"[finalizar_pedido] Ajustando valores dos pagamentos para bater com o total do pedido: "
                         f"soma_pagamentos={float(soma_pagamentos)}, valor_total={float(valor_total)}, "
                         f"diferenca={float(diferenca)}"
                     )
-                    # Ajusta o primeiro meio de pagamento para cobrir a diferença
                     if len(meios_pagamento_list) > 0:
-                        meios_pagamento_list[0]['valor'] = float(valor_total)
+                        valor0 = _dec(meios_pagamento_list[0]['valor'])
+                        novo_valor0 = valor0 + diferenca
+                        if novo_valor0 < 0:
+                            raise HTTPException(
+                                status.HTTP_400_BAD_REQUEST,
+                                detail={
+                                    "code": "PAGAMENTOS_INVALIDOS",
+                                    "message": "Soma dos pagamentos excede o valor total do pedido.",
+                                    "valor_total": float(valor_total),
+                                    "soma_pagamentos": float(soma_pagamentos),
+                                },
+                            )
+                        meios_pagamento_list[0]['valor'] = float(novo_valor0)
                         logger.info(
-                            f"[finalizar_pedido] Valor ajustado para {float(valor_total)} no primeiro meio de pagamento"
+                            f"[finalizar_pedido] Primeiro meio ajustado para {float(novo_valor0)} (diferença aplicada: {float(diferenca)})"
                         )
             
             if getattr(payload, "troco_para", None) is not None and meio_pagamento is not None:
@@ -899,7 +911,10 @@ class PedidoService:
         if pedido.valor_total is None or pedido.valor_total <= 0:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Valor total inválido para pagamento")
 
-        if pedido.transacao and pedido.transacao.status in ("PAGO", "AUTORIZADO"):
+        # Múltiplos meios de pagamento: a fonte da verdade é `pedido.transacoes[]`.
+        # Evita depender do relationship legado `pedido.transacao` (singular), que pode ter >1 linha no banco.
+        transacoes = getattr(pedido, "transacoes", None) or []
+        if any(getattr(tx, "status", None) in ("PAGO", "AUTORIZADO") for tx in transacoes):
             return self._pedido_to_response(pedido)
 
         if gateway is None:

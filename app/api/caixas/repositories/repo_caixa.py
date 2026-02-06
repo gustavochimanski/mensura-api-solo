@@ -2,7 +2,7 @@ from typing import List, Optional
 from datetime import datetime, date
 from decimal import Decimal
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import and_, or_, func
+from sqlalchemy import and_, or_, func, case
 
 from app.api.caixas.models.model_caixa import CaixaModel
 from app.utils.logger import logger
@@ -246,12 +246,20 @@ class CaixaRepository:
         
         # Busca valores agrupados por meio de pagamento
         # Considera apenas pedidos entregues no período da abertura
+        # Para DINHEIRO com troco, algumas integrações/frontends podem mandar o "valor recebido" (troco_para)
+        # como valor da transação. Para o total esperado por meio, queremos o valor da venda (valor_total).
+        # Então, para DINHEIRO, limitamos a soma a no máximo o valor_total do pedido.
+        valor_para_soma = case(
+            (MeioPagamentoModel.tipo == "DINHEIRO", func.least(TransacaoPagamentoModel.valor, PedidoUnificadoModel.valor_total)),
+            else_=TransacaoPagamentoModel.valor,
+        )
+
         query = (
             self.db.query(
                 MeioPagamentoModel.id,
                 MeioPagamentoModel.nome,
                 MeioPagamentoModel.tipo,
-                func.sum(TransacaoPagamentoModel.valor).label('valor_total'),
+                func.sum(valor_para_soma).label('valor_total'),
                 func.count(TransacaoPagamentoModel.id).label('quantidade')
             )
             .join(

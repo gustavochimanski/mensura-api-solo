@@ -41,11 +41,9 @@ class PedidoResponseBuilder:
         pagamento = build_pagamento_resumo(pedido)
         transacoes_model = getattr(pedido, "transacoes", None) or []
         transacoes_out = [TransacaoResponse.model_validate(tx) for tx in transacoes_model]
-        transacao_out = (
-            TransacaoResponse.model_validate(pedido.transacao)
-            if getattr(pedido, "transacao", None) is not None
-            else (transacoes_out[0] if transacoes_out else None)
-        )
+        # Campo legado: `transacao` (singular). Para evitar warnings e inconsistências quando existir >1 transação,
+        # derivamos esse campo SEM acessar o relationship `pedido.transacao`.
+        transacao_out = (transacoes_out[0] if transacoes_out else None)
         return PedidoResponse(
             id=pedido.id,
             status=PedidoStatusEnum(pedido.status),
@@ -240,11 +238,9 @@ class PedidoResponseBuilder:
         pagamento = build_pagamento_resumo(pedido)
         transacoes_model = getattr(pedido, "transacoes", None) or []
         transacoes_out = [TransacaoResponse.model_validate(tx) for tx in transacoes_model]
-        transacao_out = (
-            TransacaoResponse.model_validate(pedido.transacao)
-            if getattr(pedido, "transacao", None) is not None
-            else (transacoes_out[0] if transacoes_out else None)
-        )
+        # Campo legado: `transacao` (singular). Para evitar warnings e inconsistências quando existir >1 transação,
+        # derivamos esse campo SEM acessar o relationship `pedido.transacao`.
+        transacao_out = (transacoes_out[0] if transacoes_out else None)
         return PedidoResponseCompletoTotal(
             id=pedido.id,
             status=PedidoStatusEnum(pedido.status),

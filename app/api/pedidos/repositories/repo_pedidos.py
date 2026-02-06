@@ -166,7 +166,8 @@ class PedidoRepository:
                 joinedload(PedidoUnificadoModel.endereco),
                 joinedload(PedidoUnificadoModel.mesa),
                 joinedload(PedidoUnificadoModel.meio_pagamento),
-                joinedload(PedidoUnificadoModel.transacao).joinedload(TransacaoPagamentoModel.meio_pagamento),
+                # Fonte da verdade (múltiplos meios): transacoes[]
+                # Evita SAWarning do SQLAlchemy ao eager-load de `transacao` (singular) quando existir >1 transação.
                 joinedload(PedidoUnificadoModel.transacoes).joinedload(TransacaoPagamentoModel.meio_pagamento),
                 joinedload(PedidoUnificadoModel.historico),
             )
@@ -236,7 +237,8 @@ class PedidoRepository:
             joinedload(PedidoUnificadoModel.endereco),
             joinedload(PedidoUnificadoModel.entregador),
             joinedload(PedidoUnificadoModel.meio_pagamento),
-            joinedload(PedidoUnificadoModel.transacao).joinedload(TransacaoPagamentoModel.meio_pagamento),
+            # Fonte da verdade (múltiplos meios): transacoes[]
+            # Evita SAWarning do SQLAlchemy ao eager-load de `transacao` (singular) quando existir >1 transação.
             joinedload(PedidoUnificadoModel.transacoes).joinedload(TransacaoPagamentoModel.meio_pagamento),
             selectinload(PedidoUnificadoModel.historico).defer(PedidoHistoricoUnificadoModel.tipo_operacao),
         )
