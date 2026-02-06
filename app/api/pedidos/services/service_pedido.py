@@ -902,9 +902,9 @@ class PedidoService:
             import asyncio
             from app.api.pedidos.utils.pedido_notification_helper import agendar_notificar_novo_pedido
 
-            # Envia a notificação 20s após o checkout OK (sem bloquear a response).
-            # Recarrega o pedido em nova sessão após o delay para evitar DetachedInstanceError.
-            asyncio.create_task(agendar_notificar_novo_pedido(pedido_id=pedido.id, delay_seconds=20))
+            # Envia a notificação imediatamente após o checkout OK (sem bloquear a response).
+            # Recarrega o pedido em nova sessão para evitar DetachedInstanceError.
+            asyncio.create_task(agendar_notificar_novo_pedido(pedido_id=pedido.id, delay_seconds=0))
         except Exception as e:
             # Loga erro mas não quebra o fluxo
             logger.error(f"Erro ao agendar notificação de novo pedido {pedido.id}: {e}")

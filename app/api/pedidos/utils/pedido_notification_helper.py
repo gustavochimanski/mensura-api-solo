@@ -177,6 +177,45 @@ async def notificar_novo_pedido(pedido: PedidoUnificadoModel) -> None:
         logger.error(f"Erro ao notificar novo pedido {pedido_id}: {e}", exc_info=True)
 
 
+async def agendar_notificar_novo_pedido(*, pedido_id: int, delay_seconds: int = 0) -> None:
+    """
+    Notifica "novo pedido" de forma segura para o ciclo de request.
+
+    - Cria uma sessão própria (evita DetachedInstanceError quando o request fecha a sessão do FastAPI).
+    - Opcionalmente aguarda um delay (em segundos).
+    """
+    import asyncio
+    from app.database.db_connection import SessionLocal
+    from sqlalchemy.orm import joinedload
+
+    if delay_seconds and delay_seconds > 0:
+        await asyncio.sleep(int(delay_seconds))
+
+    db_session = SessionLocal()
+    try:
+        # Recarrega o pedido com relacionamentos básicos necessários para montar payload do evento.
+        pedido = (
+            db_session.query(PedidoUnificadoModel)
+            .options(
+                joinedload(PedidoUnificadoModel.cliente),
+                joinedload(PedidoUnificadoModel.itens),
+                joinedload(PedidoUnificadoModel.mesa),
+                joinedload(PedidoUnificadoModel.empresa),
+            )
+            .filter(PedidoUnificadoModel.id == int(pedido_id))
+            .first()
+        )
+        if not pedido:
+            logger.warning("[novo_pedido] Pedido %s não encontrado para notificação", pedido_id)
+            return
+
+        await notificar_novo_pedido(pedido)
+    except Exception as e:
+        logger.error("[novo_pedido] Falha ao notificar pedido %s: %s", pedido_id, e, exc_info=True)
+    finally:
+        db_session.close()
+
+
 async def notificar_pedido_impresso(pedido_id: int, empresa_id: Optional[int] = None) -> None:
     """
     Notifica o frontend sobre um pedido marcado como impresso (notificação kanban).
