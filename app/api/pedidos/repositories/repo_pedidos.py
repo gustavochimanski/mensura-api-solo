@@ -258,7 +258,17 @@ class PedidoRepository:
         complementos_rel = getattr(item, "complementos", None) or []
         for comp in complementos_rel:
             try:
-                total += Decimal(str(getattr(comp, "total", 0) or 0))
+                comp_total = Decimal(str(getattr(comp, "total", 0) or 0))
+                # Blindagem: se `comp.total` estiver zerado/desatualizado, soma a partir dos adicionais.
+                # Isso evita cenários onde o complemento foi atualizado mas o agregado não foi recalculado.
+                if comp_total == 0:
+                    adicionais_rel = getattr(comp, "adicionais", None) or []
+                    for ad in adicionais_rel:
+                        try:
+                            comp_total += Decimal(str(getattr(ad, "total", 0) or 0))
+                        except Exception:
+                            continue
+                total += comp_total
             except Exception:
                 continue
 
