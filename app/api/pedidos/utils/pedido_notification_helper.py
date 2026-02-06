@@ -4,6 +4,7 @@ Extrai dados do pedido e envia notificação via WebSocket para o frontend.
 """
 from typing import Dict, Any, Optional
 import logging
+import asyncio
 from decimal import Decimal
 
 from app.api.pedidos.models.model_pedido_unificado import PedidoUnificadoModel
@@ -175,6 +176,41 @@ async def notificar_novo_pedido(pedido: PedidoUnificadoModel) -> None:
         # Loga o erro mas não propaga para não quebrar o fluxo de criação do pedido
         # Usa pedido_id extraído no início para evitar DetachedInstanceError
         logger.error(f"Erro ao notificar novo pedido {pedido_id}: {e}", exc_info=True)
+
+
+async def agendar_notificar_novo_pedido(
+    *,
+    pedido_id: int,
+    delay_seconds: int = 20,
+) -> None:
+    """
+    Agenda a notificação de "pedido criado" com delay.
+
+    Importante: não mantém instâncias ORM (SQLAlchemy) vivas durante o sleep.
+    Após o delay, recarrega o pedido em uma nova sessão e dispara `notificar_novo_pedido`.
+    """
+    try:
+        await asyncio.sleep(max(0, int(delay_seconds)))
+    except Exception:
+        # Se o sleep for cancelado/interrompido, apenas encerra.
+        return
+
+    from app.database.db_connection import SessionLocal
+    from app.api.pedidos.repositories.repo_pedidos import PedidoRepository
+
+    db_session = SessionLocal()
+    try:
+        repo = PedidoRepository(db_session)
+        pedido = repo.get_pedido(int(pedido_id))
+        if not pedido:
+            logger.warning("[NotifyDelay] Pedido %s não encontrado para notificação de novo pedido", pedido_id)
+            return
+
+        await notificar_novo_pedido(pedido)
+    except Exception as e:
+        logger.error("[NotifyDelay] Erro ao notificar novo pedido %s após delay: %s", pedido_id, e, exc_info=True)
+    finally:
+        db_session.close()
 
 
 async def notificar_pedido_impresso(pedido_id: int, empresa_id: Optional[int] = None) -> None:

@@ -16,6 +16,7 @@ class HorarioDiaOut(BaseModel):
 class EmpresaClientOut(BaseModel):
     nome: str
     logo: Optional[str] = None
+    telefone: Optional[str] = None
     timezone: Optional[str] = None
     horarios_funcionamento: Optional[List[HorarioDiaOut]] = None
     cardapio_tema: Optional[str] = "padrao"
@@ -39,6 +40,7 @@ class EmpresaPublicListItem(BaseModel):
     id: int
     nome: str
     logo: Optional[str] = None
+    telefone: Optional[str] = None
     bairro: Optional[str] = None
     cidade: Optional[str] = None
     estado: Optional[str] = None

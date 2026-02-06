@@ -900,11 +900,11 @@ class PedidoService:
         # Notifica novo pedido em background
         try:
             import asyncio
-            from app.api.pedidos.utils.pedido_notification_helper import notificar_novo_pedido
-            # Recarrega pedido com todos os relacionamentos para a notificação
-            pedido_completo = self.repo.get_pedido(pedido.id)
-            if pedido_completo:
-                asyncio.create_task(notificar_novo_pedido(pedido_completo))
+            from app.api.pedidos.utils.pedido_notification_helper import agendar_notificar_novo_pedido
+
+            # Envia a notificação 20s após o checkout OK (sem bloquear a response).
+            # Recarrega o pedido em nova sessão após o delay para evitar DetachedInstanceError.
+            asyncio.create_task(agendar_notificar_novo_pedido(pedido_id=pedido.id, delay_seconds=20))
         except Exception as e:
             # Loga erro mas não quebra o fluxo
             logger.error(f"Erro ao agendar notificação de novo pedido {pedido.id}: {e}")
