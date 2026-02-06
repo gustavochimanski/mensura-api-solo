@@ -98,7 +98,7 @@ def listar_empresas_publicas(
             landingpage_store=empresa.landingpage_store,
         )
     
-    # Caso contrário, retorna lista
+    # Caso contrário, retorna list
     return [
         EmpresaPublicListItem(
             id=empresa.id,
