@@ -504,6 +504,11 @@ GET /api/pedidos/admin/kanban
 - `tipo` (string, opcional): Filtrar por tipo (`DELIVERY`, `BALCAO`, `MESA`)
 - `limit` (integer, padrão: 500, máximo: 1000): Limite por agrupamento
 
+**Observações importantes:**
+- O campo `meio_pagamento` **não é retornado** neste endpoint (para evitar duplicidade/inconsistência com o resumo em `pagamento`).
+- Use `pagamento.meio_pagamento_nome` como o nome do meio de pagamento exibido no kanban.
+- `pagamento` pode ser `null` quando o pedido não possui meio de pagamento associado e não há transações registradas.
+
 **Exemplo:**
 ```
 GET /api/pedidos/admin/kanban?date_filter=2024-01-15&empresa_id=1
@@ -523,13 +528,89 @@ GET /api/pedidos/admin/kanban?date_filter=2024-01-15&empresa_id=1
       },
       "valor_total": 101.00,
       "data_criacao": "2024-01-15T14:30:00Z",
+      "observacao_geral": null,
       "endereco": "Rua das Flores, 123",
-      "numero_pedido": "000001",
-      ...
+      "entregador": {
+        "id": 50,
+        "nome": "Carlos Entregador"
+      },
+      "pagamento": {
+        "meio_pagamento_nome": "Cartão Débito",
+        "esta_pago": true
+      },
+      "acertado_entregador": false,
+      "tempo_entrega_minutos": 22.15,
+      "troco_para": null,
+      "tipo_pedido": "DELIVERY",
+      "telefone_cliente": "11987654321",
+      "nome_cliente": "João Silva",
+      "mesa_id": null,
+      "mesa": null,
+      "numero_pedido": "DV-000001",
+      "mesa_numero": null,
+      "referencia_mesa": null
     }
   ],
-  "balcao": [...],
-  "mesas": [...]
+  "balcao": [
+    {
+      "id": 790,
+      "status": "A",
+      "cliente": null,
+      "valor_total": 35.80,
+      "data_criacao": "2024-01-15T15:10:00Z",
+      "observacao_geral": "Pedido de balcão",
+      "endereco": "Balcão - Retirada",
+      "entregador": null,
+      "pagamento": {
+        "meio_pagamento_nome": "Dinheiro",
+        "esta_pago": false
+      },
+      "acertado_entregador": null,
+      "tempo_entrega_minutos": 9.95,
+      "troco_para": 50.00,
+      "tipo_pedido": "BALCAO",
+      "telefone_cliente": null,
+      "nome_cliente": null,
+      "mesa_id": null,
+      "mesa": null,
+      "numero_pedido": "BAL-000047",
+      "mesa_numero": null,
+      "referencia_mesa": null
+    }
+  ],
+  "mesas": [
+    {
+      "id": 791,
+      "status": "R",
+      "cliente": {
+        "id": 321,
+        "nome": "Maria",
+        "telefone": "11999990000"
+      },
+      "valor_total": 62.00,
+      "data_criacao": "2024-01-15T16:00:00Z",
+      "observacao_geral": "Pedido de mesa",
+      "endereco": "Mesa 12",
+      "entregador": null,
+      "pagamento": {
+        "meio_pagamento_nome": "Cartão Crédito",
+        "esta_pago": false
+      },
+      "acertado_entregador": null,
+      "tempo_entrega_minutos": 17.55,
+      "troco_para": null,
+      "tipo_pedido": "MESA",
+      "telefone_cliente": "11999990000",
+      "nome_cliente": "Maria",
+      "mesa_id": 12,
+      "mesa": {
+        "id": 12
+      },
+      "numero_pedido": "12-001",
+      "mesa_numero": "12",
+      "referencia_mesa": "Mesa 12"
+    }
+  ]
 }
 ```
 
