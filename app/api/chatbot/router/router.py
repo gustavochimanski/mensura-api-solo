@@ -2460,6 +2460,103 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
             logger.error(f"Erro ao verificar se é entregador: {e}", exc_info=True)
             # Em caso de erro, continua o processamento normal (não bloqueia)
         
+        # VERIFICA SE O BOT ESTÁ ATIVO PARA ESTE NÚMERO (ANTES de qualquer resposta/cadastro)
+        # Motivo: quando o cliente NÃO tem cadastro, o fluxo de "cadastro rápido" retornava antes
+        # da checagem de pausa e o bot acabava respondendo mesmo com o número pausado.
+        if not chatbot_db.is_bot_active_for_phone(db, phone_number):
+            # Log explícito: este é um "return silencioso" (não responde ao cliente).
+            try:
+                status_info = chatbot_db.get_bot_status(db, phone_number) or {}
+            except Exception:
+                status_info = {}
+            logger.debug(
+                f"Bot pausado para o número (early-check) - phone={phone_number}, empresa_id={empresa_id_int}, status={status_info}"
+            )
+
+            # Mesmo pausado, ainda capturamos "chamar atendente" e notificamos o dashboard via WebSocket
+            try:
+                if _is_chamar_atendente_intent(message_text, button_id):
+                    from datetime import datetime
+                    from ..core.notifications import send_chatbot_websocket_notification
+
+                    notification_data = {
+                        "cliente_phone": phone_number,
+                        "cliente_nome": contact_name,
+                        "tipo": "chamar_atendente",
+                        "timestamp": datetime.utcnow().isoformat(),
+                        "bot_pausado": True,
+                        "paused_by": (status_info or {}).get("paused_by"),
+                        "chatbot_destrava_em": (status_info or {}).get("chatbot_destrava_em"),
+                    }
+
+                    title = "🔔 Solicitação de Atendimento Humano"
+                    message_ws = (
+                        f"Cliente {contact_name or phone_number} solicitou atendimento humano "
+                        f"(bot está pausado).\n\n📱 Telefone: {phone_number}"
+                    )
+                    if contact_name:
+                        message_ws += f"\n👤 Nome: {contact_name}"
+
+                    sent_count = await send_chatbot_websocket_notification(
+                        empresa_id=empresa_id_int,
+                        notification_type="chamar_atendente",
+                        title=title,
+                        message=message_ws,
+                        data=notification_data,
+                    )
+
+                    if sent_count > 0:
+                        logger.info(
+                            f"✅ Notificação WebSocket (chamar_atendente) enviada mesmo com bot pausado - "
+                            f"empresa_id={empresa_id_int}, conexões={sent_count}, phone={phone_number}"
+                        )
+                    else:
+                        logger.warning(
+                            f"⚠️ Nenhuma conexão WebSocket ativa ao notificar chamar_atendente (bot pausado) - "
+                            f"empresa_id={empresa_id_int}, phone={phone_number}"
+                        )
+            except Exception as e_ws:
+                logger.error(
+                    f"❌ Erro ao enviar notificação WebSocket de chamar_atendente com bot pausado: {e_ws}",
+                    exc_info=True,
+                )
+
+            # Salva a mensagem no histórico mesmo pausado (para auditoria/preview)
+            try:
+                conversations_paused = chatbot_db.get_conversations_by_user(db, user_id, empresa_id_int)
+                if conversations_paused:
+                    chatbot_db.create_message(
+                        db=db,
+                        conversation_id=conversations_paused[0]["id"],
+                        role="user",
+                        content=message_text,
+                        whatsapp_message_id=message_id,
+                    )
+                    # Atualiza o nome do contato se disponível
+                    if contact_name and not conversations_paused[0].get("contact_name"):
+                        chatbot_db.update_conversation_contact_name(db, conversations_paused[0]["id"], contact_name)
+                else:
+                    conversation_id = chatbot_db.create_conversation(
+                        db=db,
+                        session_id=f"whatsapp_{user_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                        user_id=user_id,
+                        prompt_key=PROMPT_ATENDIMENTO,
+                        model=DEFAULT_MODEL,
+                        contact_name=contact_name,
+                        empresa_id=empresa_id_int,
+                    )
+                    chatbot_db.create_message(
+                        db=db,
+                        conversation_id=conversation_id,
+                        role="user",
+                        content=message_text,
+                        whatsapp_message_id=message_id,
+                    )
+            except Exception as e_hist:
+                logger.warning(f"⚠️ Falha ao salvar histórico com bot pausado: {e_hist}", exc_info=True)
+
+            return  # Não responde, apenas registra/aciona WS
+
         
         # VERIFICA INTENÇÃO ANTES DO CADASTRO (usando agentes de IA)
         # Se detectar pedido de cardápio, responde direto sem pedir cadastro
