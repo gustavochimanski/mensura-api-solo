@@ -1006,14 +1006,21 @@ PATCH /api/pedidos/admin/{pedido_id}/fechar-conta
 **Body Request:**
 ```json
 {
-  "meio_pagamento_id": 1,
-  "troco_para": 50.00
+  "pagamentos": [
+    { "id": 1, "valor": 50.00 }
+  ]
 }
 ```
 
 **Campos Opcionais:**
-- `meio_pagamento_id`: Meio de pagamento utilizado
-- `troco_para`: Valor para troco
+- `meio_pagamento_id`: Meio de pagamento utilizado (legado / compat)
+- `pagamentos`: Lista de meios de pagamento parciais (recomendado). Formato: `[{ "id" | "meio_pagamento_id", "valor" }]`
+- `troco_para`: Valor informado para troco (legado / compat)
+
+**Regra de troco (sem enviar `troco_para`):**
+- Para **DINHEIRO** com troco, o frontend pode enviar o **valor recebido** em `pagamentos[0].valor` (ex.: `50.00`).
+- Se `valor` vier **maior que o total do pedido**, o backend valida se o meio é **DINHEIRO**, grava `troco_para` automaticamente e registra a transação apenas com o **valor total** do pedido.
+- Observação: este comportamento (valor recebido > total) é suportado apenas quando houver **um único** meio em `pagamentos` (evita troco ambíguo).
 
 **Response (200 OK):**
 ```json
@@ -1058,7 +1065,10 @@ PATCH /api/pedidos/admin/{pedido_id}/marcar-pedido-pago
 **Body Request (opcional):**
 ```json
 {
-  "meio_pagamento_id": 1
+  "meio_pagamento_id": 1,
+  "pagamentos": [
+    { "id": 1, "valor": 50.00 }
+  ]
 }
 ```
 
@@ -1066,6 +1076,8 @@ PATCH /api/pedidos/admin/{pedido_id}/marcar-pedido-pago
 - Se `meio_pagamento_id` vier no body, o backend **valida** (ativo) e salva no pedido.
 - Se o body vier **vazio/omitido**, o pedido **precisa já ter** um meio de pagamento definido (ex.: `meio_pagamento_id` no pedido).
 - Se não houver meio de pagamento no pedido e também não vier no payload → **400 Bad Request**.
+- Se `pagamentos` vier no payload, a soma dos valores (aplicados ao pedido) deve ser igual ao `valor_total`.
+- Para **DINHEIRO** com troco, pode-se enviar o **valor recebido** em `pagamentos[0].valor`. Se `valor` vier maior que o total, o backend valida o tipo **DINHEIRO**, grava `troco_para` automaticamente e registra a transação apenas com o **valor total**.
 
 **Response (200 OK):**
 ```json

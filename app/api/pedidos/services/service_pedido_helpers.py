@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from decimal import Decimal, ROUND_HALF_UP
-from typing import Optional
+from typing import Callable, Optional
 
 from app.api.pedidos.models.model_pedido_unificado import PedidoUnificadoModel
 from app.api.pedidos.schemas.schema_pedido import PedidoPagamentoResumo
@@ -15,6 +15,57 @@ from app.api.shared.schemas.schema_shared_enums import (
 def _dec(value: float | Decimal | int) -> Decimal:
     """Converte valor para Decimal com precisão de 2 casas decimais."""
     return Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def ajustar_pagamento_dinheiro_com_troco(
+    *,
+    pagamentos: list[dict],
+    valor_total: Decimal,
+    is_dinheiro: Callable[[int], bool],
+) -> tuple[list[dict], Decimal | None]:
+    """
+    Normaliza payloads onde o frontend envia o *valor recebido* em DINHEIRO no campo `valor`.
+
+    Regra:
+    - Se existir exatamente 1 pagamento e `valor > valor_total`, isso só é permitido para DINHEIRO.
+      Nesse caso:
+        - retorna `troco_para` (= valor recebido)
+        - ajusta o pagamento para `valor_total` (valor efetivamente aplicado ao pedido)
+
+    Observação:
+    - Para múltiplos meios, um `valor > valor_total` é considerado inválido (troco ficaria ambíguo).
+    """
+
+    if not pagamentos:
+        return pagamentos, None
+
+    # Coage/normaliza valores (defensivo)
+    pagamentos_norm = [
+        {"meio_pagamento_id": int(p.get("meio_pagamento_id")), "valor": _dec(p.get("valor", 0) or 0)}
+        for p in pagamentos
+        if p.get("meio_pagamento_id") is not None
+    ]
+    if not pagamentos_norm:
+        return [], None
+
+    if len(pagamentos_norm) != 1:
+        # Se tiver múltiplos meios, não aceitamos "valor recebido" maior que o total em nenhum item.
+        if any(p["valor"] > valor_total for p in pagamentos_norm):
+            raise ValueError(
+                "Pagamento com valor maior que o total não é suportado com múltiplos meios (troco ambíguo)."
+            )
+        return pagamentos_norm, None
+
+    p0 = pagamentos_norm[0]
+    if p0["valor"] <= valor_total:
+        return pagamentos_norm, None
+
+    mp_id = int(p0["meio_pagamento_id"])
+    if not is_dinheiro(mp_id):
+        raise ValueError("Pagamento maior que o total só é permitido para meio de pagamento do tipo DINHEIRO.")
+
+    troco_para = p0["valor"]
+    return [{"meio_pagamento_id": mp_id, "valor": valor_total}], troco_para
 
 
 def _safe_enum(enum_cls, value):

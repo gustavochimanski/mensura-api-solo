@@ -480,7 +480,7 @@ class PedidoAdminService:
             PagamentoStatusEnum,
         )
         from app.api.cadastros.schemas.schema_meio_pagamento import MeioPagamentoTipoEnum
-        from app.api.pedidos.services.service_pedido_helpers import _dec
+        from app.api.pedidos.services.service_pedido_helpers import _dec, ajustar_pagamento_dinheiro_com_troco
         from decimal import Decimal
 
         pedido = self._get_pedido(pedido_id)
@@ -535,6 +535,36 @@ class PedidoAdminService:
             pedido.meio_pagamento_id = meio_pagamento_id
 
         valor_total = _dec(getattr(pedido, "valor_total", 0) or 0)
+
+        # Se o frontend mandou "valor recebido" em dinheiro (valor > total) em `pagamentos`,
+        # normalizamos: transação registra apenas o total e persistimos `troco_para` como valor recebido.
+        if pagamentos_payload:
+            def _is_dinheiro(mp_id: int) -> bool:
+                mp = MeioPagamentoService(self.db).get(int(mp_id))
+                if not mp or not getattr(mp, "ativo", False):
+                    raise HTTPException(status.HTTP_400_BAD_REQUEST, "Meio de pagamento inválido ou inativo")
+                return mp.tipo == MeioPagamentoTipoEnum.DINHEIRO or str(mp.tipo) == "DINHEIRO"
+
+            try:
+                pagamentos_payload, troco_para_derivado = ajustar_pagamento_dinheiro_com_troco(
+                    pagamentos=pagamentos_payload,
+                    valor_total=valor_total,
+                    is_dinheiro=_is_dinheiro,
+                )
+            except ValueError as e:
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    detail={"code": "TROCO_INVALIDO", "message": str(e)},
+                )
+
+            if troco_para_derivado is not None and getattr(pedido, "troco_para", None) is None:
+                pedido.troco_para = float(troco_para_derivado)
+
+            # Atualiza snapshot com valores normalizados (aplicados no pedido)
+            if hasattr(pedido, "pagamentos_snapshot") and pagamentos_payload:
+                pedido.pagamentos_snapshot = [
+                    {"id": p["meio_pagamento_id"], "valor": float(p["valor"])} for p in pagamentos_payload
+                ]
         pagamentos_para_marcar = pagamentos_payload or [
             {"meio_pagamento_id": int(pedido.meio_pagamento_id), "valor": valor_total}
         ]
@@ -669,7 +699,7 @@ class PedidoAdminService:
         if not pedido:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
         
-        from app.api.pedidos.services.service_pedido_helpers import _dec
+        from app.api.pedidos.services.service_pedido_helpers import _dec, ajustar_pagamento_dinheiro_com_troco
 
         pagamentos_payload: list[dict] = []
         if payload and getattr(payload, "pagamentos", None):
@@ -719,6 +749,38 @@ class PedidoAdminService:
         from decimal import Decimal
 
         valor_total = _dec(getattr(pedido, "valor_total", 0) or 0)
+
+        # Se o frontend mandou "valor recebido" em DINHEIRO (valor > total) dentro de `pagamentos`,
+        # normalizamos: transação registra apenas o total e persistimos `troco_para` como valor recebido.
+        troco_para_derivado = None
+        if pagamentos_payload:
+            def _is_dinheiro(mp_id: int) -> bool:
+                mp = MeioPagamentoService(self.db).get(int(mp_id))
+                if not mp or not getattr(mp, "ativo", False):
+                    raise HTTPException(status.HTTP_400_BAD_REQUEST, "Meio de pagamento inválido ou inativo")
+                return mp.tipo == MeioPagamentoTipoEnum.DINHEIRO or str(mp.tipo) == "DINHEIRO"
+
+            try:
+                pagamentos_payload, troco_para_derivado = ajustar_pagamento_dinheiro_com_troco(
+                    pagamentos=pagamentos_payload,
+                    valor_total=valor_total,
+                    is_dinheiro=_is_dinheiro,
+                )
+            except ValueError as e:
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    detail={"code": "TROCO_INVALIDO", "message": str(e)},
+                )
+
+            if troco_para_derivado is not None and (payload is None or getattr(payload, "troco_para", None) is None):
+                pedido.troco_para = float(troco_para_derivado)
+
+            # Atualiza snapshot com valores normalizados (aplicados no pedido)
+            if hasattr(pedido, "pagamentos_snapshot") and pagamentos_payload:
+                pedido.pagamentos_snapshot = [
+                    {"id": p["meio_pagamento_id"], "valor": float(p["valor"])} for p in pagamentos_payload
+                ]
+
         pagamentos_para_fechar = pagamentos_payload or [
             {"meio_pagamento_id": int(meio_pagamento_id), "valor": valor_total}
         ]
@@ -805,6 +867,7 @@ class PedidoAdminService:
             payload.meio_pagamento_id is not None
             or payload.troco_para is not None
             or getattr(payload, "pagamentos", None)
+            or troco_para_derivado is not None
         ):
             self.db.commit()
             self.db.refresh(pedido)
@@ -812,8 +875,8 @@ class PedidoAdminService:
         # Prepara observações para o histórico
         meio_pagamento_nome = pedido.meio_pagamento.nome if pedido.meio_pagamento else "N/A"
         observacoes = f"Conta fechada. Meio de pagamento: {meio_pagamento_nome}"
-        if payload and payload.troco_para is not None:
-            observacoes += f". Troco para: R$ {payload.troco_para:.2f}"
+        if getattr(pedido, "troco_para", None) is not None:
+            observacoes += f". Troco para: R$ {float(pedido.troco_para):.2f}"
         
         # Atualiza status para ENTREGUE e registra no histórico
         status_anterior = pedido.status
