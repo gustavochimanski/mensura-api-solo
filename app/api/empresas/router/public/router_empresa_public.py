@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.api.empresas.repositories.empresa_repo import EmpresaRepository
+from app.api.notifications.models.whatsapp_config_model import WhatsAppConfigModel
 from app.api.empresas.schemas.schema_empresa_client import (
     EmpresaClientOut,
     EmpresaPublicListItem,
@@ -38,6 +39,31 @@ def listar_empresas_publicas(
         estado=estado,
         limit=limit,
     )
+
+    # Fallback de telefone: se `cadastros.empresas.telefone` estiver vazio,
+    # tenta usar o número ativo do WhatsApp Business (display_phone_number).
+    #
+    # Isso evita endpoint "sem telefone" em instalações onde o número foi
+    # cadastrado apenas na integração do WhatsApp.
+    whatsapp_phone_by_empresa_id: dict[str, str] = {}
+    empresas_sem_telefone = [e for e in empresas if not (getattr(e, "telefone", None) or "").strip()]
+    if empresas_sem_telefone:
+        ids_str = [str(int(e.id)) for e in empresas_sem_telefone if getattr(e, "id", None) is not None]
+        if ids_str:
+            configs = (
+                db.query(WhatsAppConfigModel)
+                .filter(
+                    WhatsAppConfigModel.empresa_id.in_(ids_str),
+                    WhatsAppConfigModel.is_active.is_(True),
+                )
+                .order_by(WhatsAppConfigModel.updated_at.desc())
+                .all()
+            )
+            for cfg in configs:
+                emp_id = str(getattr(cfg, "empresa_id", "") or "")
+                phone = (getattr(cfg, "display_phone_number", None) or "").strip()
+                if emp_id and phone and emp_id not in whatsapp_phone_by_empresa_id:
+                    whatsapp_phone_by_empresa_id[emp_id] = phone
     
     # Se empresa_id foi fornecido, retorna objeto único
     if empresa_id is not None:
@@ -57,11 +83,12 @@ def listar_empresas_publicas(
                 )
                 for dia in empresa.horarios_funcionamento
             ]
+        telefone_publico = (getattr(empresa, "telefone", None) or "").strip() or whatsapp_phone_by_empresa_id.get(str(int(empresa.id)))
         return EmpresaPublicListItem(
             id=empresa.id,
             nome=empresa.nome,
             logo=empresa.logo,
-            telefone=empresa.telefone,
+            telefone=telefone_publico,
             bairro=empresa.bairro,
             cidade=empresa.cidade,
             estado=empresa.estado,
@@ -77,7 +104,7 @@ def listar_empresas_publicas(
             id=empresa.id,
             nome=empresa.nome,
             logo=empresa.logo,
-            telefone=empresa.telefone,
+            telefone=(getattr(empresa, "telefone", None) or "").strip() or whatsapp_phone_by_empresa_id.get(str(int(empresa.id))),
             bairro=empresa.bairro,
             cidade=empresa.cidade,
             estado=empresa.estado,
