@@ -1070,6 +1070,20 @@ async def enviar_resumo_pedido_whatsapp(
     try:
         from sqlalchemy import text
         from app.api.chatbot.core.config_whatsapp import format_phone_number
+        # Best-effort: garante que `valor_total` e taxas estejam atualizados após edições
+        # (o resumo lê do banco via SQL). Não falha o envio se o recálculo não for possível.
+        try:
+            from app.api.pedidos.repositories.repo_pedidos import PedidoRepository
+            from app.api.pedidos.services.service_pedido import PedidoService
+
+            pedido_model = PedidoRepository(db).get_pedido(int(pedido_id))
+            if pedido_model is not None:
+                PedidoService(db)._recalcular_pedido(pedido_model)
+        except Exception as e:
+            logger.warning(
+                f"[enviar_resumo_pedido] Não foi possível recalcular totais antes do envio do resumo "
+                f"(pedido_id={pedido_id}): {e}"
+            )
 
         def _digits_only(v: str) -> str:
             return "".join(ch for ch in str(v or "") if ch.isdigit())

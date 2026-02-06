@@ -426,6 +426,19 @@ class PedidoService:
 
     def _recalcular_pedido(self, pedido: PedidoUnificadoModel):
         """Recalcula subtotal, desconto, taxas e valor total do pedido e salva no banco."""
+        # Alguns fluxos de edição atualizam tabelas relacionais (ex.: complementos) via DELETE/INSERT.
+        # Isso pode deixar relationships em memória desatualizados até expirar.
+        # Para garantir que o subtotal reflita o estado atual, tentamos recalcular a partir de um pedido
+        # recarregado do banco (best-effort, sem falhar o fluxo).
+        try:
+            pid = getattr(pedido, "id", None)
+            if pid is not None:
+                pedido_db = self.repo.get_pedido(int(pid))
+                if pedido_db is not None:
+                    pedido = pedido_db
+        except Exception:
+            pass
+
         # IMPORTANTE: Usa _calc_total do repositório que já soma complementos corretamente
         # via _calc_item_total que inclui _sum_complementos_total_relacional
         subtotal = self.repo._calc_total(pedido)
