@@ -10,9 +10,9 @@ from app.api.pedidos.repositories.repo_pedidos import PedidoRepository
 from app.api.pedidos.models.model_pedido_unificado import PedidoUnificadoModel, TipoEntrega, StatusPedido
 from app.api.pedidos.models.model_pedido_item_unificado import PedidoItemUnificadoModel
 from app.api.pedidos.models.model_pedido_item_complemento import PedidoItemComplementoModel
+from app.api.cardapio.models.model_transacao_pagamento_dv import TransacaoPagamentoModel
 from app.api.pedidos.schemas.schema_pedido import (
     KanbanAgrupadoResponse,
-    MeioPagamentoKanbanResponse,
     PedidoKanbanResponse,
     ClienteKanbanSimplificado,
     PedidoPagamentoResumoKanban,
@@ -158,6 +158,8 @@ class KanbanService:
                 joinedload(PedidoUnificadoModel.mesa),
                 joinedload(PedidoUnificadoModel.meio_pagamento),
                 joinedload(PedidoUnificadoModel.entregador),
+                # Fonte da verdade (múltiplos meios): transacoes[]
+                joinedload(PedidoUnificadoModel.transacoes).joinedload(TransacaoPagamentoModel.meio_pagamento),
             )
             .filter(
                 and_(
@@ -235,13 +237,6 @@ class KanbanService:
         # Recalcula valor total incluindo receitas, combos e adicionais
         valor_total_calculado = self._calcular_valor_total_com_receitas_combos(p)
         
-        # Meio de pagamento simplificado (apenas nome)
-        meio_pagamento_simplificado = None
-        if p.meio_pagamento:
-            meio_pagamento_simplificado = MeioPagamentoKanbanResponse(
-                nome=p.meio_pagamento.nome
-            )
-        
         # Pagamento simplificado (apenas campos usados pelo front)
         pagamento_simplificado = None
         pagamento_resumo = build_pagamento_resumo(p)
@@ -259,7 +254,6 @@ class KanbanService:
             data_criacao=p.created_at,
             endereco=endereco_str,
             observacao_geral=p.observacao_geral,
-            meio_pagamento=meio_pagamento_simplificado,
             entregador={"id": p.entregador.id, "nome": p.entregador.nome} if getattr(p, "entregador", None) else None,
             pagamento=pagamento_simplificado,
             acertado_entregador=getattr(p, "acertado_entregador", None),
@@ -309,11 +303,13 @@ class KanbanService:
         # Recalcula valor total incluindo receitas, combos e adicionais
         valor_total_mesa = self._calcular_valor_total_com_receitas_combos(p)
         
-        # Meio de pagamento simplificado (apenas nome)
-        meio_pagamento_simplificado = None
-        if p.meio_pagamento:
-            meio_pagamento_simplificado = MeioPagamentoKanbanResponse(
-                nome=p.meio_pagamento.nome
+        # Pagamento simplificado (mesma regra do delivery)
+        pagamento_simplificado = None
+        pagamento_resumo = build_pagamento_resumo(p)
+        if pagamento_resumo:
+            pagamento_simplificado = PedidoPagamentoResumoKanban(
+                meio_pagamento_nome=pagamento_resumo.meio_pagamento_nome,
+                esta_pago=pagamento_resumo.esta_pago
             )
         
         return PedidoKanbanResponse(
@@ -324,9 +320,8 @@ class KanbanService:
             data_criacao=p.created_at,
             endereco=endereco_str,
             observacao_geral=p.observacoes or p.observacao_geral or "Pedido de mesa",
-            meio_pagamento=meio_pagamento_simplificado,
             entregador=None,  # Mesa não tem entregador
-            pagamento=None,  # Mesa não tem pagamento separado
+            pagamento=pagamento_simplificado,
             acertado_entregador=None,
             tempo_entrega_minutos=tempo_entrega_minutos,
             troco_para=float(p.troco_para) if getattr(p, "troco_para", None) is not None else None,
@@ -378,11 +373,13 @@ class KanbanService:
         # Recalcula valor total incluindo receitas, combos e adicionais
         valor_total_balcao = self._calcular_valor_total_com_receitas_combos(p)
         
-        # Meio de pagamento simplificado (apenas nome)
-        meio_pagamento_simplificado = None
-        if p.meio_pagamento:
-            meio_pagamento_simplificado = MeioPagamentoKanbanResponse(
-                nome=p.meio_pagamento.nome
+        # Pagamento simplificado (mesma regra do delivery)
+        pagamento_simplificado = None
+        pagamento_resumo = build_pagamento_resumo(p)
+        if pagamento_resumo:
+            pagamento_simplificado = PedidoPagamentoResumoKanban(
+                meio_pagamento_nome=pagamento_resumo.meio_pagamento_nome,
+                esta_pago=pagamento_resumo.esta_pago
             )
         
         return PedidoKanbanResponse(
@@ -393,9 +390,8 @@ class KanbanService:
             data_criacao=p.created_at,
             endereco=endereco_str,
             observacao_geral=p.observacoes or p.observacao_geral or "Pedido de balcão",
-            meio_pagamento=meio_pagamento_simplificado,
             entregador=None,  # Balcão não tem entregador
-            pagamento=None,  # Balcão não tem pagamento separado
+            pagamento=pagamento_simplificado,
             acertado_entregador=None,
             tempo_entrega_minutos=tempo_entrega_minutos,
             troco_para=float(p.troco_para) if getattr(p, "troco_para", None) is not None else None,

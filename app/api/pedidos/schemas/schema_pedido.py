@@ -82,7 +82,6 @@ class PedidoKanbanResponse(BaseModel):
     data_criacao: datetime
     observacao_geral: Optional[str] = None
     endereco: Optional[str] = None
-    meio_pagamento: Optional[MeioPagamentoKanbanResponse] = None
     entregador: Optional[dict] = None  # Record<string, unknown> conforme front
     pagamento: Optional[PedidoPagamentoResumoKanban] = None
     acertado_entregador: Optional[bool] = None
