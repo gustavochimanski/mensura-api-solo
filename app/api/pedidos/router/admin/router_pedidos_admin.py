@@ -22,6 +22,7 @@ from app.api.pedidos.schemas import (
     PedidoResponseCompleto,
     PedidoResponseCompletoTotal,
     PedidoStatusPatchRequest,
+    PedidoTrocarTipoRequest,
     PedidoUpdateRequest,
 )
 from app.api.pedidos.services.service_pedido_admin import PedidoAdminService
@@ -381,4 +382,25 @@ def remover_entregador(
     svc: PedidoAdminService = Depends(get_pedido_admin_service),
 ):
     return svc.remover_entregador(pedido_id)
+
+
+@router.patch(
+    "/{pedido_id}/tipo",
+    response_model=PedidoResponseCompleto,
+    status_code=status.HTTP_200_OK,
+)
+def trocar_tipo_pedido(
+    pedido_id: int = Path(..., gt=0),
+    payload: PedidoTrocarTipoRequest = Body(...),
+    current_user: UserModel = Depends(get_current_user),
+    svc: PedidoAdminService = Depends(get_pedido_admin_service),
+):
+    """
+    Troca o tipo do pedido entre MESA, BALCAO e DELIVERY.
+    """
+    return svc.trocar_tipo_pedido(
+        pedido_id=pedido_id,
+        payload=payload,
+        user_id=current_user.id if current_user else None,
+    )
 

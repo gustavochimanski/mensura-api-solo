@@ -56,6 +56,7 @@ from .schema_pedido_admin import (
     PedidoItemMutationRequest,
     PedidoItemMutationAction,
     PedidoEntregadorRequest,
+    PedidoTrocarTipoRequest,
 )
 
 __all__ = [
@@ -106,5 +107,6 @@ __all__ = [
     "PedidoItemMutationRequest",
     "PedidoItemMutationAction",
     "PedidoEntregadorRequest",
+    "PedidoTrocarTipoRequest",
 ]
 

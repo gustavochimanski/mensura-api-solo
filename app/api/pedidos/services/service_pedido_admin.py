@@ -31,6 +31,7 @@ from app.api.pedidos.schemas import (
     PedidoResponseCompleto,
     PedidoResponseCompletoTotal,
     PedidoStatusPatchRequest,
+    PedidoTrocarTipoRequest,
     PedidoUpdateRequest,
 )
 from app.api.pedidos.schemas.schema_pedido import (
@@ -1275,5 +1276,283 @@ class PedidoAdminService:
                 "Desvinculação de entregador permitida apenas para pedidos de delivery/retirada.",
             )
         return self.pedido_service.desvincular_entregador(pedido_id)
+
+    # ------------------------------------------------------------------ #
+    # Troca de tipo (mesa/balcão/delivery)
+    # ------------------------------------------------------------------ #
+    def trocar_tipo_pedido(
+        self,
+        *,
+        pedido_id: int,
+        payload: PedidoTrocarTipoRequest,
+        user_id: Optional[int] = None,
+    ) -> PedidoResponseCompleto:
+        """
+        Troca a modalidade do pedido entre DELIVERY, MESA e BALCAO.
+
+        Regras principais:
+        - Só permite troca para pedidos em aberto (não CANCELADO/ENTREGUE).
+        - Ao trocar para DELIVERY: exige endereco_id e garante cliente_id.
+        - Ao trocar para MESA: exige mesa_codigo.
+        - Ao trocar para BALCAO: mesa_codigo é opcional.
+        - Atualiza mesa (ocupa/libera) conforme necessidade.
+        - Recalcula totais/taxas após a troca.
+        """
+        import asyncio
+        import threading
+        from decimal import Decimal
+
+        from app.api.cadastros.models.model_mesa import StatusMesa
+        from app.api.cadastros.repositories.repo_mesas import MesaRepository
+        from app.api.notifications.core.ws_events import WSEvents
+        from app.api.notifications.core.websocket_manager import websocket_manager
+        from app.api.pedidos.models.model_pedido_historico_unificado import TipoOperacaoPedido
+        from app.api.pedidos.models.model_pedido_unificado import TipoEntrega as TipoEntregaModel
+
+        pedido = self._get_pedido(pedido_id)
+
+        status_atual = pedido.status.value if hasattr(pedido.status, "value") else str(pedido.status)
+        if status_atual in {PedidoStatusEnum.C.value, PedidoStatusEnum.E.value}:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "Não é possível trocar o tipo de um pedido cancelado ou entregue.",
+            )
+
+        tipo_atual = self._to_tipo_entrega_enum(pedido.tipo_entrega)
+        if payload.tipo_pedido == TipoPedidoCheckoutEnum.DELIVERY:
+            tipo_novo = TipoEntregaEnum.DELIVERY
+        elif payload.tipo_pedido == TipoPedidoCheckoutEnum.MESA:
+            tipo_novo = TipoEntregaEnum.MESA
+        elif payload.tipo_pedido == TipoPedidoCheckoutEnum.BALCAO:
+            tipo_novo = TipoEntregaEnum.BALCAO
+        else:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Tipo de pedido inválido para troca.")
+
+        # Normaliza dados atuais para comparar
+        mesa_repo = MesaRepository(self.db)
+        old_mesa_id = getattr(pedido, "mesa_id", None)
+
+        # Resolver mesa_id (quando aplicável)
+        new_mesa_id = None
+        if tipo_novo == TipoEntregaEnum.MESA:
+            try:
+                codigo = Decimal(str(payload.mesa_codigo))
+            except Exception:
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, "mesa_codigo inválido.")
+            mesa = mesa_repo.get_by_codigo(codigo, empresa_id=int(pedido.empresa_id))
+            if mesa is None:
+                raise HTTPException(status.HTTP_404_NOT_FOUND, "Mesa não encontrada para a empresa informada.")
+            new_mesa_id = int(mesa.id)
+        elif tipo_novo == TipoEntregaEnum.BALCAO:
+            if payload.mesa_codigo:
+                try:
+                    codigo = Decimal(str(payload.mesa_codigo))
+                except Exception:
+                    raise HTTPException(status.HTTP_400_BAD_REQUEST, "mesa_codigo inválido.")
+                mesa = mesa_repo.get_by_codigo(codigo, empresa_id=int(pedido.empresa_id))
+                if mesa is None:
+                    raise HTTPException(status.HTTP_404_NOT_FOUND, "Mesa não encontrada para a empresa informada.")
+                new_mesa_id = int(mesa.id)
+
+        # Resolver cliente/endereço para delivery
+        endereco = None
+        if tipo_novo == TipoEntregaEnum.DELIVERY:
+            cliente_id_target = int(getattr(pedido, "cliente_id", 0) or 0) or (int(payload.cliente_id) if payload.cliente_id else 0)
+            if not cliente_id_target:
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    "cliente_id é obrigatório para trocar para DELIVERY quando o pedido não possui cliente_id.",
+                )
+            if payload.endereco_id is None:
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, "endereco_id é obrigatório para DELIVERY.")
+            endereco = self.repo.get_endereco(int(payload.endereco_id))
+            if not endereco:
+                raise HTTPException(status.HTTP_404_NOT_FOUND, "Endereço não encontrado.")
+            if getattr(endereco, "cliente_id", None) is not None and int(endereco.cliente_id) != int(cliente_id_target):
+                raise HTTPException(status.HTTP_400_BAD_REQUEST, "Endereço não pertence ao cliente informado.")
+
+            # Garante cliente_id no pedido
+            pedido.cliente_id = int(cliente_id_target)
+
+        # Se não mudou de tipo e também não mudou a mesa/endereço relevante, é idempotente.
+        if tipo_atual == tipo_novo:
+            if tipo_novo in {TipoEntregaEnum.MESA, TipoEntregaEnum.BALCAO}:
+                if int(old_mesa_id or 0) == int(new_mesa_id or 0):
+                    pedido_atualizado = self.repo.get_pedido(pedido_id)
+                    return self.pedido_service.response_builder.pedido_to_response_completo(pedido_atualizado)
+            if tipo_novo == TipoEntregaEnum.DELIVERY:
+                if int(getattr(pedido, "endereco_id", 0) or 0) == int(payload.endereco_id or 0):
+                    pedido_atualizado = self.repo.get_pedido(pedido_id)
+                    return self.pedido_service.response_builder.pedido_to_response_completo(pedido_atualizado)
+
+        # Aplica troca e ajusta campos dependentes
+        if tipo_novo == TipoEntregaEnum.DELIVERY:
+            pedido.tipo_entrega = TipoEntregaModel.DELIVERY.value
+            pedido.mesa_id = None
+            # Campos de delivery
+            pedido.endereco_id = int(payload.endereco_id)
+            pedido.endereco = endereco
+            # Limpa campos específicos de mesa/balcão
+            pedido.num_pessoas = None
+            # Mantém observacoes/observacao_geral como estão (não migrar texto automaticamente)
+        else:
+            # MESA ou BALCAO
+            pedido.tipo_entrega = (
+                TipoEntregaModel.MESA.value if tipo_novo == TipoEntregaEnum.MESA else TipoEntregaModel.BALCAO.value
+            )
+            pedido.mesa_id = new_mesa_id
+            # Limpa campos de delivery
+            pedido.endereco_id = None
+            pedido.endereco = None
+            pedido.endereco_snapshot = None
+            pedido.endereco_geo = None
+            pedido.previsao_entrega = None
+            pedido.distancia_km = None
+            pedido.entregador_id = None
+            # Num pessoas (apenas mesa)
+            if tipo_novo == TipoEntregaEnum.MESA and payload.num_pessoas is not None:
+                pedido.num_pessoas = int(payload.num_pessoas)
+            if tipo_novo == TipoEntregaEnum.BALCAO:
+                pedido.num_pessoas = None
+
+        # Se troca envolve mudança de mesa, ocupa/libera conforme necessário
+        try:
+            if tipo_novo in {TipoEntregaEnum.MESA, TipoEntregaEnum.BALCAO} and new_mesa_id is not None:
+                mesa_repo.ocupar_mesa(int(new_mesa_id), empresa_id=int(pedido.empresa_id))
+        except ValueError as e:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e))
+
+        # Recalcula totals (inclui snapshot/geo quando delivery via editar_pedido_parcial-like)
+        if tipo_novo == TipoEntregaEnum.DELIVERY:
+            # Monta snapshot/geo do endereço (mesma lógica do editar_pedido_parcial)
+            try:
+                endereco_latitude = float(endereco.latitude) if getattr(endereco, "latitude", None) else None
+                endereco_longitude = float(endereco.longitude) if getattr(endereco, "longitude", None) else None
+                if endereco_latitude and endereco_longitude:
+                    from geoalchemy2 import WKTElement
+                    pedido.endereco_geo = WKTElement(
+                        f"POINT({endereco_longitude} {endereco_latitude})",
+                        srid=4326,
+                    )
+                else:
+                    pedido.endereco_geo = None
+                from app.utils.database_utils import now_trimmed
+                pedido.endereco_snapshot = {
+                    "id": endereco.id,
+                    "logradouro": endereco.logradouro,
+                    "numero": endereco.numero,
+                    "complemento": endereco.complemento,
+                    "bairro": endereco.bairro,
+                    "cidade": endereco.cidade,
+                    "estado": endereco.estado,
+                    "cep": endereco.cep,
+                    "latitude": endereco_latitude,
+                    "longitude": endereco_longitude,
+                    "is_principal": endereco.is_principal,
+                    "cliente_id": endereco.cliente_id,
+                    "snapshot_em": str(now_trimmed()),
+                }
+            except Exception:
+                # Best-effort: não falhar a troca por inconsistência em lat/long
+                pedido.endereco_geo = None
+                pedido.endereco_snapshot = pedido.endereco_snapshot if isinstance(pedido.endereco_snapshot, dict) else None
+
+        self.db.flush()
+        self.pedido_service._recalcular_pedido(pedido)
+
+        # Histórico (sem enum específico para "troca tipo")
+        try:
+            descricao = f"Tipo do pedido alterado de {tipo_atual.value} para {tipo_novo.value}"
+            obs_parts: list[str] = []
+            if tipo_novo == TipoEntregaEnum.DELIVERY:
+                obs_parts.append(f"endereco_id={int(payload.endereco_id)}")
+                obs_parts.append(f"cliente_id={int(pedido.cliente_id)}")
+            else:
+                if new_mesa_id is not None:
+                    obs_parts.append(f"mesa_id={int(new_mesa_id)}")
+            self.repo.add_historico(
+                pedido_id=pedido.id,
+                tipo_operacao=TipoOperacaoPedido.STATUS_ALTERADO,
+                descricao=descricao,
+                observacoes=" | ".join(obs_parts) if obs_parts else None,
+                usuario_id=user_id,
+            )
+            self.repo.commit()
+        except Exception:
+            # Não quebra se falhar histórico
+            self.repo.commit()
+
+        # Liberação de mesa anterior (se saiu de uma mesa e não há mais pedidos abertos nela)
+        def _maybe_liberar_mesa(mesa_id: int | None) -> None:
+            if mesa_id is None:
+                return
+            try:
+                pedidos_mesa_abertos = self.repo.list_abertos_by_mesa(
+                    int(mesa_id),
+                    TipoEntregaModel.MESA,
+                    empresa_id=int(pedido.empresa_id),
+                )
+                pedidos_balcao_abertos = self.repo.list_abertos_by_mesa(
+                    int(mesa_id),
+                    TipoEntregaModel.BALCAO,
+                    empresa_id=int(pedido.empresa_id),
+                )
+                if len(pedidos_mesa_abertos) == 0 and len(pedidos_balcao_abertos) == 0:
+                    mesa_db = mesa_repo.get_by_id(int(mesa_id))
+                    if mesa_db and int(getattr(mesa_db, "empresa_id", 0) or 0) == int(pedido.empresa_id):
+                        if getattr(mesa_db, "status", None) == StatusMesa.OCUPADA:
+                            mesa_repo.liberar_mesa(int(mesa_id), empresa_id=int(pedido.empresa_id))
+            except Exception:
+                return
+
+        if old_mesa_id is not None:
+            # Se o novo tipo não usa a mesa antiga, tenta liberar.
+            if tipo_novo == TipoEntregaEnum.DELIVERY or (new_mesa_id is not None and int(new_mesa_id) != int(old_mesa_id)) or (new_mesa_id is None):
+                _maybe_liberar_mesa(int(old_mesa_id))
+
+        pedido_atualizado = self.repo.get_pedido(pedido.id)
+
+        # WS: notifica frontend para refetch/atualizar kanban/listas
+        try:
+            empresa_id_str = str(pedido_atualizado.empresa_id) if pedido_atualizado.empresa_id is not None else ""
+            if empresa_id_str:
+                tipo_entrega_val = (
+                    pedido_atualizado.tipo_entrega.value
+                    if hasattr(pedido_atualizado.tipo_entrega, "value")
+                    else str(pedido_atualizado.tipo_entrega)
+                )
+                status_val = (
+                    pedido_atualizado.status.value
+                    if hasattr(pedido_atualizado.status, "value")
+                    else str(pedido_atualizado.status)
+                )
+                numero_pedido_val = getattr(pedido_atualizado, "numero_pedido", None)
+                ws_payload = {
+                    "pedido_id": str(pedido_atualizado.id),
+                    "tipo_entrega": tipo_entrega_val,
+                    "status": status_val,
+                }
+                if numero_pedido_val:
+                    ws_payload["numero_pedido"] = str(numero_pedido_val)
+
+                def _emit_ws() -> None:
+                    try:
+                        asyncio.run(
+                            websocket_manager.emit_event(
+                                event=WSEvents.PEDIDO_ATUALIZADO,
+                                scope="empresa",
+                                empresa_id=empresa_id_str,
+                                payload=ws_payload,
+                                required_route="/pedidos",
+                            )
+                        )
+                    except Exception:
+                        return
+
+                threading.Thread(target=_emit_ws, daemon=True).start()
+        except Exception:
+            pass
+
+        return self.pedido_service.response_builder.pedido_to_response_completo(pedido_atualizado)
 
 

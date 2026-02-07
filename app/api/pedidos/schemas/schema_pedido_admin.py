@@ -11,6 +11,7 @@ from app.api.pedidos.schemas.schema_pedido import (
     ItemComplementoRequest,
     ItemPedidoRequest,
     MeioPagamentoParcialRequest,
+    TipoPedidoCheckoutEnum,
 )
 from app.api.shared.schemas.schema_shared_enums import PedidoStatusEnum, TipoEntregaEnum
 
@@ -150,5 +151,46 @@ class PedidoEntregadorRequest(BaseModel):
         default=None,
         description="Identificador do entregador; null desvincula.",
     )
+
+
+class PedidoTrocarTipoRequest(BaseModel):
+    """
+    Troca o tipo/modalidade do pedido entre DELIVERY, MESA e BALCAO.
+
+    Observações:
+    - Para `DELIVERY`, é obrigatório informar `endereco_id`.
+    - Para `MESA`, é obrigatório informar `mesa_codigo`.
+    - Para `BALCAO`, `mesa_codigo` é opcional.
+    - Se o pedido ainda não tiver `cliente_id` e o novo tipo for `DELIVERY`,
+      informe `cliente_id` para vincular o cliente e validar o endereço.
+    """
+
+    tipo_pedido: TipoPedidoCheckoutEnum = Field(..., description="Novo tipo do pedido (DELIVERY, MESA, BALCAO).")
+    endereco_id: Optional[int] = Field(default=None, gt=0, description="Obrigatório quando tipo_pedido=DELIVERY.")
+    cliente_id: Optional[int] = Field(
+        default=None,
+        gt=0,
+        description="Obrigatório para trocar para DELIVERY quando o pedido ainda não possui cliente_id.",
+    )
+    mesa_codigo: Optional[str] = Field(
+        default=None,
+        description="Obrigatório quando tipo_pedido=MESA. Opcional quando tipo_pedido=BALCAO.",
+    )
+    num_pessoas: Optional[int] = Field(
+        default=None,
+        ge=1,
+        le=50,
+        description="Opcional para tipo_pedido=MESA (atualiza num_pessoas).",
+    )
+
+    @model_validator(mode="after")
+    def _validar_campos_por_tipo(self):
+        if self.tipo_pedido == TipoPedidoCheckoutEnum.DELIVERY:
+            if self.endereco_id is None:
+                raise ValueError("Campo 'endereco_id' é obrigatório quando tipo_pedido=DELIVERY.")
+        if self.tipo_pedido == TipoPedidoCheckoutEnum.MESA:
+            if not self.mesa_codigo:
+                raise ValueError("Campo 'mesa_codigo' é obrigatório quando tipo_pedido=MESA.")
+        return self
 
 
