@@ -97,6 +97,7 @@ def listar_empresas_publicas(
             horarios_funcionamento=horarios,
             landingpage_store=empresa.landingpage_store,
         )
+        
     
     # Caso contrário, retorna list
     return [
