@@ -835,11 +835,66 @@ class PedidoBalcaoService:
             self.db.commit()
             self.db.refresh(pedido_antes)
 
+        valor_total = _dec(getattr(pedido_antes, "valor_total", 0) or 0)
+
+        # Se o pedido já estiver totalmente pago (via transações PAGO/AUTORIZADO),
+        # não criamos/atualizamos novas transações ao fechar a conta.
+        pagamento_repo = PagamentoRepository(self.db)
+        txs = pagamento_repo.list_by_pedido_id(pedido_antes.id)
+        valor_pago = _dec(0)
+        for tx in txs:
+            st = str(getattr(tx, "status", "")).upper()
+            if st in {"PAGO", "AUTORIZADO"}:
+                try:
+                    valor_pago += _dec(getattr(tx, "valor", 0) or 0)
+                except Exception:
+                    continue
+        if valor_pago >= valor_total:
+            # Fecha o pedido (muda status para ENTREGUE)
+            pedido = self.repo.fechar_conta(pedido_id)
+
+            # Se o pedido tinha mesa associada, verifica se há outros pedidos abertos antes de liberar
+            if mesa_id is not None:
+                pedidos_balcao_abertos = self.repo.list_abertos_by_mesa(
+                    mesa_id, TipoEntrega.BALCAO, empresa_id=pedido.empresa_id
+                )
+                from app.api.pedidos.repositories.repo_pedidos import PedidoRepository
+
+                repo_mesa_pedidos = PedidoRepository(self.db, produto_contract=self.produto_contract)
+                pedidos_mesa_abertos = repo_mesa_pedidos.list_abertos_by_mesa(
+                    mesa_id, TipoEntrega.MESA, empresa_id=pedido.empresa_id
+                )
+
+                if len(pedidos_balcao_abertos) == 0 and len(pedidos_mesa_abertos) == 0:
+                    mesa = self.repo_mesa.get_by_id(mesa_id)
+                    if mesa.empresa_id != pedido.empresa_id:
+                        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Mesa não pertence à empresa")
+                    if mesa.status == StatusMesa.OCUPADA:
+                        self.repo_mesa.liberar_mesa(mesa_id, empresa_id=pedido.empresa_id)
+
+            # Registra histórico
+            observacoes_historico = "Pagamento já registrado (fechando conta sem recriar transações)"
+            if payload and getattr(payload, "meio_pagamento_id", None):
+                observacoes_historico += f" | Meio pagamento: {payload.meio_pagamento_id}"
+            if getattr(pedido, "troco_para", None) is not None:
+                observacoes_historico += f" | Troco para: {float(pedido.troco_para):.2f}"
+
+            self.repo.add_historico(
+                pedido_id=pedido_id,
+                tipo_operacao=TipoOperacaoPedido.PEDIDO_FECHADO,
+                status_anterior=status_anterior,
+                status_novo=self._status_value(pedido.status),
+                descricao=f"Pedido {pedido.numero_pedido} fechado",
+                observacoes=observacoes_historico,
+                usuario_id=usuario_id,
+            )
+            self.repo.commit()
+            pedido = self.repo.get(pedido_id, TipoEntrega.BALCAO)
+            return PedidoResponseBuilder.pedido_to_response_completo(pedido)
+
         meio_pagamento_id = getattr(pedido_antes, "meio_pagamento_id", None)
         if meio_pagamento_id is None:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Meio de pagamento é obrigatório para fechar conta.")
-
-        valor_total = _dec(getattr(pedido_antes, "valor_total", 0) or 0)
 
         # Se o frontend mandou "valor recebido" em DINHEIRO (valor > total) dentro de `pagamentos`,
         # normalizamos: transação registra apenas o total e persistimos `troco_para` como valor recebido.
@@ -885,9 +940,6 @@ class PedidoBalcaoService:
                         "soma_pagamentos": float(soma_pagamentos),
                     },
                 )
-
-        pagamento_repo = PagamentoRepository(self.db)
-        txs = pagamento_repo.list_by_pedido_id(pedido_antes.id)
 
         for p in pagamentos_para_fechar:
             mp_id = int(p["meio_pagamento_id"])

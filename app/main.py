@@ -44,21 +44,27 @@ BASE_DIR = Path(__file__).resolve().parent
 STATIC_IMG_DIR = BASE_DIR / "static" / "img"
 STATIC_IMG_DIR.mkdir(parents=True, exist_ok=True)
 
-BASE_URL = SETTINGS_BASE_URL or os.getenv("BASE_URL", "https://teste2.mensuraapi.com.br")
+# `BASE_URL` é usado apenas para documentações (OpenAPI `servers`).
+# Se estiver vazio, o Swagger usa a própria origem (host atual), o que evita
+# "não conecta" quando o domínio default não está acessível no ambiente.
+BASE_URL = (SETTINGS_BASE_URL or os.getenv("BASE_URL", "")).strip()
 # ──────────────────────────
 # Instância FastAPI
 # ──────────────────────────
-app = FastAPI(
-    title="API de Varejo",
-    version="1.0.0",
-    description="Endpoints de relatórios, metas, dashboard e compras",
-    docs_url=("/swagger" if ENABLE_DOCS else None),
-    redoc_url=("/redoc" if ENABLE_DOCS else None),
+fastapi_kwargs = {
+    "title": "API de Varejo",
+    "version": "1.0.0",
+    "description": "Endpoints de relatórios, metas, dashboard e compras",
+    "docs_url": ("/swagger" if ENABLE_DOCS else None),
+    "redoc_url": ("/redoc" if ENABLE_DOCS else None),
+    "openapi_url": ("/openapi.json" if ENABLE_DOCS else None),
+    # Evita redirecionamento 307 quando URL não termina com /
+    "redirect_slashes": False,
+}
+if BASE_URL:
+    fastapi_kwargs["servers"] = [{"url": BASE_URL, "description": "Base URL do ambiente"}]
 
-    openapi_url=("/openapi.json" if ENABLE_DOCS else None),
-    servers=[{"url": BASE_URL, "description": "Base URL do ambiente"}],
-    redirect_slashes=False  # Evita redirecionamento 307 quando URL não termina com /
-)
+app = FastAPI(**fastapi_kwargs)
 
 # ───────────────────────────
 # Exception Handlers Globais

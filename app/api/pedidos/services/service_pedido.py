@@ -1237,13 +1237,20 @@ class PedidoService:
         if not pedido:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado")
 
-        # Impede setar status E (Entregue) para pedidos de delivery
-        # Delivery deve usar o endpoint fechar-conta para marcar como pago
-        if novo_status == PedidoStatusEnum.E:
-            if pedido.is_delivery() or pedido.is_retirada():
+        # Para DELIVERY/RETIRADA, só permitimos marcar como ENTREGUE se o pedido já estiver pago.
+        # Caso contrário, o fluxo correto é usar o endpoint fechar-conta (que registra a transação).
+        if novo_status == PedidoStatusEnum.E and (pedido.is_delivery() or pedido.is_retirada()):
+            from app.api.pedidos.services.service_pedido_helpers import build_pagamento_resumo
+
+            pagamento_resumo = build_pagamento_resumo(pedido)
+            ja_pago = bool(pagamento_resumo and getattr(pagamento_resumo, "esta_pago", False))
+            if not ja_pago:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Não é possível setar status 'Entregue' para pedidos de delivery/retirada. Use o endpoint 'fechar-conta' para marcar o pedido como pago."
+                    detail=(
+                        "Não é possível setar status 'Entregue' para pedidos de delivery/retirada sem pagamento confirmado. "
+                        "Use o endpoint 'fechar-conta' (ou marque como pago) antes de entregar."
+                    ),
                 )
 
         observacoes = None

@@ -733,6 +733,49 @@ class PedidoAdminService:
         if payload and payload.troco_para is not None:
             pedido.troco_para = payload.troco_para
 
+        # Se o pedido já estiver totalmente pago (via transações PAGO/AUTORIZADO),
+        # podemos marcar como ENTREGUE sem recriar transações e sem exigir meio_pagamento_id no payload.
+        valor_total = _dec(getattr(pedido, "valor_total", 0) or 0)
+        try:
+            from app.api.cardapio.repositories.repo_pagamentos import PagamentoRepository
+
+            pagamento_repo = PagamentoRepository(self.db)
+            txs_existentes = pagamento_repo.list_by_pedido_id(pedido.id)
+            valor_pago = _dec(0)
+            for tx in txs_existentes:
+                st = str(getattr(tx, "status", "")).upper()
+                if st in {"PAGO", "AUTORIZADO"}:
+                    try:
+                        valor_pago += _dec(getattr(tx, "valor", 0) or 0)
+                    except Exception:
+                        continue
+            if valor_pago >= valor_total:
+                # Persiste eventuais ajustes do payload (troco/snapshot/meio_pagamento_id) antes de finalizar
+                self.db.commit()
+                self.db.refresh(pedido)
+
+                meio_pagamento_nome = pedido.meio_pagamento.nome if getattr(pedido, "meio_pagamento", None) else "N/A"
+                observacoes = f"Conta fechada (já pago). Meio de pagamento: {meio_pagamento_nome}"
+                if getattr(pedido, "troco_para", None) is not None:
+                    observacoes += f". Troco para: R$ {float(pedido.troco_para):.2f}"
+
+                status_anterior = pedido.status
+                pedido.status = PedidoStatusEnum.E.value
+                self.repo.add_status_historico(
+                    pedido.id,
+                    PedidoStatusEnum.E.value,
+                    motivo="Conta fechada (já pago)",
+                    observacoes=observacoes,
+                    criado_por_id=None,
+                )
+                self.db.flush()
+                self.db.commit()
+                self.db.refresh(pedido)
+                return self.pedido_service.response_builder.pedido_to_response_completo(pedido)
+        except Exception:
+            # Best-effort: se falhar a checagem, segue o fluxo padrão (registrar transação)
+            pass
+
         # Precisa ter meio de pagamento para registrar transação
         meio_pagamento_id = getattr(pedido, "meio_pagamento_id", None)
         if meio_pagamento_id is None:
@@ -748,8 +791,6 @@ class PedidoAdminService:
             PagamentoStatusEnum,
         )
         from decimal import Decimal
-
-        valor_total = _dec(getattr(pedido, "valor_total", 0) or 0)
 
         # Se o frontend mandou "valor recebido" em DINHEIRO (valor > total) dentro de `pagamentos`,
         # normalizamos: transação registra apenas o total e persistimos `troco_para` como valor recebido.
