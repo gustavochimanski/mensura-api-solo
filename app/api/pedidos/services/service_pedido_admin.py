@@ -735,21 +735,11 @@ class PedidoAdminService:
 
         # Se o pedido já estiver totalmente pago (via transações PAGO/AUTORIZADO),
         # podemos marcar como ENTREGUE sem recriar transações e sem exigir meio_pagamento_id no payload.
-        valor_total = _dec(getattr(pedido, "valor_total", 0) or 0)
         try:
-            from app.api.cardapio.repositories.repo_pagamentos import PagamentoRepository
+            from app.api.pedidos.services.service_pedido_helpers import build_pagamento_resumo
 
-            pagamento_repo = PagamentoRepository(self.db)
-            txs_existentes = pagamento_repo.list_by_pedido_id(pedido.id)
-            valor_pago = _dec(0)
-            for tx in txs_existentes:
-                st = str(getattr(tx, "status", "")).upper()
-                if st in {"PAGO", "AUTORIZADO"}:
-                    try:
-                        valor_pago += _dec(getattr(tx, "valor", 0) or 0)
-                    except Exception:
-                        continue
-            if valor_pago >= valor_total:
+            pagamento_resumo = build_pagamento_resumo(pedido)
+            if pagamento_resumo and getattr(pagamento_resumo, "esta_pago", False):
                 # Persiste eventuais ajustes do payload (troco/snapshot/meio_pagamento_id) antes de finalizar
                 self.db.commit()
                 self.db.refresh(pedido)

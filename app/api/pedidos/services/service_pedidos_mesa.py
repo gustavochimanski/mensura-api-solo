@@ -797,17 +797,10 @@ class PedidoMesaService:
 
         # Se o pedido já estiver totalmente pago (via transações PAGO/AUTORIZADO),
         # não criamos/atualizamos novas transações ao fechar a conta.
-        pagamento_repo = PagamentoRepository(self.db)
-        txs = pagamento_repo.list_by_pedido_id(pedido_antes.id)
-        valor_pago = _dec(0)
-        for tx in txs:
-            st = str(getattr(tx, "status", "")).upper()
-            if st in {"PAGO", "AUTORIZADO"}:
-                try:
-                    valor_pago += _dec(getattr(tx, "valor", 0) or 0)
-                except Exception:
-                    continue
-        if valor_pago >= valor_total:
+        from app.api.pedidos.services.service_pedido_helpers import build_pagamento_resumo
+
+        pagamento_resumo = build_pagamento_resumo(pedido_antes)
+        if pagamento_resumo and getattr(pagamento_resumo, "esta_pago", False):
             # Fecha o pedido (muda status para ENTREGUE)
             pedido = self.repo.fechar_conta(pedido_id)
             status_novo = pedido.status.value if hasattr(pedido.status, "value") else str(pedido.status)

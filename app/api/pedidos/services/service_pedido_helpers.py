@@ -147,16 +147,42 @@ def build_pagamento_resumo(pedido: PedidoUnificadoModel) -> PedidoPagamentoResum
     # - Ter meio de pagamento NÃO implica que está pago.
     # - Considera "pago" APENAS via transações (status PAGO/AUTORIZADO).
     #   O campo `pago` não é mais persistido no pedido.
+    #
+    # Importante: para DINHEIRO, o "valor recebido" pode ser maior que o total (troco).
+    # O fluxo correto normaliza a transação para o valor_total e guarda o recebido em `troco_para`,
+    # mas aceitamos (best-effort) registros antigos/inconsistentes onde a transação ficou > total,
+    # desde que seja um único pagamento em DINHEIRO.
     valor_pago = Decimal("0.00")
+    paid_txs = []
     for tx in transacoes:
         st = _safe_enum(PagamentoStatusEnum, getattr(tx, "status", None))
         if st in {PagamentoStatusEnum.PAGO, PagamentoStatusEnum.AUTORIZADO}:
+            paid_txs.append(tx)
             try:
                 valor_pago += _dec(getattr(tx, "valor", 0) or 0)
             except Exception:
                 continue
-    tx_pago_total = valor_pago >= _dec(valor_total)
-    esta_pago = tx_pago_total
+
+    total_dec = _dec(valor_total)
+    if valor_pago == total_dec:
+        esta_pago = True
+    elif valor_pago < total_dec:
+        esta_pago = False
+    else:
+        # valor_pago > total: só é considerado "pago" se for um único pagamento em DINHEIRO.
+        def _tx_is_dinheiro(tx) -> bool:
+            try:
+                from app.api.cadastros.schemas.schema_meio_pagamento import MeioPagamentoTipoEnum
+
+                mp = getattr(tx, "meio_pagamento", None)
+                tipo = getattr(mp, "tipo", None)
+                if isinstance(tipo, MeioPagamentoTipoEnum):
+                    return tipo == MeioPagamentoTipoEnum.DINHEIRO
+                return str(tipo) == "DINHEIRO"
+            except Exception:
+                return False
+
+        esta_pago = len(paid_txs) == 1 and _tx_is_dinheiro(paid_txs[0])
 
     meio_pagamento_nome = None
     if meio_pagamento_rel is not None:
