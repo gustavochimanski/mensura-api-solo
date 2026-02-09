@@ -571,14 +571,23 @@ class PedidoAdminService:
         ]
         if pagamentos_payload:
             soma_pagamentos = sum((p["valor"] for p in pagamentos_payload), _dec(0))
-            if soma_pagamentos != valor_total:
+            # Considera pagamentos já marcados via transações (PAGO/AUTORIZADO)
+            valor_pago_existente = _dec(0)
+            for tx in txs:
+                if str(getattr(tx, "status", "")).upper() in {"PAGO", "AUTORIZADO"}:
+                    valor_pago_existente += _dec(getattr(tx, "valor", 0) or 0)
+
+            total_pos_aplicacao = valor_pago_existente + soma_pagamentos
+            if total_pos_aplicacao != valor_total:
                 raise HTTPException(
                     status.HTTP_400_BAD_REQUEST,
                     detail={
                         "code": "PAGAMENTOS_INVALIDOS",
-                        "message": "Soma dos pagamentos deve ser igual ao valor total do pedido para marcar como pago.",
+                        "message": "Soma dos pagamentos (incluindo transações já pagas) deve igualar o valor total do pedido para marcar como pago.",
                         "valor_total": float(valor_total),
-                        "soma_pagamentos": float(soma_pagamentos),
+                        "soma_pagamentos_enviados": float(soma_pagamentos),
+                        "valor_pago_existente": float(valor_pago_existente),
+                        "soma_total": float(total_pos_aplicacao),
                     },
                 )
         else:
@@ -820,14 +829,25 @@ class PedidoAdminService:
         ]
         if pagamentos_payload:
             soma_pagamentos = sum((p["valor"] for p in pagamentos_payload), _dec(0))
-            if soma_pagamentos != valor_total:
+            # Considera pagamentos já marcados via transações (PAGO/AUTORIZADO)
+            pagamento_repo_tmp = PagamentoRepository(self.db)
+            txs_existentes = pagamento_repo_tmp.list_by_pedido_id(pedido.id)
+            valor_pago_existente = _dec(0)
+            for tx in txs_existentes:
+                if str(getattr(tx, "status", "")).upper() in {"PAGO", "AUTORIZADO"}:
+                    valor_pago_existente += _dec(getattr(tx, "valor", 0) or 0)
+
+            total_pos_aplicacao = valor_pago_existente + soma_pagamentos
+            if total_pos_aplicacao != valor_total:
                 raise HTTPException(
                     status.HTTP_400_BAD_REQUEST,
                     detail={
                         "code": "PAGAMENTOS_INVALIDOS",
-                        "message": "Soma dos pagamentos deve ser igual ao valor total do pedido para fechar conta.",
+                        "message": "Soma dos pagamentos (incluindo transações já pagas) deve igualar o valor total do pedido para fechar conta.",
                         "valor_total": float(valor_total),
-                        "soma_pagamentos": float(soma_pagamentos),
+                        "soma_pagamentos_enviados": float(soma_pagamentos),
+                        "valor_pago_existente": float(valor_pago_existente),
+                        "soma_total": float(total_pos_aplicacao),
                     },
                 )
 
