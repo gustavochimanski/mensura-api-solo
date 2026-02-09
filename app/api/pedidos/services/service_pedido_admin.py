@@ -785,6 +785,8 @@ class PedidoAdminService:
         # Se o frontend mandou "valor recebido" em DINHEIRO (valor > total) dentro de `pagamentos`,
         # normalizamos: transação registra apenas o total e persistimos `troco_para` como valor recebido.
         troco_para_derivado = None
+        # Valor total do pedido em Decimal (compatível com helpers)
+        valor_total = _dec(getattr(pedido, "valor_total", 0) or 0)
         if pagamentos_payload:
             def _is_dinheiro(mp_id: int) -> bool:
                 mp = MeioPagamentoService(self.db).get(int(mp_id))
