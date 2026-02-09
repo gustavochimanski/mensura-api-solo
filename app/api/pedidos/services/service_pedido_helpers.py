@@ -169,7 +169,7 @@ def build_pagamento_resumo(pedido: PedidoUnificadoModel) -> PedidoPagamentoResum
     elif valor_pago < total_dec:
         esta_pago = False
     else:
-        # valor_pago > total: só é considerado "pago" se for um único pagamento em DINHEIRO.
+        # valor_pago > total: só é considerao "pago" se for um único pagamento em DINHEIRO.
         def _tx_is_dinheiro(tx) -> bool:
             try:
                 from app.api.cadastros.schemas.schema_meio_pagamento import MeioPagamentoTipoEnum
