@@ -29,17 +29,27 @@ class GoogleMapsAdapter:
             return None
             
         try:
+            # Se for CEP (formato 8 dígitos ou 5-3 com hífen), usar components=postal_code para maior precisão
+            import re
+            cep_match = re.match(r"^\s*(\d{5}-?\d{3}|\d{8})\s*$", endereco or "")
+            params = {
+                "key": self.api_key,
+                "region": "br",  # Dá preferência ao Brasil
+                "language": "pt-BR"
+            }
+            if cep_match:
+                cep = cep_match.group(1).replace("-", "")
+                params["components"] = f"postal_code:{cep}|country:br"
+                params["address"] = cep
+                logger.info(f"[GoogleMapsAdapter] Resolver coordenadas por CEP detectado: {cep}")
+            else:
+                params.update({
+                    "address": endereco,
+                    "components": "country:br",  # Restringe busca APENAS ao Brasil
+                })
+
             with httpx.Client(timeout=10.0) as client:
-                response = client.get(
-                    self.BASE_URL,
-                    params={
-                        "address": endereco,
-                        "key": self.api_key,
-                        "region": "br",  # Dá preferência ao Brasil
-                        "components": "country:br",  # Restringe busca APENAS ao Brasil
-                        "language": "pt-BR"
-                    }
-                )
+                response = client.get(self.BASE_URL, params=params)
             response.raise_for_status()
             data = response.json()
             status_code = data.get("status")
@@ -285,17 +295,27 @@ class GoogleMapsAdapter:
             max_results = 10
 
         try:
+            # Detecta CEP (formato 8 dígitos ou 5-3 com hífen) e usa components=postal_code para melhorar resultados
+            import re
+            cep_match = re.match(r"^\s*(\d{5}-?\d{3}|\d{8})\s*$", texto_norm)
+            params = {
+                "key": self.api_key,
+                "region": "br",
+                "language": "pt-BR",
+            }
+            if cep_match:
+                cep = cep_match.group(1).replace("-", "")
+                params["components"] = f"postal_code:{cep}|country:br"
+                params["address"] = cep
+                logger.info(f"[GoogleMapsAdapter] Buscar endereços por CEP detectado: {cep}")
+            else:
+                params.update({
+                    "address": texto_norm,
+                    "components": "country:br",
+                })
+
             with httpx.Client(timeout=10.0) as client:
-                response = client.get(
-                    self.BASE_URL,
-                    params={
-                        "address": texto_norm,
-                        "key": self.api_key,
-                        "region": "br",  # Dá preferência ao Brasil
-                        "components": "country:br",  # Restringe busca APENAS ao Brasil
-                        "language": "pt-BR",
-                    },
-                )
+                response = client.get(self.BASE_URL, params=params)
             response.raise_for_status()
             data = response.json()
             status_code = data.get("status")
