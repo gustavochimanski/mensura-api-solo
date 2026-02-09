@@ -120,7 +120,12 @@ def vincular_complementos_produto(
     db: Session = Depends(get_db),
 ):
     """Vincula múltiplos complementos a um produto."""
-    logger.info(f"[Complementos] Vincular - produto={cod_barras} complementos={req.complemento_ids}")
+    # Log do payload recebido (mostra o JSON do body para debug)
+    try:
+        payload = req.model_dump()
+    except Exception:
+        payload = str(req)
+    logger.info(f"[Complementos] Vincular - produto={cod_barras} payload={payload} complementos={req.complemento_ids}")
     service = ComplementoService(db)
     return service.vincular_complementos_produto(cod_barras, req)
 

@@ -165,8 +165,9 @@ def build_pagamento_resumo(pedido: PedidoUnificadoModel) -> PedidoPagamentoResum
 
     total_dec = _dec(valor_total)
     if valor_pago == total_dec:
-        esta_pago = True
         
+        esta_pago = True
+
     elif valor_pago < total_dec:
         esta_pago = False
     else:
