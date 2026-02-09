@@ -21,7 +21,7 @@ def listar_home(
     return HomeService(db, vitrine_contract=vitrine_contract).montar_home(empresa_id, is_home=is_home)
 
 # 🔁 ATUALIZADO: aceita cod_categoria OU slug
-@router.get("/home/vitrine-por-categoria", response_model=List[VitrineComProdutosResponse])
+@router.get("/vitrine-por-categoria", response_model=List[VitrineComProdutosResponse])
 def listar_vitrines_e_produtos_por_categoria(
     empresa_id: int = Query(...),
     cod_categoria: Optional[int] = Query(None),
@@ -43,7 +43,7 @@ def listar_vitrines_e_produtos_por_categoria(
     return svc.vitrines_com_produtos(empresa_id, cod_categoria)
 
 # 🆕 NOVO: endpoint de página de categoria (dados focados)
-@router.get("/home/categoria", response_model=CategoryPageResponse)
+@router.get("/categoria", response_model=CategoryPageResponse)
 def get_categoria_page(
     empresa_id: int = Query(...),
     slug: str = Query(..., description="Slug da categoria atual"),
