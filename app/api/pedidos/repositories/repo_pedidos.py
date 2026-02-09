@@ -227,7 +227,6 @@ class PedidoRepository:
         # Busca apenas pedidos CRIADOS naquele dia (qualquer status, exceto cancelados)
         # Isso evita trazer pedidos antigos que foram apenas atualizados no dia
         query = query.filter(
-            PedidoUnificadoModel.status != PedidoStatusEnum.C.value,  # Exclui cancelados
             PedidoUnificadoModel.created_at >= start_dt,
             PedidoUnificadoModel.created_at < end_dt
         )

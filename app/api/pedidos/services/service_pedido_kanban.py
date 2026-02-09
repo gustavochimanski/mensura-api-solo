@@ -165,7 +165,6 @@ class KanbanService:
                 and_(
                     PedidoUnificadoModel.empresa_id == empresa_id,
                     PedidoUnificadoModel.tipo_entrega == tipo_pedido,
-                    PedidoUnificadoModel.status != PedidoStatusEnum.C.value,  # Exclui cancelados
                     PedidoUnificadoModel.created_at >= start_dt,
                     PedidoUnificadoModel.created_at < end_dt
                 )
