@@ -125,16 +125,37 @@ class GatewayMiddleware(BaseHTTPMiddleware):
         # Adiciona informações no state da requisição para uso posterior
         request.state.route_type = route_type
         request.state.has_valid_auth = has_access
-        
+        # Se configurado para bloquear, interrompe aqui quando acesso inválido
+        if ENABLE_GATEWAY_BLOCKING and not has_access:
+            # Admin/client faltando autenticação -> 401
+            if route_type == RouteType.ADMIN:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Autenticação necessária para acessar rota administrativa",
+                )
+            if route_type == RouteType.CLIENT:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Super token (X-Super-Token) necessário para rotas client",
+                )
+            # Outros casos -> 403
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acesso ao recurso negado pelo gateway",
+            )
+
         # Continua com a requisição
         response = await call_next(request)
-        
+
         # Adiciona header com tipo de rota processada (opcional, para debug)
         if ENABLE_GATEWAY_HEADERS:
             response.headers["X-Route-Type"] = route_type.value
-        
+
         return response
 
 
-# Configuração (pode ser movida para settings)
-ENABLE_GATEWAY_HEADERS = False  # Define se adiciona headers de debug
+# Configuração fixa (sem depender de variáveis de ambiente)
+# Habilita headers de debug (false por padrão)
+ENABLE_GATEWAY_HEADERS = False
+# Habilita bloqueio ativo do gateway (True = middleware bloqueará rotas admin/client sem credenciais)
+ENABLE_GATEWAY_BLOCKING = True

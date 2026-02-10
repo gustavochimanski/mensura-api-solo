@@ -85,6 +85,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
 from app.core.rls_context import set_rls_context, reset_rls_context
+from app.core.gateway import GatewayMiddleware
 
 class WebhookLoggingMiddleware(BaseHTTPMiddleware):
     """Middleware para logar todas as requisições, especialmente webhooks"""
@@ -110,6 +111,8 @@ class WebhookLoggingMiddleware(BaseHTTPMiddleware):
         return response
 
 app.add_middleware(WebhookLoggingMiddleware)
+# Gateway: detecta tipo de rota e, quando configurado, bloqueia requisições sem credenciais
+app.add_middleware(GatewayMiddleware)
 
 class RlsContextMiddleware(BaseHTTPMiddleware):
     """
