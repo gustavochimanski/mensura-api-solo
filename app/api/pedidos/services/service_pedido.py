@@ -123,6 +123,12 @@ class PedidoService:
             db,
             self.repo,
         )
+        # Cache simples para resultados de preview: evita recalcular imediatamente em caso de erros repetidos.
+        # Chave: hash do payload relevante (cliente_id, endereco_id, empresa_id, itens) -> valor: (timestamp, result_or_exception)
+        # TTL curto para resultados positivos, TTL maior para erros de distância.
+        self._preview_cache: dict = {}
+        self._preview_cache_ttl_ok = 5        # segundos para resultados bem-sucedidos
+        self._preview_cache_ttl_error = 30    # segundos para erros (ex.: fora da área)
 
     # ---------------- Helpers ---------------- 
     def _atualizar_status_pedido_por_pagamento(
@@ -2209,6 +2215,56 @@ _Qualquer dúvida, entre em contato conosco._"""
         cliente_id: Optional[int] = None,
     ) -> PreviewCheckoutResponse:
         """Calcula o preview do checkout sem criar o pedido no banco de dados."""
+        # --- CACHE: evita recalculos pesados/duplicados em sequência ---
+        try:
+            import json, hashlib, time
+
+            def _payload_key():
+                # Construir string resumida do payload relevante
+                produtos_payload = getattr(payload, "produtos", None)
+                if produtos_payload is not None:
+                    itens = produtos_payload.itens or []
+                    receitas = getattr(produtos_payload, "receitas", None) or []
+                    combos = getattr(produtos_payload, "combos", None) or []
+                else:
+                    itens = payload.itens or []
+                    receitas = getattr(payload, "receitas", None) or []
+                    combos = getattr(payload, "combos", None) or []
+
+                key_obj = {
+                    "cliente_id": cliente_id,
+                    "empresa_id": getattr(payload, "empresa_id", None),
+                    "endereco_id": getattr(payload, "endereco_id", None),
+                    "itens": [
+                        {"cod": getattr(i, "produto_cod_barras", None), "q": getattr(i, "quantidade", None)}
+                        for i in itens
+                    ],
+                    "receitas_len": len(receitas),
+                    "combos_len": len(combos),
+                }
+                s = json.dumps(key_obj, sort_keys=True, ensure_ascii=True)
+                return hashlib.sha1(s.encode("utf-8")).hexdigest()
+
+            key = _payload_key()
+            now_ts = time.time()
+            cached = self._preview_cache.get(key)
+            if cached:
+                ts, stored = cached
+                # stored can be tuple ("ok", response_dict) or ("err", exception_instance)
+                # decide TTL based on stored type
+                kind = stored[0]
+                ttl = self._preview_cache_ttl_ok if kind == "ok" else self._preview_cache_ttl_error
+                if now_ts - ts < ttl:
+                    # Reaplicar: se era erro, re-raise; se era ok, retornar cópia
+                    if kind == "err":
+                        raise stored[1]
+                    else:
+                        # Reconstruir PreviewCheckoutResponse a partir do dict
+                        data = stored[1]
+                        return PreviewCheckoutResponse(**data)
+        except Exception:
+            # qualquer erro no cache não deve impedir o fluxo normal
+            pass
         # Suporta tanto o formato novo (payload.produtos.*) quanto o legado (itens/receitas/combos na raiz)
         produtos_payload = getattr(payload, "produtos", None)
         if produtos_payload is not None:
