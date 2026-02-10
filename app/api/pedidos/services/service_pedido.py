@@ -2460,16 +2460,7 @@ _Qualquer dúvida, entre em contato conosco._"""
                 # Log or handle the serialization error before returning result
                 import logging
                 logging.exception("Failed to serialize PreviewCheckoutResponse for cache.")
-                return result
-        except Exception as e:
-            # Armazena erro no cache para evitar recomputação imediata (ex.: fora da área)
-            try:
-                import time
-                now_ts = time.time()
-                self._preview_cache[key] = (now_ts, ("err", e))
-            except Exception:
-                pass
-            raise
+            return result
 
     # --------------- Itens auxiliares ---------------
     def _montar_observacao_item(self, item_req):
