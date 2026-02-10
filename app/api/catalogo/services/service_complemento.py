@@ -28,6 +28,7 @@ from app.api.catalogo.schemas.schema_complemento import (
 )
 from app.api.empresas.repositories.empresa_repo import EmpresaRepository
 from app.api.catalogo.repositories.repo_produto import ProdutoMensuraRepository
+from app.utils.logger import logger
 
 
 class ComplementoService:
