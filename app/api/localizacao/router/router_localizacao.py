@@ -50,7 +50,7 @@ def buscar_endereco(
     _current_user = Depends(get_current_user),
 ):
     """
-    Busca endereços baseado em um texto de busca.
+    Busca endereços baseado em um texto de busca, multiplos_responses=true retorna 6 opções (útil para múltiplas respostas).
     
     Retorna uma lista de endereços encontrados com suas coordenadas.
     
@@ -66,7 +66,13 @@ def buscar_endereco(
         )
     
     # Suporta parâmetro legado com typo `multiplos_repsonses`.
-    use_multiplos = multiplos_repsonses if multiplos_repsonses is not None else multiplos_responses
+    use_multiplos = multiplos_responses
+    try:
+        if multiplos_repsonses is not None:
+            use_multiplos = multiplos_repsonses
+    except NameError:
+        # Em alguns contextos a variável pode não estar definida; manter o valor padrão
+        pass
     effective_max = 6 if use_multiplos else max_results
     resultados = google_adapter.buscar_enderecos(text, max_results=effective_max)
     
@@ -176,7 +182,13 @@ def buscar_endereco_client(
         )
     
     # Suporta parâmetro legado com typo `multiplos_repsonses`.
-    use_multiplos = multiplos_repsonses if multiplos_repsonses is not None else multiplos_responses
+    use_multiplos = multiplos_responses
+    try:
+        if multiplos_repsonses is not None:
+            use_multiplos = multiplos_repsonses
+    except NameError:
+        # Em alguns contextos a variável pode não estar definida; manter o valor padrão
+        pass
     effective_max = 6 if use_multiplos else max_results
     resultados = google_adapter.buscar_enderecos(text, max_results=effective_max)
     
