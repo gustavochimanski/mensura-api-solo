@@ -113,21 +113,9 @@ def deletar_complemento(
     return {"message": "Complemento deletado com sucesso"}
 
 
-@router.post("/produto/{cod_barras}/vincular", response_model=VincularComplementosProdutoResponse, status_code=status.HTTP_200_OK)
-def vincular_complementos_produto(
-    cod_barras: str,
-    req: VincularComplementosProdutoRequest,
-    db: Session = Depends(get_db),
-):
-    """Vincula múltiplos complementos a um produto."""
-    # Log do payload recebido (mostra o JSON do body para debug)
-    try:
-        payload = req.model_dump()
-    except Exception:
-        payload = str(req)
-    logger.info(f"[Complementos] Vincular - produto={cod_barras} payload={payload} complementos={req.complemento_ids}")
-    service = ComplementoService(db)
-    return service.vincular_complementos_produto(cod_barras, req)
+# Note: endpoint de vinculação de complementos a produto foi unificado no endpoint de atualização
+# de produto: PUT /api/catalogo/admin/produtos/{cod_barras}. Este arquivo mantém apenas endpoints
+# específicos de complementos (CRUD e vinculação a receitas/combos/itens).
 
 
 @router.get("/produto/{cod_barras}", response_model=List[ComplementoResponse])

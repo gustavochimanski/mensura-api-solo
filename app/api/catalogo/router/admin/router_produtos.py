@@ -13,6 +13,9 @@ from sqlalchemy.orm import Session
 from app.api.catalogo.schemas.schema_produtos import ProdutosPaginadosResponse, CriarNovoProdutoResponse, \
     CriarNovoProdutoRequest, AtualizarProdutoRequest
 from app.api.catalogo.services.service_produto import ProdutosMensuraService
+from app.api.catalogo.services.service_complemento import ComplementoService
+from app.api.catalogo.schemas.schema_complemento import VincularComplementosProdutoRequest
+import json
 from app.core.admin_dependencies import get_current_user
 from app.database.db_connection import get_db
 from app.utils.logger import logger
@@ -114,6 +117,7 @@ async def atualizar_produto(
   ativo: Optional[bool] = Form(None),
   unidade_medida: Optional[str] = Form(None),
   imagem: Optional[UploadFile] = File(None),
+  complementos: Optional[str] = Form(None, description="JSON string para vincular complementos ao produto (ex.: {'configuracoes': [...]} ou {'complemento_ids': [...]})"),
   db: Session = Depends(get_db),
 ):
   logger.info(f"[Produtos] Atualizar - {cod_barras} / empresa {cod_empresa}")
@@ -158,7 +162,20 @@ async def atualizar_produto(
 
   service = ProdutosMensuraService(db)
   try:
-    return service.atualizar_produto(cod_empresa, cod_barras, dto)
+    prod_resp = service.atualizar_produto(cod_empresa, cod_barras, dto)
+    # Se recebeu complementos no form, processa a vinculação aqui (unifica endpoints)
+    if complementos:
+        try:
+            payload = json.loads(complementos)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Campo 'complementos' deve ser um JSON válido")
+        try:
+            req = VincularComplementosProdutoRequest.model_validate(payload)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Formato inválido para 'complementos': {e}")
+        logger.info(f"[Produtos] Vinculando complementos para produto={cod_barras} payload={payload}")
+        ComplementoService(db).vincular_complementos_produto(cod_barras, req)
+    return prod_resp
   except ValueError as e:
     raise HTTPException(status_code=400, detail=str(e))
   except HTTPException:
