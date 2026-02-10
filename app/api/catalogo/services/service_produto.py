@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.api.empresas.repositories.empresa_repo import EmpresaRepository
 from app.api.catalogo.repositories.repo_produto import ProdutoMensuraRepository
-from app.api.catalogo.schemas.schema_produtos import ProdutoListItem, CriarNovoProdutoResponse, ProdutoEmpDTO, \
+from app.api.catalogo.schemas.schema_produtos import ProdutoListCompact, ProdutoListItem, CriarNovoProdutoResponse, ProdutoEmpDTO, \
     ProdutoBaseDTO, CriarNovoProdutoRequest, AtualizarProdutoRequest
 # AdicionalRepository removido - não é mais usado
 from app.api.catalogo.repositories.repo_receitas import ReceitasRepository
@@ -130,16 +130,12 @@ class ProdutosMensuraService:
             # Verifica se o produto tem receita
             tem_receita = self.repo_receitas.produto_tem_receita(p.cod_barras)
             
-            data.append(ProdutoListItem(
+            data.append(ProdutoListCompact(
+                id=p.id,
                 cod_barras=p.cod_barras,
                 descricao=p.descricao,
-                imagem=p.imagem,
+                disponivel=bool(pe.disponivel and p.ativo),
                 preco_venda=float(pe.preco_venda),
-                custo=(float(pe.custo) if pe.custo is not None else None),
-                disponivel=pe.disponivel and p.ativo,
-                exibir_delivery=pe.exibir_delivery,
-                tem_receita=tem_receita,
-                adicionais=adicionais,
             ))
 
         return {"data": data, "total": total, "page": page, "limit": limit, "has_more": offset + limit < total}

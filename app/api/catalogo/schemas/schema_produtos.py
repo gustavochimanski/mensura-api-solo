@@ -87,6 +87,7 @@ class CriarNovoProdutoResponse(BaseModel):
 
 
 class ProdutoListItem(BaseModel):
+    # Mantido para compatibilidade interna; a listagem pública agora usa `ProdutoListCompact`.
     cod_barras: str
     descricao: str
     imagem: Optional[str] = None
@@ -94,7 +95,6 @@ class ProdutoListItem(BaseModel):
     custo: Optional[float] = None
     cod_categoria: Optional[int] = None    # Categoria do ERP (opcional)
     label_categoria: Optional[str] = None  # Nome da categoria (opcional)
-	    # diretivas removido
     disponivel: bool
     exibir_delivery: bool = True
     tem_receita: bool = False  # Indica se o produto é composto por uma receita (tem itens)
@@ -102,8 +102,18 @@ class ProdutoListItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ProdutoListCompact(BaseModel):
+    id: int
+    cod_barras: str
+    descricao: str
+    disponivel: bool
+    preco_venda: float
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class ProdutosPaginadosResponse(BaseModel):
-    data: List[ProdutoListItem]
+    data: List[ProdutoListCompact]
     total: int
     page: int
     limit: int
