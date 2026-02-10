@@ -934,6 +934,8 @@ class PedidoBalcaoService:
                     },
                 )
 
+        pagamento_repo = PagamentoRepository(self.db)
+        txs = pagamento_repo.list_by_pedido_id(pedido.id)
         for p in pagamentos_para_fechar:
             mp_id = int(p["meio_pagamento_id"])
             valor_parcial = _dec(p["valor"])
