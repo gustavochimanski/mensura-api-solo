@@ -295,144 +295,62 @@ class GoogleMapsAdapter:
         if max_results > 10:
             # Mantém o mesmo limite dos endpoints atuais (1-10)
             max_results = 10
-
+        # Modo de teste: usar apenas Places Autocomplete + Place Details
         try:
-            # Detecta CEP (formato 8 dígitos ou 5-3 com hífen) e usa components=postal_code para melhorar resultados
-            import re
-            cep_match = re.match(r"^\s*(\d{5}-?\d{3}|\d{8})\s*$", texto_norm)
-            params = {
-                "key": self.api_key,
-                "region": "br",
-                "language": "pt-BR",
-            }
-            if cep_match:
-                cep = cep_match.group(1).replace("-", "")
-                params["components"] = f"postal_code:{cep}|country:br"
-                params["address"] = cep
-                logger.info(f"[GoogleMapsAdapter] Buscar endereços por CEP detectado: {cep}")
-            else:
-                params.update({
-                    "address": texto_norm,
-                    "components": "country:br",
-                })
-
-            with httpx.Client(timeout=10.0) as client:
-                response = client.get(self.BASE_URL, params=params)
-            response.raise_for_status()
-            data = response.json()
-            status_code = data.get("status")
-
-            if status_code == "REQUEST_DENIED":
-                error_message = data.get("error_message", "Acesso negado")
-                if "referer restrictions" in (error_message or "").lower():
-                    logger.error(
-                        f"[GoogleMapsAdapter] Acesso negado pela API do Google Maps para '{texto_norm}'. "
-                        f"PROBLEMA: A API key tem restrições de referer (domínio/URL), mas a Geocoding API não aceita esse tipo de restrição. "
-                        f"SOLUÇÃO: No Google Cloud Console, altere as restrições da API key para 'Restrição de IP' ou remova as restrições. "
-                        f"Erro completo: {error_message}"
-                    )
-                else:
-                    logger.error(
-                        f"[GoogleMapsAdapter] Acesso negado pela API do Google Maps para '{texto_norm}'. "
-                        f"Verifique se a API key está correta e se a Geocoding API está habilitada. "
-                        f"Erro: {error_message}"
-                    )
-                return []
-
-            if status_code == "OVER_QUERY_LIMIT":
-                logger.error(
-                    f"[GoogleMapsAdapter] Limite de requisições excedido para '{texto_norm}'. "
-                    f"Verifique a cota da API do Google Maps."
+            with httpx.Client(timeout=8.0) as client:
+                ac_resp = client.get(
+                    self.PLACES_AUTOCOMPLETE_URL,
+                    params={
+                        "input": texto_norm,
+                        "key": self.api_key,
+                        "components": "country:br",
+                        "types": "address",
+                        "language": "pt-BR",
+                    },
                 )
-                return []
-
-            if status_code == "INVALID_REQUEST":
-                logger.warning(
-                    f"[GoogleMapsAdapter] Requisição inválida para '{texto_norm}': {data.get('error_message', '')}"
-                )
-                return []
-
-            if status_code == "ZERO_RESULTS":
-                logger.info(f"[GoogleMapsAdapter] Nenhum resultado encontrado para '{texto_norm}'")
-                return []
-
-            results = data.get("results") or []
-            if status_code != "OK" or not results:
-                logger.warning(
-                    f"[GoogleMapsAdapter] Status inesperado para '{texto_norm}': {status_code}. "
-                    f"Mensagem: {data.get('error_message', 'N/A')}"
-                )
-                return []
+            ac_resp.raise_for_status()
+            ac_data = ac_resp.json()
+            predictions = ac_data.get("predictions", []) or []
 
             saida: List[Dict] = []
-            existing_place_ids = set()
-            for result in results[:max_results]:
-                endereco_info = self._extrair_endereco_formatado(result)
-                endereco_info["formatted_address"] = result.get("formatted_address")
-                endereco_info["place_id"] = result.get("place_id")
-                existing_place_ids.add(result.get("place_id"))
-                saida.append(endereco_info)
-
-            # Se não atingimos max_results com Geocoding, tentar complemento via Places Autocomplete + Details
-            if len(saida) < max_results:
+            for pred in predictions:
+                if len(saida) >= max_results:
+                    break
+                pid = pred.get("place_id")
+                if not pid:
+                    continue
                 try:
                     with httpx.Client(timeout=6.0) as client:
-                        ac_resp = client.get(
-                            self.PLACES_AUTOCOMPLETE_URL,
+                        det_resp = client.get(
+                            self.PLACE_DETAILS_URL,
                             params={
-                                "input": texto_norm,
+                                "place_id": pid,
                                 "key": self.api_key,
-                                "components": "country:br",
-                                "types": "address",
                                 "language": "pt-BR",
+                                "fields": "address_component,geometry,formatted_address",
                             },
                         )
-                    ac_resp.raise_for_status()
-                    ac_data = ac_resp.json()
-                    predictions = ac_data.get("predictions", []) or []
-                    for pred in predictions:
-                        if len(saida) >= max_results:
-                            break
-                        pid = pred.get("place_id")
-                        if not pid or pid in existing_place_ids:
-                            continue
-                        # Buscar detalhes do place para obter geometry e address_components
-                        try:
-                            with httpx.Client(timeout=6.0) as client:
-                                det_resp = client.get(
-                                    self.PLACE_DETAILS_URL,
-                                    params={
-                                        "place_id": pid,
-                                        "key": self.api_key,
-                                        "language": "pt-BR",
-                                        "fields": "address_component,geometry,formatted_address",
-                                    },
-                                )
-                            det_resp.raise_for_status()
-                            det_data = det_resp.json()
-                            detail_result = det_data.get("result")
-                            if not detail_result:
-                                continue
-                            endereco_info = self._extrair_endereco_formatado(detail_result)
-                            endereco_info["formatted_address"] = detail_result.get("formatted_address")
-                            endereco_info["place_id"] = pid
-                            existing_place_ids.add(pid)
-                            saida.append(endereco_info)
-                        except Exception as e:
-                            logger.warning(f"[GoogleMapsAdapter] Falha ao obter detalhes do place_id {pid}: {e}")
-                            continue
+                    det_resp.raise_for_status()
+                    det_data = det_resp.json()
+                    detail_result = det_data.get("result")
+                    if not detail_result:
+                        continue
+                    endereco_info = self._extrair_endereco_formatado(detail_result)
+                    endereco_info["formatted_address"] = detail_result.get("formatted_address")
+                    endereco_info["place_id"] = pid
+                    saida.append(endereco_info)
                 except Exception as e:
-                    logger.info(f"[GoogleMapsAdapter] Autocomplete fallback falhou: {e}")
+                    logger.warning(f"[GoogleMapsAdapter] Falha ao obter detalhes do place_id {pid}: {e}")
+                    continue
 
+            if not saida:
+                logger.info(f"[GoogleMapsAdapter] Nenhuma previsão do Places para '{texto_norm}'")
             return saida
         except httpx.HTTPStatusError as e:
-            logger.error(
-                f"[GoogleMapsAdapter] Erro HTTP ao buscar endereços para {texto_norm}: "
-                f"Status {e.response.status_code}"
-            )
+            logger.error(f"[GoogleMapsAdapter] Erro HTTP no Places Autocomplete: Status {e.response.status_code}")
             return []
         except Exception as e:
-            logger.error(f"[GoogleMapsAdapter] Erro ao buscar endereços para {texto_norm}: {e}")
+            logger.error(f"[GoogleMapsAdapter] Erro no Places Autocomplete para '{texto_norm}': {e}")
             return []
     
     def _extrair_endereco_formatado(self, result: Dict) -> Dict:
