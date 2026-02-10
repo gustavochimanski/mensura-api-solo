@@ -165,6 +165,8 @@ async def atualizar_produto(
     prod_resp = service.atualizar_produto(cod_empresa, cod_barras, dto)
     # Se recebeu complementos no form, processa a vinculação aqui (unifica endpoints)
     if complementos:
+        # Log raw payload string for debugging
+        logger.info(f"[Produtos] Complementos raw payload string for produto={cod_barras}: {complementos}")
         try:
             payload = json.loads(complementos)
         except Exception:
@@ -173,8 +175,13 @@ async def atualizar_produto(
             req = VincularComplementosProdutoRequest.model_validate(payload)
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Formato inválido para 'complementos': {e}")
-        logger.info(f"[Produtos] Vinculando complementos para produto={cod_barras} payload={payload}")
-        ComplementoService(db).vincular_complementos_produto(cod_barras, req)
+        logger.info(f"[Produtos] Vinculando complementos para produto={cod_barras} parsed_payload={payload}")
+        complemento_resp = ComplementoService(db).vincular_complementos_produto(cod_barras, req)
+        # Log response from vinculação to verify configuration
+        try:
+            logger.info(f"[Produtos] Complementos vinculados response for produto={cod_barras}: {complemento_resp.model_dump() if hasattr(complemento_resp, 'model_dump') else str(complemento_resp)}")
+        except Exception:
+            logger.info(f"[Produtos] Complementos vinculados (non-serializable) for produto={cod_barras}")
     return prod_resp
   except ValueError as e:
     raise HTTPException(status_code=400, detail=str(e))
