@@ -106,6 +106,7 @@ class ProdutoListCompact(BaseModel):
     id: int
     cod_barras: str
     descricao: str
+    imagem: Optional[str] = None
     disponivel: bool
     preco_venda: float
 

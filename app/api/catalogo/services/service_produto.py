@@ -134,6 +134,7 @@ class ProdutosMensuraService:
                 id=p.id,
                 cod_barras=p.cod_barras,
                 descricao=p.descricao,
+                imagem=p.imagem,
                 disponivel=bool(pe.disponivel and p.ativo),
                 preco_venda=float(pe.preco_venda),
             ))
