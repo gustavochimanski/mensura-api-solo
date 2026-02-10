@@ -108,6 +108,7 @@ class ProdutoListCompact(BaseModel):
     descricao: str
     imagem: Optional[str] = None
     disponivel: bool
+    exibir_delivery: bool = True
     preco_venda: float
 
     model_config = ConfigDict(from_attributes=True)

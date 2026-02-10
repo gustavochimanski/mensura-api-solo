@@ -136,6 +136,7 @@ class ProdutosMensuraService:
                 descricao=p.descricao,
                 imagem=p.imagem,
                 disponivel=bool(pe.disponivel and p.ativo),
+                exibir_delivery=bool(pe.exibir_delivery),
                 preco_venda=float(pe.preco_venda),
             ))
 
