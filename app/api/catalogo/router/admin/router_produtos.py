@@ -10,7 +10,7 @@ from fastapi import status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.catalogo.schemas.schema_produtos import ProdutosPaginadosResponse, CriarNovoProdutoResponse, \
+from app.api.catalogo.schemas.schema_produtos import ProdutoDetalheResponse, ProdutosPaginadosResponse, CriarNovoProdutoResponse, \
     CriarNovoProdutoRequest, AtualizarProdutoRequest
 from app.api.catalogo.services.service_produto import ProdutosMensuraService
 from app.api.catalogo.services.service_complemento import ComplementoService
@@ -198,15 +198,26 @@ def deletar_produto(
   return None
 
 
-# ----------------- Complementos por produto (rota unificada) -----------------
-@router.get("/{cod_barras}/complementos", response_model=List[ComplementoResponse])
-def listar_complementos_produto_produto(
+@router.get("/{cod_barras}", response_model=ProdutoDetalheResponse)
+def buscar_produto_detalhe(
     cod_barras: str,
-    apenas_ativos: bool = True,
+    empresa_id: Optional[int] = Query(None, description="Empresa para incluir dados de preço/empresa"),
+    apenas_ativos: bool = Query(True, description="Ao incluir complementos, filtra apenas ativos"),
     db: Session = Depends(get_db),
 ):
-    """Lista os complementos vinculados a um produto (rota unificada)."""
-    logger.info(f"[Produtos] Listar complementos por produto - produto={cod_barras} apenas_ativos={apenas_ativos}")
-    service = ComplementoService(db)
-    return service.listar_complementos_produto(cod_barras, apenas_ativos)
+    """
+    Retorna detalhes do produto (base + dados da empresa opcional) e os complementos vinculados.
+    """
+    service = ProdutosMensuraService(db)
+    produto = service.repo.buscar_por_cod_barras(cod_barras)
+    if not produto:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Produto não encontrado")
+
+    produto_emp = None
+    if empresa_id is not None:
+        produto_emp = service.repo.get_produto_emp(empresa_id, cod_barras)
+
+    complementos = ComplementoService(db).listar_complementos_produto(cod_barras, apenas_ativos=apenas_ativos)
+
+    return ProdutoDetalheResponse(produto=produto, produto_emp=produto_emp, complementos=complementos)
 

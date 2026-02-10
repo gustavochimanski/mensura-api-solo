@@ -5,6 +5,7 @@ Centralizado no schema de catalogo
 from typing import Optional, List
 from datetime import datetime, date
 from pydantic import BaseModel, ConfigDict, Field, condecimal, constr
+from app.api.catalogo.schemas.schema_complemento import ComplementoResponse
 
 
 # ------ Requests de criação/edição ------
@@ -107,6 +108,14 @@ class ProdutosPaginadosResponse(BaseModel):
     page: int
     limit: int
     has_more: bool
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ProdutoDetalheResponse(BaseModel):
+    produto: ProdutoBaseDTO
+    produto_emp: Optional[ProdutoEmpDTO] = None
+    complementos: List[ComplementoResponse] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)
 
