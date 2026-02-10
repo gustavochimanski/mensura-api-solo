@@ -46,6 +46,7 @@ def buscar_endereco(
     text: str = Query(..., description="Texto para buscar endereços"),
     max_results: int = Query(5, ge=1, le=10, description="Número máximo de resultados"),
     multiplos_responses: Optional[bool] = Query(False, description="Quando true, retorna 6 opções (útil para múltiplas respostas)"),
+    multiplos_repsonses: Optional[bool] = Query(None, description="Alias legado para multiplos_responses (aceita valor booleano)"),
     google_adapter: GoogleMapsAdapter = Depends(get_google_maps_adapter),
     _current_user = Depends(get_current_user),
 ):
@@ -66,13 +67,7 @@ def buscar_endereco(
         )
     
     # Suporta parâmetro legado com typo `multiplos_repsonses`.
-    use_multiplos = multiplos_responses
-    try:
-        if multiplos_repsonses is not None:
-            use_multiplos = multiplos_repsonses
-    except NameError:
-        # Em alguns contextos a variável pode não estar definida; manter o valor padrão
-        pass
+    use_multiplos = multiplos_repsonses if multiplos_repsonses is not None else multiplos_responses
     effective_max = 6 if use_multiplos else max_results
     resultados = google_adapter.buscar_enderecos(text, max_results=effective_max)
     
