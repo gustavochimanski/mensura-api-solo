@@ -28,7 +28,6 @@ from app.api.catalogo.schemas.schema_complemento import (
 )
 from app.api.empresas.repositories.empresa_repo import EmpresaRepository
 from app.api.catalogo.repositories.repo_produto import ProdutoMensuraRepository
-from app.utils.logger import logger
 
 
 class ComplementoService:
@@ -137,12 +136,11 @@ class ComplementoService:
 
     def vincular_complementos_produto(self, cod_barras: str, req: VincularComplementosProdutoRequest) -> VincularComplementosProdutoResponse:
         """Vincula múltiplos complementos a um produto."""
-        # Log recebido para debug (mostra configurações/ids recebidos)
+        # Preparar payload_dump (sem log)
         try:
             payload_dump = req.model_dump()
         except Exception:
             payload_dump = str(req)
-        logger.info(f"[ComplementoService] Vincular complementos - produto={cod_barras} payload={payload_dump}")
         produto = self.repo_produto.buscar_por_cod_barras(cod_barras)
         if not produto:
             raise HTTPException(
