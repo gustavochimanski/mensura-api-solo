@@ -73,6 +73,21 @@ Mantido para clientes antigos:
 - Erro de validação do JSON `complementos` ou dados de complementos: HTTP 400 com mensagem detalhada.  
 - Erro interno: HTTP 500.
 
+## Listagem de complementos por produto (rota unificada)
+- Método: GET  
+- URL: `/api/catalogo/admin/produtos/{cod_barras}/complementos`  
+- Query params:
+  - `apenas_ativos` (boolean, opcional, default true) — filtra apenas complementos ativos
+- Observação: Este endpoint substitui o antigo `/api/catalogo/admin/complementos/produto/{cod_barras}`. Clientes devem migrar para o novo caminho.
+
+Exemplo:
+```
+GET /api/catalogo/admin/produtos/644446611/complementos?apenas_ativos=false
+Authorization: Bearer <TOKEN_ADMIN>
+```
+
+Resposta: lista de `ComplementoResponse` (mesmo formato antigo).
+
 ## Exemplo (curl)
 ```bash
 curl -X PUT "https://seu-servidor/api/catalogo/admin/produtos/644446611" \
@@ -83,13 +98,13 @@ curl -X PUT "https://seu-servidor/api/catalogo/admin/produtos/644446611" \
 ```
 
 ## Logs e verificação
-- O servidor registra:
-  - A string bruta enviada em `complementos` (`logger.info`).
-  - O payload parseado (`logger.info`) antes da vinculação.
-  - A resposta do serviço de vinculação (para verificar IDs vinculados).
-  - Dentro do `ComplementoService.vincular_complementos_produto` também há log do payload recebido.
+- O servidor registra operações principais de CRUD. Logs detalhados de payloads não são emitidos por padrão — habilite logs de debug se precisar inspecionar payloads transmitidos.
 
-Use esses logs para confirmar que a configuração enviada está sendo aplicada.
+Para verificar que a vinculação foi aplicada:
+- Após o PUT de atualização com `complementos`, consulte:
+  - GET /api/catalogo/admin/produtos/{cod_barras}/complementos?apenas_ativos=false
+  - ou a listagem global: GET /api/catalogo/admin/complementos/?empresa_id={empresa_id}&apenas_ativos=false
+
 
 ## Migração
 - Se você usa ainda o endpoint antigo `/api/catalogo/admin/complementos/produto/{cod_barras}/vincular`, atualize para o PUT no produto.  

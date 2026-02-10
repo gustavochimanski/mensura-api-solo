@@ -15,6 +15,7 @@ from app.api.catalogo.schemas.schema_produtos import ProdutosPaginadosResponse, 
 from app.api.catalogo.services.service_produto import ProdutosMensuraService
 from app.api.catalogo.services.service_complemento import ComplementoService
 from app.api.catalogo.schemas.schema_complemento import VincularComplementosProdutoRequest
+from app.api.catalogo.schemas.schema_complemento import ComplementoResponse
 import json
 from app.core.admin_dependencies import get_current_user
 from app.database.db_connection import get_db
@@ -195,4 +196,17 @@ def deletar_produto(
   service = ProdutosMensuraService(db)
   service.deletar_produto(empresa_id, cod_barras)
   return None
+
+
+# ----------------- Complementos por produto (rota unificada) -----------------
+@router.get("/{cod_barras}/complementos", response_model=List[ComplementoResponse])
+def listar_complementos_produto_produto(
+    cod_barras: str,
+    apenas_ativos: bool = True,
+    db: Session = Depends(get_db),
+):
+    """Lista os complementos vinculados a um produto (rota unificada)."""
+    logger.info(f"[Produtos] Listar complementos por produto - produto={cod_barras} apenas_ativos={apenas_ativos}")
+    service = ComplementoService(db)
+    return service.listar_complementos_produto(cod_barras, apenas_ativos)
 

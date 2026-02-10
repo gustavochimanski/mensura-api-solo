@@ -118,16 +118,9 @@ def deletar_complemento(
 # específicos de complementos (CRUD e vinculação a receitas/combos/itens).
 
 
-@router.get("/produto/{cod_barras}", response_model=List[ComplementoResponse])
-def listar_complementos_produto(
-    cod_barras: str,
-    apenas_ativos: bool = True,
-    db: Session = Depends(get_db),
-):
-    """Lista todos os complementos de um produto específico."""
-    logger.info(f"[Complementos] Listar por produto - produto={cod_barras}")
-    service = ComplementoService(db)
-    return service.listar_complementos_produto(cod_barras, apenas_ativos)
+# Nota: a listagem de complementos por produto foi unificada na rota de produtos:
+# GET /api/catalogo/admin/produtos/{cod_barras}/complementos
+# O handler específico abaixo foi removido para evitar endpoints duplicados.
 
 
 @router.post("/receita/{receita_id}/vincular", response_model=VincularComplementosReceitaResponse, status_code=status.HTTP_200_OK)
