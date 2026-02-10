@@ -10,6 +10,8 @@ class GoogleMapsAdapter:
     BASE_URL = "https://maps.googleapis.com/maps/api/geocode/json"
     DISTANCE_MATRIX_URL = "https://maps.googleapis.com/maps/api/distancematrix/json"
     DIRECTIONS_URL = "https://maps.googleapis.com/maps/api/directions/json"
+    PLACES_AUTOCOMPLETE_URL = "https://maps.googleapis.com/maps/api/place/autocomplete/json"
+    PLACE_DETAILS_URL = "https://maps.googleapis.com/maps/api/place/details/json"
     
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key or settings.GOOGLE_MAPS_API_KEY
@@ -363,12 +365,64 @@ class GoogleMapsAdapter:
                 return []
 
             saida: List[Dict] = []
+            existing_place_ids = set()
             for result in results[:max_results]:
                 endereco_info = self._extrair_endereco_formatado(result)
-                # Campos aditivos: mantêm compatibilidade com front que usa formatted_address/place_id
                 endereco_info["formatted_address"] = result.get("formatted_address")
                 endereco_info["place_id"] = result.get("place_id")
+                existing_place_ids.add(result.get("place_id"))
                 saida.append(endereco_info)
+
+            # Se não atingimos max_results com Geocoding, tentar complemento via Places Autocomplete + Details
+            if len(saida) < max_results:
+                try:
+                    with httpx.Client(timeout=6.0) as client:
+                        ac_resp = client.get(
+                            self.PLACES_AUTOCOMPLETE_URL,
+                            params={
+                                "input": texto_norm,
+                                "key": self.api_key,
+                                "components": "country:br",
+                                "types": "address",
+                                "language": "pt-BR",
+                            },
+                        )
+                    ac_resp.raise_for_status()
+                    ac_data = ac_resp.json()
+                    predictions = ac_data.get("predictions", []) or []
+                    for pred in predictions:
+                        if len(saida) >= max_results:
+                            break
+                        pid = pred.get("place_id")
+                        if not pid or pid in existing_place_ids:
+                            continue
+                        # Buscar detalhes do place para obter geometry e address_components
+                        try:
+                            with httpx.Client(timeout=6.0) as client:
+                                det_resp = client.get(
+                                    self.PLACE_DETAILS_URL,
+                                    params={
+                                        "place_id": pid,
+                                        "key": self.api_key,
+                                        "language": "pt-BR",
+                                        "fields": "address_component,geometry,formatted_address",
+                                    },
+                                )
+                            det_resp.raise_for_status()
+                            det_data = det_resp.json()
+                            detail_result = det_data.get("result")
+                            if not detail_result:
+                                continue
+                            endereco_info = self._extrair_endereco_formatado(detail_result)
+                            endereco_info["formatted_address"] = detail_result.get("formatted_address")
+                            endereco_info["place_id"] = pid
+                            existing_place_ids.add(pid)
+                            saida.append(endereco_info)
+                        except Exception as e:
+                            logger.warning(f"[GoogleMapsAdapter] Falha ao obter detalhes do place_id {pid}: {e}")
+                            continue
+                except Exception as e:
+                    logger.info(f"[GoogleMapsAdapter] Autocomplete fallback falhou: {e}")
 
             return saida
         except httpx.HTTPStatusError as e:
