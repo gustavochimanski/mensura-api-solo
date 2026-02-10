@@ -477,16 +477,15 @@ class PedidoService:
     # ---------------- Fluxos ----------------
     async def finalizar_pedido(self, payload: FinalizarPedidoRequest, cliente_id: int) -> PedidoResponse:
         # Suporta tanto o formato novo (payload.produtos.*) quanto o legado (itens/receitas/combos na raiz)
-        try:
-            produtos_payload = getattr(payload, "produtos", None)
-            if produtos_payload is not None:
-                itens_normais = produtos_payload.itens or []
-                receitas_req = getattr(produtos_payload, "receitas", None) or []
-                combos_req = getattr(produtos_payload, "combos", None) or []
-            else:
-                itens_normais = payload.itens or []
-                receitas_req = getattr(payload, "receitas", None) or []
-                combos_req = getattr(payload, "combos", None) or []
+        produtos_payload = getattr(payload, "produtos", None)
+        if produtos_payload is not None:
+            itens_normais = produtos_payload.itens or []
+            receitas_req = getattr(produtos_payload, "receitas", None) or []
+            combos_req = getattr(produtos_payload, "combos", None) or []
+        else:
+            itens_normais = payload.itens or []
+            receitas_req = getattr(payload, "receitas", None) or []
+            combos_req = getattr(payload, "combos", None) or []
 
         if not itens_normais and not receitas_req and not combos_req:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Pedido vazio")
