@@ -162,6 +162,27 @@ async def atualizar_produto(
 
   service = ProdutosMensuraService(db)
   try:
+    # Log completo do payload recebido (inclui campos do form e presença do arquivo)
+    try:
+        imagem_nome = imagem.filename if imagem else None
+    except Exception:
+        imagem_nome = None
+    payload_completo = {
+        "cod_empresa": cod_empresa,
+        "cod_barras": cod_barras,
+        "descricao": descricao,
+        "preco_venda": str(preco_venda) if preco_venda is not None else None,
+        "custo": str(custo) if custo is not None else None,
+        "sku_empresa": sku_empresa,
+        "disponivel": disponivel,
+        "exibir_delivery": exibir_delivery,
+        "ativo": ativo,
+        "unidade_medida": unidade_medida,
+        "imagem_filename": imagem_nome,
+        "complementos_raw": complementos,
+    }
+    # Uso warning para assegurar visibilidade nos logs em produção
+    logger.warning(f"[Produtos] Payload completo update produto={cod_barras} payload={payload_completo}")
     prod_resp = service.atualizar_produto(cod_empresa, cod_barras, dto)
     # Se recebeu complementos no form, processa a vinculação aqui (unifica endpoints)
     if complementos:
