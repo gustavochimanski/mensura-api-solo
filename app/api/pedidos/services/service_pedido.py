@@ -477,15 +477,16 @@ class PedidoService:
     # ---------------- Fluxos ----------------
     async def finalizar_pedido(self, payload: FinalizarPedidoRequest, cliente_id: int) -> PedidoResponse:
         # Suporta tanto o formato novo (payload.produtos.*) quanto o legado (itens/receitas/combos na raiz)
-        produtos_payload = getattr(payload, "produtos", None)
-        if produtos_payload is not None:
-            itens_normais = produtos_payload.itens or []
-            receitas_req = getattr(produtos_payload, "receitas", None) or []
-            combos_req = getattr(produtos_payload, "combos", None) or []
-        else:
-            itens_normais = payload.itens or []
-            receitas_req = getattr(payload, "receitas", None) or []
-            combos_req = getattr(payload, "combos", None) or []
+        try:
+            produtos_payload = getattr(payload, "produtos", None)
+            if produtos_payload is not None:
+                itens_normais = produtos_payload.itens or []
+                receitas_req = getattr(produtos_payload, "receitas", None) or []
+                combos_req = getattr(produtos_payload, "combos", None) or []
+            else:
+                itens_normais = payload.itens or []
+                receitas_req = getattr(payload, "receitas", None) or []
+                combos_req = getattr(payload, "combos", None) or []
 
         if not itens_normais and not receitas_req and not combos_req:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Pedido vazio")
@@ -2441,16 +2442,33 @@ _Qualquer dúvida, entre em contato conosco._"""
             except (TypeError, ValueError):
                 tempo_entrega_minutos = None
 
-        return PreviewCheckoutResponse(
-            subtotal=float(subtotal),
-            taxa_entrega=float(taxa_entrega),
-            taxa_servico=float(taxa_servico),
-            valor_total=float(valor_total),
-            desconto=float(desconto),
-            distancia_km=float(distancia_km) if distancia_km is not None else None,
-            empresa_id=empresa_id,
-            tempo_entrega_minutos=tempo_entrega_minutos,
-        )
+            result = PreviewCheckoutResponse(
+                subtotal=float(subtotal),
+                taxa_entrega=float(taxa_entrega),
+                taxa_servico=float(taxa_servico),
+                valor_total=float(valor_total),
+                desconto=float(desconto),
+                distancia_km=float(distancia_km) if distancia_km is not None else None,
+                empresa_id=empresa_id,
+                tempo_entrega_minutos=tempo_entrega_minutos,
+            )
+            # Armazena no cache (resultado OK) — tenta model_dump para serializar
+            try:
+                import time
+                now_ts = time.time()
+                self._preview_cache[key] = (now_ts, ("ok", result.model_dump()))
+            except Exception:
+                pass
+            return result
+        except Exception as e:
+            # Armazena erro no cache para evitar recomputação imediata (ex.: fora da área)
+            try:
+                import time
+                now_ts = time.time()
+                self._preview_cache[key] = (now_ts, ("err", e))
+            except Exception:
+                pass
+            raise
 
     # --------------- Itens auxiliares ---------------
     def _montar_observacao_item(self, item_req):
