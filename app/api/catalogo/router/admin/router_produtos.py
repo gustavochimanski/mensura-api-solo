@@ -2,7 +2,7 @@
 from datetime import date
 import json
 from decimal import Decimal
-from typing import Optional
+from typing import Optional, List
 
 from fastapi import APIRouter, Depends, Query, UploadFile, Form, File, HTTPException
 from pydantic import BaseModel
