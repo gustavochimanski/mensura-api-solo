@@ -153,8 +153,13 @@ class VincularComplementosProdutoRequest(BaseModel):
     
     @model_validator(mode='after')
     def validate_at_least_one_format(self):
+        # Permite listas vazias (interpreta como "remover todas as vinculações").
+        if self.complemento_ids is not None and len(self.complemento_ids) == 0:
+            return self
+        if self.configuracoes is not None and len(self.configuracoes) == 0:
+            return self
         if not self.configuracoes and not self.complemento_ids:
-            raise ValueError("Deve fornecer 'complemento_ids' ou 'configuracoes'")
+            raise ValueError("Deve fornecer 'complemento_ids' (não vazio) ou 'configuracoes' (não vazio)")
         return self
 
 

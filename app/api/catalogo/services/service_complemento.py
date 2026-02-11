@@ -149,24 +149,34 @@ class ComplementoService:
             )
         
         # Processa formato completo ou simples
-        # Prioriza configuracoes se fornecido e não vazio
-        if req.configuracoes is not None and len(req.configuracoes) > 0:
-            # Formato completo: usa configurações detalhadas
-            complemento_ids = [cfg.complemento_id for cfg in req.configuracoes]
-            ordens = [cfg.ordem if cfg.ordem is not None else idx for idx, cfg in enumerate(req.configuracoes)]
-            obrigatorios = [cfg.obrigatorio for cfg in req.configuracoes]
-            quantitativos = [cfg.quantitativo for cfg in req.configuracoes]
-            # Se quantitativo for False, minimo_itens e maximo_itens devem ser None
-            minimos_itens = [None if not cfg.quantitativo else cfg.minimo_itens for cfg in req.configuracoes]
-            maximos_itens = [None if not cfg.quantitativo else cfg.maximo_itens for cfg in req.configuracoes]
+        # Permite listas vazias para remover todas as vinculações (compatível com receitas/combos).
+        if req.configuracoes is not None:
+            if len(req.configuracoes) > 0:
+                # Formato completo: usa configurações detalhadas
+                complemento_ids = [cfg.complemento_id for cfg in req.configuracoes]
+                ordens = [cfg.ordem if cfg.ordem is not None else idx for idx, cfg in enumerate(req.configuracoes)]
+                obrigatorios = [cfg.obrigatorio for cfg in req.configuracoes]
+                quantitativos = [cfg.quantitativo for cfg in req.configuracoes]
+                # Se quantitativo for False, minimo_itens e maximo_itens devem ser None
+                minimos_itens = [None if not cfg.quantitativo else cfg.minimo_itens for cfg in req.configuracoes]
+                maximos_itens = [None if not cfg.quantitativo else cfg.maximo_itens for cfg in req.configuracoes]
+            else:
+                # Lista vazia: remove todas as vinculações
+                complemento_ids = []
+                ordens = []
+                obrigatorios = []
+                quantitativos = []
+                minimos_itens = []
+                maximos_itens = []
         else:
             # Formato simples: compatibilidade (usa valores padrão)
-            if not req.complemento_ids:
+            if req.complemento_ids is None:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Deve fornecer 'complemento_ids' ou 'configuracoes'"
                 )
-            complemento_ids = req.complemento_ids
+            # Lista vazia é permitida (remove todas as vinculações)
+            complemento_ids = req.complemento_ids if req.complemento_ids is not None else []
             ordens = req.ordens
             obrigatorios = None  # Usa False como padrão no repositório
             quantitativos = None  # Usa False como padrão no repositório
