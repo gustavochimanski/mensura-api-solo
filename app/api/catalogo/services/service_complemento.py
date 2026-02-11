@@ -7,6 +7,7 @@ from app.api.catalogo.models.model_complemento import ComplementoModel
 from app.api.catalogo.models.model_complemento_vinculo_item import ComplementoVinculoItemModel
 from app.api.catalogo.repositories.repo_complemento import ComplementoRepository
 from app.api.catalogo.repositories.repo_complemento_item import ComplementoItemRepository
+from app.utils.logger import logger
 from app.api.catalogo.schemas.schema_complemento import (
     ComplementoResponse,
     CriarComplementoRequest,
@@ -191,6 +192,10 @@ class ComplementoService:
             quantitativos,
             minimos_itens, 
             maximos_itens
+        )
+        logger.info(
+            f"[ComplementoService] vincular_complementos_produto called for produto={cod_barras} "
+            f"com complemento_ids={complemento_ids} ordens={ordens} obrigatorios={obrigatorios} quantitativos={quantitativos}"
         )
         self.db.commit()
         

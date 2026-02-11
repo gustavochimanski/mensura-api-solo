@@ -9,6 +9,8 @@ class ComplementoRepository:
 
     def __init__(self, db: Session):
         self.db = db
+        from app.utils.logger import logger
+        self.logger = logger
 
     def criar_complemento(self, **data) -> ComplementoModel:
         """Cria um novo complemento."""
@@ -115,6 +117,8 @@ class ComplementoRepository:
             raise ValueError(f"Complementos não encontrados: {nao_encontrados}")
         
         # Remove vinculações existentes
+        # Log e remove vinculações existentes
+        self.logger.info(f"[ComplementoRepository] Removendo vinculações existentes para produto_id={produto.id} (cod_barras={cod_barras})")
         self.db.execute(
             produto_complemento_link.delete().where(
                 produto_complemento_link.c.produto_id == produto.id
@@ -143,6 +147,7 @@ class ComplementoRepository:
             # Encontra o complemento correspondente
             complemento = next((c for c in complementos if c.id == complemento_id), None)
             if complemento:
+                self.logger.info(f"[ComplementoRepository] Inserindo vinculo produto_id={produto.id} complemento_id={complemento.id} ordem={ordens[idx]} obrigatorio={obrigatorios[idx] if obrigatorios is not None else None}")
                 self.db.execute(
                     produto_complemento_link.insert().values(
                         produto_id=produto.id,
