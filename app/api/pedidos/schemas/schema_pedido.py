@@ -1,3 +1,4 @@
+from __future__ import annotations
 from enum import Enum
 from typing import List, Optional, Union, TYPE_CHECKING
 from datetime import datetime
@@ -192,7 +193,7 @@ class ComboPedidoRequest(BaseModel):
 
     class ComboSecaoSelecionada(BaseModel):
         secao_id: int
-        itens: List[ComboSecaoSelecionadaItem] = Field(min_length=1)
+        itens: List["ComboSecaoSelecionadaItem"] = Field(min_length=1)
 
     secoes: Optional[List[ComboSecaoSelecionada]] = Field(
         default=None,
