@@ -170,14 +170,14 @@ class ConnectionManager:
                     
                     # Se ainda há conexões ativas após o cleanup, verifica o limite
                 if active_existing:
-                        # Ordena por tempo de conexão (mais antigas primeiro)
-                        active_existing.sort(
-                            key=lambda ws: self.websocket_to_connected_at.get(ws, datetime.min)
-                        )
+                    # Ordena por tempo de conexão (mais antigas primeiro)
+                    active_existing.sort(
+                        key=lambda ws: self.websocket_to_connected_at.get(ws, datetime.min)
+                    )
 
-                        allowed_existing = max(0, self.max_connections_per_user_empresa - 1)
-                        evict_count = max(0, len(active_existing) - allowed_existing)
-                        if evict_count > 0:
+                    allowed_existing = max(0, self.max_connections_per_user_empresa - 1)
+                    evict_count = max(0, len(active_existing) - allowed_existing)
+                    if evict_count > 0:
                         websockets_to_evict = active_existing[:evict_count]
 
                         # DEBUG: registra ids e timestamps das conexões que serão expulsas
@@ -187,26 +187,26 @@ class ConnectionManager:
                             evict_info.append({"ws_id": id(ws), "connected_at": ts.isoformat() if ts else None})
                         logger.debug(f"[CONNECT] Conexões selecionadas para expulsão: {evict_info}")
 
-                            # Remove do estado imediatamente (mesmo que o close falhe)
-                            for ws in websockets_to_evict:
-                                # Proteção extra: não remover acidentalmente a nova conexão (defensivo)
-                                if ws is websocket:
-                                    logger.warning(f"[CONNECT] Tentativa de expulsar a própria conexão nova (id={id(ws)}); pulando.")
-                                    continue
-                                self._remove_connection_no_lock(ws)
+                        # Remove do estado imediatamente (mesmo que o close falhe)
+                        for ws in websockets_to_evict:
+                            # Proteção extra: não remover acidentalmente a nova conexão (defensivo)
+                            if ws is websocket:
+                                logger.warning(f"[CONNECT] Tentativa de expulsar a própria conexão nova (id={id(ws)}); pulando.")
+                                continue
+                            self._remove_connection_no_lock(ws)
 
-                            logger.warning(
-                                f"[CONNECT] Limite atingido para user_id={user_id}, empresa_id={empresa_id}. "
-                                f"Fechando {len(websockets_to_evict)} conexão(ões) antiga(s) ativa(s) para aceitar a nova. "
-                                f"Total encontradas: {len(existing_same_empresa)}, Ativas: {len(active_existing)}, "
-                                f"Inativas removidas: {len(inactive_existing)}, max_connections_per_user_empresa={self.max_connections_per_user_empresa}"
-                            )
-                    else:
-                        logger.debug(
-                            f"[CONNECT] Todas as conexões existentes para user_id={user_id}, empresa_id={empresa_id} "
-                            f"já estão inativas. Total encontradas: {len(existing_same_empresa)}, "
-                            f"Inativas removidas: {len(inactive_existing)}"
+                        logger.warning(
+                            f"[CONNECT] Limite atingido para user_id={user_id}, empresa_id={empresa_id}. "
+                            f"Fechando {len(websockets_to_evict)} conexão(ões) antiga(s) ativa(s) para aceitar a nova. "
+                            f"Total encontradas: {len(existing_same_empresa)}, Ativas: {len(active_existing)}, "
+                            f"Inativas removidas: {len(inactive_existing)}, max_connections_per_user_empresa={self.max_connections_per_user_empresa}"
                         )
+                else:
+                    logger.debug(
+                        f"[CONNECT] Todas as conexões existentes para user_id={user_id}, empresa_id={empresa_id} "
+                        f"já estão inativas. Total encontradas: {len(existing_same_empresa)}, "
+                        f"Inativas removidas: {len(inactive_existing)}"
+                    )
 
             # Adiciona a nova conexão ao estado
             if user_id not in self.active_connections:
