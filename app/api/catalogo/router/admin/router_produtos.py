@@ -165,6 +165,11 @@ async def atualizar_produto(
 
   service = ProdutosMensuraService(db)
   try:
+    # Log DTO payload for debugging
+    try:
+      logger.info(f"[Produtos] atualizar_produto DTO for {cod_barras}: {json.dumps(dto.model_dump(exclude_none=True), ensure_ascii=False)}")
+    except Exception:
+      logger.info(f"[Produtos] atualizar_produto DTO for {cod_barras}: {repr(dto)}")
     prod_resp = service.atualizar_produto(cod_empresa, cod_barras, dto)
     # Se recebeu complementos no form, processa a vinculação aqui (unifica endpoints)
     if complementos is not None:
@@ -189,6 +194,16 @@ async def atualizar_produto(
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Formato inválido para 'complementos': {e}")
         complemento_resp = ComplementoService(db).vincular_complementos_produto(cod_barras, req)
+        # Log complemento response
+        try:
+            logger.info(f"[Produtos] complemento_resp for {cod_barras}: {json.dumps(complemento_resp.model_dump(), ensure_ascii=False)}")
+        except Exception:
+            logger.info(f"[Produtos] complemento_resp for {cod_barras}: {repr(complemento_resp)}")
+    # Log product response
+    try:
+      logger.info(f"[Produtos] prod_resp for {cod_barras}: {json.dumps(prod_resp.model_dump(), ensure_ascii=False)}")
+    except Exception:
+      logger.info(f"[Produtos] prod_resp for {cod_barras}: {repr(prod_resp)}")
     return prod_resp
   except ValueError as e:
     raise HTTPException(status_code=400, detail=str(e))
