@@ -157,6 +157,9 @@ class ConnectionManager:
                     ws for ws in existing_for_user
                     if self.websocket_to_empresa.get(ws) == empresa_id
                 ]
+                # Inicializa listas para evitar UnboundLocalError caso não sejam criadas abaixo
+                active_existing: List[WebSocket] = []
+                inactive_existing: List[WebSocket] = []
 
                 if existing_same_empresa:
                     # Filtra apenas conexões que ainda estão ativas
