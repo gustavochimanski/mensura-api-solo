@@ -2452,26 +2452,26 @@ _Qualquer dúvida, entre em contato conosco._"""
             except (TypeError, ValueError):
                 tempo_entrega_minutos = None
 
-            result = PreviewCheckoutResponse(
-                subtotal=float(subtotal),
-                taxa_entrega=float(taxa_entrega),
-                taxa_servico=float(taxa_servico),
-                valor_total=float(valor_total),
-                desconto=float(desconto),
-                distancia_km=float(distancia_km) if distancia_km is not None else None,
-                empresa_id=empresa_id,
-                tempo_entrega_minutos=tempo_entrega_minutos,
-            )
-            # Armazena no cache (resultado OK) — tenta model_dump para serializar
-            try:
-                import time
-                now_ts = time.time()
-                self._preview_cache[key] = (now_ts, ("ok", result.model_dump()))
-            except Exception:
-                # Log or handle the serialization error before returning result
-                import logging
-                logging.exception("Failed to serialize PreviewCheckoutResponse for cache.")
-            return result
+        result = PreviewCheckoutResponse(
+            subtotal=float(subtotal),
+            taxa_entrega=float(taxa_entrega),
+            taxa_servico=float(taxa_servico),
+            valor_total=float(valor_total),
+            desconto=float(desconto),
+            distancia_km=float(distancia_km) if distancia_km is not None else None,
+            empresa_id=empresa_id,
+            tempo_entrega_minutos=tempo_entrega_minutos,
+        )
+        # Armazena no cache (resultado OK) — tenta model_dump para serializar
+        try:
+            import time
+            now_ts = time.time()
+            self._preview_cache[key] = (now_ts, ("ok", result.model_dump()))
+        except Exception:
+            # Log or handle the serialization error before returning result
+            import logging
+            logging.exception("Failed to serialize PreviewCheckoutResponse for cache.")
+        return result
 
     # --------------- Itens auxiliares ---------------
     def _montar_observacao_item(self, item_req):
