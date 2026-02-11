@@ -8,13 +8,11 @@ from app.api.catalogo.router.admin import (
 )
 from app.api.catalogo.router.client import (
     router_complementos_client,
-    router_combos_client,
     router_busca_global_client,
 )
-from app.api.catalogo.router.public import (
-    router_complementos_public,
-    router_combos_public,
-)
+from app.api.catalogo.router.client.router_combos_client import router as router_combos_client
+from app.api.catalogo.router.public import router_complementos_public
+from app.api.catalogo.router.public.router_combos_public import router as router_combos_public
 
 router = APIRouter()
 
