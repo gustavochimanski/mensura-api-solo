@@ -169,7 +169,7 @@ class ConnectionManager:
                         self._remove_connection_no_lock(ws)
                     
                     # Se ainda há conexões ativas após o cleanup, verifica o limite
-                    if active_existing:
+                if active_existing:
                         # Ordena por tempo de conexão (mais antigas primeiro)
                         active_existing.sort(
                             key=lambda ws: self.websocket_to_connected_at.get(ws, datetime.min)
@@ -178,10 +178,21 @@ class ConnectionManager:
                         allowed_existing = max(0, self.max_connections_per_user_empresa - 1)
                         evict_count = max(0, len(active_existing) - allowed_existing)
                         if evict_count > 0:
-                            websockets_to_evict = active_existing[:evict_count]
+                        websockets_to_evict = active_existing[:evict_count]
+
+                        # DEBUG: registra ids e timestamps das conexões que serão expulsas
+                        evict_info = []
+                        for ws in websockets_to_evict:
+                            ts = self.websocket_to_connected_at.get(ws)
+                            evict_info.append({"ws_id": id(ws), "connected_at": ts.isoformat() if ts else None})
+                        logger.debug(f"[CONNECT] Conexões selecionadas para expulsão: {evict_info}")
 
                             # Remove do estado imediatamente (mesmo que o close falhe)
                             for ws in websockets_to_evict:
+                                # Proteção extra: não remover acidentalmente a nova conexão (defensivo)
+                                if ws is websocket:
+                                    logger.warning(f"[CONNECT] Tentativa de expulsar a própria conexão nova (id={id(ws)}); pulando.")
+                                    continue
                                 self._remove_connection_no_lock(ws)
 
                             logger.warning(
