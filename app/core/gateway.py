@@ -97,8 +97,16 @@ def validate_route_access(request: Request, route_type: RouteType) -> bool:
         return auth_header.startswith("Bearer ")
     
     if route_type == RouteType.CLIENT:
-        # Verifica se tem super_token no header
-        return "x-super-token" in request.headers or "X-Super-Token" in request.headers
+        # Exceções: endpoints de cadastro/login/novo-dispositivo não exigem super token
+        # Ex.: POST /api/cadastros/client/clientes (criar cliente), /novo-dispositivo (login cliente)
+        path = request.url.path.lower()
+        if path.startswith("/api/cadastros/client/clientes") and request.method.upper() == "POST":
+            return True
+        if "/novo-dispositivo" in path or "/login" in path or path.startswith("/api/auth"):
+            return True
+
+        # Verifica se tem super_token no header (case-insensitive via get)
+        return bool(request.headers.get("x-super-token") or request.headers.get("X-Super-Token"))
     
     return False
 
