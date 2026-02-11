@@ -378,19 +378,22 @@ class IngredientesService:
             Lista de itens com produto e quantidade
         """
         try:
+            # Agora os itens de combo estão em combo_secoes -> combo_secoes_itens.
             query = text("""
                 SELECT
-                    ci.id,
-                    ci.produto_cod_barras,
-                    ci.quantidade,
-                    p.descricao as produto_nome,
-                    pe.preco_venda
-                FROM catalogo.combos_itens ci
-                LEFT JOIN catalogo.produtos p ON p.cod_barras = ci.produto_cod_barras
-                LEFT JOIN catalogo.produtos_empresa pe ON pe.cod_barras = ci.produto_cod_barras
-                    AND pe.empresa_id = :empresa_id
-                WHERE ci.combo_id = :combo_id
-                ORDER BY p.descricao
+                    csi.id,
+                    COALESCE(p.descricao, r.nome, '') AS produto_nome,
+                    csi.produto_cod_barras,
+                    csi.receita_id,
+                    csi.preco_incremental,
+                    pe.preco_venda,
+                    cs.titulo as secao_titulo
+                FROM catalogo.combo_secoes_itens csi
+                JOIN catalogo.combo_secoes cs ON cs.id = csi.secao_id AND cs.combo_id = :combo_id
+                LEFT JOIN catalogo.produtos p ON p.cod_barras = csi.produto_cod_barras
+                LEFT JOIN catalogo.produtos_empresa pe ON pe.cod_barras = csi.produto_cod_barras AND pe.empresa_id = :empresa_id
+                LEFT JOIN catalogo.receitas r ON r.id = csi.receita_id
+                ORDER BY cs.ordem, csi.ordem, produto_nome
             """)
 
             result = self.db.execute(query, {
@@ -402,10 +405,12 @@ class IngredientesService:
             for row in result.fetchall():
                 itens.append({
                     "id": row[0],
-                    "cod_barras": row[1],
-                    "quantidade": row[2],
-                    "produto_nome": row[3] or "Produto",
-                    "preco_unitario": float(row[4]) if row[4] else 0
+                    "produto_nome": row[1] or "Item",
+                    "cod_barras": row[2],
+                    "receita_id": row[3],
+                    "preco_incremental": float(row[4]) if row[4] is not None else 0.0,
+                    "preco_unitario": float(row[5]) if row[5] is not None else float(row[4]) if row[4] is not None else 0.0,
+                    "secao": row[6],
                 })
 
             return itens

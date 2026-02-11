@@ -20,17 +20,6 @@ class ComboAdapter(IComboContract):
             titulo=combo.titulo,
             preco_total=combo.preco_total,
             ativo=combo.ativo,
-            itens=[
-                ComboItemDTO(
-                    produto_cod_barras=i.produto_cod_barras,
-                    receita_id=i.receita_id,
-                    quantidade=i.quantidade,
-                    preco_incremental=getattr(i, "preco_incremental", None),
-                    permite_quantidade=getattr(i, "permite_quantidade", None),
-                    quantidade_min=getattr(i, "quantidade_min", None),
-                    quantidade_max=getattr(i, "quantidade_max", None),
-                ) for i in combo.itens
-            ],
             secoes=[
                 {
                     "id": s.id,

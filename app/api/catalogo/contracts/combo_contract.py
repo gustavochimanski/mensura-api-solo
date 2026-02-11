@@ -22,8 +22,8 @@ class ComboMiniDTO(BaseModel):
     titulo: str
     preco_total: Decimal
     ativo: bool
-    itens: List[ComboItemDTO]
-    secoes: list | None = None
+    # Itens diretos foram removidos: combos agora são representados apenas por seções.
+    secoes: list
 
 
 class IComboContract(ABC):
