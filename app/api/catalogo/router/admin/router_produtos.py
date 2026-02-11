@@ -122,6 +122,8 @@ async def atualizar_produto(
   db: Session = Depends(get_db),
 ):
   logger.info(f"[Produtos] Atualizar - {cod_barras} / empresa {cod_empresa}")
+  # Log complementos param even if empty/None for debugging PUT payloads
+  logger.info(f"[Produtos] complementos param received for {cod_barras}: {repr(complementos)}")
   
   # processa upload de imagem se fornecido
   imagem_url = None
