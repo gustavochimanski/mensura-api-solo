@@ -42,7 +42,7 @@ class ComboSecaoIn(BaseModel):
 class CriarComboRequest(BaseModel):
     empresa_id: int
     titulo: constr(min_length=1, max_length=120)
-    descricao: constr(min_length=1, max_length=255)
+    descricao: Optional[constr(min_length=1, max_length=255)] = None
     preco_total: condecimal(max_digits=18, decimal_places=2) = Field(..., ge=0)
     custo_total: Optional[condecimal(max_digits=18, decimal_places=2)] = None
     ativo: bool = True
