@@ -83,6 +83,33 @@ class CombosService:
         if imagem is not None:
             imagem_url = update_file_to_minio(self.db, combo.empresa_id, imagem, "combos", url_antiga=combo.imagem)
 
+        # prepara payload de secoes para atualização (evita compreensões aninhadas complexas)
+        secoes_payload = None
+        if req.secoes is not None:
+            secoes_payload = []
+            for s in req.secoes:
+                itens_payload = []
+                for it in s.itens:
+                    itens_payload.append({
+                        "produto_cod_barras": it.produto_cod_barras if it.produto_cod_barras else None,
+                        "receita_id": it.receita_id if it.receita_id else None,
+                        "preco_incremental": it.preco_incremental,
+                        "permite_quantidade": it.permite_quantidade,
+                        "quantidade_min": it.quantidade_min,
+                        "quantidade_max": it.quantidade_max,
+                        "ordem": getattr(it, "ordem", 0),
+                    })
+                secoes_payload.append({
+                    "titulo": s.titulo,
+                    "descricao": s.descricao,
+                    "obrigatorio": s.obrigatorio,
+                    "quantitativo": s.quantitativo,
+                    "minimo_itens": s.minimo_itens,
+                    "maximo_itens": s.maximo_itens,
+                    "ordem": getattr(s, "ordem", 0),
+                    "itens": itens_payload,
+                })
+
         combo = self.repo.atualizar_combo(
             combo,
             titulo=req.titulo,
@@ -92,26 +119,7 @@ class CombosService:
             ativo=req.ativo,
             imagem_url=imagem_url,
             itens=[],
-            secoes=([{
-                "titulo": s.titulo,
-                "descricao": s.descricao,
-                "obrigatorio": s.obrigatorio,
-                "quantitativo": s.quantitativo,
-                "minimo_itens": s.minimo_itens,
-                "maximo_itens": s.maximo_itens,
-                "ordem": getattr(s, "ordem", 0),
-                "itens": [
-                    {
-                        "produto_cod_barras": it.produto_cod_barras if it.produto_cod_barras else None,
-                        "receita_id": it.receita_id if it.receita_id else None,
-                        "preco_incremental": it.preco_incremental,
-                        "permite_quantidade": it.permite_quantidade,
-                        "quantidade_min": it.quantidade_min,
-                        "quantidade_max": it.quantidade_max,
-                        "ordem": getattr(it, "ordem", 0),
-                    } for it in s.itens
-                ]
-            } for s in (req.secoes or [])] if req.secoes is not None else None,
+            secoes=secoes_payload,
         )
         self.db.commit()
         self.db.refresh(combo)
