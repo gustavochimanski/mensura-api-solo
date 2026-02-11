@@ -167,13 +167,18 @@ async def atualizar_produto(
   try:
     prod_resp = service.atualizar_produto(cod_empresa, cod_barras, dto)
     # Se recebeu complementos no form, processa a vinculação aqui (unifica endpoints)
-    if complementos:
-        # Log raw payload for debugging
-        logger.info(f"[Produtos] complementos raw payload for {cod_barras}: {complementos}")
-        try:
-            payload = json.loads(complementos)
-        except Exception:
-            raise HTTPException(status_code=400, detail="Campo 'complementos' deve ser um JSON válido")
+    if complementos is not None:
+        # Log raw payload for debugging (may be empty string)
+        logger.info(f"[Produtos] complementos raw payload for {cod_barras}: {repr(complementos)}")
+        # Interpret empty string as explicit "remove all" -> complemento_ids = []
+        if isinstance(complementos, str) and complementos.strip() == "":
+            payload = {"complemento_ids": []}
+            logger.info(f"[Produtos] complementos interpreted as empty list for {cod_barras}")
+        else:
+            try:
+                payload = json.loads(complementos)
+            except Exception:
+                raise HTTPException(status_code=400, detail="Campo 'complementos' deve ser um JSON válido")
         # Log parsed payload
         try:
             logger.info(f"[Produtos] complementos parsed payload for {cod_barras}: {json.dumps(payload, ensure_ascii=False)}")
