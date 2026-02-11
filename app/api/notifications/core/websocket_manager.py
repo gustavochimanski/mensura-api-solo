@@ -217,9 +217,26 @@ class ConnectionManager:
         
         # Fecha as conexões expulsas (fora do lock, best-effort)
         for ws in websockets_to_evict:
+            # Tenta notificar o cliente que será desconectado e deve deslogar/fechar sessão no front
+            try:
+                if self._is_websocket_active(ws):
+                    logout_msg = {
+                        "type": "event",
+                        "event": "force_logout",
+                        "scope": "usuario",
+                        "payload": {
+                            "reason": "conexao_substituida",
+                            "message": "Sua sessão foi encerrada porque houve nova conexão para sua conta."
+                        },
+                        "timestamp": datetime.utcnow().isoformat()
+                    }
+                    await ws.send_text(json.dumps(logout_msg))
+            except Exception as e:
+                logger.debug(f"[CONNECT] Falha ao notificar websocket expulsado (id={id(ws)}): {e}")
+
             await self._best_effort_close(
                 ws,
-                code=4000,
+                code=4001,
                 reason="Conexão substituída por outra mais recente para o mesmo usuário/empresa"
             )
         
