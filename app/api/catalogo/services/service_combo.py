@@ -11,7 +11,8 @@ from app.api.catalogo.schemas.schema_combo import (
     CriarComboRequest,
     AtualizarComboRequest,
     ComboDTO,
-    ComboItemDTO,
+    ComboSecaoDTO,
+    ComboSecaoItemDTO,
     ListaCombosResponse,
 )
 from app.api.pedidos.models.model_pedido_item_unificado import PedidoItemUnificadoModel
@@ -45,12 +46,28 @@ class CombosService:
             custo_total=(Decimal(str(req.custo_total)) if req.custo_total is not None else None),
             ativo=req.ativo,
             imagem_url=imagem_url,
-            itens=[
+            itens=[],
+            secoes=[
                 {
-                    "produto_cod_barras": it.produto_cod_barras if it.produto_cod_barras else None,
-                    "receita_id": it.receita_id if it.receita_id else None,
-                    "quantidade": it.quantidade
-                } for it in req.itens
+                    "titulo": s.titulo,
+                    "descricao": s.descricao,
+                    "obrigatorio": s.obrigatorio,
+                    "quantitativo": s.quantitativo,
+                    "minimo_itens": s.minimo_itens,
+                    "maximo_itens": s.maximo_itens,
+                    "ordem": getattr(s, "ordem", 0),
+                    "itens": [
+                        {
+                            "produto_cod_barras": it.produto_cod_barras if it.produto_cod_barras else None,
+                            "receita_id": it.receita_id if it.receita_id else None,
+                            "preco_incremental": it.preco_incremental,
+                            "permite_quantidade": it.permite_quantidade,
+                            "quantidade_min": it.quantidade_min,
+                            "quantidade_max": it.quantidade_max,
+                            "ordem": getattr(it, "ordem", 0),
+                        } for it in s.itens
+                    ]
+                } for s in req.secoes
             ],
         )
         self.db.commit()
@@ -74,16 +91,27 @@ class CombosService:
             custo_total=(Decimal(str(req.custo_total)) if req.custo_total is not None else None),
             ativo=req.ativo,
             imagem_url=imagem_url,
-            itens=(
-                [
+            itens=[],
+            secoes=([{
+                "titulo": s.titulo,
+                "descricao": s.descricao,
+                "obrigatorio": s.obrigatorio,
+                "quantitativo": s.quantitativo,
+                "minimo_itens": s.minimo_itens,
+                "maximo_itens": s.maximo_itens,
+                "ordem": getattr(s, "ordem", 0),
+                "itens": [
                     {
                         "produto_cod_barras": it.produto_cod_barras if it.produto_cod_barras else None,
                         "receita_id": it.receita_id if it.receita_id else None,
-                        "quantidade": it.quantidade
-                    } for it in (req.itens or [])
+                        "preco_incremental": it.preco_incremental,
+                        "permite_quantidade": it.permite_quantidade,
+                        "quantidade_min": it.quantidade_min,
+                        "quantidade_max": it.quantidade_max,
+                        "ordem": getattr(it, "ordem", 0),
+                    } for it in s.itens
                 ]
-                if req.itens is not None else None
-            ),
+            } for s in (req.secoes or [])] if req.secoes is not None else None,
         )
         self.db.commit()
         self.db.refresh(combo)
@@ -143,12 +171,29 @@ class CombosService:
             custo_total=(float(combo.custo_total) if combo.custo_total is not None else None),
             ativo=combo.ativo,
             imagem=combo.imagem,
-            itens=[
-                ComboItemDTO(
-                    produto_cod_barras=i.produto_cod_barras,
-                    receita_id=i.receita_id,
-                    quantidade=i.quantidade
-                ) for i in combo.itens
+            secoes=[
+                ComboSecaoDTO(
+                    id=s.id,
+                    titulo=s.titulo,
+                    descricao=s.descricao,
+                    obrigatorio=s.obrigatorio,
+                    quantitativo=s.quantitativo,
+                    minimo_itens=s.minimo_itens,
+                    maximo_itens=s.maximo_itens,
+                    itens=[
+                        ComboSecaoItemDTO(
+                            id=i.id,
+                            produto_cod_barras=i.produto_cod_barras,
+                            receita_id=i.receita_id,
+                            preco_incremental=float(i.preco_incremental),
+                            permite_quantidade=i.permite_quantidade,
+                            quantidade_min=i.quantidade_min,
+                            quantidade_max=i.quantidade_max,
+                            ordem=i.ordem,
+                        ) for i in s.itens
+                    ],
+                    ordem=getattr(s, "ordem", 0),
+                ) for s in combo.secoes
             ],
             created_at=combo.created_at,
             updated_at=combo.updated_at,

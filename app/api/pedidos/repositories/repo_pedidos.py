@@ -779,8 +779,18 @@ class PedidoRepository:
             PedidoItemComplementoAdicionalModel,
         )
 
-        if not complementos_request or not isinstance(complementos_request, list):
+        # Support both legacy list-of-complementos and new dict format:
+        # legacy: complementos_request = [ {complemento_id, adicionais: [...]}, ... ]
+        # new: complementos_request = { "complementos": [...], "secoes": [...] }
+        secoes_selecionadas: list = []
+        if not complementos_request:
             return
+
+        if isinstance(complementos_request, dict):
+            complementos_list = complementos_request.get("complementos", []) or []
+            secoes_selecionadas = complementos_request.get("secoes", []) or []
+        else:
+            complementos_list = complementos_request if isinstance(complementos_request, list) else []
 
         complemento_contract = ComplementoAdapter(self.db)
 
@@ -792,7 +802,7 @@ class PedidoRepository:
         complemento_ids: list[int] = []
         selecionados_por_complemento: dict[int, list[dict]] = {}
 
-        for comp_req in complementos_request:
+        for comp_req in complementos_list:
             comp_id = getattr(comp_req, "complemento_id", None)
             if comp_id is None:
                 continue
@@ -808,7 +818,7 @@ class PedidoRepository:
                 if getattr(a, "adicional_id", None) is not None
             ]
 
-        if not complemento_ids:
+        if not complemento_ids and not secoes_selecionadas:
             return
 
         # Busca/valida complementos conforme tipo do item
@@ -829,61 +839,109 @@ class PedidoRepository:
         elif empresa_id is not None:
             complementos_db = complemento_contract.buscar_por_ids(int(empresa_id), complemento_ids)
 
-        if not complementos_db:
-            return
+        # Persistir complementos tradicionais (se existirem)
+        if complementos_db:
+            qtd_item = int(getattr(item, "quantidade", 1) or 1)
 
-        qtd_item = int(getattr(item, "quantidade", 1) or 1)
-
-        for comp in complementos_db:
-            comp_id = getattr(comp, "id", None)
-            if comp_id is None:
-                continue
-            selecionados = selecionados_por_complemento.get(int(comp_id), [])
-            if not selecionados:
-                continue
-
-            adicionais_catalogo = {getattr(a, "id", None): a for a in (getattr(comp, "adicionais", None) or [])}
-            comp_total = Dec("0")
-
-            # Monta lista de adicionais válidos
-            adicionais_rows: list[tuple[int, str, int, Dec, Dec]] = []
-            for sel in selecionados:
-                ad_id = sel.get("adicional_id")
-                if ad_id is None or ad_id not in adicionais_catalogo:
+            for comp in complementos_db:
+                comp_id = getattr(comp, "id", None)
+                if comp_id is None:
                     continue
-                ad = adicionais_catalogo[ad_id]
-                preco_unit = Dec(str(getattr(ad, "preco", 0) or 0))
-                qtd_ad = int(sel.get("quantidade") or 1)
-                if qtd_ad < 1:
-                    qtd_ad = 1
-                # Se o complemento não for quantitativo, força qtd_ad = 1
-                if not bool(getattr(comp, "quantitativo", False)):
-                    qtd_ad = 1
-                total_ad = preco_unit * Dec(str(qtd_ad)) * Dec(str(qtd_item))
-                comp_total += total_ad
-                adicionais_rows.append((int(ad_id), str(getattr(ad, "nome", "") or ""), qtd_ad, preco_unit, total_ad))
+                selecionados = selecionados_por_complemento.get(int(comp_id), [])
+                if not selecionados:
+                    continue
 
-            if not adicionais_rows:
-                continue
+                adicionais_catalogo = {getattr(a, "id", None): a for a in (getattr(comp, "adicionais", None) or [])}
+                comp_total = Dec("0")
 
-            comp_row = PedidoItemComplementoModel(
-                pedido_item_id=item.id,
-                complemento_id=int(comp_id),
-                total=comp_total,
-            )
-            self.db.add(comp_row)
-            self.db.flush()
+                # Monta lista de adicionais válidos
+                adicionais_rows: list[tuple[int, str, int, Dec, Dec]] = []
+                for sel in selecionados:
+                    ad_id = sel.get("adicional_id")
+                    if ad_id is None or ad_id not in adicionais_catalogo:
+                        continue
+                    ad = adicionais_catalogo[ad_id]
+                    preco_unit = Dec(str(getattr(ad, "preco", 0) or 0))
+                    qtd_ad = int(sel.get("quantidade") or 1)
+                    if qtd_ad < 1:
+                        qtd_ad = 1
+                    # Se o complemento não for quantitativo, força qtd_ad = 1
+                    if not bool(getattr(comp, "quantitativo", False)):
+                        qtd_ad = 1
+                    total_ad = preco_unit * Dec(str(qtd_ad)) * Dec(str(qtd_item))
+                    comp_total += total_ad
+                    adicionais_rows.append((int(ad_id), str(getattr(ad, "nome", "") or ""), qtd_ad, preco_unit, total_ad))
 
-            for adicional_id, nome, qtd_ad, preco_unit, total_ad in adicionais_rows:
-                self.db.add(
-                    PedidoItemComplementoAdicionalModel(
-                        item_complemento_id=comp_row.id,
-                        adicional_id=adicional_id,
-                        quantidade=qtd_ad,
-                        preco_unitario=preco_unit,
-                        total=total_ad,
-                    )
+                if not adicionais_rows:
+                    continue
+
+                comp_row = PedidoItemComplementoModel(
+                    pedido_item_id=item.id,
+                    complemento_id=int(comp_id),
+                    total=comp_total,
                 )
+                self.db.add(comp_row)
+                self.db.flush()
+
+                for adicional_id, nome, qtd_ad, preco_unit, total_ad in adicionais_rows:
+                    self.db.add(
+                        PedidoItemComplementoAdicionalModel(
+                            item_complemento_id=comp_row.id,
+                            adicional_id=adicional_id,
+                            quantidade=qtd_ad,
+                            preco_unitario=preco_unit,
+                            total=total_ad,
+                        )
+                    )
+
+        # Persistir seleções de seções de combo (novo)
+        try:
+            if secoes_selecionadas and getattr(item, "combo_id", None) is not None:
+                # Import models dinamicamente para evitar ciclo de import
+                from app.api.catalogo.models.model_combo_secoes import ComboSecaoModel, ComboSecaoItemModel
+                from app.api.pedidos.models.model_pedido_item_combo_secoes import (
+                    PedidoItemComboSecaoModel,
+                    PedidoItemComboSecaoItemModel,
+                )
+
+                for sec_sel in secoes_selecionadas:
+                    secao_id = int(sec_sel.get("secao_id"))
+                    itens_sel = sec_sel.get("itens", []) or []
+                    sec_model = self.db.query(ComboSecaoModel).filter(ComboSecaoModel.id == secao_id).first()
+                    sec_titulo = getattr(sec_model, "titulo", None) if sec_model is not None else None
+
+                    sec_row = PedidoItemComboSecaoModel(
+                        pedido_item_id=item.id,
+                        secao_id=secao_id,
+                        secao_titulo_snapshot=sec_titulo,
+                        ordem=getattr(sec_model, "ordem", 0) if sec_model is not None else 0,
+                    )
+                    self.db.add(sec_row)
+                    self.db.flush()
+
+                    # Persistir itens selecionados da seção
+                    for it_sel in itens_sel:
+                        item_id = int(it_sel.get("id"))
+                        qtd_it = int(it_sel.get("quantidade", 1) or 1)
+                        cat_item = self.db.query(ComboSecaoItemModel).filter(ComboSecaoItemModel.id == item_id).first()
+                        preco_inc = getattr(cat_item, "preco_incremental", 0) if cat_item is not None else 0
+                        prod_cod = getattr(cat_item, "produto_cod_barras", None) if cat_item is not None else None
+                        receita_snap = getattr(cat_item, "receita_id", None) if cat_item is not None else None
+
+                        sec_item_row = PedidoItemComboSecaoItemModel(
+                            pedido_item_secao_id=sec_row.id,
+                            combo_secoes_item_id=item_id,
+                            produto_cod_barras_snapshot=prod_cod,
+                            receita_id_snapshot=receita_snap,
+                            preco_incremental_snapshot=preco_inc,
+                            quantidade=qtd_it,
+                        )
+                        self.db.add(sec_item_row)
+                self.db.flush()
+        except Exception:
+            # Não falhar toda a persistência de complementos caso algo dê errado ao gravar seções
+            pass
+        # end _persistir_complementos_do_request
 
     def atualizar_item(
         self,

@@ -792,22 +792,32 @@ def get_conversations_by_user(
     )
     result = db.execute(query, params)
 
-    return [
-        {
-            "id": row[0],
-            "session_id": row[1],
-            "user_id": row[2],
-            "contact_name": row[3],
-            "prompt_key": row[4],
-            "model": row[5],
-            "empresa_id": row[6],
-            "profile_picture_url": row[7],
-            "created_at": row[8],
-            "updated_at": row[9],
-            "last_message_at": row[10],
-        }
-        for row in result.fetchall()
-    ]
+    rows = result.fetchall()
+    conversations = []
+    for row in rows:
+        try:
+            bot_status = get_bot_status(db, row[2])
+        except Exception:
+            bot_status = {"phone_number": row[2], "is_active": True}
+
+        conversations.append(
+            {
+                "id": row[0],
+                "session_id": row[1],
+                "user_id": row[2],
+                "contact_name": row[3],
+                "prompt_key": row[4],
+                "model": row[5],
+                "empresa_id": row[6],
+                "profile_picture_url": row[7],
+                "created_at": row[8],
+                "updated_at": row[9],
+                "last_message_at": row[10],
+                "bot_status": bot_status,
+            }
+        )
+
+    return conversations
 
 
 def update_conversation(db: Session, conversation_id: int):

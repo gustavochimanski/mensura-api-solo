@@ -185,6 +185,19 @@ class ComboPedidoRequest(BaseModel):
         default=None,
         description="Lista de complementos do combo, cada um com seus adicionais selecionados",
     )
+    # Seções do combo selecionadas (novo formato)
+    class ComboSecaoSelecionadaItem(BaseModel):
+        id: int
+        quantidade: int = Field(ge=1, default=1)
+
+    class ComboSecaoSelecionada(BaseModel):
+        secao_id: int
+        itens: List[ComboSecaoSelecionadaItem] = Field(min_length=1)
+
+    secoes: Optional[List[ComboSecaoSelecionada]] = Field(
+        default=None,
+        description="Lista de seções do combo com itens selecionados e suas quantidades",
+    )
 
 
 class ProdutosPedidoRequest(BaseModel):

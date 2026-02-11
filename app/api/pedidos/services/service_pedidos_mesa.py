@@ -320,7 +320,11 @@ class PedidoMesaService:
                 # Monta observação completa para combos
                 observacao_completa = f"Combo #{product.identifier} - {descricao_produto}"
                 
-                # Adiciona item
+                # Adiciona item (inclui secoes selecionadas se presentes)
+                complementos_payload = {
+                    "complementos": combo_req.complementos if getattr(combo_req, "complementos", None) else [],
+                    "secoes": combo_req.secoes if getattr(combo_req, "secoes", None) else [],
+                }
                 self.repo.add_item(
                     pedido.id,
                     combo_id=combo_req.combo_id,
@@ -328,7 +332,7 @@ class PedidoMesaService:
                     preco_unitario=preco_unitario,
                     observacao=observacao_completa,
                     produto_descricao_snapshot=descricao_produto,
-                    complementos=combo_req.complementos if combo_req.complementos else None,
+                    complementos=complementos_payload,
                 )
             self.repo.commit()
         

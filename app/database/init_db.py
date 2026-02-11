@@ -658,6 +658,43 @@ def criar_tabelas_cardapio_antes():
     except Exception as e:
         logger.error(f"❌ Erro ao importar modelos do cardapio: {e}", exc_info=True)
 
+
+def aplicar_migrations_locais():
+    """
+    Executa arquivos SQL de migrations locais encontrados em <repo_root>/migrations/sql.
+    Os arquivos são aplicados em ordem alfanumérica. Os scripts devem ser idempotentes.
+    """
+    try:
+        from pathlib import Path
+
+        logger.info("📦 Aplicando migrations locais em migrations/sql/ ...")
+        repo_root = Path(__file__).resolve().parents[2]
+        sql_dir = repo_root / "migrations" / "sql"
+        if not sql_dir.exists():
+            logger.info("ℹ️ migrations/sql/ não existe; pulando migrations locais.")
+            return
+
+        sql_files = sorted([p for p in sql_dir.iterdir() if p.is_file() and p.suffix.lower() == ".sql"])
+        if not sql_files:
+            logger.info("ℹ️ Nenhum arquivo .sql encontrado em migrations/sql/; pulando.")
+            return
+
+        for sql_file in sql_files:
+            try:
+                logger.info("↪ Aplicando %s", sql_file.name)
+                sql_text = sql_file.read_text(encoding="utf-8")
+                with engine.begin() as conn:
+                    conn.execute(text(sql_text))
+            except Exception as ex_file:
+                logger.error("❌ Falha ao aplicar %s: %s", sql_file.name, ex_file, exc_info=True)
+                # Continua com outros arquivos, não interrompe toda inicialização
+                continue
+
+        logger.info("✅ Aplicação de migrations locais concluída.")
+    except Exception as e:
+        logger.error("❌ Erro ao executar aplicar_migrations_locais: %s", e, exc_info=True)
+        return
+
 def criar_tabela_pedidos_sem_postgis():
     """
     Função removida - tabelas são criadas automaticamente pelos imports dos modelos.
@@ -2040,6 +2077,9 @@ def inicializar_banco():
     # Cria os ENUMs antes de criar as tabelas
     logger.info("📦 Passo 5/8: Criando/verificando ENUMs...")
     criar_enums()
+    
+    # Aplica migrations SQL locais (migrations/sql/*.sql) — idempotente
+    aplicar_migrations_locais()
     
     # SEMPRE cria as tabelas (criar_tabelas usa checkfirst=True, então não sobrescreve)
     logger.info("📋 Passo 6/8: Criando/verificando todas as tabelas...")

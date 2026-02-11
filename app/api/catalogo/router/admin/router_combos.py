@@ -53,20 +53,20 @@ async def criar_combo(
     descricao: str = Form(...),
     preco_total: float = Form(...),
     ativo: bool = Form(True),
-    itens: str = Form(..., description="JSON de itens: [{produto_cod_barras, quantidade}]"),
+    secoes: str = Form(..., description="JSON de seções do combo"),
     imagem: UploadFile | None = None,
     db: Session = Depends(get_db),
 ):
     svc = CombosService(db)
     try:
-        itens_list = json.loads(itens)
+        secoes_list = json.loads(secoes)
         req = CriarComboRequest(
             empresa_id=empresa_id,
             titulo=titulo,
             descricao=descricao,
             preco_total=preco_total,
             ativo=ativo,
-            itens=itens_list,
+            secoes=secoes_list,
         )
         return svc.criar(req, imagem=imagem)
     except ValueError as e:
@@ -80,7 +80,7 @@ async def atualizar_combo(
     descricao: str | None = Form(None),
     preco_total: float | None = Form(None),
     ativo: bool | None = Form(None),
-    itens: str | None = Form(None),  # JSON opcional
+    secoes: str | None = Form(None),  # JSON opcional
     imagem: UploadFile | None = None,
     db: Session = Depends(get_db),
 ):
@@ -91,7 +91,7 @@ async def atualizar_combo(
             descricao=descricao,
             preco_total=preco_total,
             ativo=ativo,
-            itens=(json.loads(itens) if itens is not None else None),
+            secoes=(json.loads(secoes) if secoes is not None else None),
         )
         return svc.atualizar(combo_id, req, imagem=imagem)
     except ValueError as e:

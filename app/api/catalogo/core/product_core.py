@@ -406,6 +406,39 @@ class ProductCore:
                 combo_id=combo_id,
                 receita_id=receita_id,
             )
+            # --- Novo: Suporte a 'secoes' em complementos_request para combos ---
+            # complementos_request pode ser um dict contendo {'complementos': [...], 'secoes':[...]}
+            # Se houver seleções de seções, somamos os preco_incremental dos itens selecionados.
+            try:
+                secoes_selecionadas = []
+                if isinstance(complementos_request, dict):
+                    secoes_selecionadas = complementos_request.get("secoes", []) or []
+                # Se houver seções selecionadas e contrato de combo disponível, sumariza incrementais
+                if product.product_type == ProductType.COMBO and secoes_selecionadas and self.combo_contract:
+                    combo_dto = self.combo_contract.buscar_por_id(int(product.identifier))
+                    if combo_dto:
+                        # mapa: secao_id -> dict(itens por id)
+                        secoes_map = {s.get("id"): s for s in getattr(combo_dto, "secoes", [])}
+                        adicional_total = Decimal("0")
+                        for sel in secoes_selecionadas:
+                            sec_id = int(sel.get("secao_id"))
+                            itens_sel = sel.get("itens", []) or []
+                            sec_catalog = secoes_map.get(sec_id)
+                            if not sec_catalog:
+                                continue
+                            itens_catalog_map = {it.get("id"): it for it in sec_catalog.get("itens", [])}
+                            for it_sel in itens_sel:
+                                item_id = int(it_sel.get("id"))
+                                qtd_it = max(1, int(it_sel.get("quantidade", 1) or 1))
+                                it_cat = itens_catalog_map.get(item_id)
+                                if not it_cat:
+                                    continue
+                                preco_inc = Decimal(str(it_cat.get("preco_incremental", 0) or 0))
+                                adicional_total += preco_inc * Decimal(str(qtd_it)) * Decimal(str(quantidade))
+                        total_complementos += adicional_total
+            except Exception:
+                # Não parar o cálculo de complementos se houver problema ao processar seções
+                pass
         
         preco_total = preco_base + total_complementos
         return preco_total, snapshot

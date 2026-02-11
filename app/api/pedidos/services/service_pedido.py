@@ -708,7 +708,16 @@ class PedidoService:
                 # Os complementos são somados separadamente via _sum_complementos_total_relacional
                 # para evitar duplicação no cálculo do total do item
                 complementos_combo = getattr(cb, "complementos", None) or []
-                preco_unit_combo = product.get_preco_venda()
+                secoes_selecionadas = getattr(cb, "secoes", None) or []
+                # Combina complementos tradicionais com seleções de seções em um dict
+                complementos_request = {"complementos": complementos_combo, "secoes": secoes_selecionadas}
+                # Calcula preço total do combo incluindo incrementais de seções
+                preco_total_combo, _ = self.product_core.calcular_preco_com_complementos(
+                    product=product,
+                    quantidade=qtd_combo,
+                    complementos_request=complementos_request,
+                )
+                preco_unit_combo = preco_total_combo / Decimal(str(qtd_combo))
                 # O subtotal será recalculado depois incluindo complementos via _recalcular_pedido
                 observacao_combo = product.nome
                 if hasattr(cb, 'observacao') and cb.observacao:
@@ -721,7 +730,7 @@ class PedidoService:
                     preco_unitario=preco_unit_combo,
                     observacao=observacao_combo,
                     produto_descricao_snapshot=product.nome or product.descricao,
-                    complementos=complementos_combo,
+                    complementos=complementos_request,
                 )
             
             # IMPORTANTE: Recalcula o subtotal usando _calc_total que já inclui complementos
@@ -2405,10 +2414,12 @@ _Qualquer dúvida, entre em contato conosco._"""
 
             # Calcula preço com complementos usando ProductCore
             complementos_combo = getattr(cb, "complementos", None) or []
+            secoes_selecionadas = getattr(cb, "secoes", None) or []
+            complementos_request = {"complementos": complementos_combo, "secoes": secoes_selecionadas}
             preco_total_combo, _ = self.product_core.calcular_preco_com_complementos(
                 product=product,
                 quantidade=qtd_combo,
-                complementos_request=complementos_combo,
+                complementos_request=complementos_request,
             )
             subtotal += preco_total_combo
 

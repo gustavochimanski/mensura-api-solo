@@ -10,6 +10,10 @@ class ComboItemDTO(BaseModel):
     produto_cod_barras: str | None = None
     receita_id: int | None = None
     quantidade: int
+    preco_incremental: float | None = None
+    permite_quantidade: bool | None = None
+    quantidade_min: int | None = None
+    quantidade_max: int | None = None
 
 
 class ComboMiniDTO(BaseModel):
@@ -19,6 +23,7 @@ class ComboMiniDTO(BaseModel):
     preco_total: Decimal
     ativo: bool
     itens: List[ComboItemDTO]
+    secoes: list | None = None
 
 
 class IComboContract(ABC):

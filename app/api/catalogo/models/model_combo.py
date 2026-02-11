@@ -32,6 +32,13 @@ class ComboModel(Base):
         back_populates="combos",
         viewonly=True,  # Leitura apenas, pois a relação real é no link
     )
+    # Seções do combo (novo modelo para suportar seções com itens e regras)
+    secoes = relationship(
+        "ComboSecaoModel",
+        back_populates="combo",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
     model_config = ConfigDict(from_attributes=True)
 
