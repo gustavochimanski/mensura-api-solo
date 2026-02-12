@@ -2117,7 +2117,7 @@ def inicializar_banco():
                     # Computa maior sufixo numérico já presente para este prefixo/empresa
                     # Extrai apenas dígitos do sufixo para evitar falhas com formatos não-numéricos
                     max_q = text(
-                        "SELECT COALESCE(MAX((NULLIF(regexp_replace(split_part(numero_pedido, '-', 2), '\\\\D', '', 'g'))::bigint)), 0) AS max_seq "
+                        "SELECT COALESCE(MAX((NULLIF(regexp_replace(split_part(numero_pedido, '-', 2), '\\\\D', '', 'g'), ''))::bigint), 0) AS max_seq "
                         "FROM pedidos.pedidos "
                         "WHERE empresa_id = :empresa_id AND numero_pedido LIKE :like"
                     )
