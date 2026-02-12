@@ -394,12 +394,10 @@ class PedidoRepository:
                 msg = str(orig) if orig is not None else str(exc)
                 # Se foi colisão no unique (numero_pedido), gera novo número e tenta novamente
                 if "uq_pedidos_empresa_numero" in msg or "UniqueViolation" in msg:
-                    pedido.numero_pedido = self._next_numero_prefixado(
+                    pedido.numero_pedido = self._next_numero_via_sequence(
                         empresa_id=empresa_id,
-                        tipo_entrega=TipoEntrega.DELIVERY.value,
                         prefixo="DV",
                         width=6,
-                        lock_code=1001,
                     )
                     continue
                 # Re-raise para outros tipos de IntegrityError
@@ -457,12 +455,10 @@ class PedidoRepository:
             except IntegrityError as exc:
                 self.db.rollback()
                 if "uq_pedidos_empresa_numero" in str(exc.orig) or "UniqueViolation" in str(exc.orig):
-                    pedido.numero_pedido = self._next_numero_prefixado(
+                    pedido.numero_pedido = self._next_numero_via_sequence(
                         empresa_id=empresa_id,
-                        tipo_entrega=TipoEntrega.BALCAO.value,
                         prefixo="BAL",
                         width=6,
-                        lock_code=1002,
                     )
                     continue
                 raise
@@ -523,15 +519,10 @@ class PedidoRepository:
             except IntegrityError as exc:
                 self.db.rollback()
                 if "uq_pedidos_empresa_numero" in str(exc.orig) or "UniqueViolation" in str(exc.orig):
-                    pedido.numero_pedido = self._next_numero_prefixado(
+                    pedido.numero_pedido = self._next_numero_via_sequence(
                         empresa_id=empresa_id,
-                        tipo_entrega=TipoEntrega.MESA.value,
                         prefixo=str(mesa.numero),
                         width=3,
-                        lock_code=300000 + int(mesa_id),
-                        extra_filters=[
-                            PedidoUnificadoModel.mesa_id == mesa_id,
-                        ],
                     )
                     continue
                 raise
