@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Optional
+import re
 
 from fastapi import HTTPException
 from starlette import status
@@ -109,6 +110,28 @@ class PedidoRepository:
                 seq_atual = 0
 
         return f"{prefixo}-{(seq_atual + 1):0{width}d}"
+
+    # ------------- Geração por sequence (opção B) -------------
+    def _seq_name(self, empresa_id: int, prefix: str) -> str:
+        """Gera um nome seguro de sequence a partir de empresa_id e prefixo."""
+        prefix_clean = re.sub(r"[^0-9A-Za-z_]", "_", str(prefix)).lower()
+        return f"pedido_num_seq_{empresa_id}_{prefix_clean}"
+
+    def _ensure_sequence_exists(self, seq_name: str) -> None:
+        """Cria a sequence no schema pedidos se não existir."""
+        # Identificadores não podem ser bind params, mas seq_name é construído internamente (int + sanitized prefix)
+        self.db.execute(text(f"CREATE SEQUENCE IF NOT EXISTS pedidos.{seq_name} START 1"))
+
+    def _next_numero_via_sequence(self, *, empresa_id: int, prefixo: str, width: int) -> str:
+        """
+        Obtém nextval de uma sequence por empresa/prefixo e formata o numero.
+        Sequências são atômicas no BD e previnem colisões sem advisory locks.
+        """
+        seq_name = self._seq_name(empresa_id, prefixo)
+        self._ensure_sequence_exists(seq_name)
+        nextv = self.db.execute(text(f"SELECT nextval('pedidos.{seq_name}')")).scalar()
+        seq = int(nextv)
+        return f"{prefixo}-{seq:0{width}d}"
 
     # ------------- Validations / Queries -------------
     def get_cliente(self, telefone: str) -> Optional[ClienteModel]:
@@ -336,13 +359,8 @@ class PedidoRepository:
     ) -> PedidoUnificadoModel:
         """Cria um pedido de delivery."""
         # Gera número único de pedido: DV-{sequencial} por empresa (concorrência segura)
-        numero = self._next_numero_prefixado(
-            empresa_id=empresa_id,
-            tipo_entrega=TipoEntrega.DELIVERY.value,
-            prefixo="DV",
-            width=6,
-            lock_code=1001,
-        )
+        # Usa sequence por empresa/prefixo para evitar colisões (Opção B)
+        numero = self._next_numero_via_sequence(empresa_id=empresa_id, prefixo="DV", width=6)
         
         pedido = PedidoUnificadoModel(
             tipo_entrega=TipoEntrega.DELIVERY.value,
@@ -410,13 +428,8 @@ class PedidoRepository:
                 raise HTTPException(status.HTTP_400_BAD_REQUEST, "Mesa não pertence à empresa informada")
 
         # Gera número único de pedido: BAL-{sequencial} por empresa (concorrência segura)
-        numero = self._next_numero_prefixado(
-            empresa_id=empresa_id,
-            tipo_entrega=TipoEntrega.BALCAO.value,
-            prefixo="BAL",
-            width=6,
-            lock_code=1002,
-        )
+        # Usa sequence por empresa/prefixo para balcão
+        numero = self._next_numero_via_sequence(empresa_id=empresa_id, prefixo="BAL", width=6)
 
         pedido = PedidoUnificadoModel(
             tipo_entrega=TipoEntrega.BALCAO.value,
@@ -481,16 +494,8 @@ class PedidoRepository:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Mesa não encontrada")
 
         # número simples: {mesa.numero}-{sequencial curto} (concorrência segura por mesa)
-        numero = self._next_numero_prefixado(
-            empresa_id=empresa_id,
-            tipo_entrega=TipoEntrega.MESA.value,
-            prefixo=str(mesa.numero),
-            width=3,
-            lock_code=300000 + int(mesa_id),
-            extra_filters=[
-                PedidoUnificadoModel.mesa_id == mesa_id,
-            ],
-        )
+        # Usa sequence por empresa+mesa para gerar numeros por mesa
+        numero = self._next_numero_via_sequence(empresa_id=empresa_id, prefixo=str(mesa.numero), width=3)
 
         pedido = PedidoUnificadoModel(
             tipo_entrega=TipoEntrega.MESA.value,
