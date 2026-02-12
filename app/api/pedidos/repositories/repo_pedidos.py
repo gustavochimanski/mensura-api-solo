@@ -122,20 +122,11 @@ class PedidoRepository:
         Cria a sequence no schema pedidos se não existir e a alinha com os valores existentes.
         Garante que nextval() retornará um valor maior que qualquer numero_pedido já presente.
         """
-        # Cria a sequence se não existir
+        # Cria a sequence se não existir.
+        # IMPORTANT: NÃO fazer alinhamento (setval) aqui — isso causa race condition
+        # quando múltiplas requisições concorrentes chamam esta função simultaneamente.
+        # O alinhamento (setval para max existente) é feito uma única vez durante init_db().
         self.db.execute(text(f"CREATE SEQUENCE IF NOT EXISTS pedidos.{seq_name} START 1"))
-
-        # Calcula o maior seq já presente para esse prefixo/empresa (extrai parte após '-')
-        # Usa regexp_replace para extrair apenas dígitos do sufixo (evita erros se houver sufixos não-numéricos)
-        max_q = text(
-            "SELECT COALESCE(MAX((NULLIF(regexp_replace(split_part(numero_pedido, '-', 2), '\\\\D', '', 'g'), ''))::bigint), 0) AS max_seq "
-            "FROM pedidos.pedidos "
-            "WHERE empresa_id = :empresa_id AND numero_pedido LIKE :like"
-        )
-        max_seq = self.db.execute(max_q, {"empresa_id": int(empresa_id), "like": f"{prefixo}-%"}).scalar() or 0
-
-        # Ajusta a sequence para o max atual (setval(..., max_seq, false) faz nextval retornar max_seq+1)
-        self.db.execute(text(f"SELECT setval('pedidos.{seq_name}', :val, false)"), {"val": int(max_seq)})
 
     def _next_numero_via_sequence(self, *, empresa_id: int, prefixo: str, width: int) -> str:
         """
