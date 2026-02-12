@@ -105,7 +105,11 @@ def validate_route_access(request: Request, route_type: RouteType) -> bool:
         if "/novo-dispositivo" in path or "/login" in path or path.startswith("/api/auth"):
             return True
 
-        # Verifica se tem super_token no header (case-insensitive via get)
+        # Aceita Authorization Bearer OU super_token no header (case-insensitive)
+        auth_header = request.headers.get("Authorization", "") or request.headers.get("authorization", "")
+        if isinstance(auth_header, str) and auth_header.strip().lower().startswith("bearer "):
+            return True
+        # Se não tiver Bearer, aceita super token (X-Super-Token)
         return bool(request.headers.get("x-super-token") or request.headers.get("X-Super-Token"))
     
     return False
