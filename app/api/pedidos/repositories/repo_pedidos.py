@@ -117,10 +117,24 @@ class PedidoRepository:
         prefix_clean = re.sub(r"[^0-9A-Za-z_]", "_", str(prefix)).lower()
         return f"pedido_num_seq_{empresa_id}_{prefix_clean}"
 
-    def _ensure_sequence_exists(self, seq_name: str) -> None:
-        """Cria a sequence no schema pedidos se não existir."""
-        # Identificadores não podem ser bind params, mas seq_name é construído internamente (int + sanitized prefix)
+    def _ensure_sequence_exists(self, seq_name: str, empresa_id: int, prefixo: str) -> None:
+        """
+        Cria a sequence no schema pedidos se não existir e a alinha com os valores existentes.
+        Garante que nextval() retornará um valor maior que qualquer numero_pedido já presente.
+        """
+        # Cria a sequence se não existir
         self.db.execute(text(f"CREATE SEQUENCE IF NOT EXISTS pedidos.{seq_name} START 1"))
+
+        # Calcula o maior seq já presente para esse prefixo/empresa (extrai parte após '-')
+        max_q = text(
+            "SELECT COALESCE(MAX(CAST(split_part(numero_pedido, '-', 2) AS bigint)), 0) AS max_seq "
+            "FROM pedidos.pedidos "
+            "WHERE empresa_id = :empresa_id AND numero_pedido LIKE :like"
+        )
+        max_seq = self.db.execute(max_q, {"empresa_id": int(empresa_id), "like": f"{prefixo}-%"}).scalar() or 0
+
+        # Ajusta a sequence para o max atual (setval(..., max_seq, false) faz nextval retornar max_seq+1)
+        self.db.execute(text(f"SELECT setval('pedidos.{seq_name}', :val, false)"), {"val": int(max_seq)})
 
     def _next_numero_via_sequence(self, *, empresa_id: int, prefixo: str, width: int) -> str:
         """
@@ -128,7 +142,7 @@ class PedidoRepository:
         Sequências são atômicas no BD e previnem colisões sem advisory locks.
         """
         seq_name = self._seq_name(empresa_id, prefixo)
-        self._ensure_sequence_exists(seq_name)
+        self._ensure_sequence_exists(seq_name, empresa_id, prefixo)
         nextv = self.db.execute(text(f"SELECT nextval('pedidos.{seq_name}')")).scalar()
         seq = int(nextv)
         return f"{prefixo}-{seq:0{width}d}"
