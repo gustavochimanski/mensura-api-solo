@@ -453,10 +453,10 @@ class PedidoRepository:
                 self._ensure_sequence_exists(seq_name, empresa_id, "BAL")
 
                 insert_sql = text(
-                    "INSERT INTO pedidos.pedidos (tipo_entrega, empresa_id, mesa_id, cliente_id, meio_pagamento_id, numero_pedido, observacoes, status, subtotal, desconto, taxa_entrega, taxa_servico, valor_total, created_at, updated_at) "
+                    "INSERT INTO pedidos.pedidos (tipo_entrega, empresa_id, mesa_id, cliente_id, meio_pagamento_id, numero_pedido, observacoes, status, subtotal, desconto, taxa_entrega, taxa_servico, valor_total, acertado_entregador, created_at, updated_at) "
                     "SELECT :tipo_entrega, :empresa_id, :mesa_id, :cliente_id, :meio_pagamento_id, "
                     "(:prefixo || '-' || LPAD(nextval('pedidos." + seq_name + "')::text, :width, '0')), "
-                    ":observacoes, :status, :subtotal, :desconto, :taxa_entrega, :taxa_servico, :valor_total, now(), now() "
+                    ":observacoes, :status, :subtotal, :desconto, :taxa_entrega, :taxa_servico, :valor_total, :acertado_entregador, now(), now() "
                     "RETURNING id"
                 )
 
@@ -474,6 +474,7 @@ class PedidoRepository:
                     "desconto": Decimal("0"),
                     "taxa_entrega": Decimal("0"),
                     "taxa_servico": Decimal("0"),
+                    "acertado_entregador": False,
                     "valor_total": Decimal("0"),
                 }
 
