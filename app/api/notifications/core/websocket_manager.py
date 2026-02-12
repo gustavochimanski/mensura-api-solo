@@ -83,6 +83,13 @@ class ConnectionManager:
 
     def _remove_connection_no_lock(self, websocket: WebSocket) -> None:
         """Remove um websocket das estruturas internas (NÃO faz await e pressupõe lock)."""
+        try:
+            ws_id = id(websocket)
+            client = getattr(websocket, 'client', None)
+            client_repr = f"{getattr(client, 'host', 'unknown')}:{getattr(client, 'port', 'unknown')}" if client else "unknown"
+            logger.debug(f"[STATE] Removendo websocket id={ws_id}, client={client_repr}")
+        except Exception:
+            logger.debug("[STATE] Removendo websocket - falha ao obter informações do cliente", exc_info=True)
         user_id = self.websocket_to_user.get(websocket)
         empresa_id = self.websocket_to_empresa.get(websocket)
 
@@ -127,6 +134,13 @@ class ConnectionManager:
             if not self._is_websocket_active(websocket):
                 logger.debug(f"[CONNECT] WebSocket já está fechado, pulando close()")
                 return
+            try:
+                ws_id = id(websocket)
+                client = getattr(websocket, 'client', None)
+                client_repr = f"{getattr(client, 'host', 'unknown')}:{getattr(client, 'port', 'unknown')}" if client else "unknown"
+                logger.debug(f"[CONNECT] Fechando websocket id={ws_id}, client={client_repr}, code={code}, reason={reason}")
+            except Exception:
+                logger.debug("[CONNECT] Fechando websocket - falha ao obter informações do cliente", exc_info=True)
             await websocket.close(code=code, reason=reason)
         except Exception:
             # Pode falhar se já estiver fechado / estado inválido; é ok.
@@ -228,6 +242,17 @@ class ConnectionManager:
             self.websocket_to_empresa[websocket] = empresa_id
             self.websocket_to_route[websocket] = ""
             self.websocket_to_connected_at[websocket] = datetime.utcnow()
+            # Log extra: headers/origin do websocket recém-adicionado para correlação
+            try:
+                headers = getattr(websocket, 'headers', {}) or {}
+                origin = headers.get('origin', headers.get('Origin', 'unknown'))
+                sec_proto = headers.get("sec-websocket-protocol") or headers.get("Sec-WebSocket-Protocol")
+                logger.debug(
+                    f"[CONNECT] Registrado websocket id={id(websocket)}, user_id={user_id}, empresa_id={empresa_id}, "
+                    f"origin={origin}, sec_protocol={sec_proto[:200] if sec_proto else None}"
+                )
+            except Exception:
+                logger.debug("[CONNECT] Falha ao logar headers do websocket recém-adicionado", exc_info=True)
         
         # Fecha as conexões expulsas (fora do lock, best-effort)
         for ws in websockets_to_evict:
