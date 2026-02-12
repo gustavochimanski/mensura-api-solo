@@ -126,8 +126,9 @@ class PedidoRepository:
         self.db.execute(text(f"CREATE SEQUENCE IF NOT EXISTS pedidos.{seq_name} START 1"))
 
         # Calcula o maior seq já presente para esse prefixo/empresa (extrai parte após '-')
+        # Usa regexp_replace para extrair apenas dígitos do sufixo (evita erros se houver sufixos não-numéricos)
         max_q = text(
-            "SELECT COALESCE(MAX(CAST(split_part(numero_pedido, '-', 2) AS bigint)), 0) AS max_seq "
+            "SELECT COALESCE(MAX((NULLIF(regexp_replace(split_part(numero_pedido, '-', 2), '\\\\D', '', 'g'))::bigint)), 0) AS max_seq "
             "FROM pedidos.pedidos "
             "WHERE empresa_id = :empresa_id AND numero_pedido LIKE :like"
         )
