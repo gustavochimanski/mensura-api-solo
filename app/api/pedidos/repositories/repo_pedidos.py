@@ -6,7 +6,7 @@ from typing import Optional
 import re
 
 from fastapi import HTTPException
-from starlette import status
+from starlette import status as http_status
 from sqlalchemy import func, or_, and_, text
 from sqlalchemy.orm import Session, joinedload, defer, selectinload
 from sqlalchemy.exc import IntegrityError
@@ -204,7 +204,7 @@ class PedidoRepository:
         """Busca um pedido por ID e tipo, lança exceção se não encontrar."""
         pedido = self.get_pedido(pedido_id, tipo_entrega)
         if not pedido:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
+            raise HTTPException(http_status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
         return pedido
 
     def get_by_cliente_id(self, cliente_id: int) -> list[PedidoUnificadoModel]:
@@ -405,7 +405,7 @@ class PedidoRepository:
                 # Re-raise para outros tipos de IntegrityError
                 raise
         raise HTTPException(
-            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            http_status.HTTP_500_INTERNAL_SERVER_ERROR,
             "Não foi possível criar o pedido de delivery (colisão de numero_pedido).",
         )
 
@@ -423,9 +423,9 @@ class PedidoRepository:
         if mesa_id is not None:
             mesa = self.db.query(MesaModel).filter(MesaModel.id == mesa_id).first()
             if not mesa:
-                raise HTTPException(status.HTTP_404_NOT_FOUND, "Mesa não encontrada")
+                raise HTTPException(http_status.HTTP_404_NOT_FOUND, "Mesa não encontrada")
             if mesa.empresa_id != empresa_id:
-                raise HTTPException(status.HTTP_400_BAD_REQUEST, "Mesa não pertence à empresa informada")
+                raise HTTPException(http_status.HTTP_400_BAD_REQUEST, "Mesa não pertence à empresa informada")
 
         # Gera número único de pedido: BAL-{sequencial} por empresa (concorrência segura)
         # Usa sequence por empresa/prefixo para balcão
@@ -467,7 +467,7 @@ class PedidoRepository:
                     continue
                 raise
         raise HTTPException(
-            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            http_status.HTTP_500_INTERNAL_SERVER_ERROR,
             "Não foi possível criar o pedido de balcão (colisão de numero_pedido).",
         )
 
@@ -491,7 +491,7 @@ class PedidoRepository:
             .first()
         )
         if not mesa:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Mesa não encontrada")
+            raise HTTPException(http_status.HTTP_404_NOT_FOUND, "Mesa não encontrada")
 
         # número simples: {mesa.numero}-{sequencial curto} (concorrência segura por mesa)
         # Usa sequence por empresa+mesa para gerar numeros por mesa
@@ -536,7 +536,7 @@ class PedidoRepository:
                     continue
                 raise
         raise HTTPException(
-            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            http_status.HTTP_500_INTERNAL_SERVER_ERROR,
             "Não foi possível criar o pedido de mesa (colisão de numero_pedido).",
         )
 
@@ -981,7 +981,7 @@ class PedidoRepository:
     ) -> PedidoItemUnificadoModel:
         item = self.get_item_by_id(item_id)
         if not item:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, f"Item {item_id} não encontrado")
+            raise HTTPException(http_status.HTTP_404_NOT_FOUND, f"Item {item_id} não encontrado")
         if quantidade is not None:
             item.quantidade = quantidade
             # Recalcula preco_total se quantidade mudou
@@ -1074,7 +1074,7 @@ class PedidoRepository:
         """Adiciona um item ao pedido (balcão ou mesa). Busca preço automaticamente se for produto."""
         pedido = self.get_pedido(pedido_id)
         if not pedido:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
+            raise HTTPException(http_status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
 
         # Valida que apenas um tipo está preenchido
         tipos_preenchidos = sum([
@@ -1084,7 +1084,7 @@ class PedidoRepository:
         ])
         if tipos_preenchidos != 1:
             raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
+                http_status.HTTP_400_BAD_REQUEST,
                 "Exatamente um dos campos (produto_cod_barras, receita_id, combo_id) deve ser preenchido"
             )
 
@@ -1097,18 +1097,18 @@ class PedidoRepository:
                 if self.produto_contract is not None:
                     pe_dto = self.produto_contract.obter_produto_emp_por_cod(pedido.empresa_id, produto_cod_barras)
                     if not pe_dto:
-                        raise HTTPException(status.HTTP_404_NOT_FOUND, "Produto não encontrado")
+                        raise HTTPException(http_status.HTTP_404_NOT_FOUND, "Produto não encontrado")
                     if not pe_dto.disponivel or not (pe_dto.produto and bool(pe_dto.produto.ativo)):
-                        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Produto indisponível")
+                        raise HTTPException(http_status.HTTP_400_BAD_REQUEST, "Produto indisponível")
                     preco_unitario = Decimal(str(pe_dto.preco_venda or 0))
                     if pe_dto.produto:
                         descricao_snapshot = descricao_snapshot or pe_dto.produto.descricao
                         imagem_snapshot = imagem_snapshot or pe_dto.produto.imagem
                 else:
-                    raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Contrato de produto não configurado")
+                    raise HTTPException(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "Contrato de produto não configurado")
             else:
                 raise HTTPException(
-                    status.HTTP_400_BAD_REQUEST,
+                    http_status.HTTP_400_BAD_REQUEST,
                     "preco_unitario é obrigatório para receitas e combos"
                 )
 
@@ -1132,14 +1132,14 @@ class PedidoRepository:
         """Remove um item do pedido e recalcula o total."""
         pedido = self.get_pedido(pedido_id)
         if not pedido:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
+            raise HTTPException(http_status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
         item = (
             self.db.query(PedidoItemUnificadoModel)
             .filter(PedidoItemUnificadoModel.id == item_id, PedidoItemUnificadoModel.pedido_id == pedido_id)
             .first()
         )
         if not item:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Item não encontrado")
+            raise HTTPException(http_status.HTTP_404_NOT_FOUND, "Item não encontrado")
         self.db.delete(item)
         self.db.commit()
         return self._refresh_total(pedido)
@@ -1149,7 +1149,7 @@ class PedidoRepository:
         """Cancela um pedido (balcão ou mesa)."""
         pedido = self.get_pedido(pedido_id)
         if not pedido:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
+            raise HTTPException(http_status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
         pedido.status = StatusPedido.CANCELADO.value
         self.db.commit()
         self.db.refresh(pedido)
@@ -1159,7 +1159,7 @@ class PedidoRepository:
         """Confirma um pedido (balcão ou mesa) mudando status para IMPRESSAO."""
         pedido = self.get_pedido(pedido_id)
         if not pedido:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
+            raise HTTPException(http_status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
         pedido.status = StatusPedido.IMPRESSAO.value
         self.db.commit()
         self.db.refresh(pedido)
@@ -1169,7 +1169,7 @@ class PedidoRepository:
         """Fecha a conta de um pedido (balcão ou mesa) mudando status para ENTREGUE."""
         pedido = self.get_pedido(pedido_id)
         if not pedido:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
+            raise HTTPException(http_status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
         pedido.status = StatusPedido.ENTREGUE.value
         self.db.commit()
         self.db.refresh(pedido)
@@ -1179,7 +1179,7 @@ class PedidoRepository:
         """Reabre um pedido cancelado ou entregue."""
         pedido = self.get_pedido(pedido_id)
         if not pedido:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
+            raise HTTPException(http_status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
         status_atual = (
             pedido.status
             if isinstance(pedido.status, str)
@@ -1196,7 +1196,7 @@ class PedidoRepository:
         """Atualiza o status do pedido (aceita enum ou string)."""
         pedido = self.get_pedido(pedido_id)
         if not pedido:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
+            raise HTTPException(http_status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
         if hasattr(novo_status, "value"):
             status_value = novo_status.value
         else:
