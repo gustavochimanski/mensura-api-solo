@@ -6,6 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from .db_connection import engine, Base, SessionLocal
 from app.core.security import hash_password
 from app.api.cadastros.models.user_model import UserModel
+import re
 
 logger = logging.getLogger(__name__)
 SCHEMAS = ["notifications", "cadastros", "cardapio", "catalogo", "financeiro", "pedidos", "chatbot"]
@@ -2089,6 +2090,46 @@ def inicializar_banco():
     if not verificar_banco_inicializado():
         logger.error("❌ Banco não está inicializado (tabelas principais ausentes). Abortando passos 6-8.")
         return
+    
+    # Migração: criar/alinha sequences de numero_pedido (DV/BAL/mesa) por empresa
+    try:
+        logger.info("🔧 Migração: Criando/alinhando sequences de numero_pedido por empresa/prefixo...")
+        with engine.begin() as conn:
+            # Seleciona pares (empresa_id, prefixo) existentes na tabela de pedidos
+            rows = conn.execute(
+                text(
+                    "SELECT empresa_id, split_part(numero_pedido, '-', 1) AS prefix "
+                    "FROM pedidos.pedidos "
+                    "WHERE numero_pedido IS NOT NULL "
+                    "GROUP BY empresa_id, prefix"
+                )
+            ).fetchall()
+
+            for empresa_id, prefix in rows:
+                try:
+                    prefix_raw = str(prefix or "")
+                    prefix_clean = re.sub(r'[^0-9A-Za-z_]', '_', prefix_raw).lower()
+                    seq_name = f"pedido_num_seq_{int(empresa_id)}_{prefix_clean}"
+
+                    # Cria sequence se não existir
+                    conn.execute(text(f"CREATE SEQUENCE IF NOT EXISTS pedidos.{seq_name} START 1"))
+
+                    # Computa maior sufixo numérico já presente para este prefixo/empresa
+                    max_q = text(
+                        "SELECT COALESCE(MAX(CAST(split_part(numero_pedido, '-', 2) AS bigint)), 0) AS max_seq "
+                        "FROM pedidos.pedidos "
+                        "WHERE empresa_id = :empresa_id AND numero_pedido LIKE :like"
+                    )
+                    max_seq = conn.execute(max_q, {"empresa_id": int(empresa_id), "like": f"{prefix_raw}-%"}).scalar() or 0
+
+                    # Ajusta sequence para que nextval retorne max_seq + 1
+                    conn.execute(text(f"SELECT setval('pedidos.{seq_name}', :val, false)"), {"val": int(max_seq)})
+                except Exception as e_inner:
+                    logger.warning("⚠️ Falha ao alinhar sequence para empresa=%s prefix=%s: %s", empresa_id, prefix, e_inner)
+                    continue
+        logger.info("✅ Migração de sequences de numero_pedido concluída.")
+    except Exception as e:
+        logger.warning("⚠️ Erro ao executar migração de sequences de pedidos: %s", e)
     
     # Normaliza types legados (admin/super -> funcionario)
     logger.info("👥 Passo 7/8: Normalizando type_user (legado)...")
