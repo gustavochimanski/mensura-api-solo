@@ -361,10 +361,35 @@ class PedidoRepository:
             taxa_servico=Decimal("0"),
             valor_total=Decimal("0"),
         )
-        self.db.add(pedido)
-        self.db.flush()
-        self.add_status_historico(pedido.id, status, motivo="Pedido criado")
-        return pedido
+        # Commit/flush com retry para cobrir colisões de numero_pedido (concorrência externa)
+        max_tentativas = 5
+        for _ in range(max_tentativas):
+            try:
+                self.db.add(pedido)
+                self.db.flush()
+                self.add_status_historico(pedido.id, status, motivo="Pedido criado")
+                return pedido
+            except IntegrityError as exc:
+                # Rollback da transação atual para limpar estado do session
+                self.db.rollback()
+                orig = getattr(exc, "orig", None)
+                msg = str(orig) if orig is not None else str(exc)
+                # Se foi colisão no unique (numero_pedido), gera novo número e tenta novamente
+                if "uq_pedidos_empresa_numero" in msg or "UniqueViolation" in msg:
+                    pedido.numero_pedido = self._next_numero_prefixado(
+                        empresa_id=empresa_id,
+                        tipo_entrega=TipoEntrega.DELIVERY.value,
+                        prefixo="DV",
+                        width=6,
+                        lock_code=1001,
+                    )
+                    continue
+                # Re-raise para outros tipos de IntegrityError
+                raise
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            "Não foi possível criar o pedido de delivery (colisão de numero_pedido).",
+        )
 
     def criar_pedido_balcao(
         self,#
