@@ -63,7 +63,7 @@ def upgrade() -> None:
     op.create_table(
         "pedido_item_combo_secoes",
         sa.Column("id", sa.Integer, primary_key=True, autoincrement=True),
-        sa.Column("pedido_item_id", sa.Integer, sa.ForeignKey("pedidos.pedido_item_unificado.id", ondelete="CASCADE"), nullable=False, index=True),
+        sa.Column("pedido_item_id", sa.Integer, sa.ForeignKey("pedidos.pedidos_itens.id", ondelete="CASCADE"), nullable=False, index=True),
         sa.Column("secao_id", sa.Integer, sa.ForeignKey("catalogo.combo_secoes.id", ondelete="SET NULL"), nullable=True, index=True),
         sa.Column("secao_titulo_snapshot", sa.String(120), nullable=True),
         sa.Column("ordem", sa.Integer, nullable=False, server_default="0"),

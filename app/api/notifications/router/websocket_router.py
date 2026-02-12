@@ -271,18 +271,7 @@ async def websocket_notifications(
             f"tipo_user_id={type(user_id)}, tipo_empresa_id={type(empresa_id)}, "
             f"websocket_id={id(websocket)}, client={client_host}:{client_port}, origin={origin}"
         )
-        # Log de correlação para facilitar debug: token sub, empresa, ws id, client, origin, subprotocol
-        try:
-            headers_for_log = headers or {}
-            sec_proto = headers_for_log.get("sec-websocket-protocol") or headers_for_log.get("Sec-WebSocket-Protocol")
-            logger.info(
-                f"[WS_ROUTER][CONN_CORREL] token_sub={user_id_int} empresa_id={resolved_empresa_id} "
-                f"websocket_id={id(websocket)} client={client_host}:{client_port} origin={origin} "
-                f"sec_protocol={sec_proto[:200] if sec_proto else None}"
-            )
-        except Exception:
-            # Não deve falhar a conexão por causa de logging
-            logger.debug("[WS_ROUTER][CONN_CORREL] Falha ao gerar log de correlação", exc_info=True)
+        
         
         # Conecta o WebSocket
         await websocket_manager.connect(websocket, user_id, empresa_id)

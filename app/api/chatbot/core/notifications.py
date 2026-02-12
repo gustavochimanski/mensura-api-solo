@@ -1429,6 +1429,27 @@ async def enviar_resumo_pedido_whatsapp(
                 if tempo_estimado_min is not None:
                     mensagem += f"\n⏱️ *Tempo estimado:* ~{_formatar_tempo_minutos(tempo_estimado_min)}"
 
+        # Se for delivery, tenta anexar o endereço de entrega ao resumo (quando disponível)
+        try:
+            if str(tipo_entrega) == "DELIVERY" and endereco_id:
+                try:
+                    # Usa o serviço de endereços do chatbot para obter texto formatado do endereço
+                    from app.api.chatbot.core.address_service import ChatbotAddressService
+
+                    addr_service = ChatbotAddressService(db, empresa_id=empresa_id_int or 1)
+                    endereco_obj = addr_service.get_endereco_by_id(telefone_final, int(endereco_id))
+                    endereco_formatado = None
+                    if endereco_obj and isinstance(endereco_obj, dict):
+                        endereco_formatado = endereco_obj.get("endereco_completo")
+                    if endereco_formatado:
+                        mensagem += f"\n\n📍 *Endereço de Entrega:*\n{endereco_formatado}"
+                except Exception:
+                    # Não falha o envio do resumo se houver erro ao buscar o endereço
+                    pass
+        except Exception:
+            # Segurança adicional: qualquer erro aqui não deve impedir o envio do resumo
+            pass
+
         # Envia via WhatsApp (se conseguir). Mesmo que falhe, NÃO deixamos de salvar no chat interno.
         result: Dict = {}
         try:

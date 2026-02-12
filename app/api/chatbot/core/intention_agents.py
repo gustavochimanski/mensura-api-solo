@@ -10,6 +10,7 @@ from enum import Enum
 class IntentionType(Enum):
     """Tipos de intenções que podem ser detectadas"""
     INICIAR_PEDIDO = "iniciar_pedido"
+    ACOMPANHAR_PEDIDO = "acompanhar_pedido"
     ADICIONAR_PRODUTO = "adicionar_produto"
     VER_CARDAPIO = "ver_cardapio"
     VER_CARRINHO = "ver_carrinho"
@@ -108,6 +109,34 @@ class IniciarPedidoAgent(IntentionAgent):
                     "params": {}
                 }
         
+        return None
+
+
+class AcompanharPedidoAgent(IntentionAgent):
+    """Agente para detectar intenção de acompanhar pedido do cliente"""
+
+    def __init__(self):
+        # Prioridade entre ver_cardapio (150) e iniciar_pedido (100)
+        super().__init__(priority=120)
+
+    def detect(self, mensagem: str, mensagem_normalizada: str, context: Dict[str, Any] = None) -> Optional[Dict[str, Any]]:
+        """
+        Detecta frases como:
+        - "gostaria de acompanhar meu pedido"
+        - "queria acompanhar meu pedido por aqui"
+        - "acompanhar pedido"
+        """
+        if not mensagem_normalizada:
+            return None
+
+        padrao = r'(?:gostaria\s+de\s+|queria\s+|por\s+favor\s+)?acompanhar\s+(?:meu\s+)?pedido(?:\s+por\s+aqui)?'
+        if re.search(padrao, mensagem_normalizada, re.IGNORECASE):
+            print(f"🔎 [Agente AcompanharPedido] Detectado: '{mensagem}'")
+            return {
+                "intention": IntentionType.ACOMPANHAR_PEDIDO,
+                "funcao": "acompanhar_pedido",
+                "params": {}
+            }
         return None
 
 
@@ -388,6 +417,7 @@ class IntentionRouter:
         self.agents: List[IntentionAgent] = [
             ChamarAtendenteAgent(),    # Prioridade 200 - deve ser o PRIMEIRO
             VerCardapioAgent(),        # Prioridade 150 - verificado PRIMEIRO (antes de cadastro)
+            AcompanharPedidoAgent(),   # Prioridade 120 - verificar antes de iniciar pedido
             IniciarPedidoAgent(),      # Prioridade 100 - verificado segundo
             AdicionarProdutoAgent(),  # Prioridade 50
             ConversacaoAgent(),        # Prioridade 10 - fallback

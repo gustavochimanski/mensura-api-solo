@@ -45,7 +45,7 @@ CREATE INDEX IF NOT EXISTS ix_combo_secoes_itens_produto_cod_barras ON catalogo.
 -- tabela: pedidos.pedido_item_combo_secoes
 CREATE TABLE IF NOT EXISTS pedidos.pedido_item_combo_secoes (
     id SERIAL PRIMARY KEY,
-    pedido_item_id INTEGER NOT NULL REFERENCES pedidos.pedido_item_unificado(id) ON DELETE CASCADE,
+    pedido_item_id INTEGER NOT NULL REFERENCES pedidos.pedidos_itens(id) ON DELETE CASCADE,
     secao_id INTEGER REFERENCES catalogo.combo_secoes(id) ON DELETE SET NULL,
     secao_titulo_snapshot VARCHAR(120),
     ordem INTEGER NOT NULL DEFAULT 0,

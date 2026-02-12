@@ -737,6 +737,16 @@ async def get_user_conversations(
         data_inicio=data_inicio,
         data_fim=data_fim,
     )
+    # Anexa status do bot (pausado/ativo) para cada conversa baseada no telefone (user_id)
+    try:
+        for conv in conversations:
+            try:
+                conv["bot_status"] = chatbot_db.get_bot_status(db, conv.get("user_id"))
+            except Exception:
+                conv["bot_status"] = {"phone_number": conv.get("user_id"), "is_active": True}
+    except Exception:
+        # Não falhar a rota se algo der errado ao buscar status
+        pass
     return {"conversations": conversations}
 
 
@@ -754,6 +764,11 @@ async def get_user_latest_conversation(user_id: str, db: Session = Depends(get_d
 
     # Busca as mensagens
     messages = chatbot_db.get_messages(db, conversation_id)
+    # Anexa status do bot (pausado/ativo) para a conversa retornada
+    try:
+        latest_conversation["bot_status"] = chatbot_db.get_bot_status(db, latest_conversation.get("user_id"))
+    except Exception:
+        latest_conversation["bot_status"] = {"phone_number": latest_conversation.get("user_id"), "is_active": True}
 
     return {
         "conversation": latest_conversation,
@@ -802,6 +817,15 @@ async def list_all_conversations(db: Session = Depends(get_db)):
             }
             for row in result.fetchall()
         ]
+        # Anexa status do bot para cada conversa (se possível)
+        try:
+            for conv in conversations:
+                try:
+                    conv["bot_status"] = chatbot_db.get_bot_status(db, conv.get("user_id"))
+                except Exception:
+                    conv["bot_status"] = {"phone_number": conv.get("user_id"), "is_active": True}
+        except Exception:
+            pass
         return {"conversations": conversations}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao listar conversas: {str(e)}")
@@ -2641,6 +2665,73 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
         empresa_id_int = int(empresa_id) if empresa_id else 1
         user_id = phone_number
         conversations = chatbot_db.get_conversations_by_user(db, user_id, empresa_id_int)
+
+        # DETECTA INTENÇÃO "ACOMPANHAR PEDIDO" (responde sem pedir cadastro)
+        intencao_acompanhar = intencao and (
+            intencao.get("intention") == IntentionType.ACOMPANHAR_PEDIDO or
+            intencao.get("funcao") == "acompanhar_pedido"
+        )
+        if intencao_acompanhar:
+            from app.api.pedidos.repositories.repo_pedidos import PedidoRepository
+            from datetime import datetime
+
+            pedido_repo = PedidoRepository(db)
+
+            # Cria conversa se não existir
+            if conversations:
+                conversation_id = conversations[0]['id']
+            else:
+                conversation_id = chatbot_db.create_conversation(
+                    db=db,
+                    session_id=f"whatsapp_{user_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                    user_id=user_id,
+                    prompt_key=PROMPT_ATENDIMENTO_PEDIDO_WHATSAPP,
+                    model="groq-sales",
+                    contact_name=contact_name,
+                    empresa_id=empresa_id_int
+                )
+
+            # Salva mensagem do usuário
+            chatbot_db.create_message(db, conversation_id, "user", message_text, whatsapp_message_id=message_id)
+
+            resposta = None
+            try:
+                cliente = pedido_repo.get_cliente(phone_number)
+                if cliente:
+                    pedidos_abertos = pedido_repo.list_abertos_by_cliente_id(cliente.id, empresa_id=empresa_id_int)
+                    if pedidos_abertos:
+                        pedido = pedidos_abertos[0]  # já ordenado por created_at.desc()
+                        # Monta resumo simples dos itens
+                        itens_lines = []
+                        for it in getattr(pedido, "itens", [])[:10]:
+                            nome = getattr(it, "produto_descricao_snapshot", None) or getattr(it, "produto_descricao_snapshot", "") or ""
+                            qtd = int(getattr(it, "quantidade", 1) or 1)
+                            itens_lines.append(f"{qtd}x {nome}")
+                        itens_text = "\n".join(itens_lines) if itens_lines else "Sem itens registrados."
+                        status_nome = pedido_repo._status_para_nome(pedido.status) if hasattr(pedido_repo, "_status_para_nome") else str(getattr(pedido, "status", ""))
+                        total = getattr(pedido, "valor_total", 0) or 0
+                        resposta = (
+                            f"Encontrei {len(pedidos_abertos)} pedido(s) em aberto. Último pedido:\n"
+                            f"Pedido: {getattr(pedido,'numero_pedido','-')}\n"
+                            f"Status: {status_nome}\n"
+                            f"Itens:\n{itens_text}\n"
+                            f"Total: R$ {total}"
+                        )
+                    else:
+                        resposta = "Não encontrei pedidos em aberto vinculados ao seu número."
+                else:
+                    resposta = "Não consegui localizar um cadastro para este número. Você pode me informar o nome ou o telefone cadastrado?"
+            except Exception as e:
+                logger.exception(f"Erro ao consultar pedidos para acompanhamento: {e}")
+                resposta = "Desculpe, não foi possível consultar seus pedidos agora. Tente novamente mais tarde."
+
+            notifier = OrderNotification()
+            result = await notifier.send_whatsapp_message(phone_number, resposta, empresa_id=empresa_id)
+            if isinstance(result, dict) and result.get("success"):
+                whatsapp_message_id = result.get("message_id")
+                chatbot_db.create_message(db, conversation_id, "assistant", resposta, whatsapp_message_id=whatsapp_message_id)
+                db.commit()
+            return
 
         # VERIFICA DUPLICAÇÃO: Usa message_id do WhatsApp (único por mensagem) para detectar duplicatas reais
         # Se não tiver message_id, usa verificação por conteúdo apenas para mensagens longas (>3 chars)
