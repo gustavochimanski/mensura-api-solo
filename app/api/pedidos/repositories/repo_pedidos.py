@@ -444,39 +444,63 @@ class PedidoRepository:
         # Usa sequence por empresa/prefixo para balcão
         numero = self._next_numero_via_sequence(empresa_id=empresa_id, prefixo="BAL", width=6)
 
-        pedido = PedidoUnificadoModel(
-            tipo_entrega=TipoEntrega.BALCAO.value,
-            empresa_id=empresa_id,
-            mesa_id=mesa_id,
-            cliente_id=cliente_id,
-            meio_pagamento_id=meio_pagamento_id,
-            numero_pedido=numero,
-            observacoes=observacoes,
-            status=StatusPedido.IMPRESSAO.value,
-            subtotal=Decimal("0"),
-            desconto=Decimal("0"),
-            taxa_entrega=Decimal("0"),
-            taxa_servico=Decimal("0"),
-            valor_total=Decimal("0"),
-        )
-        # Commit com retry para cobrir concorrência com processos antigos/externos
-        max_tentativas = 5
+        # Tentativa mais segura: inserir atomically usando nextval() da sequence no próprio INSERT
+        seq_name = self._seq_name(empresa_id, "BAL")
+        max_tentativas = 8
         for _ in range(max_tentativas):
             try:
-                self.db.add(pedido)
+                # garante sequence/alinhamento
+                self._ensure_sequence_exists(seq_name, empresa_id, "BAL")
+
+                insert_sql = text(
+                    "INSERT INTO pedidos.pedidos (tipo_entrega, empresa_id, mesa_id, cliente_id, meio_pagamento_id, numero_pedido, observacoes, status, subtotal, desconto, taxa_entrega, taxa_servico, valor_total, created_at, updated_at) "
+                    "SELECT :tipo_entrega, :empresa_id, :mesa_id, :cliente_id, :meio_pagamento_id, "
+                    "(:prefixo || '-' || LPAD(nextval('pedidos." + seq_name + "')::text, :width, '0')), "
+                    ":observacoes, :status, :subtotal, :desconto, :taxa_entrega, :taxa_servico, :valor_total, now(), now() "
+                    "RETURNING id"
+                )
+
+                params = {
+                    "tipo_entrega": TipoEntrega.BALCAO.value,
+                    "empresa_id": int(empresa_id),
+                    "mesa_id": mesa_id,
+                    "cliente_id": cliente_id,
+                    "meio_pagamento_id": meio_pagamento_id,
+                    "prefixo": "BAL",
+                    "width": 6,
+                    "observacoes": observacoes,
+                    "status": StatusPedido.IMPRESSAO.value,
+                    "subtotal": Decimal("0"),
+                    "desconto": Decimal("0"),
+                    "taxa_entrega": Decimal("0"),
+                    "taxa_servico": Decimal("0"),
+                    "valor_total": Decimal("0"),
+                }
+
+                res = self.db.execute(insert_sql, params)
+                new_id = res.scalar() if res.returns_rows else (res.fetchone()[0] if res._saved_cursor is not None else None)
+                if new_id is None:
+                    self.db.rollback()
+                    continue
                 self.db.commit()
-                self.db.refresh(pedido)
+                pedido = self.db.get(PedidoUnificadoModel, int(new_id))
+                if pedido is not None:
+                    self.db.refresh(pedido)
                 return pedido
             except IntegrityError as exc:
                 self.db.rollback()
-                if "uq_pedidos_empresa_numero" in str(exc.orig) or "UniqueViolation" in str(exc.orig):
-                    pedido.numero_pedido = self._next_numero_via_sequence(
-                        empresa_id=empresa_id,
-                        prefixo="BAL",
-                        width=6,
-                    )
+                orig = getattr(exc, "orig", None)
+                msg = str(orig) if orig is not None else str(exc)
+                if "uq_pedidos_empresa_numero" in msg or "UniqueViolation" in msg:
+                    # tentativa falhou por colisão, tenta de novo
                     continue
                 raise
+            except Exception:
+                try:
+                    self.db.rollback()
+                except Exception:
+                    pass
+                continue
         raise HTTPException(
             http_status.HTTP_500_INTERNAL_SERVER_ERROR,
             "Não foi possível criar o pedido de balcão (colisão de numero_pedido).",
