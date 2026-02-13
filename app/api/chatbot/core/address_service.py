@@ -318,6 +318,8 @@ class ChatbotAddressService:
         try:
             import uuid
             super_token = str(uuid.uuid4())
+            # Garantir que nome nunca seja None ao inserir no banco
+            nome_final = (nome or "Cliente WhatsApp").strip() or "Cliente WhatsApp"
 
             query = text("""
                 INSERT INTO cadastros.clientes (telefone, nome, ativo, super_token, created_at, updated_at)
@@ -326,7 +328,7 @@ class ChatbotAddressService:
             """)
             result = self.db.execute(query, {
                 "telefone": telefone_limpo,
-                "nome": nome,
+                "nome": nome_final,
                 "super_token": super_token
             })
             self.db.commit()
