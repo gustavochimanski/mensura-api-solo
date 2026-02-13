@@ -3660,13 +3660,20 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
             # Se a mensagem do cliente indica que quer "receber atualizações" e existe pedido em aberto,
             # envia resumo do pedido mais recente imediatamente (caso o cliente não tenha informado pedido_id).
             try:
-                mensagem_lower = (message_text or "").lower()
-                termos_atualizacao = [
-                    'atualiza', 'atualização', 'atualizacoes', 'atualizações',
-                    'acompanhar pedido', 'acompanhar meu pedido', 'status do pedido',
-                    'receber atualiza', 'receber atualizações', 'atualizar pedido'
-                ]
-                if pedido_aberto_info and any(t in mensagem_lower for t in termos_atualizacao):
+                import unicodedata
+                mensagem_texto = message_text or ""
+
+                def _strip_accents(s: str) -> str:
+                    return "".join(
+                        c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn"
+                    )
+
+                norm = _strip_accents(mensagem_texto).lower()
+                # Termos robustos (substring) para capturar variações/typos como "tualizações"
+                ativadores = ["atualiz", "tualiz", "acompanhar", "status", "acompanhar pedido", "receber atualiz"]
+                if pedido_aberto_info and any(a in norm for a in ativadores):
+                    logger = logging.getLogger(__name__)
+                    logger.info(f"Intenção de receber atualizações detectada (norm='{norm[:80]}') para telefone={phone_number}, enviando resumo do pedido {pedido_aberto.id}")
                     # Monta mensagem resumo compacta (mesma formatação usada no handler)
                     status = pedido_aberto_info.get('status', '')
                     numero_pedido = pedido_aberto_info.get('numero_pedido', 'N/A')
