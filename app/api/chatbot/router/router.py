@@ -3233,7 +3233,17 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
 
         # Se não aceita pedidos pelo WhatsApp, intercepta tentativas de pedido
         is_pedido_intent = _is_pedido_intent(message_text)
-        if not aceita_pedidos_whatsapp and (button_id == "pedir_whatsapp" or is_pedido_intent):
+        # Detecta intenção de "atualizações" para evitar redirecionar automaticamente
+        try:
+            import unicodedata
+            mensagem_norm = (message_text or "")
+            mensagem_norm = "".join(c for c in unicodedata.normalize("NFKD", mensagem_norm) if not unicodedata.combining(c)).lower()
+        except Exception:
+            mensagem_norm = (message_text or "").lower()
+
+        skip_update_intent = any(k in mensagem_norm for k in ["atualiz", "tualiz", "acompanhar", "status", "receber atualiz"])
+
+        if not aceita_pedidos_whatsapp and (button_id == "pedir_whatsapp" or (is_pedido_intent and not skip_update_intent)):
             import logging
             logger = logging.getLogger(__name__)
             logger.info(f"🚫 Interceptando tentativa de pedido - aceita_pedidos_whatsapp: {aceita_pedidos_whatsapp}, button_id: {button_id}, is_pedido_intent: {is_pedido_intent}, mensagem: {message_text[:50]}")
