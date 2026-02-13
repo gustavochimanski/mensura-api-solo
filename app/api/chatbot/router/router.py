@@ -3660,118 +3660,19 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
             # Se a mensagem do cliente indica que quer "receber atualizações" e existe pedido em aberto,
             # envia resumo do pedido mais recente imediatamente (caso o cliente não tenha informado pedido_id).
             try:
-                import unicodedata
-                mensagem_texto = message_text or ""
+                # Delegar decisão ao agente (orquestrador)
+                from ..core.groq_sales_handler import GroqSalesHandler
 
-                def _strip_accents(s: str) -> str:
-                    return "".join(
-                        c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn"
-                    )
-
-                norm = _strip_accents(mensagem_texto).lower()
-                # Termos robustos (substring) para capturar variações/typos como "tualizações"
-                ativadores = ["atualiz", "tualiz", "acompanhar", "status", "acompanhar pedido", "receber atualiz"]
-                if pedido_aberto_info and any(a in norm for a in ativadores):
-                    logger = logging.getLogger(__name__)
-                    logger.info(f"Intenção de receber atualizações detectada (norm='{norm[:80]}') para telefone={phone_number}, enviando resumo do pedido {pedido_aberto.id}")
-                    # Monta mensagem resumo compacta (mesma formatação usada no handler)
-                    status = pedido_aberto_info.get('status', '')
-                    numero_pedido = pedido_aberto_info.get('numero_pedido', 'N/A')
-                    tipo_entrega = pedido_aberto_info.get('tipo_entrega', '')
-                    created_at = pedido_aberto_info.get('created_at')
-                    itens = pedido_aberto_info.get('itens', [])
-                    subtotal = pedido_aberto_info.get('subtotal', 0.0)
-                    taxa_entrega = pedido_aberto_info.get('taxa_entrega', 0.0)
-                    desconto = pedido_aberto_info.get('desconto', 0.0)
-                    valor_total = pedido_aberto_info.get('valor_total', 0.0)
-                    endereco = pedido_aberto_info.get('endereco')
-                    meio_pagamento = pedido_aberto_info.get('meio_pagamento')
-                    mesa_codigo = pedido_aberto_info.get('mesa_codigo')
-
-                    status_texto = {
-                        'P': 'Pendente',
-                        'I': 'Em impressão',
-                        'R': 'Em preparo',
-                        'S': 'Saiu para entrega',
-                        'A': 'Aguardando pagamento',
-                        'D': 'Editado',
-                        'X': 'Em edição'
-                    }.get(status, status)
-
-                    tipo_entrega_texto = {
-                        'DELIVERY': 'Delivery',
-                        'RETIRADA': 'Retirada',
-                        'BALCAO': 'Balcão',
-                        'MESA': 'Mesa'
-                    }.get(tipo_entrega, tipo_entrega)
-
-                    data_formatada = ""
-                    if created_at:
-                        try:
-                            from datetime import datetime
-                            dt = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
-                            data_formatada = dt.strftime("%d/%m/%Y %H:%M")
-                        except:
-                            data_formatada = created_at
-
-                    mensagem_pedido = f"📦 *Pedido #{numero_pedido}* | {status_texto} | {tipo_entrega_texto}"
-                    if mesa_codigo:
-                        mensagem_pedido += f" | Mesa: {mesa_codigo}"
-                    if data_formatada:
-                        mensagem_pedido += f"\n📅 {data_formatada}"
-                    mensagem_pedido += "\n\n*Itens:*\n"
-                    if itens:
-                        for item in itens:
-                            nome = item.get('nome', 'Item')
-                            qtd = item.get('quantidade', 1)
-                            preco_total_item = item.get('preco_total', 0.0)
-                            mensagem_pedido += f"• {qtd}x {nome} - R$ {preco_total_item:.2f}\n"
-                    else:
-                        mensagem_pedido += "Nenhum item encontrado\n"
-
-                    mensagem_pedido += f"\n*Resumo:* Subtotal: R$ {subtotal:.2f}"
-                    if taxa_entrega > 0:
-                        mensagem_pedido += f" | Entrega: R$ {taxa_entrega:.2f}"
-                    if desconto > 0:
-                        mensagem_pedido += f" | Desconto: -R$ {desconto:.2f}"
-                    mensagem_pedido += f"\n*TOTAL: R$ {valor_total:.2f}*"
-
-                    if endereco:
-                        mensagem_pedido += "\n\n📍 *Entrega:*"
-                        end_parts = []
-                        if endereco.get('rua'):
-                            end_parts.append(endereco['rua'])
-                        if endereco.get('numero'):
-                            end_parts.append(endereco['numero'])
-                        if end_parts:
-                            mensagem_pedido += f"\n{', '.join(end_parts)}"
-                        endereco_line = []
-                        if endereco.get('complemento'):
-                            endereco_line.append(endereco['complemento'])
-                        if endereco.get('bairro'):
-                            endereco_line.append(endereco['bairro'])
-                        if endereco_line:
-                            mensagem_pedido += f"\n{', '.join(endereco_line)}"
-                        cidade_line = []
-                        if endereco.get('cidade'):
-                            cidade_line.append(endereco['cidade'])
-                        if endereco.get('cep'):
-                            cidade_line.append(f"CEP: {endereco['cep']}")
-                        if cidade_line:
-                            mensagem_pedido += f"\n{' - '.join(cidade_line)}"
-
-                    if meio_pagamento:
-                        mensagem_pedido += f"\n\n💳 *Pagamento:* {meio_pagamento}"
-
-                    mensagem_pedido += "\n\nComo posso te ajudar? 😊"
-
-                    # Envia via WhatsApp e registra no histórico
+                handler = GroqSalesHandler(db, empresa_id_int, prompt_key=prompt_key_sales)
+                mensagem_pedido = await handler.should_send_order_summary(message_text, pedido_aberto_info, phone_number=phone_number)
+                if mensagem_pedido:
+                    import logging
+                    logging.getLogger(__name__).info(f"Orquestrador: enviando resumo de pedido via agente para {phone_number} (pedido_id={pedido_aberto.id})")
                     notifier = OrderNotification()
                     result = await notifier.send_whatsapp_message(phone_number, mensagem_pedido, empresa_id=empresa_id)
                     try:
                         if result and isinstance(result, dict) and result.get("success"):
                             whatsapp_response_message_id = result.get("message_id")
-                            # Cria mensagem do assistente no histórico da conversa
                             if 'conversation_id' in locals() and conversation_id:
                                 chatbot_db.create_message(db=db, conversation_id=conversation_id, role="assistant", content=mensagem_pedido, whatsapp_message_id=whatsapp_response_message_id)
                     except Exception:
@@ -3779,7 +3680,7 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                     return
             except Exception as e_at:
                 logger = logging.getLogger(__name__)
-                logger.error(f"Erro ao tentar enviar resumo de pedido por intenção de atualização: {e_at}", exc_info=True)
+                logger.error(f"Erro no orquestrador ao delegar envio de resumo: {e_at}", exc_info=True)
             
             resposta = await processar_mensagem_groq(
                 db=db,

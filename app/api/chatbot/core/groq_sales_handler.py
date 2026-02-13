@@ -510,6 +510,126 @@ class GroqSalesHandler:
         msg = re.sub(r"\s+", " ", msg).strip()
         return msg
 
+    async def should_send_order_summary(self, message_text: str, pedido_aberto_info: dict, phone_number: str | None = None) -> str | None:
+        """
+        Decide se, dada uma mensagem do cliente, devemos retornar o resumo
+        do pedido em aberto. Retorna a mensagem pronta se deve enviar, ou None.
+
+        A decisão é feita por heurística simples (normalização + substrings).
+        O orquestrador (router) deve chamar esta função e, se receber uma string,
+        enviar via WhatsApp e registrar o histórico.
+        """
+        try:
+            if not pedido_aberto_info:
+                return None
+
+            msg = (message_text or "").strip()
+            if not msg:
+                return None
+
+            norm = self._normalizar_mensagem(msg)
+            ativadores = ["atualiz", "tualiz", "acompanhar", "status", "acompanhar pedido", "receber atualiz"]
+            if not any(a in norm for a in ativadores):
+                return None
+
+            # Monta a mensagem resumo (formato compacto)
+            status = pedido_aberto_info.get('status', '')
+            numero_pedido = pedido_aberto_info.get('numero_pedido', 'N/A')
+            tipo_entrega = pedido_aberto_info.get('tipo_entrega', '')
+            created_at = pedido_aberto_info.get('created_at')
+            itens = pedido_aberto_info.get('itens', [])
+            subtotal = pedido_aberto_info.get('subtotal', 0.0)
+            taxa_entrega = pedido_aberto_info.get('taxa_entrega', 0.0)
+            desconto = pedido_aberto_info.get('desconto', 0.0)
+            valor_total = pedido_aberto_info.get('valor_total', 0.0)
+            endereco = pedido_aberto_info.get('endereco')
+            meio_pagamento = pedido_aberto_info.get('meio_pagamento')
+            mesa_codigo = pedido_aberto_info.get('mesa_codigo')
+
+            status_texto = {
+                'P': 'Pendente',
+                'I': 'Em impressão',
+                'R': 'Em preparo',
+                'S': 'Saiu para entrega',
+                'A': 'Aguardando pagamento',
+                'D': 'Editado',
+                'X': 'Em edição'
+            }.get(status, status)
+
+            tipo_entrega_texto = {
+                'DELIVERY': 'Delivery',
+                'RETIRADA': 'Retirada',
+                'BALCAO': 'Balcão',
+                'MESA': 'Mesa'
+            }.get(tipo_entrega, tipo_entrega)
+
+            data_formatada = ""
+            if created_at:
+                try:
+                    from datetime import datetime
+                    dt = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                    data_formatada = dt.strftime("%d/%m/%Y %H:%M")
+                except:
+                    data_formatada = created_at
+
+            mensagem_pedido = f"📦 *Pedido #{numero_pedido}* | {status_texto} | {tipo_entrega_texto}"
+            if mesa_codigo:
+                mensagem_pedido += f" | Mesa: {mesa_codigo}"
+            if data_formatada:
+                mensagem_pedido += f"\n📅 {data_formatada}"
+            mensagem_pedido += "\n\n*Itens:*\n"
+            if itens:
+                for item in itens:
+                    nome = item.get('nome', 'Item')
+                    qtd = item.get('quantidade', 1)
+                    preco_total_item = item.get('preco_total', 0.0)
+                    mensagem_pedido += f"• {qtd}x {nome} - R$ {preco_total_item:.2f}\n"
+            else:
+                mensagem_pedido += "Nenhum item encontrado\n"
+
+            mensagem_pedido += f"\n*Resumo:* Subtotal: R$ {subtotal:.2f}"
+            if taxa_entrega > 0:
+                mensagem_pedido += f" | Entrega: R$ {taxa_entrega:.2f}"
+            if desconto > 0:
+                mensagem_pedido += f" | Desconto: -R$ {desconto:.2f}"
+            mensagem_pedido += f"\n*TOTAL: R$ {valor_total:.2f}*"
+
+            if endereco:
+                mensagem_pedido += "\n\n📍 *Entrega:*"
+                end_parts = []
+                if endereco.get('rua'):
+                    end_parts.append(endereco['rua'])
+                if endereco.get('numero'):
+                    end_parts.append(endereco['numero'])
+                if end_parts:
+                    mensagem_pedido += f"\n{', '.join(end_parts)}"
+                endereco_line = []
+                if endereco.get('complemento'):
+                    endereco_line.append(endereco['complemento'])
+                if endereco.get('bairro'):
+                    endereco_line.append(endereco['bairro'])
+                if endereco_line:
+                    mensagem_pedido += f"\n{', '.join(endereco_line)}"
+                cidade_line = []
+                if endereco.get('cidade'):
+                    cidade_line.append(endereco['cidade'])
+                if endereco.get('cep'):
+                    cidade_line.append(f"CEP: {endereco['cep']}")
+                if cidade_line:
+                    mensagem_pedido += f"\n{' - '.join(cidade_line)}"
+
+            if meio_pagamento:
+                mensagem_pedido += f"\n\n💳 *Pagamento:* {meio_pagamento}"
+
+            mensagem_pedido += "\n\nComo posso te ajudar? 😊"
+
+            return mensagem_pedido
+        except Exception as e:
+            # Em caso de erro, não bloquear o fluxo principal
+            import logging
+            logging.getLogger(__name__).error(f"[should_send_order_summary] Erro: {e}", exc_info=True)
+            return None
+
     def _extrair_quantidade_pergunta(self, pergunta: str, nome_produto: str) -> int:
         """
         Extrai quantidade da pergunta quando o cliente pergunta preço com quantidade.
