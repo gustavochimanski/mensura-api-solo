@@ -2620,6 +2620,72 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
             from datetime import datetime
             conversations = chatbot_db.get_conversations_by_user(db, user_id, empresa_id_int)
             
+        # Se a última mensagem do assistente foi um pedido explícito de nome, encaminha diretamente
+        # para o handler de vendas (Groq) para processar possíveis respostas de nome.
+        try:
+            if conversations:
+                conv_id_tmp = conversations[0]["id"]
+                last_msgs = chatbot_db.get_messages(db, conv_id_tmp)
+                if last_msgs:
+                    # pega última mensagem do assistant
+                    last_assistant = next((m for m in reversed(last_msgs) if m.get("role") == "assistant"), None)
+                    if last_assistant and isinstance(last_assistant.get("content"), str):
+                        last_text = last_assistant.get("content").lower()
+                        if "qual o seu" in last_text and "nome" in last_text:
+                            from ..core.groq_sales_handler import processar_mensagem_groq
+                            logger = __import__("logging").getLogger(__name__)
+                            logger.info(f"[router] Última mensagem do assistente pareceu pedir nome; delegando ao Groq (conversation_id={conv_id_tmp})")
+                            ai_response = await processar_mensagem_groq(
+                                db=db,
+                                user_id=phone_number,
+                                mensagem=message_text,
+                                empresa_id=empresa_id_int,
+                                emit_welcome_message=False,
+                                prompt_key=prompt_key_sales
+                            )
+                            # envia resposta e vincula whatsapp id normalmente
+                            notifier = OrderNotification()
+                            result = await notifier.send_whatsapp_message(phone_number, ai_response, empresa_id=empresa_id)
+                            whatsapp_message_id = result.get("message_id") if isinstance(result, dict) and result.get("success") else None
+                            try:
+                                from sqlalchemy import text
+                                update_whatsapp_id_query = text("""
+                                    WITH target AS (
+                                        SELECT id
+                                        FROM chatbot.messages
+                                        WHERE conversation_id = :conversation_id
+                                          AND role = 'assistant'
+                                          AND content = :content
+                                          AND created_at > NOW() - INTERVAL '60 seconds'
+                                        ORDER BY created_at DESC
+                                        LIMIT 1
+                                    )
+                                    UPDATE chatbot.messages
+                                    SET metadata = jsonb_set(
+                                        COALESCE(metadata, '{}'::jsonb),
+                                        '{whatsapp_message_id}',
+                                        to_jsonb(CAST(:whatsapp_message_id AS text)),
+                                        true
+                                    )
+                                    WHERE id IN (SELECT id FROM target)
+                                """)
+                                db.execute(update_whatsapp_id_query, {
+                                    "conversation_id": conv_id_tmp,
+                                    "content": ai_response,
+                                    "whatsapp_message_id": whatsapp_message_id
+                                })
+                                db.commit()
+                            except Exception:
+                                # fallback: cria mensagem se não conseguir atualizar
+                                try:
+                                    chatbot_db.create_message(db, conv_id_tmp, "assistant", ai_response, whatsapp_message_id=whatsapp_message_id)
+                                except Exception:
+                                    pass
+                            return
+        except Exception:
+            # não quebra o fluxo se algo falhar aqui
+            pass
+
             # Cria conversa se não existir
             if not conversations:
                 conversation_id = chatbot_db.create_conversation(
