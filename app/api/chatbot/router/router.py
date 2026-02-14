@@ -3000,41 +3000,60 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                     logger = logging.getLogger(__name__)
                     logger.error(f"Erro ao verificar estado de cadastro: {e}")
             
-            # Em vez de pedir o nome, cadastra o cliente automaticamente com nome NULL (sem bloqueio)
-            # e cria a conversa/registro da mensagem para continuar o fluxo normalmente.
+            # Quando precisa cadastrar, iniciamos o fluxo de cadastro pedindo o NOME
+            # em vez de criar o cliente automaticamente com nome NULL.
             try:
-                # Garante que exista um cliente (nome ficará NULL)
-                cliente_criado = address_service.criar_cliente_se_nao_existe(phone_number, nome=None)
-                if cliente_criado:
-                    cliente_id = cliente_criado.get("id")
+                from ..core.application.conversacao_service import ConversacaoService
+                from ..core.notifications import OrderNotification
+                from datetime import datetime
+
+                # Marca que é um cadastro rápido (durante o pedido/conversa)
+                dados_cadastro = {"cadastro_rapido": True, "carrinho": [], "historico": []}
+
+                # Salva estado de conversa para indicar que estamos aguardando o nome.
+                conversacao_service = ConversacaoService(db, empresa_id=empresa_id_int, prompt_key=prompt_key_sales)
+                conversacao_service.salvar_estado(phone_number, "cadastro_nome", dados_cadastro)
+
+                # Garante que exista uma conversa para salvar histórico/ mensagens
+                conversations_post = chatbot_db.get_conversations_by_user(db, user_id, empresa_id_int)
+                if conversations_post:
+                    conversation_id = conversations_post[0]["id"]
+                else:
+                    conversation_id = chatbot_db.create_conversation(
+                        db=db,
+                        session_id=f"whatsapp_{user_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                        user_id=user_id,
+                        prompt_key=prompt_key_sales,
+                        model="groq-sales",
+                        contact_name=contact_name,
+                        empresa_id=empresa_id_int,
+                    )
+
+                # Salva a mensagem do usuário no histórico
+                try:
+                    chatbot_db.create_message(db, conversation_id, "user", message_text, whatsapp_message_id=message_id)
+                except Exception as e:
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.error(f"Erro ao salvar mensagem do usuário antes de pedir nome: {e}", exc_info=True)
+
+                # Pergunta pelo nome via WhatsApp e salva a mensagem do assistente
+                pergunta_nome = "Olá! Para continuar, qual o seu *nome completo* (nome e sobrenome)? 😊"
+                notifier = OrderNotification()
+                result_send = await notifier.send_whatsapp_message(phone_number, pergunta_nome, empresa_id=empresa_id)
+                whatsapp_msg_id = result_send.get("message_id") if isinstance(result_send, dict) else None
+                try:
+                    chatbot_db.create_message(db, conversation_id, "assistant", pergunta_nome, whatsapp_message_id=whatsapp_msg_id)
+                except Exception:
+                    # Não aborta se não conseguir salvar a mensagem do assistente
+                    pass
+
+                # Retorna aqui para aguardar a resposta do usuário (nome)
+                return
             except Exception as e:
                 import logging
                 logger = logging.getLogger(__name__)
-                logger.error(f"Erro ao criar cliente automaticamente: {e}", exc_info=True)
-
-            # Cria conversa se não existir
-            from datetime import datetime
-            if not conversations:
-                conversation_id = chatbot_db.create_conversation(
-                    db=db,
-                    session_id=f"whatsapp_{user_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
-                    user_id=user_id,
-                    prompt_key="atendimento-pedido-whatsapp",
-                    model="groq-sales",
-                    empresa_id=empresa_id_int
-                )
-            else:
-                conversation_id = conversations[0]['id']
-
-            # Salva a mensagem do usuário imediatamente
-            try:
-                chatbot_db.create_message(db, conversation_id, "user", message_text, whatsapp_message_id=message_id)
-            except Exception as e:
-                import logging
-                logger = logging.getLogger(__name__)
-                logger.error(f"Erro ao salvar mensagem do usuário após cadastro automático: {e}", exc_info=True)
-            # Continua o processamento normal (não retorna aqui) para que o fluxo de IA
-            # processe a mensagem como de costume.
+                logger.error(f"Erro ao iniciar fluxo de cadastro (pedir nome): {e}", exc_info=True)
 
         # VERIFICA PEDIDOS EM ABERTO para este cliente
         pedido_aberto = None
