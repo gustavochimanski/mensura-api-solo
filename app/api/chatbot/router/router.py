@@ -3946,6 +3946,24 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                     logger_local.debug(f"[router] conversation_ids={ids}")
             except Exception as e_conv:
                 logger_local.warning(f"[router] falha ao listar conversations para debug: {e_conv}")
+            # Fallback por sufixo do telefone (procura conversas que possam ter user_id armazenado em formato diferente)
+            try:
+                if not estado_atual and phone_number and len(phone_number) >= 8:
+                    from sqlalchemy import text
+                    sufixo = phone_number[-9:]
+                    q = text("""
+                        SELECT metadata->>'sales_state' as estado
+                        FROM chatbot.conversations
+                        WHERE user_id LIKE :pattern
+                        ORDER BY updated_at DESC
+                        LIMIT 1
+                    """)
+                    row = db.execute(q, {"pattern": f"%{sufixo}"}).fetchone()
+                    if row and row[0]:
+                        estado_atual = row[0]
+                        logger_local.info(f"[router] fallback sufixo encontrou estado_atual={estado_atual!r} para pattern=%{sufixo}")
+            except Exception as e_suf:
+                logger_local.warning(f"[router] fallback sufixo falhou: {e_suf}")
         except Exception:
             estado_atual = None
             estado_dados = {}
