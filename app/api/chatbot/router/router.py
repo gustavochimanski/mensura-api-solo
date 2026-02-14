@@ -3012,11 +3012,6 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 # Marca que é um cadastro rápido (durante o pedido/conversa)
                 dados_cadastro = {"cadastro_rapido": True, "carrinho": [], "historico": []}
 
-                # Salva estado de conversa para indicar que estamos aguardando o nome.
-                logger.info(f"[router] Salvando estado cadastro_nome para phone={phone_number}, empresa_id={empresa_id_int}")
-                conversacao_service = ConversacaoService(db, empresa_id=empresa_id_int, prompt_key=prompt_key_sales)
-                conversacao_service.salvar_estado(phone_number, "cadastro_nome", dados_cadastro)
-
                 # Garante que exista uma conversa para salvar histórico/ mensagens
                 conversations_post = chatbot_db.get_conversations_by_user(db, user_id, empresa_id_int)
                 if conversations_post:
@@ -3031,6 +3026,11 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                         contact_name=contact_name,
                         empresa_id=empresa_id_int,
                     )
+
+                # Salva estado de conversa para indicar que estamos aguardando o nome.
+                logger.info(f"[router] Salvando estado cadastro_nome para phone={phone_number}, empresa_id={empresa_id_int} (conversation_id={conversation_id})")
+                conversacao_service = ConversacaoService(db, empresa_id=empresa_id_int, prompt_key=prompt_key_sales)
+                conversacao_service.salvar_estado(phone_number, "cadastro_nome", dados_cadastro)
 
                 # Salva a mensagem do usuário no histórico
                 try:
