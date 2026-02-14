@@ -2454,6 +2454,11 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
 
         empresa_id_int = int(empresa_id) if empresa_id else 1
         user_id = phone_number
+        # Pre-initialize conversations para evitar UnboundLocalError em ramificações anteriores
+        try:
+            conversations = chatbot_db.get_conversations_by_user(db, user_id, empresa_id_int)
+        except Exception:
+            conversations = []
         
         # VERIFICA SE É MENSAGEM DE ENTREGADOR/MOTOBOY - IGNORA
         # Quando motoboy envia mensagem para o estabelecimento, o chatbot deve ignorar
