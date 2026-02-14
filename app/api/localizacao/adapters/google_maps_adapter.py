@@ -379,8 +379,39 @@ class GoogleMapsAdapter:
                     logger.warning(f"[GoogleMapsAdapter] Falha ao obter detalhes do place_id {pid}: {e}")
                     continue
 
+            # Se não houve previsões do Places, tentar Geocoding direto (melhora busca por rua/nome)
             if not saida:
-                logger.info(f"[GoogleMapsAdapter] Nenhuma previsão do Places para '{texto_norm}'")
+                logger.info(f"[GoogleMapsAdapter] Nenhuma previsão do Places para '{texto_norm}', tentando Geocoding direto")
+                try:
+                    with httpx.Client(timeout=8.0) as client:
+                        geo_resp = client.get(
+                            self.BASE_URL,
+                            params={
+                                "address": texto_norm,
+                                "components": "country:br",
+                                "key": self.api_key,
+                                "language": "pt-BR",
+                            },
+                        )
+                    geo_resp.raise_for_status()
+                    geo_data = geo_resp.json()
+                    if geo_data.get("status") == "OK" and geo_data.get("results"):
+                        for res in geo_data.get("results", [])[:max_results]:
+                            try:
+                                endereco_info = self._extrair_endereco_formatado(res)
+                                # Geocoding retorna geometry/location
+                                loc = res.get("geometry", {}).get("location", {})
+                                endereco_info["latitude"] = loc.get("lat")
+                                endereco_info["longitude"] = loc.get("lng")
+                                endereco_info["formatted_address"] = res.get("formatted_address")
+                                saida.append(endereco_info)
+                            except Exception as e:
+                                logger.warning(f"[GoogleMapsAdapter] Falha ao processar resultado de Geocoding: {e}")
+                                continue
+                    else:
+                        logger.info(f"[GoogleMapsAdapter] Geocoding não retornou resultados para '{texto_norm}' (status={geo_data.get('status')})")
+                except Exception as e:
+                    logger.error(f"[GoogleMapsAdapter] Erro ao chamar Geocoding como fallback para '{texto_norm}': {e}")
             return saida
         except httpx.HTTPStatusError as e:
             logger.error(f"[GoogleMapsAdapter] Erro HTTP no Places Autocomplete: Status {e.response.status_code}")
