@@ -4902,12 +4902,12 @@ REGRA PARA COMPLEMENTOS:
                 self._salvar_estado_conversa(user_id, STATE_CADASTRO_NOME, dados)
                 return f"Entendi! 😊\n\nMas para continuar, preciso do seu *nome completo*.\n\nComo você gostaria de ser chamado?"
         
-        # Valida se tem pelo menos nome e sobrenome
+        # Validação: prefere nome completo, mas aceita também nome simples para não bloquear o fluxo.
         partes_nome = nome.split()
         if len(partes_nome) < 2:
-            # Mantém o estado de cadastro
-            self._salvar_estado_conversa(user_id, STATE_CADASTRO_NOME, dados)
-            return "❓ Por favor, digite seu *nome completo* (nome e sobrenome) 😊\n\nExemplo: João Silva"
+            # Mantém a flag de cadastro rápido mas permite salvar nomes de uma palavra
+            dados.setdefault('nome_incompleto', True)
+            # não retorna aqui — prossegue para tentativa de salvar o nome informado
         
         # Parece ser um nome válido - tenta salvar
         try:
