@@ -3920,6 +3920,89 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
         empresa_id_int = int(empresa_id) if empresa_id else 1
 
         # 5. Chama a IA
+        # Se a conversa já está no fluxo de cadastro de nome ("cadastro_nome"), devemos delegar
+        # ao GroqSalesHandler mesmo que a conta NÃO aceite pedidos via WhatsApp, para concluir o cadastro.
+        try:
+            from ..core.application.conversacao_service import ConversacaoService
+            from ..core.groq_sales_handler import processar_mensagem_groq, STATE_CADASTRO_NOME
+
+            conversacao_service = ConversacaoService(db, empresa_id=empresa_id_int, prompt_key=prompt_key_sales)
+            try:
+                estado_atual, _ = conversacao_service.obter_estado(phone_number)
+            except Exception:
+                estado_atual = None
+        except Exception:
+            estado_atual = None
+
+        # Se estiver aguardando cadastro de nome, sempre use o handler de vendas (para processar _processar_cadastro_nome_rapido)
+        if estado_atual == STATE_CADASTRO_NOME:
+            try:
+                ai_response = await processar_mensagem_groq(
+                    db=db,
+                    user_id=phone_number,
+                    mensagem=message_text,
+                    empresa_id=empresa_id_int,
+                    emit_welcome_message=False,
+                    prompt_key=prompt_key
+                )
+
+                if not ai_response or not str(ai_response).strip():
+                    return
+
+                notifier = OrderNotification()
+                result = await notifier.send_whatsapp_message(phone_number, ai_response, empresa_id=empresa_id)
+
+                # Vincula whatsapp_message_id à última resposta salva (tenta atualizar; cria se não achar)
+                if isinstance(result, dict) and result.get("success") and result.get("message_id"):
+                    try:
+                        from sqlalchemy import text
+                        whatsapp_response_message_id = result.get("message_id")
+                        update_whatsapp_id_query = text("""
+                            WITH target AS (
+                                SELECT id
+                                FROM chatbot.messages
+                                WHERE conversation_id = :conversation_id
+                                  AND role = 'assistant'
+                                  AND content = :content
+                                  AND created_at > NOW() - INTERVAL '60 seconds'
+                                ORDER BY created_at DESC
+                                LIMIT 1
+                            )
+                            UPDATE chatbot.messages
+                            SET metadata = jsonb_set(
+                                COALESCE(metadata, '{}'::jsonb),
+                                '{whatsapp_message_id}',
+                                to_jsonb(CAST(:whatsapp_message_id AS text)),
+                                true
+                            )
+                            WHERE id IN (SELECT id FROM target)
+                        """)
+                        update_result = db.execute(update_whatsapp_id_query, {
+                            "conversation_id": conversation_id,
+                            "content": ai_response,
+                            "whatsapp_message_id": whatsapp_response_message_id
+                        })
+                        db.commit()
+                        if update_result.rowcount == 0:
+                            chatbot_db.create_message(
+                                db=db,
+                                conversation_id=conversation_id,
+                                role="assistant",
+                                content=ai_response,
+                                whatsapp_message_id=whatsapp_response_message_id
+                            )
+                    except Exception as e:
+                        import logging
+                        logger = logging.getLogger(__name__)
+                        logger.error(f"Erro ao vincular whatsapp_message_id à resposta do bot (cadastro_nome): {e}", exc_info=True)
+
+                return
+            except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Erro ao processar mensagem no fluxo cadastro_nome: {e}", exc_info=True)
+                return
+
         # CRÍTICO: quando NÃO aceita pedidos no WhatsApp, NÃO pode usar o GroqSalesHandler (ele possui tool-calling
         # e pode acionar fluxo de checkout). Neste modo usamos apenas chat "texto puro".
         if not aceita_pedidos_whatsapp:
