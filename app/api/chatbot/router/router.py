@@ -3929,11 +3929,26 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
 
             conversacao_service = ConversacaoService(db, empresa_id=empresa_id_int, prompt_key=prompt_key_sales)
             try:
-                estado_atual, _ = conversacao_service.obter_estado(phone_number)
-            except Exception:
-                estado_atual = None
+                estado_atual, estado_dados = conversacao_service.obter_estado(phone_number)
+            except Exception as e_est:
+                import logging as _log
+                _log.getLogger(__name__).error(f"[router] Erro ao obter estado da conversa para {phone_number}: {e_est}", exc_info=True)
+                estado_atual, estado_dados = None, {}
+
+            # Log detalhado para diagnosticar porque às vezes o estado não é encontrado
+            import logging as _log
+            logger_local = _log.getLogger(__name__)
+            try:
+                conversations_check = chatbot_db.get_conversations_by_user(db, phone_number, empresa_id_int)
+                logger_local.info(f"[router] estado_atual={estado_atual!r} estado_keys={list((estado_dados or {}).keys())} conversations_found={len(conversations_check)}")
+                if conversations_check:
+                    ids = [c['id'] for c in conversations_check]
+                    logger_local.debug(f"[router] conversation_ids={ids}")
+            except Exception as e_conv:
+                logger_local.warning(f"[router] falha ao listar conversations para debug: {e_conv}")
         except Exception:
             estado_atual = None
+            estado_dados = {}
 
         # Se estiver aguardando cadastro de nome, sempre use o handler de vendas (para processar _processar_cadastro_nome_rapido)
         if estado_atual == STATE_CADASTRO_NOME:
