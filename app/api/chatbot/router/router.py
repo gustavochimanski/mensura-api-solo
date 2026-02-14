@@ -3007,10 +3007,13 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 from ..core.notifications import OrderNotification
                 from datetime import datetime
 
+                import logging
+                logger = logging.getLogger(__name__)
                 # Marca que é um cadastro rápido (durante o pedido/conversa)
                 dados_cadastro = {"cadastro_rapido": True, "carrinho": [], "historico": []}
 
                 # Salva estado de conversa para indicar que estamos aguardando o nome.
+                logger.info(f"[router] Salvando estado cadastro_nome para phone={phone_number}, empresa_id={empresa_id_int}")
                 conversacao_service = ConversacaoService(db, empresa_id=empresa_id_int, prompt_key=prompt_key_sales)
                 conversacao_service.salvar_estado(phone_number, "cadastro_nome", dados_cadastro)
 
@@ -3033,20 +3036,18 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 try:
                     chatbot_db.create_message(db, conversation_id, "user", message_text, whatsapp_message_id=message_id)
                 except Exception as e:
-                    import logging
-                    logger = logging.getLogger(__name__)
-                    logger.error(f"Erro ao salvar mensagem do usuário antes de pedir nome: {e}", exc_info=True)
+                    logger.error(f"[router] Erro ao salvar mensagem do usuário antes de pedir nome: {e}", exc_info=True)
 
                 # Pergunta pelo nome via WhatsApp e salva a mensagem do assistente
                 pergunta_nome = "Olá! Para continuar, qual o seu *nome completo* (nome e sobrenome)? 😊"
                 notifier = OrderNotification()
+                logger.info(f"[router] Enviando pergunta pelo nome para {phone_number}")
                 result_send = await notifier.send_whatsapp_message(phone_number, pergunta_nome, empresa_id=empresa_id)
                 whatsapp_msg_id = result_send.get("message_id") if isinstance(result_send, dict) else None
                 try:
                     chatbot_db.create_message(db, conversation_id, "assistant", pergunta_nome, whatsapp_message_id=whatsapp_msg_id)
                 except Exception:
-                    # Não aborta se não conseguir salvar a mensagem do assistente
-                    pass
+                    logger.warning(f"[router] Não foi possível salvar a mensagem do assistente (pergunta nome) no chat para conversation_id={conversation_id}")
 
                 # Retorna aqui para aguardar a resposta do usuário (nome)
                 return

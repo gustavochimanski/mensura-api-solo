@@ -4858,16 +4858,21 @@ REGRA PARA COMPLEMENTOS:
         Processa o nome do cliente durante o cadastro rápido
         Se a mensagem não for um nome válido, responde ao cliente primeiro e depois pede o nome novamente
         """
+        import logging
+        logger = logging.getLogger(__name__)
+
         nome = mensagem.strip()
-        
+        logger.debug(f"[cadastro_nome] Iniciando processamento do nome. user_id={user_id!r}, mensagem={mensagem!r}, dados_keys={list(dados.keys())}")
+
         # Validação básica de tamanho
         if len(nome) < 2:
+            logger.debug(f"[cadastro_nome] Nome muito curto: {nome!r} (user_id={user_id})")
             return "❓ Nome muito curto! Por favor, digite seu nome completo 😊"
         
         # Detecta se NÃO é um nome válido
         if self._detectar_se_nao_e_nome(nome):
             # Não é um nome - responde ao cliente primeiro usando IA conversacional
-            print(f"⚠️ Mensagem não parece ser um nome: '{nome}' - respondendo primeiro e pedindo nome novamente")
+            logger.info(f"[cadastro_nome] Mensagem não parece ser um nome: {nome!r} - respondendo e pedindo nome novamente (user_id={user_id})")
             
             # Gera resposta conversacional para a mensagem do cliente
             try:
@@ -4886,6 +4891,7 @@ REGRA PARA COMPLEMENTOS:
                 )
                 
                 # Mantém o estado de cadastro e pede o nome novamente
+                logger.debug(f"[cadastro_nome] Mantendo estado cadastro_nome para user_id={user_id}")
                 self._salvar_estado_conversa(user_id, STATE_CADASTRO_NOME, dados)
                 
                 # Combina a resposta da IA com a solicitação do nome
@@ -4894,6 +4900,7 @@ REGRA PARA COMPLEMENTOS:
                 mensagem_completa += "Para continuar, preciso do seu *nome completo* 😊\n\n"
                 mensagem_completa += "Como você gostaria de ser chamado?"
                 
+                logger.debug(f"[cadastro_nome] Enviando resposta conversacional + pedido de nome (user_id={user_id})")
                 return mensagem_completa
                 
             except Exception as e:
@@ -4902,29 +4909,34 @@ REGRA PARA COMPLEMENTOS:
                 self._salvar_estado_conversa(user_id, STATE_CADASTRO_NOME, dados)
                 return f"Entendi! 😊\n\nMas para continuar, preciso do seu *nome completo*.\n\nComo você gostaria de ser chamado?"
         
-        # Validação: prefere nome completo, mas aceita também nome simples para não bloquear o fluxo.
+            # Validação: prefere nome completo, mas aceita também nome simples para não bloquear o fluxo.
         partes_nome = nome.split()
         if len(partes_nome) < 2:
-            # Mantém a flag de cadastro rápido mas permite salvar nomes de uma palavra
-            dados.setdefault('nome_incompleto', True)
-            # não retorna aqui — prossegue para tentativa de salvar o nome informado
+                # Mantém a flag de cadastro rápido mas permite salvar nomes de uma palavra
+                dados.setdefault('nome_incompleto', True)
+                logger.debug(f"[cadastro_nome] Nome com 1 palavra aceito temporariamente: {nome!r} (user_id={user_id})")
+                # não retorna aqui — prossegue para tentativa de salvar o nome informado
         
         # Parece ser um nome válido - tenta salvar
         try:
             # Usa o address_service para criar/atualizar cliente (garante consistência)
+            logger.info(f"[cadastro_nome] Tentando criar/atualizar cliente: telefone={user_id}, nome={nome!r}")
             cliente = self.address_service.criar_cliente_se_nao_existe(
                 telefone=user_id,
                 nome=nome
             )
-            
+
             if not cliente:
+                logger.warning(f"[cadastro_nome] address_service.criar_cliente_se_nao_existe retornou None (user_id={user_id}, nome={nome})")
                 # Mantém o estado de cadastro em caso de erro
                 self._salvar_estado_conversa(user_id, STATE_CADASTRO_NOME, dados)
                 return "❌ Ops! Ocorreu um erro ao salvar seu nome. Tente novamente 😊"
             
             # Nome salvo - remove flag de cadastro e continua com o fluxo normal
             dados.pop('cadastro_rapido', None)
-            print(f"✅ Cliente cadastrado/atualizado: {nome} (telefone: {user_id})")
+            logger.info(f"[cadastro_nome] ✅ Cliente cadastrado/atualizado: id={cliente.get('id')} nome={cliente.get('nome')!r} telefone={cliente.get('telefone')}")
+            # limpa sinal de nome_incompleto se existir
+            dados.pop('nome_incompleto', None)
             
             # Se estava no meio de um pedido, continua com o fluxo de pedido
             if dados.get('carrinho') or dados.get('tipo_entrega'):
