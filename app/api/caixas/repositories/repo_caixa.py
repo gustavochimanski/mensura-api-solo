@@ -154,22 +154,23 @@ class CaixaRepository:
             raise ValueError("Caixa não encontrado")
         
         saldo = Decimal(str(caixa.valor_inicial))
-        
-        # Busca entradas/saídas de dinheiro no período do caixa.
-        # IMPORTANTE: usa o timestamp do pagamento (transação) e não a criação do pedido,
-        # pois balcão/mesa podem ser criados antes da abertura e pagos depois.
+
+        # Captura um timestamp único para evitar pequenas discrepâncias entre consultas
         data_fim = caixa.data_fechamento if caixa.data_fechamento else datetime.utcnow()
         ts_pagamento = func.coalesce(TransacaoPagamentoModel.pago_em, TransacaoPagamentoModel.created_at)
-        
-        # Entradas: pedidos entregues e pagos em dinheiro através de transações.
-        # IMPORTANTE:
-        # - Pode existir mais de uma transação PAGO para o mesmo pedido (reprocessamento/duplicidade).
-        # - Para não inflar o fechamento, consolidamos por pedido usando MAX(valor) (assumimos 1 pagamento
-        #   em dinheiro por pedido; pagamentos parciais em dinheiro no mesmo pedido são raros no modelo atual).
-        entradas_por_pedido_sq = (
+
+        # Calcula total pago em DINHEIRO por pedido (soma das transações),
+        # e limita por pedido ao valor_total do pedido para evitar inflar por múltiplas transações.
+        pagos_por_pedido_sq = (
             self.db.query(
                 TransacaoPagamentoModel.pedido_id.label("pedido_id"),
-                func.max(TransacaoPagamentoModel.valor).label("valor_pago_dinheiro"),
+                PedidoUnificadoModel.valor_total.label("valor_total_pedido"),
+                func.sum(
+                    case(
+                        (MeioPagamentoModel.tipo == "DINHEIRO", TransacaoPagamentoModel.valor),
+                        else_=0
+                    )
+                ).label("total_pago_dinheiro"),
             )
             .join(PedidoUnificadoModel, TransacaoPagamentoModel.pedido_id == PedidoUnificadoModel.id)
             .join(MeioPagamentoModel, TransacaoPagamentoModel.meio_pagamento_id == MeioPagamentoModel.id)
@@ -183,35 +184,21 @@ class CaixaRepository:
                     MeioPagamentoModel.tipo == "DINHEIRO",
                 )
             )
-            .group_by(TransacaoPagamentoModel.pedido_id)
+            .group_by(TransacaoPagamentoModel.pedido_id, PedidoUnificadoModel.valor_total)
             .subquery()
         )
-        total_entradas = (
-            self.db.query(func.sum(entradas_por_pedido_sq.c.valor_pago_dinheiro)).scalar()
-            or Decimal("0")
+
+        # Soma os valores por pedido, limitando cada pedido ao seu valor_total (evita duplicidade/overpay)
+        total_entradas_q = (
+            self.db.query(
+                func.sum(func.least(pagos_por_pedido_sq.c.total_pago_dinheiro, pagos_por_pedido_sq.c.valor_total_pedido))
+            ).scalar()
         )
-        
-        # Saídas: trocos dados (troco real) para pedidos entregues e pagos em dinheiro
-        # Regra: quando o cliente informa "troco_para", o troco efetivo é (troco_para - valor_total),
-        # somente quando troco_para > valor_total e o pagamento é DINHEIRO.
-        # Evita duplicar o troco quando houver múltiplas transações PAGO em dinheiro para o mesmo pedido.
-        # Usa a lista de pedidos (distinct) que tiveram ao menos 1 transação PAGO em dinheiro no período.
+        total_entradas = Decimal(str(total_entradas_q or 0))
+
+        # Saídas: trocos dados (troco real) para os mesmos pedidos considerados acima
         pedidos_com_pagamento_dinheiro_sq = (
-            self.db.query(TransacaoPagamentoModel.pedido_id.label("pedido_id"))
-            .join(PedidoUnificadoModel, TransacaoPagamentoModel.pedido_id == PedidoUnificadoModel.id)
-            .join(MeioPagamentoModel, TransacaoPagamentoModel.meio_pagamento_id == MeioPagamentoModel.id)
-            .filter(
-                and_(
-                    PedidoUnificadoModel.empresa_id == empresa_id,
-                    ts_pagamento >= caixa.data_abertura,
-                    ts_pagamento <= data_fim,
-                    PedidoUnificadoModel.status == StatusPedido.ENTREGUE.value,
-                    TransacaoPagamentoModel.status == PagamentoStatusEnum.PAGO.value,
-                    MeioPagamentoModel.tipo == "DINHEIRO",
-                )
-            )
-            .distinct()
-            .subquery()
+            self.db.query(pagos_por_pedido_sq.c.pedido_id).subquery()
         )
         query_saidas = (
             self.db.query(func.sum(PedidoUnificadoModel.troco_para - PedidoUnificadoModel.valor_total))
@@ -225,26 +212,22 @@ class CaixaRepository:
                 )
             )
         )
-        total_saidas = query_saidas.scalar() or Decimal("0")
+        total_saidas = Decimal(str(query_saidas.scalar() or 0))
         
         # Retiradas: sangrias e despesas
         from app.api.caixas.models.model_retirada import RetiradaModel
         query_retiradas = (
             self.db.query(func.sum(RetiradaModel.valor))
-            .filter(
-                and_(
-                    RetiradaModel.caixa_id == caixa_id
-                )
-            )
+            .filter(RetiradaModel.caixa_id == caixa_id)
         )
-        total_retiradas = query_retiradas.scalar() or Decimal("0")
+        total_retiradas = Decimal(str(query_retiradas.scalar() or 0))
         
         saldo_esperado = saldo + total_entradas - total_saidas - total_retiradas
         
         # Atualiza o saldo esperado no caixa
+        # Atualiza o saldo esperado no caixa (mantendo Decimal internamente)
         caixa.saldo_esperado = saldo_esperado
         self.db.commit()
-        
         return saldo_esperado
 
     def calcular_valores_esperados_por_meio(
@@ -268,26 +251,24 @@ class CaixaRepository:
         
         data_fim = caixa.data_fechamento if caixa.data_fechamento else datetime.utcnow()
         ts_pagamento = func.coalesce(TransacaoPagamentoModel.pago_em, TransacaoPagamentoModel.created_at)
-        
-        # Busca valores agrupados por meio de pagamento
-        # Considera apenas pedidos entregues no período da abertura
-        # Para DINHEIRO com troco, algumas integrações/frontends podem mandar o "valor recebido" (troco_para)
-        # como valor da transação. Para o total esperado por meio, queremos o valor da venda (valor_total).
-        # Então, para DINHEIRO, limitamos a soma a no máximo o valor_total do pedido.
+
+        # Valor por transação; para DINHEIRO consideramos o valor da transação (pode representar valor recebido),
+        # mas consolidaremos por pedido somando transações e limitando por pedido ao seu valor_total.
         valor_para_soma = case(
-            (MeioPagamentoModel.tipo == "DINHEIRO", func.least(TransacaoPagamentoModel.valor, PedidoUnificadoModel.valor_total)),
+            (MeioPagamentoModel.tipo == "DINHEIRO", TransacaoPagamentoModel.valor),
             else_=TransacaoPagamentoModel.valor,
         )
 
-        # Evita inflar valores quando existir mais de uma transação PAGO do mesmo meio para o mesmo pedido.
-        # Consolida 1 valor por (pedido, meio) usando MAX(valor_para_soma).
+        # Consolida por (meio, pedido) somando todas as transações válidas do período.
+        # Também traz o valor_total do pedido para permitir cap por pedido quando o meio for DINHEIRO.
         por_pedido_meio_sq = (
             self.db.query(
                 MeioPagamentoModel.id.label("meio_pagamento_id"),
                 MeioPagamentoModel.nome.label("meio_pagamento_nome"),
                 MeioPagamentoModel.tipo.label("meio_pagamento_tipo"),
                 TransacaoPagamentoModel.pedido_id.label("pedido_id"),
-                func.max(valor_para_soma).label("valor_consolidado"),
+                PedidoUnificadoModel.valor_total.label("valor_total_pedido"),
+                func.sum(valor_para_soma).label("valor_por_pedido"),
             )
             .join(TransacaoPagamentoModel, MeioPagamentoModel.id == TransacaoPagamentoModel.meio_pagamento_id)
             .join(PedidoUnificadoModel, TransacaoPagamentoModel.pedido_id == PedidoUnificadoModel.id)
@@ -305,16 +286,24 @@ class CaixaRepository:
                 MeioPagamentoModel.nome,
                 MeioPagamentoModel.tipo,
                 TransacaoPagamentoModel.pedido_id,
+                PedidoUnificadoModel.valor_total,
             )
             .subquery()
         )
 
+        # Ao agregar por meio, para DINHEIRO limitamos o valor por pedido ao valor_total do pedido.
         query = (
             self.db.query(
                 por_pedido_meio_sq.c.meio_pagamento_id.label("id"),
                 por_pedido_meio_sq.c.meio_pagamento_nome.label("nome"),
                 por_pedido_meio_sq.c.meio_pagamento_tipo.label("tipo"),
-                func.sum(por_pedido_meio_sq.c.valor_consolidado).label("valor_total"),
+                func.sum(
+                    case(
+                        (por_pedido_meio_sq.c.meio_pagamento_tipo == "DINHEIRO",
+                         func.least(por_pedido_meio_sq.c.valor_por_pedido, por_pedido_meio_sq.c.valor_total_pedido)),
+                        else_=por_pedido_meio_sq.c.valor_por_pedido
+                    )
+                ).label("valor_total"),
                 func.count(por_pedido_meio_sq.c.pedido_id).label("quantidade"),
             )
             .group_by(
