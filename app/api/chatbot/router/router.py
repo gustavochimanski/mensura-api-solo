@@ -2454,6 +2454,9 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
 
         empresa_id_int = int(empresa_id) if empresa_id else 1
         user_id = phone_number
+        # Variáveis de prompt usadas em vários pontos — inicializa cedo para evitar UnboundLocalError
+        prompt_key_sales = PROMPT_ATENDIMENTO_PEDIDO_WHATSAPP
+        prompt_key_support = PROMPT_ATENDIMENTO
         # Pre-initialize conversations para evitar UnboundLocalError em ramificações anteriores
         try:
             conversations = chatbot_db.get_conversations_by_user(db, user_id, empresa_id_int)
@@ -3075,7 +3078,6 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
             # em vez de criar o cliente automaticamente com nome NULL.
             try:
                 from ..core.application.conversacao_service import ConversacaoService
-                from ..core.notifications import OrderNotification
                 from datetime import datetime
 
                 import logging
