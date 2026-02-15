@@ -36,6 +36,51 @@ router = APIRouter(prefix="/ws", tags=["websocket"])
 
 WS_IDLE_TIMEOUT_SECONDS: int = int(os.getenv("WS_IDLE_TIMEOUT_SECONDS", "3600"))  # 1h
 
+# Redis-based rate limiting / temporary ban (opcional)
+REDIS_URL = os.getenv("WS_RATE_REDIS_URL", "redis://localhost:6379/1")
+try:
+    from aioredis import from_url as _redis_from_url  # type: ignore
+except Exception:
+    try:
+        import redis.asyncio as _redis_lib  # type: ignore
+        _redis_from_url = _redis_lib.from_url
+    except Exception:
+        _redis_from_url = None
+
+_redis_client = _redis_from_url(REDIS_URL, decode_responses=True) if _redis_from_url else None
+
+async def is_banned_ip(ip: str) -> bool:
+    """Verifica se o IP está banido (retorna False se Redis não estiver configurado)."""
+    if not _redis_client or not ip:
+        return False
+    try:
+        return await _redis_client.exists(f"ban:{ip}") == 1
+    except Exception as e:
+        logger.debug(f"[WS_RATE_LIMIT] Redis error on is_banned_ip: {e}")
+        return False
+
+async def incr_fail_and_maybe_ban(ip: str, limit: int = 5, window: int = 60, ban_ttl: int = 300) -> bool:
+    """
+    Incrementa contador de falhas para o IP e aplica ban se ultrapassar o limite.
+    Retorna True se o IP acabou de ser banido.
+    Se Redis não estiver disponível, não aplica ban (retorna False).
+    """
+    if not _redis_client or not ip:
+        return False
+    key = f"ws_fail:{ip}"
+    try:
+        cnt = await _redis_client.incr(key)
+        if cnt == 1:
+            await _redis_client.expire(key, window)
+        if cnt > limit:
+            await _redis_client.set(f"ban:{ip}", "1", ex=ban_ttl)
+            logger.info("[WS_RATE_LIMIT] Ban aplicado ip=%s por %s segundos", ip, ban_ttl)
+            return True
+        return False
+    except Exception as e:
+        logger.debug(f"[WS_RATE_LIMIT] Redis error on incr_fail: {e}")
+        return False
+
 async def _close_ws_policy(websocket: WebSocket, reason: str) -> None:
     # 1008: Policy Violation (apropriado para auth inválida)
     # IMPORTANTE: Precisamos aceitar o WebSocket antes de fechar para responder ao Sec-WebSocket-Protocol
@@ -145,8 +190,25 @@ async def websocket_notifications(
     """
     user_id = "unknown"
     try:
+        # 0) Verifica se o IP está banido antes de qualquer tentativa de autenticação
+        # Obtém o IP do cliente (X-Forwarded-For, X-Real-IP ou client.host)
+        client_ip = None
+        try:
+            headers = dict(websocket.headers) if hasattr(websocket, "headers") else {}
+            client_ip = headers.get("x-forwarded-for") or headers.get("x-real-ip")
+            if client_ip:
+                # se X-Forwarded-For vier com múltiplos IPs, pega o primeiro
+                client_ip = client_ip.split(",")[0].strip()
+        except Exception:
+            client_ip = websocket.client.host if websocket.client else "unknown"
+
+        logger.info(f"[WS_ROUTER] Tentando autenticar WebSocket - empresa_id={empresa_id}, client_ip={client_ip}")
+        if await is_banned_ip(client_ip):
+            logger.info(f"[WS_RATE_LIMIT] Rejeitando conexão de IP banido: {client_ip}")
+            await _close_ws_policy(websocket, "IP temporariamente bloqueado por tentativas inválidas")
+            return
+
         # 1) Autentica via header Authorization (Bearer) ANTES do accept()
-        logger.info(f"[WS_ROUTER] Tentando autenticar WebSocket - empresa_id={empresa_id}")
         token = _get_bearer_token_from_ws(websocket)
         if not token:
             logger.warning(f"[WS_ROUTER] Token não encontrado - empresa_id={empresa_id}")
@@ -161,6 +223,14 @@ async def websocket_notifications(
         except HTTPException as e:
             # Token inválido/expirado (evita stacktrace ruidoso em reconexões do frontend)
             logger.info(f"[WS_ROUTER] Token inválido/expirado: {e.detail}")
+            # Conta falhas para o IP e possivelmente aplica ban
+            try:
+                banned = await incr_fail_and_maybe_ban(client_ip, limit=int(os.getenv("WS_RATE_LIMIT_MAX", "5")), window=int(os.getenv("WS_RATE_LIMIT_WINDOW", "60")), ban_ttl=int(os.getenv("WS_RATE_LIMIT_BAN_TTL", "300")))
+            except Exception:
+                banned = False
+            if banned:
+                await _close_ws_policy(websocket, "IP temporariamente bloqueado por tentativas inválidas")
+                return
             await _close_ws_policy(websocket, "Token inválido ou expirado")
             return
         except Exception as e:

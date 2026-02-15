@@ -108,3 +108,14 @@ class MercadoPagoClient:
         resp.raise_for_status()
         return MercadoPagoPayment.from_dict(resp.json())
 
+    async def refund_payment(self, payment_id: str) -> MercadoPagoPayment:
+        """
+        Solicita reembolso (refund) do pagamento e retorna o pagamento atualizado.
+        Usa o endpoint de refunds do Mercado Pago e em seguida busca o pagamento
+        para obter o status atualizado.
+        """
+        resp = await self._client.post(f"/v1/payments/{payment_id}/refunds")
+        resp.raise_for_status()
+        # Após criar o refund, obtém o pagamento atualizado para refletir o novo status.
+        return await self.get_payment(payment_id)
+

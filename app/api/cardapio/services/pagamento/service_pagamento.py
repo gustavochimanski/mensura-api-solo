@@ -203,6 +203,53 @@ class PagamentoService:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Transação não encontrada")
         return await self.atualizar_status_por_transacao_id(transacao_id=transacao.id, payload=payload)
 
+    async def estornar_transacao(
+        self,
+        *,
+        transacao_id: int,
+    ) -> TransacaoResponse:
+        """
+        Realiza o estorno de uma transação.
+
+        - Se a transação tiver um provider_transaction_id e o gateway suportar refund
+          (ex.: MercadoPago), tenta executar o refund no gateway e aplica o resultado.
+        - Caso contrário, marca a transação como ESTORNADO localmente.
+        """
+        transacao = self.repo.get_by_id(int(transacao_id))
+        if not transacao:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Transação não encontrada")
+
+        # Se já estiver estornada, retorna sem fazer nada adicional.
+        if transacao.status == PagamentoStatusEnum.ESTORNADO.value:
+            return TransacaoResponse.model_validate(transacao)
+
+        provider_id = getattr(transacao, "provider_transaction_id", None)
+        gateway_str = getattr(transacao, "gateway", None)
+
+        # Tenta estornar via gateway quando possível.
+        try:
+            if provider_id and gateway_str:
+                # gateway no banco é salvo como string; tenta mapear para enum
+                try:
+                    gateway_enum = PagamentoGatewayEnum(gateway_str)
+                except Exception:
+                    gateway_enum = None
+
+                if gateway_enum is not None:
+                    result = await self.gateway.refund(gateway=gateway_enum, payment_id=str(provider_id))
+                    self._aplicar_resultado(transacao, result)
+                    self.repo.commit()
+                    return TransacaoResponse.model_validate(transacao)
+
+            # Fallback: marca como estornado localmente
+            self.repo.atualizar(transacao, status=PagamentoStatusEnum.ESTORNADO.value)
+            self.repo.registrar_evento(transacao, "estornado_em")
+            self.repo.commit()
+            return TransacaoResponse.model_validate(transacao)
+        except Exception as exc:  # pragma: no cover - propagamos erro para o caller/admin visualizar
+            self.repo.rollback()
+            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, f"Falha ao realizar estorno: {exc}")
+
     async def consultar_gateway(
         self,
         *,

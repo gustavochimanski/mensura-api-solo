@@ -97,6 +97,34 @@ class PaymentGatewayClient:
 
         raise RuntimeError(f"Consulta não implementada para gateway {gateway}")
 
+    async def refund(
+        self,
+        *,
+        gateway: PagamentoGatewayEnum,
+        payment_id: str,
+    ) -> PaymentResult:
+        """
+        Solicita estorno/refund para a transação identificada por payment_id no gateway indicado.
+        Retorna um PaymentResult com o status resultante após o refund (ex.: ESTORNADO).
+        """
+        if gateway == PagamentoGatewayEnum.MERCADOPAGO:
+            payment = await self.mercadopago.refund_payment(payment_id)
+            return self._payment_to_result(payment)
+
+        if self.mode == "mock":
+            # Cenário mock: considera refund como bem sucedido e retorna status ESTORNADO.
+            payload = {
+                "mock_refund": True,
+                "payment_id": payment_id,
+            }
+            return PaymentResult(
+                status=PagamentoStatusEnum.ESTORNADO,
+                provider_transaction_id=str(payment_id),
+                payload=payload,
+            )
+
+        raise RuntimeError(f"Refund não implementado para gateway {gateway}")
+
     async def _charge_mercadopago(
         self,
         *,

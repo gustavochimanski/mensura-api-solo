@@ -8,6 +8,7 @@ from app.api.pedidos.services.dependencies import get_pedido_service
 from app.core.admin_dependencies import get_current_user
 from app.database.db_connection import get_db
 from app.utils.logger import logger
+from app.api.cardapio.schemas.schema_transacao_pagamento import TransacaoResponse
 
 router = APIRouter(prefix="/api/cardapio/admin/pagamentos", tags=["Admin - Cardápio - Pagamentos"], dependencies=[Depends(get_current_user)])
 
@@ -55,3 +56,26 @@ async def atualizar_status_pagamento_por_transacao(
         f"[Pagamentos][Admin] Atualizar status transacao - transacao_id={transacao_id} status={payload.status}"
     )
     return await svc.atualizar_status_pagamento_por_transacao_id(transacao_id=transacao_id, payload=payload)
+
+
+@router.post(
+    "/transacoes/{transacao_id}/estornar",
+    response_model=TransacaoResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def estornar_transacao(
+    transacao_id: int = Path(..., description="ID da transação", gt=0),
+    db: Session = Depends(get_db),
+    svc: PedidoService = Depends(get_pedido_service),
+):
+    """
+    Realiza o estorno (refund) de uma transação.
+
+    Fluxo:
+    - Se a transação possuir `provider_transaction_id` e o gateway suportar refund (ex.: MercadoPago),
+      o sistema tentará executar o refund no gateway e aplicará o resultado à transação.
+    - Caso contrário, a transação será marcada localmente como `ESTORNADO`.
+    """
+    logger.info(f"[Pagamentos][Admin] Estornar transacao - transacao_id={transacao_id}")
+    return await svc.pagamentos.estornar_transacao(transacao_id=transacao_id)
+ 
