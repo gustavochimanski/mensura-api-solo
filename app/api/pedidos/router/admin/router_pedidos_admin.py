@@ -30,6 +30,12 @@ from app.api.pedidos.services.dependencies import get_pedido_admin_service
 from app.api.shared.schemas.schema_shared_enums import PedidoStatusEnum, TipoEntregaEnum
 from app.api.cadastros.models.user_model import UserModel
 from app.core.admin_dependencies import get_current_user
+from decimal import Decimal
+from typing import Optional
+from pydantic import BaseModel, ConfigDict
+from fastapi import Body, HTTPException
+from app.api.cadastros.schemas.schema_endereco import EnderecoBase
+from app.api.pedidos.services.service_pedido_taxas import TaxaService
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +75,58 @@ def preview_checkout_admin(
                 effective_cliente_id = None
     return svc.calcular_preview_checkout(payload, cliente_id=effective_cliente_id)
 
+ 
+ 
+class CalcularTaxaAdminRequest(BaseModel):
+    empresa_id: int
+    subtotal: Decimal
+    endereco: Optional[EnderecoBase] = None
+    tipo_entrega: TipoEntregaEnum = TipoEntregaEnum.DELIVERY
 
+    model_config = ConfigDict(extra="forbid")
+
+
+class CalcularTaxaResponse(BaseModel):
+    taxa_entrega: float
+    taxa_servico: float
+    distancia_km: Optional[float] = None
+    tempo_estimado_minutos: Optional[int] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+@router.post(
+    "/taxa/calc",
+    response_model=CalcularTaxaResponse,
+    status_code=status.HTTP_200_OK,
+)
+def calcular_taxa_admin(
+    payload: CalcularTaxaAdminRequest = Body(...),
+    svc: PedidoAdminService = Depends(get_pedido_admin_service),
+):
+    """
+    Endpoint ADMIN para calcular apenas as taxas (taxa_entrega e taxa_servico),
+    distância e tempo estimado quando aplicável.
+    Requer autenticação admin (dependência global do router).
+    """
+    try:
+        taxa_entrega, taxa_servico, distancia_km, tempo_estimado = TaxaService(svc.db).calcular_taxas(
+            tipo_entrega=payload.tipo_entrega,
+            subtotal=payload.subtotal,
+            endereco=payload.endereco,
+            empresa_id=payload.empresa_id,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, str(e))
+
+    return CalcularTaxaResponse(
+        taxa_entrega=float(taxa_entrega) if taxa_entrega is not None else 0.0,
+        taxa_servico=float(taxa_servico) if taxa_servico is not None else 0.0,
+        distancia_km=float(distancia_km) if distancia_km is not None else None,
+        tempo_estimado_minutos=int(tempo_estimado) if tempo_estimado is not None else None,
+    )
 @router.get(
     "",
     response_model=list[PedidoResponse],
