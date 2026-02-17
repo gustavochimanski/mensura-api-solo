@@ -1025,14 +1025,16 @@ class PedidoAdminService:
     # ------------------------------------------------------------------ #
     def gerenciar_item(self, pedido_id: int, payload: PedidoItemMutationRequest):
         pedido = self._get_pedido(pedido_id)
-        tipo = self._to_tipo_entrega_enum(pedido.tipo_entrega)
-        
-        # Validação: se tipo foi informado no payload, deve corresponder ao tipo do pedido
-        if payload.tipo and payload.tipo != tipo:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                f"Tipo informado no payload ({payload.tipo}) não corresponde ao tipo do pedido ({tipo})"
-            )
+        # Envolve o processamento em try/finally para garantir recomputação dos totais ao final
+        try:
+            tipo = self._to_tipo_entrega_enum(pedido.tipo_entrega)
+            
+            # Validação: se tipo foi informado no payload, deve corresponder ao tipo do pedido
+            if payload.tipo and payload.tipo != tipo:
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    f"Tipo informado no payload ({payload.tipo}) não corresponde ao tipo do pedido ({tipo})"
+                )
 
         if tipo == TipoEntregaEnum.DELIVERY:
             if payload.acao == PedidoItemMutationAction.ADD:
@@ -1646,7 +1648,34 @@ class PedidoAdminService:
                 threading.Thread(target=_emit_ws, daemon=True).start()
         except Exception:
             pass
-
-        return self.pedido_service.response_builder.pedido_to_response_completo(pedido_atualizado)
+            return self.pedido_service.response_builder.pedido_to_response_completo(pedido_atualizado)
+        finally:
+            # Best-effort: sempre tenta recalcular e persistir os totais após qualquer mutação de itens
+            try:
+                pedido_fresh = self.repo.get_pedido(pedido_id)
+                if pedido_fresh is not None:
+                    # Recalcula e persiste (atualiza subtotal/valor_total/taxas)
+                    try:
+                        self.pedido_service._recalcular_pedido(pedido_fresh)
+                        # garantir visibilidade imediata
+                        self.repo.commit()
+                    except Exception:
+                        # tenta pelo repositório direto caso o serviço falhe
+                        try:
+                            subtotal = self.repo._calc_total(pedido_fresh)
+                            desconto = getattr(pedido_fresh, "desconto", Decimal("0"))
+                            taxa_entrega = getattr(pedido_fresh, "taxa_entrega", Decimal("0"))
+                            taxa_servico = getattr(pedido_fresh, "taxa_servico", Decimal("0"))
+                            self.repo.atualizar_totais(
+                                pedido_fresh,
+                                subtotal=subtotal,
+                                desconto=desconto,
+                                taxa_entrega=taxa_entrega,
+                                taxa_servico=taxa_servico,
+                            )
+                        except Exception:
+                            pass
+            except Exception:
+                pass
 
 
