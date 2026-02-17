@@ -4804,52 +4804,63 @@ REGRA PARA COMPLEMENTOS:
         Detecta se a mensagem NÃO parece ser um nome válido.
         Retorna True se NÃO for um nome, False se pode ser um nome.
         """
-        mensagem_lower = mensagem.lower().strip()
+        import re
+
+        mensagem_lower = (mensagem or "").lower().strip()
+
+        # Heurística: limpa pontuação, emojis e palavras de cortesia antes das checagens,
+        # pois clientes costumam responder "João Silva, obrigado" e isso não deve invalidar o nome.
+        cleaned = re.sub(r'[^\w\s]', ' ', mensagem_lower, flags=re.UNICODE)
+        cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+
+        # Remove palavras de cortesia comuns para evitar falsos positivos
+        cortesias = {"obrigado", "obrigada", "valeu", "ok", "obg", "brigado", "brigada", "tudo bem", "até", "ate", "tchau"}
+        tokens = [t for t in cleaned.split() if t and t not in cortesias]
+        cleaned_lower = " ".join(tokens)
 
         # Heurística rápida: perguntas comuns sem "?"
         if mensagem_lower.startswith(("voces", "vocês", "vc", "vcs", "você", "voce")):
             return True
-        
-        # Lista de palavras/frases que indicam que NÃO é um nome
+
+        # Lista de palavras/frases que indicam que NÃO é um nome (checadas no texto limpo)
         palavras_nao_nome = [
             "chamar", "atendente", "humano", "falar com", "quero falar",
             "preciso de", "ligar atendente", "chama alguém", "oi", "olá",
-            "bom dia", "boa tarde", "boa noite", "tudo bem", "e aí",
+            "bom dia", "boa tarde", "boa noite", "e aí",
             "estão atendendo", "estao atendendo", "vocês estão", "voce esta",
             "você está", "voces estao", "atendendo", "atendem", "atende",
-            "sim", "não", "nao", "ok", "tudo certo", "beleza", "blz",
+            "sim", "não", "nao", "tudo certo", "beleza", "blz",
             "quero", "gostaria", "preciso", "tem", "você tem", "voce tem",
             "quanto", "qual", "onde", "como", "quando", "por favor",
-            "obrigado", "obrigada", "valeu", "tchau", "até", "ate",
             # Dúvidas comuns que aparecem muito no WhatsApp (sem "?")
             "entrega", "entregam", "entregue", "delivery", "retirada", "retirar",
             "taxa", "frete", "cardápio", "cardapio", "menu", "promoção", "promocao",
             "horário", "horario", "aberto", "fechado", "abre", "fecha",
             "endereço", "endereco", "localização", "localizacao",
         ]
-        
-        # Verifica se contém palavras que indicam que não é um nome
-        if any(palavra in mensagem_lower for palavra in palavras_nao_nome):
+
+        # Se o texto limpo contém palavras que indicam que não é um nome -> não é nome
+        if any(palavra in cleaned_lower for palavra in palavras_nao_nome):
             return True
-        
-        # Verifica se é uma pergunta (contém interrogação)
+
+        # Se for uma pergunta explícita, não é nome
         if "?" in mensagem:
             return True
-        
-        # Verifica se tem verbos comuns que não aparecem em nomes
+
+        # Verifica se tem verbos comuns que não aparecem em nomes (no texto limpo)
         verbos_comuns = [
             "está", "esta", "estão", "estao", "é", "e", "são", "sao",
             "tem", "têm", "tem", "faz", "fazem", "quer", "querem",
             "precisa", "precisam", "gosta", "gostam", "vai", "vão", "vao"
         ]
-        partes = mensagem_lower.split()
+        partes = cleaned_lower.split()
         if any(verbo in partes for verbo in verbos_comuns):
             return True
-        
+
         # Verifica se tem números (nomes geralmente não têm números)
-        if any(char.isdigit() for char in mensagem):
+        if any(char.isdigit() for char in cleaned_lower):
             return True
-        
+
         # Se passou todas as verificações, pode ser um nome
         return False
 
@@ -4862,7 +4873,21 @@ REGRA PARA COMPLEMENTOS:
         logger = logging.getLogger(__name__)
 
         nome = mensagem.strip()
-        logger.debug(f"[cadastro_nome] Iniciando processamento do nome. user_id={user_id!r}, mensagem={mensagem!r}, dados_keys={list(dados.keys())}")
+        # Tenta extrair nome quando o usuário responde em uma frase (ex: "Meu nome é João", "Me chamo João")
+        try:
+            import re
+            m = re.search(r'(?:meu nome é|meu nome e|me chamo(?: é)?|sou|chamo(?: me)?|meu nome:)\s+(.+)', nome, re.IGNORECASE)
+            if m:
+                extracted = m.group(1).strip()
+                # Remove pontuação final/excessos
+                extracted = re.sub(r'^[^\w\d]+|[^\w\d]+$', '', extracted)
+                if extracted:
+                    nome = extracted
+        except Exception:
+            # Não falha por causa da heurística de extração
+            pass
+
+        logger.debug(f"[cadastro_nome] Iniciando processamento do nome. user_id={user_id!r}, mensagem={mensagem!r}, dados_keys={list(dados.keys())}, nome_extraido={nome!r}")
 
         # Validação básica de tamanho
         if len(nome) < 2:
