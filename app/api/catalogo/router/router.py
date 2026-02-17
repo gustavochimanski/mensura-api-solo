@@ -13,6 +13,7 @@ from app.api.catalogo.router.client import (
 from app.api.catalogo.router.client.router_combos_client import router as router_combos_client
 from app.api.catalogo.router.public import router_complementos_public
 from app.api.catalogo.router.public.router_combos_public import router as router_combos_public
+from app.api.catalogo.router.public.router_busca_global_public import router as router_busca_global_public
 
 router = APIRouter()
 
@@ -31,3 +32,4 @@ router.include_router(router_busca_global_client)
 # Rotas públicas (não requerem autenticação)
 router.include_router(router_complementos_public)
 router.include_router(router_combos_public)
+router.include_router(router_busca_global_public)
