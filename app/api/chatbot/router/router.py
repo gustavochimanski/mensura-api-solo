@@ -3038,14 +3038,14 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
         address_service = ChatbotAddressService(db, empresa_id_int)
         cliente = address_service.get_cliente_by_telefone(phone_number)
         cliente_id = None
+        # Por padrão, só iniciamos fluxo de cadastro quando o cliente NÃO existir.
+        # Se o cliente já existe, não pedir o nome automaticamente — enviar link para pedido.
         precisa_cadastrar = False
-        
         if cliente:
-            cliente_id = cliente.get('id')
-            nome_cliente = cliente.get('nome', '')
-            # Se cliente existe mas tem nome genérico, precisa cadastrar nome
-            if nome_cliente in ['Cliente WhatsApp', 'Cliente', ''] or len(nome_cliente.split()) < 2:
-                precisa_cadastrar = True
+            cliente_id = cliente.get("id")
+            nome_cliente = cliente.get("nome", "")
+            # Mantemos o cliente cadastrado mesmo que o nome seja genérico; não forçar cadastro aqui.
+            # Atualizações de nome continuam sendo possíveis via fluxo específico de edição.
         else:
             # Cliente não existe - precisa cadastrar
             precisa_cadastrar = True
