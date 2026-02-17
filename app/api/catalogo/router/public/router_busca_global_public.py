@@ -1,7 +1,7 @@
 """
 Router público para busca global de produtos, receitas e combos (sem autenticação)
 """
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Query, status, Depends
 from sqlalchemy.orm import Session
 
 from app.database.db_connection import get_db
