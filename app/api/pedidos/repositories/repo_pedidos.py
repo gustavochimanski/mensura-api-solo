@@ -590,8 +590,20 @@ class PedidoRepository:
         if pedido.valor_total < 0:
             pedido.valor_total = Decimal("0")
         pedido.distancia_km = distancia_km
-        # Apenas flush — não precisa de refresh
-        self.db.flush()
+        # Persiste imediatamente para evitar divergência entre transações
+        # Flush + commit + refresh garante valores visíveis para outros fluxos/requests.
+        try:
+            self.db.flush()
+            self.db.commit()
+            # refresh para garantir que relacionamentos e colunas estejam atualizados no objeto
+            self.db.refresh(pedido)
+        except Exception:
+            # Se commit falhar (ex: em uma transação maior), faz rollback e relança para o chamador decidir.
+            try:
+                self.db.rollback()
+            except Exception:
+                pass
+            raise
 
     def add_status_historico(
         self, 
