@@ -894,6 +894,8 @@ class PedidoRepository:
         # Persistir complementos tradicionais (se existirem)
         if complementos_db:
             qtd_item = int(getattr(item, "quantidade", 1) or 1)
+            # acumulador para manter item.preco_total consistente com complementos relacionais
+            comp_total_acumulado = Dec("0")
 
             for comp in complementos_db:
                 comp_id = getattr(comp, "id", None)
@@ -945,6 +947,19 @@ class PedidoRepository:
                             total=total_ad,
                         )
                     )
+                # acumula total do complemento para atualizar preco_total do item
+                try:
+                    comp_total_acumulado += comp_total
+                except Exception:
+                    pass
+
+            # Atualiza preco_total do item para incluir complementos (mantém compatibilidade com outros fluxos que usam preco_total)
+            try:
+                base = (item.preco_unitario or Dec("0")) * Dec(str(qtd_item))
+                item.preco_total = base + comp_total_acumulado
+                self.db.flush()
+            except Exception:
+                pass
 
         # Persistir seleções de seções de combo (novo)
         try:
