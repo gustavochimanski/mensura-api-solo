@@ -100,7 +100,23 @@ class WebhookLoggingMiddleware(BaseHTTPMiddleware):
                 lk = k.lower()
                 if lk in ("authorization", "cookie", "set-cookie") or "token" in lk or "secret" in lk:
                     headers[k] = "[REDACTED]"
-            logger.info(f"   Headers: {headers}")
+            # Filtra headers para evitar logs enormes (ex.: 360dialog envia muitos headers)
+            allowed = {
+                "host",
+                "x-real-ip",
+                "x-forwarded-for",
+                "x-cliente",
+                "content-length",
+                "user-agent",
+                "content-type",
+                "x-hub-signature",
+                "x-hub-signature-256",
+                "cf-ray",
+                "cf-connecting-ip",
+                "cf-ipcountry",
+            }
+            filtered = {k: v for k, v in headers.items() if k.lower() in allowed}
+            logger.info(f"   Headers (filtered): {filtered} (total_headers={len(headers)})")
             logger.info(f"   Client: {request.client.host if request.client else 'unknown'}")
         
         response = await call_next(request)
