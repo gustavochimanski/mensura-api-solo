@@ -1020,9 +1020,44 @@ class PedidoRepository:
         if not item:
             raise HTTPException(http_status.HTTP_404_NOT_FOUND, f"Item {item_id} não encontrado")
         if quantidade is not None:
-            item.quantidade = quantidade
-            # Recalcula preco_total se quantidade mudou
-            item.preco_total = item.preco_unitario * Decimal(str(quantidade))
+            old_qtd = int(getattr(item, "quantidade", 1) or 1)
+            new_qtd = int(quantidade)
+            item.quantidade = new_qtd
+            # Recalcula preco_total base (produto apenas)
+            try:
+                item.preco_total = (item.preco_unitario or Decimal("0")) * Decimal(str(new_qtd))
+            except Exception:
+                item.preco_total = Decimal("0")
+
+            # Se existirem complementos relacionais, atualiza seus totais proporcionalmente
+            try:
+                comps = getattr(item, "complementos", None) or []
+                if comps and old_qtd and new_qtd != old_qtd:
+                    total_comps = Decimal("0")
+                    for comp in comps:
+                        # atualiza cada adicional do complemento
+                        adicionais = getattr(comp, "adicionais", None) or []
+                        comp_total = Decimal("0")
+                        for ad in adicionais:
+                            try:
+                                preco_unit_ad = Decimal(str(getattr(ad, "preco_unitario", 0) or 0))
+                                qtd_ad = int(getattr(ad, "quantidade", 1) or 1)
+                                novo_total_ad = preco_unit_ad * Decimal(str(qtd_ad)) * Decimal(str(new_qtd))
+                                ad.total = novo_total_ad
+                                comp_total += novo_total_ad
+                            except Exception:
+                                continue
+                        # atualiza total do complemento
+                        comp.total = comp_total
+                        total_comps += comp_total
+                    # soma complementos ao preco_total do item
+                    try:
+                        item.preco_total = (item.preco_unitario or Decimal("0")) * Decimal(str(new_qtd)) + total_comps
+                    except Exception:
+                        pass
+            except Exception:
+                # best-effort: não falhar a atualização do item se houver erro ao atualizar complementos
+                pass
         if observacao is not None:
             item.observacao = observacao
         self.db.flush()
