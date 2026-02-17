@@ -105,8 +105,8 @@ class TaxaService:
         if tipo_entrega in {TipoEntregaEnum.MESA, TipoEntregaEnum.BALCAO}:
             taxa_servico = _dec(0)
         else:
-            # Taxa de serviço fixa de 20 centavos
-            taxa_servico = _dec("0.20")
+            # Taxa de serviço fixa ajustada para 0.00 conforme solicitado
+            taxa_servico = _dec("0.00")
         return taxa_entrega, taxa_servico, distancia_km, tempo_estimado_min
 
     def _calcular_distancia_km(self, empresa_id: int, endereco) -> Optional[Decimal]:

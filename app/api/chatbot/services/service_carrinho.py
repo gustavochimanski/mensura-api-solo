@@ -28,6 +28,10 @@ from app.api.pedidos.utils.complementos import (
     resolve_complementos_diretos
 )
 from app.utils.logger import logger
+from decimal import Decimal
+from app.api.pedidos.services.service_pedido_taxas import TaxaService
+from app.api.shared.schemas.schema_shared_enums import TipoEntregaEnum
+from app.api.pedidos.repositories.repo_pedidos import PedidoRepository
 
 
 class CarrinhoService:
@@ -474,12 +478,56 @@ class CarrinhoService:
     def _recalcular_totais(self, carrinho: CarrinhoTemporarioModel):
         """Recalcula subtotal e total do carrinho"""
         subtotal = carrinho.calcular_subtotal()
-        total = carrinho.calcular_total()
-        
+
+        # Calcula taxas (taxa_entrega, taxa_servico) com base no tipo_entrega, subtotal e endereço
+        tipo_entrega_value = (
+            carrinho.tipo_entrega.value
+            if hasattr(carrinho.tipo_entrega, "value")
+            else str(carrinho.tipo_entrega)
+        )
+        try:
+            tipo_enum = TipoEntregaEnum[tipo_entrega_value] if isinstance(tipo_entrega_value, str) else tipo_entrega_value
+        except Exception:
+            tipo_enum = TipoEntregaEnum.DELIVERY
+
+        try:
+            taxa_entrega, taxa_servico, distancia_km, _ = TaxaService(self.db).calcular_taxas(
+                tipo_entrega=tipo_enum,
+                subtotal=subtotal,
+                endereco=carrinho.endereco_snapshot,
+                empresa_id=carrinho.empresa_id,
+            )
+        except Exception:
+            taxa_entrega = Decimal("0")
+            taxa_servico = Decimal("0")
+            distancia_km = None
+
+        # Calcula desconto via cupom (usa repository de pedidos para consultar cupom)
+        desconto = Decimal("0")
+        if getattr(carrinho, "cupom_id", None):
+            try:
+                pedido_repo = PedidoRepository(self.db)
+                desconto = TaxaService(self.db).aplicar_cupom(
+                    cupom_id=carrinho.cupom_id,
+                    subtotal=subtotal,
+                    empresa_id=carrinho.empresa_id,
+                    repo=pedido_repo,
+                )
+            except Exception:
+                desconto = Decimal("0")
+
+        # Calcula total final e persiste todos os valores relevantes
+        total = subtotal - desconto + (taxa_entrega or Decimal("0")) + (taxa_servico or Decimal("0"))
+        if total < Decimal("0"):
+            total = Decimal("0")
+
         self.repo.update(
             carrinho,
             subtotal=subtotal,
-            valor_total=total
+            desconto=desconto,
+            taxa_entrega=taxa_entrega,
+            taxa_servico=taxa_servico,
+            valor_total=total,
         )
 
     def _carrinho_to_response(self, carrinho: CarrinhoTemporarioModel) -> CarrinhoResponse:
