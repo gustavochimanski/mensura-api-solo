@@ -820,6 +820,27 @@ class PedidoRepository:
                 pedido_id=pedido_id,
                 complementos_request=complementos,
             )
+        # Depois de persistir complementos, garante que o subtotal/valor_total do pedido sejam atualizados
+        try:
+            pedido = self.db.get(PedidoUnificadoModel, int(pedido_id))
+            if pedido is not None:
+                subtotal = self._calc_total(pedido)
+                desconto = getattr(pedido, "desconto", Decimal("0")) or Decimal("0")
+                taxa_entrega = getattr(pedido, "taxa_entrega", Decimal("0")) or Decimal("0")
+                taxa_servico = getattr(pedido, "taxa_servico", Decimal("0")) or Decimal("0")
+                self.atualizar_totais(
+                    pedido,
+                    subtotal=subtotal,
+                    desconto=desconto,
+                    taxa_entrega=taxa_entrega,
+                    taxa_servico=taxa_servico,
+                )
+        except Exception:
+            # Best-effort: não falhar a adição do item caso a atualização de totais dê erro
+            try:
+                self.db.rollback()
+            except Exception:
+                pass
 
         return item
 
