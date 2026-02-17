@@ -295,41 +295,8 @@ class GoogleMapsAdapter:
         if max_results > 10:
             # Mantém o mesmo limite dos endpoints atuais (1-10)
             max_results = 10
-        # Modo de teste: usar apenas Places Autocomplete + Place Details
-        # Se for CEP, usar ViaCEP primeiro
+        # Usar apenas Places Autocomplete + Place Details — não consultar ViaCEP
         import re
-        cep_match = re.match(r"^\s*(\d{5}-?\d{3}|\d{8})\s*$", texto_norm)
-        if cep_match:
-            cep = cep_match.group(1).replace("-", "")
-            try:
-                with httpx.Client(timeout=5.0) as client:
-                    vc_resp = client.get(f"https://viacep.com.br/ws/{cep}/json/")
-                vc_resp.raise_for_status()
-                vc_data = vc_resp.json()
-                # ViaCEP retorna {"erro": true} se não encontrar
-                if vc_data.get("erro"):
-                    logger.info(f"[GoogleMapsAdapter] ViaCEP não encontrou CEP {cep}, caindo para Places")
-                else:
-                    # Mapear campos do ViaCEP para formato esperado pelo front
-                    endereco_info = {
-                        "estado": vc_data.get("uf"),
-                        "codigo_estado": vc_data.get("uf"),
-                        "cidade": vc_data.get("localidade"),
-                        "bairro": vc_data.get("bairro"),
-                        "distrito": None,
-                        "logradouro": vc_data.get("logradouro"),
-                        "numero": None,
-                        "cep": f"{cep[:5]}-{cep[5:]}",
-                        "pais": "Brasil",
-                        "latitude": None,
-                        "longitude": None,
-                        "endereco_formatado": f"{vc_data.get('logradouro') or ''} - {vc_data.get('bairro') or ''}, {vc_data.get('localidade') or ''} - {vc_data.get('uf') or ''}, {cep[:5]}-{cep[5:]}".strip(" ,-"),
-                    }
-                    return [endereco_info]
-            except httpx.HTTPStatusError as e:
-                logger.error(f"[GoogleMapsAdapter] Erro HTTP ao consultar ViaCEP para {cep}: Status {e.response.status_code}")
-            except Exception as e:
-                logger.error(f"[GoogleMapsAdapter] Erro ao consultar ViaCEP para {cep}: {e}")
 
         # Usar apenas Places Autocomplete + Place Details
         try:
