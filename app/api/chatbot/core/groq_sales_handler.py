@@ -6355,6 +6355,10 @@ Responda de forma natural e curta:"""
                     "Enquanto isso, posso te ajudar com alguma dúvida? 😊"
                 )
             
+            # Se estivermos no fluxo de cadastro de nome, prioriza esse fluxo sobre intents de produto
+            if estado == STATE_CADASTRO_NOME:
+                return await self._processar_cadastro_nome_rapido(user_id, mensagem, dados)
+
             # VERIFICA PEDIDO EM ABERTO (apenas na primeira mensagem da conversa ou se ainda não foi tratado)
             if pedido_aberto and not dados.get('pedido_aberto_tratado'):
                 # Verifica se o cliente quer falar sobre o pedido ou não
