@@ -1130,15 +1130,40 @@ class PedidoAdminService:
                 descricao_produto = product.nome or product.descricao or ""
                 
                 if product.product_type.value == "produto":
-                    self.repo.adicionar_item(
-                        pedido_id=pedido_id,
-                        cod_barras=str(product.identifier),
-                        quantidade=qtd,
-                        preco_unitario=preco_unitario,
-                        observacao=body.observacao,
-                        produto_descricao_snapshot=descricao_produto,
-                        complementos=body.complementos if body.complementos else None,
-                    )
+                    # Se complementos NÃO foram fornecidos no payload, tente mesclar com item existente
+                    merged = False
+                    if not getattr(body, "complementos", None):
+                        try:
+                            # procura item existente no pedido com mesmo cod_barras (produto simples)
+                            existing = next(
+                                (
+                                    i
+                                    for i in pedido.itens
+                                    if getattr(i, "produto_cod_barras", None) is not None
+                                    and str(getattr(i, "produto_cod_barras")) == str(product.identifier)
+                                    and (getattr(i, "receita_id", None) is None)
+                                    and (getattr(i, "combo_id", None) is None)
+                                ),
+                                None,
+                            )
+                            if existing:
+                                # incrementa quantidade existente (mantendo complementos já selecionados nele)
+                                new_qtd = int(getattr(existing, "quantidade", 1) or 1) + int(qtd)
+                                self.repo.atualizar_item(existing.id, quantidade=new_qtd)
+                                merged = True
+                        except Exception:
+                            merged = False
+
+                    if not merged:
+                        self.repo.adicionar_item(
+                            pedido_id=pedido_id,
+                            cod_barras=str(product.identifier),
+                            quantidade=qtd,
+                            preco_unitario=preco_unitario,
+                            observacao=body.observacao,
+                            produto_descricao_snapshot=descricao_produto,
+                            complementos=body.complementos if body.complementos else None,
+                        )
                     descricao_historico = f"Produto adicionado: {product.identifier} (qtd: {qtd})"
                 elif product.product_type.value == "receita":
                     self.repo.adicionar_item(
