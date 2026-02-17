@@ -670,6 +670,14 @@ class PedidoBalcaoService:
 
     def cancelar(self, pedido_id: int, usuario_id: int | None = None) -> PedidoResponseCompleto:
         pedido_antes = self.repo.get(pedido_id, TipoEntrega.BALCAO)
+        # Recalcular totais antes de fechar conta para garantir valor atualizado
+        try:
+            self._recalcular_totais(pedido_antes)
+            self.repo.commit()
+            pedido_antes = self.repo.get(pedido_id, TipoEntrega.BALCAO)
+        except Exception:
+            # best-effort: segue mesmo se falhar
+            pass
         status_anterior = self._status_value(pedido_antes.status)
         pedido = self.repo.cancelar(pedido_id)
         # Registra histórico

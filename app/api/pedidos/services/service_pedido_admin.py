@@ -370,6 +370,15 @@ class PedidoAdminService:
 
     def atualizar_pedido(self, pedido_id: int, payload: PedidoUpdateRequest) -> PedidoResponseCompleto:
         pedido = self._get_pedido(pedido_id)
+        # Garanta que os totais estejam atualizados antes de validar pagamentos
+        try:
+            # Recalcula e persiste subtotal/valores/taxas a partir do estado atual do pedido
+            self.pedido_service._recalcular_pedido(pedido)
+            self.repo.commit()
+            pedido = self._get_pedido(pedido_id)
+        except Exception:
+            # Best-effort: se falhar a recomputação, segue com o pedido carregado (evita quebrar fluxo)
+            pass
         tipo = self._to_tipo_entrega_enum(pedido.tipo_entrega)
 
         # Atualizações comuns via PedidoService
@@ -706,6 +715,13 @@ class PedidoAdminService:
     def _fechar_conta_delivery(self, pedido_id: int, payload: PedidoFecharContaRequest | None) -> PedidoResponseCompleto:
         """Fecha conta de pedido delivery/retirada registrando transação PAGO e marcando como entregue."""
         pedido = self.repo.get_pedido(pedido_id)
+        # Recalcula totais antes de fechar conta para evitar divergência (item adicionado fora deste request)
+        try:
+            self.pedido_service._recalcular_pedido(pedido)
+            self.repo.commit()
+            pedido = self.repo.get_pedido(pedido_id)
+        except Exception:
+            pass
         if not pedido:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Pedido não encontrado")
         
