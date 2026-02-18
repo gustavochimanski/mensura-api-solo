@@ -877,7 +877,6 @@ class RelatorioRepository:
                     PedidoUnificadoModel.empresa_id == empresa_id,
                     PedidoUnificadoModel.created_at >= inicio_dt,
                     PedidoUnificadoModel.created_at < fim_dt,
-                    PedidoUnificadoModel.status.not_in(["C"]),  # Exclui cancelados
                 )
                 .all()
             )
@@ -914,6 +913,8 @@ class RelatorioRepository:
                 {
                     "id": int(p.id) if p.id is not None else None,
                     "tipo": tipo_val,
+                    "status": status_val,
+                    "status_descricao": getattr(p, "status_descricao", None),
                     "cliente": cliente_nome,
                     "subtotal": subtotal_val,
                     "taxa_entrega": taxa_entrega_val,
