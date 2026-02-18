@@ -35,6 +35,8 @@ def get_default_permissions() -> List[PermissionDef]:
         ("route:/cadastros:regioes-entrega", "Cadastros - Regiões de entrega"),
         ("route:/marketing", "Marketing"),
         ("route:/relatorios", "Relatórios"),
+        ("route:/relatorios:visao-geral", "Relatórios - Visão Geral"),
+        ("route:/relatorios:venda-detalhada", "Relatórios - Venda detalhada"),
         ("route:/chatbot", "Chatbot"),
         ("route:/atendimentos", "Atendimentos"),
         ("route:/financeiro", "Financeiro"),
@@ -49,6 +51,7 @@ def get_default_permissions() -> List[PermissionDef]:
         ("route:/configuracoes:permissoes", "Configurações - Permissões"),
         ("route:/bi", "BI"),
         ("route:/bi:entregador-detalhado", "BI - Entregador detalhado"),
+        ("route:/bi:periodo-de-vendas", "BI - Período de vendas"),
         ("route:/bi:cliente-detalhado", "BI - Cliente detalhado"),
         ("route:/empresas", "Empresas"),
     ]
