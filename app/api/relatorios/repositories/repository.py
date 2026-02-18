@@ -908,6 +908,12 @@ class RelatorioRepository:
                 if isinstance(p.tipo_entrega, str)
                 else getattr(p.tipo_entrega, "value", str(p.tipo_entrega))
             )
+            
+            status_val = (
+                p.status
+                if isinstance(p.status, str)
+                else getattr(p.status, "value", str(p.status))
+            )
 
             resultados.append(
                 {
