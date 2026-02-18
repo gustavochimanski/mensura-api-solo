@@ -860,3 +860,66 @@ class RelatorioRepository:
             "top_entregadores": self._top_entregadores(empresa_id, inicio_periodo, fim_periodo),
         }
 
+    def vendas_detalhadas_geral(
+        self,
+        empresa_id: int,
+        inicio: date,
+        fim: date,
+    ) -> List[Dict[str, object]]:
+        """Retorna lista de pedidos no período com campos detalhados solicitados."""
+        inicio_dt = datetime.combine(inicio, time.min)
+        fim_dt = datetime.combine(fim + timedelta(days=1), time.min)
+
+        def _query():
+            return (
+                self.db.query(PedidoUnificadoModel)
+                .filter(
+                    PedidoUnificadoModel.empresa_id == empresa_id,
+                    PedidoUnificadoModel.created_at >= inicio_dt,
+                    PedidoUnificadoModel.created_at < fim_dt,
+                    PedidoUnificadoModel.status.not_in(["C"]),  # Exclui cancelados
+                )
+                .all()
+            )
+
+        pedidos = self._handle_db_error(_query, default_return=[])
+
+        resultados: List[Dict[str, object]] = []
+        for p in pedidos:
+            # subtotal: usa coluna subtotal quando preenchida, senão calcula pelos itens
+            subtotal_val = _decimal_to_float(p.subtotal)
+            if subtotal_val <= 0:
+                subtotal_val = _decimal_to_float(p.subtotal_calc)
+
+            taxa_entrega_val = _decimal_to_float(p.taxa_entrega)
+
+            total_val = _decimal_to_float(p.valor_total)
+            if total_val <= 0:
+                total_val = _decimal_to_float(p.valor_total_calc)
+
+            # Cliente (nome) quando disponível
+            cliente_nome = None
+            try:
+                cliente_nome = getattr(p.cliente, "nome", None) if p.cliente is not None else None
+            except Exception:
+                cliente_nome = None
+
+            tipo_val = (
+                p.tipo_entrega
+                if isinstance(p.tipo_entrega, str)
+                else getattr(p.tipo_entrega, "value", str(p.tipo_entrega))
+            )
+
+            resultados.append(
+                {
+                    "id": int(p.id) if p.id is not None else None,
+                    "tipo": tipo_val,
+                    "cliente": cliente_nome,
+                    "subtotal": subtotal_val,
+                    "taxa_entrega": taxa_entrega_val,
+                    "total": total_val,
+                    "created_at": p.created_at.isoformat() if p.created_at is not None else None,
+                }
+            )
+
+        return resultados

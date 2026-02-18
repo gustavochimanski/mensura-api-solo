@@ -70,6 +70,15 @@ class RelatoriosService:
             fim=data_fim,
         )
 
+    def vendas_detalhadas_geral(self, empresa_id: int, inicio: str, fim: str) -> list:
+        """Valida período e retorna lista detalhada de vendas."""
+        data_inicio, data_fim = self._validar_periodo(inicio, fim)
+        return self.repository.vendas_detalhadas_geral(
+            empresa_id=empresa_id,
+            inicio=data_inicio,
+            fim=data_fim,
+        )
+
     def relatorio_diario(self, empresa_id: int, dia_str: str) -> dict:
         dia = self._validar_data(dia_str)
         return self.repository.obter_panoramico_diario(

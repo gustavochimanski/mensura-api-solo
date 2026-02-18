@@ -92,3 +92,19 @@ def panoramico_pico_hora(
         inicio=inicio,
         fim=fim,
     )
+
+
+@router.get("/venda-detalhada/geral")
+def venda_detalhada_geral(
+    inicio: str = Query(..., description="Início do período no formato YYYY-MM-DD"),
+    fim: str = Query(..., description="Fim do período no formato YYYY-MM-DD"),
+    empresa_id: int = Query(..., description="Identificador da empresa"),
+    db: Session = Depends(get_db),
+):
+    repository = RelatorioRepository(db)
+    service = RelatoriosService(repository)
+    return service.vendas_detalhadas_geral(
+        empresa_id=empresa_id,
+        inicio=inicio,
+        fim=fim,
+    )
