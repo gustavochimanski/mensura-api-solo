@@ -197,18 +197,22 @@ class CaixaRepository:
         total_entradas = Decimal(str(total_entradas_q or 0))
 
         # Saídas: trocos dados (troco real) para os mesmos pedidos considerados acima
-        pedidos_com_pagamento_dinheiro_sq = (
-            self.db.query(pagos_por_pedido_sq.c.pedido_id).subquery()
-        )
+        # Apenas consideramos como "saída (troco dado)" os pedidos cujo total pago em DINHEIRO
+        # representa efetivamente um recebimento maior do que o valor do pedido.
+        # Ou seja: só subtraímos (troco_para - valor_total) quando a soma das transações em DINHEIRO
+        # para o pedido é maior que o valor_total (casos em que o frontend gravou o valor recebido).
+        pagamentos_por_pedido_sq = pagos_por_pedido_sq  # já contém total_pago_dinheiro por pedido
+
         query_saidas = (
             self.db.query(func.sum(PedidoUnificadoModel.troco_para - PedidoUnificadoModel.valor_total))
+            .join(pagamentos_por_pedido_sq, pagamentos_por_pedido_sq.c.pedido_id == PedidoUnificadoModel.id)
             .filter(
                 and_(
                     PedidoUnificadoModel.empresa_id == empresa_id,
-                    PedidoUnificadoModel.id.in_(self.db.query(pedidos_com_pagamento_dinheiro_sq.c.pedido_id)),
                     PedidoUnificadoModel.status == StatusPedido.ENTREGUE.value,
                     PedidoUnificadoModel.troco_para.isnot(None),
                     PedidoUnificadoModel.troco_para > PedidoUnificadoModel.valor_total,
+                    pagamentos_por_pedido_sq.c.total_pago_dinheiro > PedidoUnificadoModel.valor_total,
                 )
             )
         )

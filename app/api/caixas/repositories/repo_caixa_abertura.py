@@ -201,10 +201,19 @@ class CaixaAberturaRepository:
             or Decimal("0")
         )
         
-        # Saídas: trocos dados (troco_para - valor_total, quando troco_para > valor_total)
-        # Calcula o troco real dado para pedidos entregues e pagos em dinheiro com troco
-        pedidos_com_pagamento_dinheiro_sq = (
-            self.db.query(TransacaoPagamentoModel.pedido_id.label("pedido_id"))
+        # Saídas: trocos dados (troco_para - valor_total), mas somente para pedidos cujo total
+        # pago em DINHEIRO representa um recebimento maior que o valor do pedido
+        # (isto é, quando a transação em DINHEIRO reflete o valor recebido).
+        pagamentos_por_pedido_sq = (
+            self.db.query(
+                TransacaoPagamentoModel.pedido_id.label("pedido_id"),
+                func.sum(
+                    case(
+                        (MeioPagamentoModel.tipo == "DINHEIRO", TransacaoPagamentoModel.valor),
+                        else_=0
+                    )
+                ).label("total_pago_dinheiro"),
+            )
             .join(PedidoUnificadoModel, TransacaoPagamentoModel.pedido_id == PedidoUnificadoModel.id)
             .join(MeioPagamentoModel, TransacaoPagamentoModel.meio_pagamento_id == MeioPagamentoModel.id)
             .filter(
@@ -217,18 +226,20 @@ class CaixaAberturaRepository:
                     MeioPagamentoModel.tipo == "DINHEIRO",
                 )
             )
-            .distinct()
+            .group_by(TransacaoPagamentoModel.pedido_id)
             .subquery()
         )
+
         query_saidas = (
             self.db.query(func.sum(PedidoUnificadoModel.troco_para - PedidoUnificadoModel.valor_total))
+            .join(pagamentos_por_pedido_sq, pagamentos_por_pedido_sq.c.pedido_id == PedidoUnificadoModel.id)
             .filter(
                 and_(
                     PedidoUnificadoModel.empresa_id == empresa_id,
-                    PedidoUnificadoModel.id.in_(self.db.query(pedidos_com_pagamento_dinheiro_sq.c.pedido_id)),
                     PedidoUnificadoModel.status == StatusPedido.ENTREGUE.value,
                     PedidoUnificadoModel.troco_para.isnot(None),
                     PedidoUnificadoModel.troco_para > PedidoUnificadoModel.valor_total,
+                    pagamentos_por_pedido_sq.c.total_pago_dinheiro > PedidoUnificadoModel.valor_total,
                 )
             )
         )

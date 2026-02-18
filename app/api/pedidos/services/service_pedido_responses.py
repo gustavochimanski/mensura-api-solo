@@ -31,6 +31,26 @@ class PedidoResponseBuilder:
     """Classe responsável por converter modelos de pedido em diferentes tipos de responses."""
 
     @staticmethod
+    def _calcular_troco_exibicao(pedido: PedidoUnificadoModel) -> float | None:
+        """
+        Calcula o troco real a ser exibido ao usuário:
+        troco_exibicao = troco_para (valor recebido) - valor_total
+        Retorna None se não houver troco positivo a exibir.
+        """
+        troco_para = getattr(pedido, "troco_para", None)
+        if troco_para is None:
+            return None
+        try:
+            troco_val = float(troco_para or 0)
+            valor_total = float(getattr(pedido, "valor_total", 0) or 0)
+            troco_calculado = troco_val - valor_total
+            if troco_calculado > 0:
+                return round(troco_calculado, 2)
+            return None
+        except Exception:
+            return None
+
+    @staticmethod
     def _build_produtos(pedido: PedidoUnificadoModel):
         # produtos_snapshot foi removido - receitas e combos agora estão nos itens do pedido
         return build_produtos_out_from_items(pedido.itens, None)
@@ -64,7 +84,7 @@ class PedidoResponseBuilder:
             previsao_entrega=getattr(pedido, "previsao_entrega", None),
             distancia_km=(float(pedido.distancia_km) if getattr(pedido, "distancia_km", None) is not None else None),
             observacao_geral=getattr(pedido, "observacao_geral", None),
-            troco_para=(float(pedido.troco_para) if getattr(pedido, "troco_para", None) is not None else None),
+            troco_para=PedidoResponseBuilder._calcular_troco_exibicao(pedido),
             cupom_id=getattr(pedido, "cupom_id", None),
             endereco_snapshot=getattr(pedido, "endereco_snapshot", None),
             endereco_geography=str(getattr(pedido, "endereco_geo", None)) if getattr(pedido, "endereco_geo", None) is not None else None,
@@ -101,7 +121,7 @@ class PedidoResponseBuilder:
             previsao_entrega=getattr(pedido, "previsao_entrega", None),
             distancia_km=(float(pedido.distancia_km) if getattr(pedido, "distancia_km", None) is not None else None),
             observacao_geral=getattr(pedido, "observacao_geral", None),
-            troco_para=(float(pedido.troco_para) if getattr(pedido, "troco_para", None) is not None else None),
+            troco_para=PedidoResponseBuilder._calcular_troco_exibicao(pedido),
             cupom_id=getattr(pedido, "cupom_id", None),
             endereco_snapshot=getattr(pedido, "endereco_snapshot", None),
             endereco_geography=str(getattr(pedido, "endereco_geo", None)) if getattr(pedido, "endereco_geo", None) is not None else None,
@@ -135,7 +155,7 @@ class PedidoResponseBuilder:
             previsao_entrega=getattr(pedido, "previsao_entrega", None),
             distancia_km=(float(pedido.distancia_km) if getattr(pedido, "distancia_km", None) is not None else None),
             observacao_geral=getattr(pedido, "observacao_geral", None),
-            troco_para=(float(pedido.troco_para) if getattr(pedido, "troco_para", None) is not None else None),
+            troco_para=PedidoResponseBuilder._calcular_troco_exibicao(pedido),
             cupom_id=getattr(pedido, "cupom_id", None),
             endereco_snapshot=getattr(pedido, "endereco_snapshot", None),
             endereco_geography=str(getattr(pedido, "endereco_geo", None)) if getattr(pedido, "endereco_geo", None) is not None else None,
@@ -284,7 +304,7 @@ class PedidoResponseBuilder:
             previsao_entrega=getattr(pedido, "previsao_entrega", None),
             distancia_km=(float(pedido.distancia_km) if getattr(pedido, "distancia_km", None) is not None else None),
             observacao_geral=getattr(pedido, "observacao_geral", None),
-            troco_para=(float(pedido.troco_para) if getattr(pedido, "troco_para", None) is not None else None),
+            troco_para=PedidoResponseBuilder._calcular_troco_exibicao(pedido),
             endereco_snapshot=getattr(pedido, "endereco_snapshot", None),
             endereco_geography=str(getattr(pedido, "endereco_geo", None)) if getattr(pedido, "endereco_geo", None) is not None else None,
             data_criacao=getattr(pedido, "data_criacao", getattr(pedido, "created_at", None)),
@@ -314,7 +334,7 @@ class PedidoResponseBuilder:
             valor_total=float(pedido.valor_total or 0),
             previsao_entrega=getattr(pedido, "previsao_entrega", None),
             observacao_geral=getattr(pedido, "observacao_geral", None),
-            troco_para=(float(pedido.troco_para) if getattr(pedido, "troco_para", None) is not None else None),
+            troco_para=PedidoResponseBuilder._calcular_troco_exibicao(pedido),
             endereco_snapshot=getattr(pedido, "endereco_snapshot", None),
             data_criacao=getattr(pedido, "data_criacao", getattr(pedido, "created_at", None)),
             data_atualizacao=getattr(pedido, "data_atualizacao", getattr(pedido, "updated_at", None)),
