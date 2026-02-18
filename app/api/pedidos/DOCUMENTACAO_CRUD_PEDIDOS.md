@@ -1018,7 +1018,7 @@ PATCH /api/pedidos/admin/{pedido_id}/fechar-conta
  - `troco_para`: REMOVIDO — troco é calculado pelo backend; não enviar este campo em requests.
 
 **Regra de troco (IMPORTANTE — frontend/admin NÃO enviar `troco_para`):**
-- O campo `troco_para` foi removido dos payloads. O backend é responsável por calcular e persistir o troco quando aplicável.
+- O campo `troco_para` foi removido dos payloads. O backend é responsável por calcular e persistir o troco quando aplicável
 - Para pagamentos em DINHEIRO onde se deseja informar o valor recebido (ex.: cliente pagou com nota maior), envie o `valor` recebido em `pagamentos[0].valor` (ex.: `50.00`). Se esse `valor` for maior que o `valor_total` e houver apenas um meio no array, o backend irá:
   - Validar que o meio é do tipo DINHEIRO;
   - Gravar internamente o `troco_para` (valor recebido);
