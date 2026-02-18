@@ -246,7 +246,7 @@ Content-Type: application/json
   "mesa_codigo": "5",
   "num_pessoas": 4,
   "observacao_geral": "Observação geral",
-  // campo "troco_para" removido: troco é calculado pelo backend (não enviar)
+  "troco_para": 50.00,  // ACEITO no checkout CLIENTE (envie apenas no endpoint /api/pedidos/client/checkout)
   "cupom_id": 10,
   "meios_pagamento": [
     {
@@ -1024,6 +1024,8 @@ PATCH /api/pedidos/admin/{pedido_id}/fechar-conta
   - Gravar internamente o `troco_para` (valor recebido);
   - Registrar a transação apenas com o `valor_total` do pedido (valor aplicado).
 - Não envie `troco_para` diretamente em nenhuma requisição — o backend irá calcular e retornar o valor do troco nas respostas quando aplicável.
+**Exceção — Checkout Cliente:**
+- O endpoint de checkout do cliente (`POST /api/pedidos/client/checkout`) ACEITA o campo `troco_para` no payload. Use `troco_para` apenas nesse endpoint quando o cliente quiser informar o valor recebido (ex.: pagou com nota maior). Para demais endpoints (admin, fechamento de conta via admin), mantenha a regra de não enviar `troco_para`.
 
 **Response (200 OK):**
 ```json

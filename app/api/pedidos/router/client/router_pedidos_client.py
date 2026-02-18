@@ -71,7 +71,7 @@ async def finalizar_checkout(
     logger.info(f"[Pedidos] Finalizar checkout - cliente_id={cliente.id} tipo={payload.tipo_pedido}")
 
     if payload.tipo_pedido == TipoPedidoCheckoutEnum.DELIVERY:
-        pedido = await svc.finalizar_pedido(payload, cliente_id=cliente.id)
+        pedido = await svc.finalizar_pedido(payload, cliente_id=cliente.id, accept_troco=True)
         return CheckoutTotalResponse(valor_total=float(getattr(pedido, "valor_total", 0) or 0))
 
     if payload.tipo_pedido == TipoPedidoCheckoutEnum.MESA:

@@ -475,7 +475,7 @@ class PedidoService:
         self.db.refresh(pedido)
 
     # ---------------- Fluxos ----------------
-    async def finalizar_pedido(self, payload: FinalizarPedidoRequest, cliente_id: int) -> PedidoResponse:
+    async def finalizar_pedido(self, payload: FinalizarPedidoRequest, cliente_id: int, accept_troco: bool = False) -> PedidoResponse:
         # Suporta tanto o formato novo (payload.produtos.*) quanto o legado (itens/receitas/combos na raiz)
         produtos_payload = getattr(payload, "produtos", None)
         if produtos_payload is not None:
@@ -815,8 +815,35 @@ class PedidoService:
                             f"[finalizar_pedido] Primeiro meio ajustado para {float(novo_valor0)} (diferença aplicada: {float(diferenca)})"
                         )
             
-            # Observação: troco_para não deve ser enviado pelo frontend/cliente.
-            # O backend calcula troco automaticamente quando aplicável (ex.: pagamento em DINHEIRO com valor recebido > total).
+            # Se permitido (fluxo de checkout cliente), aceita troco enviado no payload.
+            if accept_troco and getattr(payload, "troco_para", None) is not None and meio_pagamento is not None:
+                try:
+                    troco_para = _dec(payload.troco_para)
+                except Exception:
+                    raise HTTPException(status.HTTP_400_BAD_REQUEST, "troco_para inválido")
+
+                mp_tipo = getattr(meio_pagamento, "tipo", None)
+                is_dinheiro = (
+                    mp_tipo == MeioPagamentoTipoEnum.DINHEIRO
+                    or str(mp_tipo).upper() == "DINHEIRO"
+                )
+                if not is_dinheiro:
+                    raise HTTPException(
+                        status.HTTP_400_BAD_REQUEST,
+                        detail={"code": "TROCO_INVALIDO", "message": "troco_para só permitido para pagamento em DINHEIRO."},
+                    )
+                valor_total = _dec(getattr(pedido, "valor_total", 0) or 0)
+                if troco_para < valor_total:
+                    raise HTTPException(
+                        status.HTTP_400_BAD_REQUEST,
+                        detail={
+                            "code": "TROCO_INSUFICIENTE",
+                            "message": "Valor para troco menor que o total do pedido.",
+                            "valor_total": float(valor_total),
+                            "troco_para": float(troco_para),
+                        },
+                    )
+                pedido.troco_para = float(troco_para)
 
             logger.info(f"[finalizar_pedido] antes commit cliente_id={pedido.cliente_id}")
             self.repo.commit()
