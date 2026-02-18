@@ -782,8 +782,6 @@ class PedidoService:
                     logger.warning(f"[finalizar_pedido] Erro ao definir previsão de entrega (fallback): {e}")
 
             pedido.observacao_geral = payload.observacao_geral
-            if payload.troco_para:
-                pedido.troco_para = _dec(payload.troco_para)
 
             valor_total = _dec(pedido.valor_total or 0)
             
@@ -817,24 +815,8 @@ class PedidoService:
                             f"[finalizar_pedido] Primeiro meio ajustado para {float(novo_valor0)} (diferença aplicada: {float(diferenca)})"
                         )
             
-            if getattr(payload, "troco_para", None) is not None and meio_pagamento is not None:
-                mp_tipo = getattr(meio_pagamento, "tipo", None)
-                is_dinheiro = (
-                    mp_tipo == MeioPagamentoTipoEnum.DINHEIRO
-                    or str(mp_tipo).upper() == "DINHEIRO"
-                )
-                if is_dinheiro:
-                    troco_para = _dec(payload.troco_para)
-                    if troco_para < valor_total:
-                        raise HTTPException(
-                            status.HTTP_400_BAD_REQUEST,
-                            detail={
-                                "code": "TROCO_INSUFICIENTE",
-                                "message": "Valor para troco menor que o total do pedido.",
-                                "valor_total": float(valor_total),
-                                "troco_para": float(troco_para),
-                            },
-                        )
+            # Observação: troco_para não deve ser enviado pelo frontend/cliente.
+            # O backend calcula troco automaticamente quando aplicável (ex.: pagamento em DINHEIRO com valor recebido > total).
 
             logger.info(f"[finalizar_pedido] antes commit cliente_id={pedido.cliente_id}")
             self.repo.commit()
@@ -1461,58 +1443,8 @@ class PedidoService:
 
         if payload.observacao_geral is not None:
             pedido.observacao_geral = payload.observacao_geral
-        if payload.troco_para is not None:
-            meio_pagamento_atual = None
-            try:
-                meio_pagamento_id_ref = payload.meio_pagamento_id if payload.meio_pagamento_id is not None else pedido.meio_pagamento_id
-                if meio_pagamento_id_ref is not None:
-                    meio_pagamento_atual = MeioPagamentoService(self.db).get(meio_pagamento_id_ref)
-            except Exception:
-                meio_pagamento_atual = None
-
-            pedido.troco_para = _dec(payload.troco_para)
-
-            subtotal = pedido.subtotal or Decimal("0")
-            desconto = self._aplicar_cupom(
-                cupom_id=pedido.cupom_id,
-                subtotal=subtotal,
-                empresa_id=pedido.empresa_id,
-            )
-            taxa_entrega, taxa_servico, distancia_km, _ = self._calcular_taxas(
-                tipo_entrega=pedido.tipo_entrega if isinstance(pedido.tipo_entrega, TipoEntregaEnum)
-                            else TipoEntregaEnum(pedido.tipo_entrega),
-                subtotal=subtotal,
-                endereco=endereco or pedido.endereco,
-                empresa_id=pedido.empresa_id,
-            )
-            self.repo.atualizar_totais(
-                pedido,
-                subtotal=subtotal,
-                desconto=desconto,
-                taxa_entrega=taxa_entrega,
-                taxa_servico=taxa_servico,
-                distancia_km=distancia_km,
-            )
-
-            if meio_pagamento_atual is not None:
-                mp_tipo = getattr(meio_pagamento_atual, "tipo", None)
-                is_dinheiro = (
-                    mp_tipo == MeioPagamentoTipoEnum.DINHEIRO
-                    or str(mp_tipo).upper() == "DINHEIRO"
-                )
-                if is_dinheiro:
-                    valor_total = _dec(pedido.valor_total or 0)
-                    troco_para = _dec(pedido.troco_para)
-                    if troco_para < valor_total:
-                        raise HTTPException(
-                            status.HTTP_400_BAD_REQUEST,
-                            detail={
-                                "code": "TROCO_INSUFICIENTE",
-                                "message": "Valor para troco menor que o total do pedido.",
-                                "valor_total": float(valor_total),
-                                "troco_para": float(troco_para),
-                            },
-                        )
+        # Observação: editar pedido parcial não aceita mais troco enviado pelo frontend.
+        # O cálculo de troco é responsabilidade do backend quando necessário.
 
         subtotal = pedido.subtotal or Decimal("0")
         desconto = self._aplicar_cupom(

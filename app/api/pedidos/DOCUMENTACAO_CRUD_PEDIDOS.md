@@ -60,7 +60,7 @@ Content-Type: application/json
   "mesa_codigo": "5",
   "num_pessoas": 4,
   "observacao_geral": "Observação geral do pedido",
-  "troco_para": 50.00,
+  // campo "troco_para" removido: troco é calculado pelo backend (não enviar)
   "cupom_id": 10,
   "meios_pagamento": [
     {
@@ -246,7 +246,7 @@ Content-Type: application/json
   "mesa_codigo": "5",
   "num_pessoas": 4,
   "observacao_geral": "Observação geral",
-  "troco_para": 50.00,
+  // campo "troco_para" removido: troco é calculado pelo backend (não enviar)
   "cupom_id": 10,
   "meios_pagamento": [
     {
@@ -1015,12 +1015,15 @@ PATCH /api/pedidos/admin/{pedido_id}/fechar-conta
 **Campos Opcionais:**
 - `meio_pagamento_id`: Meio de pagamento utilizado (legado / compat)
 - `pagamentos`: Lista de meios de pagamento parciais (recomendado). Formato: `[{ "id" | "meio_pagamento_id", "valor" }]`
-- `troco_para`: Valor informado para troco (legado / compat)
+ - `troco_para`: REMOVIDO — troco é calculado pelo backend; não enviar este campo em requests.
 
-**Regra de troco (sem enviar `troco_para`):**
-- Para **DINHEIRO** com troco, o frontend pode enviar o **valor recebido** em `pagamentos[0].valor` (ex.: `50.00`).
-- Se `valor` vier **maior que o total do pedido**, o backend valida se o meio é **DINHEIRO**, grava `troco_para` automaticamente e registra a transação apenas com o **valor total** do pedido.
-- Observação: este comportamento (valor recebido > total) é suportado apenas quando houver **um único** meio em `pagamentos` (evita troco ambíguo).
+**Regra de troco (IMPORTANTE — frontend/admin NÃO enviar `troco_para`):**
+- O campo `troco_para` foi removido dos payloads. O backend é responsável por calcular e persistir o troco quando aplicável.
+- Para pagamentos em DINHEIRO onde se deseja informar o valor recebido (ex.: cliente pagou com nota maior), envie o `valor` recebido em `pagamentos[0].valor` (ex.: `50.00`). Se esse `valor` for maior que o `valor_total` e houver apenas um meio no array, o backend irá:
+  - Validar que o meio é do tipo DINHEIRO;
+  - Gravar internamente o `troco_para` (valor recebido);
+  - Registrar a transação apenas com o `valor_total` do pedido (valor aplicado).
+- Não envie `troco_para` diretamente em nenhuma requisição — o backend irá calcular e retornar o valor do troco nas respostas quando aplicável.
 
 **Response (200 OK):**
 ```json

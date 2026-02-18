@@ -70,7 +70,7 @@ class RemoverItemResponse(BaseModel):
 class FecharContaBalcaoRequest(BaseModel):
     meio_pagamento_id: Optional[int] = None
     pagamentos: Optional[List[MeioPagamentoParcialRequest]] = None
-    troco_para: Optional[float] = None
+    # troco_para removido: troco é calculado pelo backend quando aplicável (não enviar desde o frontend/admin).
 
 
 class AtualizarStatusPedidoRequest(BaseModel):
@@ -820,8 +820,6 @@ class PedidoBalcaoService:
         # Se receber payload, salva dados de pagamento nos campos diretos
         pagamentos_payload: list[dict] = []
         if payload is not None:
-            if payload.troco_para is not None:
-                pedido_antes.troco_para = payload.troco_para
             # Novo formato: múltiplos meios (pagamentos: [{id|meio_pagamento_id, valor}])
             if getattr(payload, "pagamentos", None):
                 for pag in payload.pagamentos or []:

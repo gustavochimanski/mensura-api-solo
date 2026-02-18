@@ -754,9 +754,8 @@ class PedidoAdminService:
                 raise HTTPException(status.HTTP_400_BAD_REQUEST, "Meio de pagamento inválido ou inativo")
             pedido.meio_pagamento_id = payload.meio_pagamento_id
         
-        # Atualiza troco se fornecido
-        if payload and payload.troco_para is not None:
-            pedido.troco_para = payload.troco_para
+        # Observação: troco não deve ser enviado pelo admin/frontend.
+        # O backend calcula troco automaticamente quando aplicável.
 
         # Se o pedido já estiver totalmente pago (via transações PAGO/AUTORIZADO),
         # podemos marcar como ENTREGUE sem recriar transações e sem exigir meio_pagamento_id no payload.
@@ -935,7 +934,6 @@ class PedidoAdminService:
         # Isso garante que o meio_pagamento_id seja persistido e o relacionamento seja atualizado
         if payload and (
             payload.meio_pagamento_id is not None
-            or payload.troco_para is not None
             or getattr(payload, "pagamentos", None)
             or troco_para_derivado is not None
         ):
