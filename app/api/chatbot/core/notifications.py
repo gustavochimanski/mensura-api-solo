@@ -13,6 +13,16 @@ import json
 
 logger = logging.getLogger(__name__)
 
+# Mapeamento de status de pedido para templates/emoji usados nas mensagens.
+ORDER_STATUS_TEMPLATES = {
+    "PENDENTE": {"name": "Pendente", "emoji": "⏳", "message": "Pedido aguardando confirmação"},
+    "CONFIRMADO": {"name": "Confirmado", "emoji": "✅", "message": "Pedido confirmado"},
+    "PREPARANDO": {"name": "Em preparação", "emoji": "👩‍🍳", "message": "Pedido em preparação"},
+    "SAINDO_PARA_ENTREGA": {"name": "Saiu para entrega", "emoji": "🛵", "message": "Pedido saiu para entrega"},
+    "ENTREGUE": {"name": "Entregue", "emoji": "📦", "message": "Pedido entregue"},
+    "CANCELADO": {"name": "Cancelado", "emoji": "❌", "message": "Pedido cancelado"},
+}
+
 
 class OrderNotification:
     """Gerenciador de notificações de pedidos"""
