@@ -83,7 +83,23 @@ async def processar_mensagem_groq(*args, **kwargs) -> Optional[str]:
                     except Exception:
                         pass
 
-                return f"Obrigado {parts[0]}! Seu cadastro foi realizado com sucesso. Posso te ajudar com o pedido?"
+                created_info = None
+                try:
+                    # cliente_obj may be SQLAlchemy row/object or tuple depending on service/repo
+                    if hasattr(cliente_obj, "__dict__"):
+                        created_info = {"id": getattr(cliente_obj, "id", None), "nome": getattr(cliente_obj, "nome", None), "telefone": getattr(cliente_obj, "telefone", None)}
+                    elif isinstance(cliente_obj, (list, tuple)):
+                        created_info = {"id": cliente_obj[0], "nome": cliente_obj[1], "telefone": cliente_obj[2] if len(cliente_obj) > 2 else None}
+                    elif isinstance(cliente_obj, dict):
+                        created_info = {"id": cliente_obj.get("id"), "nome": cliente_obj.get("nome"), "telefone": cliente_obj.get("telefone")}
+
+                except Exception:
+                    created_info = None
+
+                return {
+                    "message": f"Obrigado {parts[0]}! Seu cadastro foi realizado com sucesso. Posso te ajudar com o pedido?",
+                    "created_cliente": created_info,
+                }
             except Exception:
                 try:
                     db.rollback()

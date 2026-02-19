@@ -2589,87 +2589,103 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
             )
 
             # Mesmo pausado, ainda capturamos "chamar atendente" e notificamos o dashboard via WebSocket
+        # Antes de retornar por conta do pause, verifica se a conversa está no fluxo de cadastro_nome.
+        # Nesse caso SPECÍFICO, devemos continuar processando a mensagem (aceitar o nome do cliente).
+        estado_atual = None
+        try:
+            from app.config.settings import STATE_CADASTRO_NOME
+            from app.api.chatbot.core.application.conversacao_service import ConversacaoService
+            conversacao_service_tmp = ConversacaoService(db, empresa_id=empresa_id_int, prompt_key=prompt_key_sales)
             try:
-                if _is_chamar_atendente_intent(message_text, button_id):
-                    from datetime import datetime
-                    from ..core.notifications import send_chatbot_websocket_notification
+                estado_atual, _ = conversacao_service_tmp.obter_estado(phone_number)
+            except Exception:
+                estado_atual = None
+        except Exception:
+            estado_atual = None
 
-                    notification_data = {
-                        "cliente_phone": phone_number,
-                        "cliente_nome": contact_name,
-                        "tipo": "chamar_atendente",
-                        "timestamp": datetime.utcnow().isoformat(),
-                        "bot_pausado": True,
-                        "paused_by": (status_info or {}).get("paused_by"),
-                        "chatbot_destrava_em": (status_info or {}).get("chatbot_destrava_em"),
-                    }
+        try:
+            if _is_chamar_atendente_intent(message_text, button_id):
+                from datetime import datetime
+                from ..core.notifications import send_chatbot_websocket_notification
 
-                    title = "🔔 Solicitação de Atendimento Humano"
-                    message_ws = (
-                        f"Cliente {contact_name or phone_number} solicitou atendimento humano "
-                        f"(bot está pausado).\n\n📱 Telefone: {phone_number}"
-                    )
-                    if contact_name:
-                        message_ws += f"\n👤 Nome: {contact_name}"
+                notification_data = {
+                    "cliente_phone": phone_number,
+                    "cliente_nome": contact_name,
+                    "tipo": "chamar_atendente",
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "bot_pausado": True,
+                    "paused_by": (status_info or {}).get("paused_by"),
+                    "chatbot_destrava_em": (status_info or {}).get("chatbot_destrava_em"),
+                }
 
-                    sent_count = await send_chatbot_websocket_notification(
-                        empresa_id=empresa_id_int,
-                        notification_type="chamar_atendente",
-                        title=title,
-                        message=message_ws,
-                        data=notification_data,
-                    )
+                title = "🔔 Solicitação de Atendimento Humano"
+                message_ws = (
+                    f"Cliente {contact_name or phone_number} solicitou atendimento humano "
+                    f"(bot está pausado).\n\n📱 Telefone: {phone_number}"
+                )
+                if contact_name:
+                    message_ws += f"\n👤 Nome: {contact_name}"
 
-                    if sent_count > 0:
-                        logger.info(
-                            f"✅ Notificação WebSocket (chamar_atendente) enviada mesmo com bot pausado - "
-                            f"empresa_id={empresa_id_int}, conexões={sent_count}, phone={phone_number}"
-                        )
-                    else:
-                        logger.warning(
-                            f"⚠️ Nenhuma conexão WebSocket ativa ao notificar chamar_atendente (bot pausado) - "
-                            f"empresa_id={empresa_id_int}, phone={phone_number}"
-                        )
-            except Exception as e_ws:
-                logger.error(
-                    f"❌ Erro ao enviar notificação WebSocket de chamar_atendente com bot pausado: {e_ws}",
-                    exc_info=True,
+                sent_count = await send_chatbot_websocket_notification(
+                    empresa_id=empresa_id_int,
+                    notification_type="chamar_atendente",
+                    title=title,
+                    message=message_ws,
+                    data=notification_data,
                 )
 
-            # Salva a mensagem no histórico mesmo pausado (para auditoria/preview)
-            try:
-                conversations_paused = chatbot_db.get_conversations_by_user(db, user_id, empresa_id_int)
-                if conversations_paused:
-                    chatbot_db.create_message(
-                        db=db,
-                        conversation_id=conversations_paused[0]["id"],
-                        role="user",
-                        content=message_text,
-                        whatsapp_message_id=message_id,
+                if sent_count > 0:
+                    logger.info(
+                        f"✅ Notificação WebSocket (chamar_atendente) enviada mesmo com bot pausado - "
+                        f"empresa_id={empresa_id_int}, conexões={sent_count}, phone={phone_number}"
                     )
-                    # Atualiza o nome do contato se disponível
-                    if contact_name and not conversations_paused[0].get("contact_name"):
-                        chatbot_db.update_conversation_contact_name(db, conversations_paused[0]["id"], contact_name)
                 else:
-                    conversation_id = chatbot_db.create_conversation(
-                        db=db,
-                        session_id=f"whatsapp_{user_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
-                        user_id=user_id,
-                        prompt_key=PROMPT_ATENDIMENTO,
-                        model=DEFAULT_MODEL,
-                        contact_name=contact_name,
-                        empresa_id=empresa_id_int,
+                    logger.warning(
+                        f"⚠️ Nenhuma conexão WebSocket ativa ao notificar chamar_atendente (bot pausado) - "
+                        f"empresa_id={empresa_id_int}, phone={phone_number}"
                     )
-                    chatbot_db.create_message(
-                        db=db,
-                        conversation_id=conversation_id,
-                        role="user",
-                        content=message_text,
-                        whatsapp_message_id=message_id,
-                    )
-            except Exception as e_hist:
-                logger.warning(f"⚠️ Falha ao salvar histórico com bot pausado: {e_hist}", exc_info=True)
+        except Exception as e_ws:
+            logger.error(
+                f"❌ Erro ao enviar notificação WebSocket de chamar_atendente com bot pausado: {e_ws}",
+                exc_info=True,
+            )
 
+        # Salva a mensagem no histórico mesmo pausado (para auditoria/preview)
+        try:
+            conversations_paused = chatbot_db.get_conversations_by_user(db, user_id, empresa_id_int)
+            if conversations_paused:
+                chatbot_db.create_message(
+                    db=db,
+                    conversation_id=conversations_paused[0]["id"],
+                    role="user",
+                    content=message_text,
+                    whatsapp_message_id=message_id,
+                )
+                # Atualiza o nome do contato se disponível
+                if contact_name and not conversations_paused[0].get("contact_name"):
+                    chatbot_db.update_conversation_contact_name(db, conversations_paused[0]["id"], contact_name)
+            else:
+                conversation_id = chatbot_db.create_conversation(
+                    db=db,
+                    session_id=f"whatsapp_{user_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                    user_id=user_id,
+                    prompt_key=PROMPT_ATENDIMENTO,
+                    model=DEFAULT_MODEL,
+                    contact_name=contact_name,
+                    empresa_id=empresa_id_int,
+                )
+                chatbot_db.create_message(
+                    db=db,
+                    conversation_id=conversation_id,
+                    role="user",
+                    content=message_text,
+                    whatsapp_message_id=message_id,
+                )
+        except Exception as e_hist:
+            logger.warning(f"⚠️ Falha ao salvar histórico com bot pausado: {e_hist}", exc_info=True)
+
+        # Só retorna (não processa) se NÃO estivermos no fluxo de cadastro de nome.
+        if estado_atual != STATE_CADASTRO_NOME:
             return  # Não responde, apenas registra/aciona WS
 
         
@@ -4195,11 +4211,22 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                     prompt_key=prompt_key
                 )
 
-                if not ai_response or not str(ai_response).strip():
+                if not ai_response:
+                    return
+
+                # Support dict response from processar_mensagem_groq during cadastro_nome
+                if isinstance(ai_response, dict):
+                    ai_message = ai_response.get("message", "") or ""
+                    created_cliente = ai_response.get("created_cliente")
+                else:
+                    ai_message = str(ai_response)
+                    created_cliente = None
+
+                if not ai_message.strip():
                     return
 
                 notifier = OrderNotification()
-                result = await notifier.send_whatsapp_message(phone_number, ai_response, empresa_id=empresa_id)
+                result = await notifier.send_whatsapp_message(phone_number, ai_message, empresa_id=empresa_id)
 
                 # Vincula whatsapp_message_id à última resposta salva (tenta atualizar; cria se não achar)
                 if isinstance(result, dict) and result.get("success") and result.get("message_id"):
@@ -4228,7 +4255,7 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                         """)
                         update_result = db.execute(update_whatsapp_id_query, {
                             "conversation_id": conversation_id,
-                            "content": ai_response,
+                            "content": ai_message,
                             "whatsapp_message_id": whatsapp_response_message_id
                         })
                         db.commit()
@@ -4244,6 +4271,28 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                         import logging
                         logger = logging.getLogger(__name__)
                         logger.error(f"Erro ao vincular whatsapp_message_id à resposta do bot (cadastro_nome): {e}", exc_info=True)
+
+                # If we created the cliente just now, send the cardápio link afterwards
+                try:
+                    if created_cliente:
+                        # Reuse existing config retrieval if available; fallback to DB lookup
+                        try:
+                            config_repo = ChatbotConfigRepository(db)
+                            config = config_repo.get_by_empresa_id(empresa_id_int)
+                        except Exception:
+                            config = None
+                        resposta_cardapio = _montar_mensagem_redirecionamento(db, empresa_id_int, config)
+                        result2 = await notifier.send_whatsapp_message(phone_number, resposta_cardapio, empresa_id=empresa_id)
+                        # Save the cardapio message as assistant
+                        if isinstance(result2, dict) and result2.get("success"):
+                            whatsapp_message_id2 = result2.get("message_id")
+                            try:
+                                chatbot_db.create_message(db, conversation_id, "assistant", resposta_cardapio, whatsapp_message_id=whatsapp_message_id2)
+                                db.commit()
+                            except Exception:
+                                pass
+                except Exception:
+                    pass
 
                 return
             except Exception as e:
