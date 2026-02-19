@@ -45,3 +45,6 @@ NGROK_DOMAIN = os.getenv("NGROK_DOMAIN")
 
 # Groq API
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+GROQ_API_URL = os.getenv("GROQ_API_URL", "")
+MODEL_NAME = os.getenv("MODEL_NAME", "gpt-default")
+STATE_CADASTRO_NOME = os.getenv("STATE_CADASTRO_NOME", "cadastro_nome")

@@ -2,10 +2,7 @@
 This provides minimal constants and functions so the router can import
 the names without failing. Replace with real implementation when available.
 """
-MODEL_NAME = "gpt-default"
-GROQ_API_URL = ""
-GROQ_API_KEY = ""
-STATE_CADASTRO_NOME = "cadastro_nome"
+from app.config.settings import MODEL_NAME, GROQ_API_URL, GROQ_API_KEY, STATE_CADASTRO_NOME
 
 class GroqSalesHandler:
     def __init__(self, *args, **kwargs):

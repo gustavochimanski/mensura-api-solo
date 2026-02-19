@@ -17,7 +17,8 @@ import re
 from app.database.db_connection import get_db
 from ..core import database as chatbot_db
 from ..core.notifications import OrderNotification, ORDER_STATUS_TEMPLATES
-from ..core.groq_sales_handler import GroqSalesHandler, GROQ_API_URL, GROQ_API_KEY, MODEL_NAME
+from ..core.groq_sales_handler import GroqSalesHandler
+from app.config.settings import GROQ_API_URL, GROQ_API_KEY, MODEL_NAME, STATE_CADASTRO_NOME
 from ..core.llm_policy import build_system_prompt, clamp_temperature
 from app.api.notifications.repositories.whatsapp_config_repository import WhatsAppConfigRepository
 from app.api.empresas.repositories.empresa_repo import EmpresaRepository
