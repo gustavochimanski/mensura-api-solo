@@ -91,8 +91,8 @@ async def processar_mensagem_groq(*args, **kwargs) -> Optional[str]:
                     pass
                 return "Desculpe, houve um erro ao salvar seu cadastro. Tente novamente em instantes."
 
-        # Fallback generic response
-        return "Recebi sua mensagem — em breve retorno."
+        # Se não parece nome, peça explicitamente o nome completo
+        return "Por favor, envie seu *nome completo* (nome e sobrenome) para que eu possa cadastrar você."
     except Exception as e:
         # Não quebrar fluxo principal em caso de erro inesperado
         import logging as _log
