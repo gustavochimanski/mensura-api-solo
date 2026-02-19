@@ -1200,15 +1200,24 @@ async def send_notification(request: Request, db: Session = Depends(get_db)):
 
             # Cancela a tentativa de pause se já estiver pausado
             if chatbot_db.is_bot_active_for_phone(db, phone_normalized):
-                pause_result = chatbot_db.set_bot_status(
-                    db=db,
-                    phone_number=phone_normalized,
-                    paused_by="atendente_respondeu",
-                    empresa_id=empresa_id,
-                    desativa_chatbot_em=destrava_em,
-                )
-                if not pause_result.get("success"):
-                    logger.error(f"❌ Falha ao pausar chatbot: {pause_result.get('error')}")
+                # Se a conversa estiver no fluxo cadastro_nome, NÃO pausar
+                try:
+                    from app.config.settings import STATE_CADASTRO_NOME
+                    from app.api.chatbot.core.application.conversacao_service import ConversacaoService
+                    estado_tmp, _ = ConversacaoService(db, empresa_id=empresa_id, prompt_key=prompt_key_sales).obter_estado(phone_normalized)
+                except Exception:
+                    estado_tmp = None
+
+                if estado_tmp != STATE_CADASTRO_NOME:
+                    pause_result = chatbot_db.set_bot_status(
+                        db=db,
+                        phone_number=phone_normalized,
+                        paused_by="atendente_respondeu",
+                        empresa_id=empresa_id,
+                        desativa_chatbot_em=destrava_em,
+                    )
+                    if not pause_result.get("success"):
+                        logger.error(f"❌ Falha ao pausar chatbot: {pause_result.get('error')}")
         except Exception as e:
             logger.error(f"❌ Erro ao pausar chatbot após resposta do atendente: {e}", exc_info=True)
 
@@ -1351,15 +1360,24 @@ async def send_media(request: Request, db: Session = Depends(get_db)):
 
                     # Cancela a tentativa de pause se já estiver pausado
                     if chatbot_db.is_bot_active_for_phone(db, phone_clean_media):
-                        pause_result = chatbot_db.set_bot_status(
-                            db=db,
-                            phone_number=phone_clean_media,
-                            paused_by="atendente_respondeu",
-                            empresa_id=empresa_id,
-                            desativa_chatbot_em=destrava_em,
-                        )
-                        if not pause_result.get("success"):
-                            logger.error(f"❌ Falha ao pausar chatbot após mídia: {pause_result.get('error')}")
+                        # Se a conversa estiver no fluxo cadastro_nome, NÃO pausar
+                        try:
+                            from app.config.settings import STATE_CADASTRO_NOME
+                            from app.api.chatbot.core.application.conversacao_service import ConversacaoService
+                            estado_tmp, _ = ConversacaoService(db, empresa_id=empresa_id, prompt_key=prompt_key_sales).obter_estado(phone_clean_media)
+                        except Exception:
+                            estado_tmp = None
+
+                        if estado_tmp != STATE_CADASTRO_NOME:
+                            pause_result = chatbot_db.set_bot_status(
+                                db=db,
+                                phone_number=phone_clean_media,
+                                paused_by="atendente_respondeu",
+                                empresa_id=empresa_id,
+                                desativa_chatbot_em=destrava_em,
+                            )
+                            if not pause_result.get("success"):
+                                logger.error(f"❌ Falha ao pausar chatbot após mídia: {pause_result.get('error')}")
                 except Exception as e:
                     logger.error(f"❌ Erro ao pausar chatbot após envio de mídia pelo atendente: {e}", exc_info=True)
 
@@ -2005,17 +2023,26 @@ async def process_webhook_background(body: dict, headers_info: Optional[dict] = 
                                         # Cancela a tentativa de pause se já estiver pausado
                                         if chatbot_db.is_bot_active_for_phone(db, cliente_phone):
                                             destrava_em = chatbot_db.get_auto_pause_until()
-                                            pause_result = chatbot_db.set_bot_status(
-                                                db=db,
-                                                phone_number=cliente_phone,
-                                                paused_by="atendente_respondeu",
-                                                empresa_id=empresa_id_int,
-                                                desativa_chatbot_em=destrava_em,
-                                            )
-                                            if not pause_result.get("success"):
-                                                logger.error(
-                                                    f"Falha ao pausar chatbot após mensagem humana (WhatsApp Web): {pause_result.get('error')}"
+                                            # Se a conversa estiver no fluxo cadastro_nome, NÃO pausar
+                                            try:
+                                                from app.config.settings import STATE_CADASTRO_NOME
+                                                from app.api.chatbot.core.application.conversacao_service import ConversacaoService
+                                                estado_tmp, _ = ConversacaoService(db, empresa_id=empresa_id_int, prompt_key=prompt_key_sales).obter_estado(cliente_phone)
+                                            except Exception:
+                                                estado_tmp = None
+
+                                            if estado_tmp != STATE_CADASTRO_NOME:
+                                                pause_result = chatbot_db.set_bot_status(
+                                                    db=db,
+                                                    phone_number=cliente_phone,
+                                                    paused_by="atendente_respondeu",
+                                                    empresa_id=empresa_id_int,
+                                                    desativa_chatbot_em=destrava_em,
                                                 )
+                                                if not pause_result.get("success"):
+                                                    logger.error(
+                                                        f"Falha ao pausar chatbot após mensagem humana (WhatsApp Web): {pause_result.get('error')}"
+                                                    )
                                     except Exception as e:
                                         logger.error(
                                             f"❌ Erro ao processar mensagem outgoing (humano) do WhatsApp Web: {e}",
@@ -2210,17 +2237,26 @@ async def process_webhook_background(body: dict, headers_info: Optional[dict] = 
                                 # Cancela a tentativa de pause se já estiver pausado
                                 if chatbot_db.is_bot_active_for_phone(db, cliente_phone):
                                     destrava_em = chatbot_db.get_auto_pause_until()
-                                    pause_result = chatbot_db.set_bot_status(
-                                        db=db,
-                                        phone_number=cliente_phone,
-                                        paused_by="atendente_respondeu",
-                                        empresa_id=empresa_id_int,
-                                        desativa_chatbot_em=destrava_em,
-                                    )
-                                    if not pause_result.get("success"):
-                                        logger.error(
-                                            f"Falha ao pausar chatbot após smb_message_echoes humano: {pause_result.get('error')}"
+                                    # Se a conversa estiver no fluxo cadastro_nome, NÃO pausar
+                                    try:
+                                        from app.config.settings import STATE_CADASTRO_NOME
+                                        from app.api.chatbot.core.application.conversacao_service import ConversacaoService
+                                        estado_tmp, _ = ConversacaoService(db, empresa_id=empresa_id_int, prompt_key=prompt_key_sales).obter_estado(cliente_phone)
+                                    except Exception:
+                                        estado_tmp = None
+
+                                    if estado_tmp != STATE_CADASTRO_NOME:
+                                        pause_result = chatbot_db.set_bot_status(
+                                            db=db,
+                                            phone_number=cliente_phone,
+                                            paused_by="atendente_respondeu",
+                                            empresa_id=empresa_id_int,
+                                            desativa_chatbot_em=destrava_em,
                                         )
+                                        if not pause_result.get("success"):
+                                            logger.error(
+                                                f"Falha ao pausar chatbot após smb_message_echoes humano: {pause_result.get('error')}"
+                                            )
                             except Exception as e:
                                 logger.error(f"❌ Erro ao processar smb_message_echoes: {e}", exc_info=True)
 
