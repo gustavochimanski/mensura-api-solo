@@ -11,6 +11,7 @@ class IntentionType(str, Enum):
     UNKNOWN = "unknown"
     ORDER = "order"
     VER_CARDAPIO = "ver_cardapio"
+    ACOMPANHAR_PEDIDO = "acompanhar_pedido"
 
 
 class IntentionRouter:
@@ -36,6 +37,8 @@ class IntentionRouter:
             return {"intention": IntentionType.VER_CARDAPIO, "funcao": "ver_cardapio"}
         if any(k in txt for k in ("pedir", "quero pedir", "fazer pedido", "pedido")):
             return {"intention": IntentionType.ORDER, "funcao": "create_order"}
+        if any(k in txt for k in ("acompanhar", "acompanhar pedido", "rastrear", "status do pedido", "onde está meu pedido", "onde esta meu pedido")):
+            return {"intention": IntentionType.ACOMPANHAR_PEDIDO, "funcao": "acompanhar_pedido"}
         return {"intention": IntentionType.UNKNOWN}
 
 
