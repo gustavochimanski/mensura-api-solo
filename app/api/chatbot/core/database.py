@@ -52,6 +52,8 @@ _pass_through_names = [
     "get_conversation_with_messages",
     "get_stats",
     "seed_default_prompts",
+    "is_bot_active_for_phone",
+    "is_bot_globally_active",
 ]
 
 for _name in _pass_through_names:
