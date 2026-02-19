@@ -37,19 +37,8 @@ from .llm_policy import (
     make_json_repair_prompt,
     validate_action_json,
 )
-from app.api.chatbot.services.service_carrinho import CarrinhoService
-from app.api.chatbot.schemas.schema_carrinho import (
-    AdicionarItemCarrinhoRequest,
-    AtualizarItemCarrinhoRequest,
-    RemoverItemCarrinhoRequest,
-    ItemCarrinhoRequest,
-    ReceitaCarrinhoRequest,
-    ComboCarrinhoRequest,
-)
-from app.api.catalogo.adapters.produto_adapter import ProdutoAdapter
-from app.api.catalogo.adapters.complemento_adapter import ComplementoAdapter
-from app.api.catalogo.adapters.receitas_adapter import ReceitasAdapter
-from app.api.catalogo.adapters.combo_adapter import ComboAdapter
+# Imports relacionados à finalização via chatbot/checkout removidos intencionalmente.
+# (CarrinhoService e adapters de checkout foram neutralizados pois finalização via GroqSalesHandler está desativada.)
 from app.api.catalogo.services.service_busca_global import BuscaGlobalService
 from .observability import ChatbotObservability
 
@@ -4535,8 +4524,9 @@ REGRA PARA COMPLEMENTOS:
 
         return None
 
-    def _get_carrinho_service(self) -> CarrinhoService:
-        # Mantém a assinatura original, mas delega para o Domain Service
+    def _get_carrinho_service(self) -> Any:
+        # Mantém a assinatura original (sem depender de tipo do serviço de checkout),
+        # delega para o Domain Service que continua disponível.
         return self.carrinho_domain.get_carrinho_service()
 
     def _obter_carrinho_db(self, user_id: str):
@@ -5528,7 +5518,9 @@ Sua única função é ajudar a ESCOLHER PRODUTOS. Nada mais!
             dados['forma_pagamento'] = meio_detectado['nome']
             dados['meio_pagamento_id'] = meio_detectado['id']
             print(f"💳 Pagamento detectado (natural): {meio_detectado['nome']} (ID: {meio_detectado['id']})")
-            return await self._gerar_resumo_pedido(user_id, dados)
+            # Finalização via chatbot foi desativada — mostra apenas o resumo e instrui o cliente a finalizar pelo site
+            resumo = await self._gerar_resumo_pedido(user_id, dados)
+            return resumo + "\n\n⚠️ Finalização via chatbot foi desativada. Para confirmar seu pedido, acesse nosso site ou app."
 
         # Tenta por número (incluindo ordinais)
         numero = self._extrair_numero_natural(mensagem, max_opcoes=len(meios))
@@ -5538,7 +5530,9 @@ Sua única função é ajudar a ESCOLHER PRODUTOS. Nada mais!
             dados['forma_pagamento'] = meio_selecionado['nome']
             dados['meio_pagamento_id'] = meio_selecionado['id']
             print(f"💳 Pagamento selecionado (número): {meio_selecionado['nome']} (ID: {meio_selecionado['id']})")
-            return await self._gerar_resumo_pedido(user_id, dados)
+            # Finalização via chatbot foi desativada — mostra apenas o resumo e instrui o cliente a finalizar pelo site
+            resumo = await self._gerar_resumo_pedido(user_id, dados)
+            return resumo + "\n\n⚠️ Finalização via chatbot foi desativada. Para confirmar seu pedido, acesse nosso site ou app."
 
         # Mensagem de erro com opções dinâmicas
         opcoes_str = "\n".join([f"*{i+1}* - {meio['nome']}" for i, meio in enumerate(meios)])
@@ -5649,118 +5643,9 @@ Sua única função é ajudar a ESCOLHER PRODUTOS. Nada mais!
         Returns:
             ID do pedido criado ou None se falhar
         """
-        try:
-            # Importa serviço de carrinho
-            from app.api.chatbot.services.service_carrinho import CarrinhoService
-            from app.api.catalogo.adapters.produto_adapter import ProdutoAdapter
-            from app.api.catalogo.adapters.complemento_adapter import ComplementoAdapter
-            from app.api.catalogo.adapters.receitas_adapter import ReceitasAdapter
-            from app.api.catalogo.adapters.combo_adapter import ComboAdapter
-            
-            # Cria serviço de carrinho
-            produto_contract = ProdutoAdapter(self.db)
-            complemento_contract = ComplementoAdapter(self.db)
-            receitas_contract = ReceitasAdapter(self.db)
-            combo_contract = ComboAdapter(self.db)
-            
-            carrinho_service = CarrinhoService(
-                db=self.db,
-                produto_contract=produto_contract,
-                complemento_contract=complemento_contract,
-                receitas_contract=receitas_contract,
-                combo_contract=combo_contract
-            )
-            
-            # Busca carrinho do banco de dados
-            carrinho = carrinho_service.obter_carrinho(user_id, self.empresa_id)
-            if not carrinho:
-                print("[Checkout] Carrinho vazio ou não encontrado no banco")
-                return None
-            
-            # Buscar ou criar cliente para obter o super_token e cliente_id
-            cliente = self.address_service.criar_cliente_se_nao_existe(user_id)
-            if not cliente:
-                print("[Checkout] ERRO: Não foi possível criar/buscar cliente")
-                return None
-
-            super_token = cliente.get('super_token')
-            cliente_id = cliente.get('id')
-            if not super_token:
-                print("[Checkout] ERRO: Cliente sem super_token")
-                return None
-            if not cliente_id:
-                print("[Checkout] ERRO: Cliente sem ID")
-                return None
-
-            # Converte carrinho do banco para formato do checkout
-            from app.api.chatbot.repositories.repo_carrinho import CarrinhoRepository
-            from app.api.chatbot.models.model_carrinho import CarrinhoTemporarioModel
-            
-            carrinho_repo = CarrinhoRepository(self.db)
-            carrinho_model = carrinho_repo.get_by_id(carrinho.id, load_items=True)
-            if not carrinho_model:
-                print("[Checkout] ERRO: Carrinho não encontrado após busca")
-                return None
-            
-            # Converte carrinho passando cliente_id para garantir que sempre tenha
-            payload = carrinho_service.converter_para_checkout(carrinho_model, cliente_id=cliente_id)
-            
-            # Adiciona meio de pagamento se foi detectado
-            meio_pagamento_id = dados.get('meio_pagamento_id') or carrinho_model.meio_pagamento_id
-            if meio_pagamento_id:
-                total = float(carrinho_model.valor_total)
-                payload["meios_pagamento"] = [{
-                    "id": meio_pagamento_id,
-                    "valor": total
-                }]
-                print(f"[Checkout] Meio de pagamento (ID: {meio_pagamento_id}), Valor: R$ {total:.2f}")
-
-            print(f"[Checkout] Payload: {json.dumps(payload, indent=2, default=str)}")
-
-            # Chamar endpoint /checkout
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                headers = {
-                    "Content-Type": "application/json",
-                    "X-Super-Token": super_token
-                }
-
-                # URL do checkout (localhost pois estamos no mesmo servidor)
-                checkout_url = "http://localhost:8000/api/pedidos/client/checkout"
-
-                print(f"[Checkout] Chamando {checkout_url}")
-                response = await client.post(checkout_url, json=payload, headers=headers)
-
-                print(f"[Checkout] Status: {response.status_code}")
-
-                if response.status_code == 201:
-                    result = response.json()
-                    pedido_id = result.get('id')
-                    print(f"[Checkout] ✅ Pedido criado com sucesso! ID: {pedido_id}")
-                    
-                    # Limpa o carrinho após sucesso no checkout
-                    carrinho_service.limpar_carrinho(user_id, self.empresa_id)
-                    print(f"[Checkout] ✅ Carrinho limpo após criação do pedido")
-                    
-                    return pedido_id
-                else:
-                    # Extrair mensagem de erro da resposta
-                    try:
-                        error_json = response.json()
-                        error_detail = error_json.get('detail', 'Erro desconhecido')
-                    except:
-                        error_detail = response.text
-
-                    print(f"[Checkout] ❌ Erro ao criar pedido: {response.status_code} - {error_detail}")
-                    return {"erro": True, "mensagem": error_detail}
-
-        except httpx.TimeoutException:
-            print("[Checkout] ⏰ Timeout ao chamar endpoint /checkout")
-            return {"erro": True, "mensagem": "Tempo esgotado ao processar pedido. Tente novamente."}
-        except Exception as e:
-            print(f"[Checkout] ❌ ERRO ao salvar pedido via checkout: {e}")
-            import traceback
-            traceback.print_exc()
-            return {"erro": True, "mensagem": "Erro interno ao processar pedido."}
+        # Finalização de pedido via GroqSalesHandler foi desativada.
+        # Para criar pedidos, o fluxo deve usar o endpoint /api/pedidos/... ou o checkout do frontend.
+        return {"erro": True, "mensagem": "Finalização via chatbot desativada. Por favor, finalize seu pedido pelo site ou app."}
 
 
     # ========== RESPOSTAS CONVERSACIONAIS ==========
@@ -7023,38 +6908,31 @@ Responda de forma natural e curta:"""
                     return resposta
                 
                 if self._detectar_confirmacao_pedido(mensagem):
-                    # Salvar pedido via endpoint /checkout
-                    resultado = await self._salvar_pedido_via_checkout(user_id, dados)
+                    # Finalização via chatbot foi desativada - direcionar cliente para o site/app
+                    try:
+                        empresa_query = text("""
+                            SELECT nome, cardapio_link
+                            FROM cadastros.empresas
+                            WHERE id = :empresa_id
+                        """)
+                        result = self.db.execute(empresa_query, {"empresa_id": self.empresa_id})
+                        empresa = result.fetchone()
+                        link_cardapio = empresa[1] if empresa and empresa[1] else LINK_CARDAPIO
+                    except Exception:
+                        link_cardapio = LINK_CARDAPIO
 
-                    if isinstance(resultado, dict) and resultado.get('erro'):
-                        # Checkout falhou - mostrar erro ao usuário
-                        erro_msg = resultado.get('mensagem', 'Erro ao processar pedido')
-                        return f"❌ *Ops! Não foi possível confirmar o pedido:*\n\n{erro_msg}\n\nDigite *OK* para tentar novamente ou *CANCELAR* para desistir."
-
-                    # Sucesso - limpar carrinho e resetar estado
+                    # Limpa estado local do carrinho/chat e retorna mensagem informativa
                     dados['carrinho'] = []
                     dados.pop('carrinho_aberto_tratado', None)
                     dados.pop('carrinho_aberto_continuado', None)
                     dados.pop('aguardando_confirmacao_cancelamento_carrinho', None)
                     self._salvar_estado_conversa(user_id, STATE_WELCOME, dados)
 
-                    if resultado:
-                        msg_confirmacao = "🎉 *PEDIDO CONFIRMADO!*\n"
-                        msg_confirmacao += "━━━━━━━━━━━━━━━━━━━━\n\n"
-                        msg_confirmacao += f"📋 *Número do pedido:* #{resultado}\n\n"
-                        msg_confirmacao += "✅ Seu pedido foi enviado para a cozinha!\n"
-                        msg_confirmacao += "📱 Você receberá atualizações sobre a entrega\n\n"
-                        msg_confirmacao += "━━━━━━━━━━━━━━━━━━━━\n"
-                        msg_confirmacao += "Obrigado pela preferência! 😊"
-                        return msg_confirmacao
-                    else:
-                        msg_confirmacao = "🎉 *PEDIDO CONFIRMADO!*\n"
-                        msg_confirmacao += "━━━━━━━━━━━━━━━━━━━━\n\n"
-                        msg_confirmacao += "✅ Seu pedido foi enviado para a cozinha!\n"
-                        msg_confirmacao += "📱 Você receberá atualizações sobre a entrega\n\n"
-                        msg_confirmacao += "━━━━━━━━━━━━━━━━━━━━\n"
-                        msg_confirmacao += "Obrigado pela preferência! 😊"
-                        return msg_confirmacao
+                    return (
+                        "⚠️ Finalização de pedidos via chatbot foi desativada.\n\n"
+                        f"Para confirmar seu pedido, por favor acesse nosso cardápio: \n\n👉 {link_cardapio}\n\n"
+                        "Ou entre em contato com um atendente para ajuda."
+                    )
                 elif 'cancelar' in mensagem.lower():
                     dados['carrinho'] = []
                     dados.pop('carrinho_aberto_tratado', None)

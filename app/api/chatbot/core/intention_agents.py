@@ -59,56 +59,34 @@ class IniciarPedidoAgent(IntentionAgent):
     
     def detect(self, mensagem: str, mensagem_normalizada: str, context: Dict[str, Any] = None) -> Optional[Dict[str, Any]]:
         """
-        Detecta intenção de iniciar novo pedido.
-        IMPORTANTE: NÃO deve detectar quando há produto específico mencionado.
+        Fluxo de pedido via chatbot foi desativado.
+        Qualquer tentativa de 'iniciar pedido' deve redirecionar o usuário para ver o cardápio.
         """
-        # Padrões que indicam iniciar pedido (SEM produto específico)
+        # Se detectar termos que indicam intenção de iniciar pedido, retornar intenção de ver cardápio
         padroes_iniciar = [
-            # "gostaria de fazer um pedido", "gostaria de fazer pedido"
             r'(?:gostaria|gostaria de|queria|queria de)\s+(?:fazer|fazer um|fazer uma)\s+(?:pedido|novo\s+pedido)',
-            # "fazer novo pedido", "fazer pedido"
-            r'fazer\s+(?:novo\s+)?pedido(?!\s+de\s+\w)',  # NÃO "fazer pedido de pizza"
-            # "novo pedido"
+            r'fazer\s+(?:novo\s+)?pedido(?!\s+de\s+\w)',
             r'novo\s+pedido',
-            # "começar de novo", "comecar de novo"
             r'come[cç]ar\s+(?:de\s+)?novo',
-            # "iniciar pedido", "iniciar novo pedido"
             r'iniciar\s+(?:novo\s+)?pedido',
-            # "quero fazer pedido" (mas NÃO "quero fazer pedido de pizza")
             r'quero\s+fazer\s+(?:um\s+)?pedido(?!\s+de\s+\w)',
-            # "quero pedir" (mas NÃO "quero pedir pizza")
             r'quero\s+pedir(?!\s+\w)',
-            # "vou fazer pedido", "vou pedir"
             r'vou\s+fazer\s+(?:um\s+)?pedido(?!\s+de\s+\w)',
             r'vou\s+pedir(?!\s+\w)',
-            # "preciso fazer pedido", "preciso pedir"
             r'preciso\s+fazer\s+(?:um\s+)?pedido(?!\s+de\s+\w)',
             r'preciso\s+pedir(?!\s+\w)',
-            # "fazer um pedido" (genérico)
             r'fazer\s+um\s+pedido(?!\s+de\s+\w)',
         ]
-        
-        # Verifica se menciona produto específico (ex: "fazer pedido de pizza")
-        tem_produto_especifico = re.search(
-            r'(?:fazer|fazer um|pedir|quero fazer|vou fazer)\s+(?:pedido|um pedido)\s+de\s+(\w+)',
-            mensagem_normalizada,
-            re.IGNORECASE
-        )
-        
-        # Se tem produto específico, NÃO é iniciar pedido, é adicionar produto
-        if tem_produto_especifico:
-            return None
-        
-        # Verifica cada padrão
+
         for padrao in padroes_iniciar:
-            if re.search(padrao, mensagem_normalizada, re.IGNORECASE):
-                print(f"🆕 [Agente IniciarPedido] Detectado: '{mensagem}'")
+            if re.search(padrao, mensagem_normalizada or "", re.IGNORECASE):
+                print(f"➡️ [Agente IniciarPedido] Redirecionando para cardápio: '{mensagem}'")
                 return {
-                    "intention": IntentionType.INICIAR_PEDIDO,
-                    "funcao": "iniciar_novo_pedido",
+                    "intention": IntentionType.VER_CARDAPIO,
+                    "funcao": "ver_cardapio",
                     "params": {}
                 }
-        
+
         return None
 
 
@@ -126,17 +104,18 @@ class AcompanharPedidoAgent(IntentionAgent):
         - "queria acompanhar meu pedido por aqui"
         - "acompanhar pedido"
         """
+        # Acompanhamento de pedidos depende de haver pedidos; como fluxo de pedido foi desativado,
+        # redirecionamos para ver o cardápio caso o usuário tente acompanhar.
         if not mensagem_normalizada:
             return None
         padrao = r'(?:gostaria\s+de\s+|queria\s+|por\s+favor\s+)?acompanhar\s+(?:meu\s+)?pedido(?:\s+por\s+aqui)?'
-        # Também aceita pedidos de "receber atualizações" ou "receber atualizacoes" do pedido
         padrao_receber_atualizacoes = r'(?:gostaria\s+de\s+|queria\s+|por\s+favor\s+)?(?:receber|querer\s+receber)\s+.*atualiz'
 
         if re.search(padrao, mensagem_normalizada, re.IGNORECASE) or re.search(padrao_receber_atualizacoes, mensagem_normalizada, re.IGNORECASE):
-            print(f"🔎 [Agente AcompanharPedido] Detectado: '{mensagem}'")
+            print(f"➡️ [Agente AcompanharPedido] Redirecionando para cardápio: '{mensagem}'")
             return {
-                "intention": IntentionType.ACOMPANHAR_PEDIDO,
-                "funcao": "acompanhar_pedido",
+                "intention": IntentionType.VER_CARDAPIO,
+                "funcao": "ver_cardapio",
                 "params": {}
             }
         return None
@@ -197,151 +176,11 @@ class AdicionarProdutoAgent(IntentionAgent):
     
     def detect(self, mensagem: str, mensagem_normalizada: str, context: Dict[str, Any] = None) -> Optional[Dict[str, Any]]:
         """
-        Detecta intenção de adicionar produto.
-        IMPORTANTE: Só detecta se houver MENÇÃO CLARA de produto.
+        Detecção de intenção de adicionar produto foi desativada.
+        Quando o usuário menciona um produto, o sistema deve apenas fornecer informações
+        sobre o produto ou redirecionar para o cardápio (dependendo do fluxo principal).
         """
-        # PRIMEIRO: Verifica se é uma pergunta de preço/valor (NÃO é pedido)
-        # Ex: "qual valor do x bacon", "quanto custa a pizza", etc.
-        padroes_pergunta_preco = [
-            r'(?:qual|quais?)\s+(?:o\s+)?(?:valor|pre[cç]o)',
-            r'quanto\s+(?:que\s+)?(?:fica|custa|é|e)',
-            r'(?:pre[cç]o|valor)\s+(?:d[aeo]|de|do|da)',
-            r'quanto\s+(?:que\s+)?(?:fica|custa)\s+(?:a|o|o\s+)?',
-        ]
-        
-        # Se é pergunta de preço, NÃO é adicionar produto
-        for padrao in padroes_pergunta_preco:
-            if re.search(padrao, mensagem_normalizada, re.IGNORECASE):
-                return None  # Deixa outras verificações lidarem com perguntas de preço
-        
-        # Verifica se NÃO é uma intenção de iniciar pedido genérico
-        # Ex: "gostaria de fazer um pedido" não deve ser capturado como produto "pedido"
-        padroes_iniciar_pedido = [
-            r'(?:gostaria|gostaria de|queria|queria de)\s+(?:fazer|fazer um|fazer uma)\s+(?:pedido|novo\s+pedido)',
-            r'fazer\s+(?:novo\s+)?pedido(?!\s+de\s+\w)',
-            r'novo\s+pedido',
-            r'quero\s+fazer\s+(?:um\s+)?pedido(?!\s+de\s+\w)',
-            r'quero\s+pedir(?!\s+\w)',
-            r'vou\s+fazer\s+(?:um\s+)?pedido(?!\s+de\s+\w)',
-            r'preciso\s+fazer\s+(?:um\s+)?pedido(?!\s+de\s+\w)',
-        ]
-        
-        # Se corresponde a iniciar pedido genérico, NÃO é adicionar produto
-        for padrao in padroes_iniciar_pedido:
-            if re.search(padrao, mensagem_normalizada, re.IGNORECASE):
-                return None  # Deixa o IniciarPedidoAgent lidar com isso
-        
-        # Padrões que indicam adicionar produto (com produto mencionado)
-        patterns_pedido = [
-            # "quero X", "quero um X", "quero 2 X"
-            (r'(?:quero|qro)\s+(?:(uma?|um|duas?|dois|doise|tres|tr[eê]s|\d+)\s*)?(.+)', 1, 2),
-            # "me ve X", "me vê X", "manda X", "traz X"
-            (r'(?:me\s+)?(?:ve|vê|manda|traz)\s+(?:(uma?|um|duas?|dois|doise|tres|tr[eê]s|\d+)\s*)?(.+)', 1, 2),
-            # "2 X", "um X", "duas X"
-            (r'(?:(uma?|um|duas?|dois|doise|tres|tr[eê]s|\d+))\s+(.+?)(?:\s+por\s+favor)?$', 1, 2),
-            # "pode ser X", "vou querer X"
-            (r'(?:pode\s+ser|vou\s+querer)\s+(?:(uma?|um|duas?|dois|doise|tres|tr[eê]s|\d+)\s*)?(.+)', 1, 2),
-            # "fazer pedido de X", "quero fazer pedido de X"
-            (r'(?:fazer|quero fazer|vou fazer)\s+(?:pedido|um pedido)\s+de\s+(.+)', None, 1),
-        ]
-        
-        def _parse_quantidade_token(token: Optional[str]) -> int:
-            if not token:
-                return 1
-            t = mensagem_normalizada if isinstance(token, str) else str(token)
-            if t.isdigit():
-                return max(int(t), 1)
-            mapa = {
-                "um": 1, "uma": 1, "dois": 2, "duas": 2, "doise": 2,
-                "tres": 3, "três": 3, "quatro": 4, "cinco": 5,
-                "seis": 6, "sete": 7, "oito": 8, "nove": 9, "dez": 10,
-            }
-            return mapa.get(t, 1)
-        
-        def _limpar_termos_finais(texto: str) -> str:
-            """Remove termos como 'então', 'aí', 'por favor' do final"""
-            t = texto.strip()
-            stop_finais = ["entao", "então", "ai", "aí", "pf", "pfv", "por favor", "ok", "blz"]
-            while True:
-                t_norm = t.lower().strip()
-                if not t_norm:
-                    return ""
-                tokens = t_norm.split()
-                if not tokens:
-                    return ""
-                if t_norm.endswith("por favor"):
-                    t = re.sub(r"\s*por\s+favor\s*$", "", t, flags=re.IGNORECASE).strip()
-                    continue
-                last = tokens[-1]
-                if last in stop_finais:
-                    t = re.sub(rf"\s*{re.escape(last)}\s*$", "", t, flags=re.IGNORECASE).strip()
-                    continue
-                return t.strip()
-        
-        # Verifica cada padrão
-        for pattern, qtd_group, produto_group in patterns_pedido:
-            match = re.search(pattern, mensagem_normalizada)
-            if match:
-                qtd_token = (match.group(qtd_group) or "").strip() if qtd_group and match.lastindex and match.lastindex >= qtd_group else ""
-                produto_completo = (match.group(produto_group) or "").strip() if match.lastindex and match.lastindex >= produto_group else ""
-                
-                if not produto_completo or len(produto_completo) < 2:
-                    continue
-                
-                # Parse quantidade
-                quantidade = _parse_quantidade_token(qtd_token)
-                
-                # Verifica quantidade dentro do produto (ex: "2x bacon")
-                qtd_match = re.search(r'^(\d+)\s*x?\s*', produto_completo)
-                if qtd_match:
-                    quantidade = max(int(qtd_match.group(1)), 1)
-                    produto_completo = produto_completo[qtd_match.end():].strip()
-                
-                # Remove personalização do nome do produto
-                produto_limpo = produto_completo
-                personalizacao = None
-                
-                # Detecta "sem X"
-                match_sem = re.search(r'\s+sem\s+(\w+)', produto_completo, re.IGNORECASE)
-                if match_sem:
-                    personalizacao = {"acao": "remover_ingrediente", "item": match_sem.group(1)}
-                    produto_limpo = re.sub(r'\s+sem\s+\w+', '', produto_completo, flags=re.IGNORECASE).strip()
-                
-                # Detecta "com X extra" ou "mais X"
-                match_extra = re.search(r'\s+(?:com|mais|extra)\s+(\w+)', produto_completo, re.IGNORECASE)
-                if match_extra and not personalizacao:
-                    personalizacao = {"acao": "adicionar_extra", "item": match_extra.group(1)}
-                    produto_limpo = re.sub(r'\s+(?:com|mais|extra)\s+\w+', '', produto_completo, flags=re.IGNORECASE).strip()
-                
-                produto_limpo = _limpar_termos_finais(produto_limpo)
-                
-                # Se ficou muito curto, pode ser que não seja produto
-                if not produto_limpo or len(produto_limpo) < 2:
-                    continue
-                
-                # Verifica se não é uma frase genérica de iniciar pedido
-                palavras_genericas = ['pedido', 'pedir', 'fazer', 'novo', 'um', 'uma']
-                if produto_limpo.lower() in palavras_genericas:
-                    continue
-                
-                # Verifica se a mensagem completa é sobre iniciar pedido (não adicionar produto)
-                # Ex: "gostaria de fazer um pedido" não deve ser capturado como produto "pedido"
-                if re.search(r'(?:gostaria|queria|quero|vou|preciso)\s+(?:de\s+)?(?:fazer|fazer um|fazer uma)\s+(?:pedido|novo\s+pedido)(?!\s+de\s+\w)', mensagem_normalizada, re.IGNORECASE):
-                    # Se a mensagem é sobre iniciar pedido genérico, não é adicionar produto
-                    continue
-                
-                print(f"🛒 [Agente AdicionarProduto] Detectado: '{mensagem}' -> produto: '{produto_limpo}', qtd: {quantidade}")
-                
-                params = {"produto_busca": produto_limpo, "quantidade": max(int(quantidade), 1)}
-                if personalizacao:
-                    params["personalizacao"] = personalizacao
-                
-                return {
-                    "intention": IntentionType.ADICIONAR_PRODUTO,
-                    "funcao": "adicionar_produto",
-                    "params": params
-                }
-        
+        # Não captura intenção de adicionar produto para prevenir fluxo de pedido via chatbot.
         return None
 
 
