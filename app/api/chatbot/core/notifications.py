@@ -1403,7 +1403,7 @@ async def enviar_resumo_pedido_whatsapp(
         saved_in_chat = False
         conversation_id = None
         chatbot_message_id = None
-        try:''
+        try:
             from . import database as chatbot_db
             from sqlalchemy import text as sql_text
             from datetime import datetime as _dt
