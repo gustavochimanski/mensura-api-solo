@@ -3458,7 +3458,7 @@ REGRA PARA COMPLEMENTOS:
 
                             taxa_entrega = dados.get('taxa_entrega', 0.0)
                             if taxa_entrega and taxa_entrega > 0:
-                                resumo += f"\nTaxa de entrega: R$ {taxa_entrega:.2f}"
+                                resumo += f"\ntaxa de entrega: {taxa_entrega:.2f}"
                             resumo += f"\n💰 *Total: R$ {(total + (taxa_entrega or 0.0)):.2f}*"
                             resposta_limpa += resumo
 
@@ -3682,7 +3682,7 @@ REGRA PARA COMPLEMENTOS:
 
                 taxa_entrega = dados.get('taxa_entrega', 0.0)
                 if taxa_entrega and taxa_entrega > 0:
-                    resp += f"\nTaxa de entrega: R$ {taxa_entrega:.2f}"
+                    resp += f"\ntaxa de entrega: {taxa_entrega:.2f}"
                 resp += f"\n💰 *Total: R$ {(total + (taxa_entrega or 0.0)):.2f}*"
                 resp += "\n\nQuer mais alguma coisa? 😊"
                 return resp
@@ -3812,7 +3812,7 @@ REGRA PARA COMPLEMENTOS:
                                     resp += f"        ➕ {nome}\n"
                     taxa_entrega = dados.get('taxa_entrega', 0.0)
                     if taxa_entrega and taxa_entrega > 0:
-                        resp += f"\nTaxa de entrega: R$ {taxa_entrega:.2f}"
+                        resp += f"\ntaxa de entrega: {taxa_entrega:.2f}"
                     resp += f"\n💰 *Total: R$ {(total + (taxa_entrega or 0.0)):.2f}*"
 
                     # Verifica se tem complementos obrigatórios
@@ -5592,7 +5592,7 @@ Sua única função é ajudar a ESCOLHER PRODUTOS. Nada mais!
         mensagem += "━━━━━━━━━━━━━━━━━━━━\n"
         mensagem += f"Subtotal: R$ {subtotal:.2f}\n"
         if taxa_entrega > 0:
-            mensagem += f"Taxa de entrega: R$ {taxa_entrega:.2f}\n"
+            mensagem += f"taxa de entrega: {taxa_entrega:.2f}\n"
         mensagem += f"\n💰 *TOTAL: R$ {total:.2f}*\n"
         mensagem += "━━━━━━━━━━━━━━━━━━━━\n\n"
 
