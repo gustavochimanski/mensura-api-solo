@@ -2,8 +2,9 @@
 from typing import Any, Dict
 
 try:
-    # reutiliza a config legacy
-    from app.api.chatbot.legacy.core.config_whatsapp import SOME_SETTING  # type: ignore
+    # reutiliza a config legacy via import relativo
+    from ..legacy.core import config_whatsapp as config_whatsapp  # type: ignore
+    SOME_SETTING = getattr(config_whatsapp, \"SOME_SETTING\", None)
 except Exception:
     SOME_SETTING = None
 
