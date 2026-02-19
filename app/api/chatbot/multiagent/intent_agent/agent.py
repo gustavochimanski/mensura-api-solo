@@ -18,6 +18,9 @@ class IntentAgent(AgentBase):
         # Heurística simples: procurar palavras-chave ligadas a pedido/compra
         if any(k in text for k in ["comprar", "pedido", "adicionar", "carrinho", "produto"]):
             return IntentResult("create_order", {"matched": True})
+        # intenção ver cardápio
+        if any(k in text for k in ["cardapio", "cardápio", "menu", "cardápio_link", "cardápio link"]):
+            return IntentResult("ver_cardapio", {"matched": True})
         # fallback - devolver intenção genérica para ser tratada pelas funções disponíveis
         return IntentResult("unknown", {})
 
