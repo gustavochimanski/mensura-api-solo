@@ -12,7 +12,7 @@ from typing import Any, Dict, Tuple
 
 from sqlalchemy.orm import Session
 
-from ..infrastructure.conversa_repository import ConversaRepository
+from ..repositories.conversa_repository import ConversaRepository
 
 
 class ConversacaoService:
