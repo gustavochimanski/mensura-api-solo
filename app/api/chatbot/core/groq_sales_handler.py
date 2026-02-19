@@ -562,9 +562,19 @@ class GroqSalesHandler:
                 try:
                     taxa_entrega = float(self._obter_taxa_entrega_por_pedido_id(pedido_aberto_info.get('pedido_id')))
                 except Exception:
-                    taxa_entrega = pedido_aberto_info.get('taxa_entrega', 0.0)
+            taxa_entrega = pedido_aberto_info.get('taxa_entrega', 0.0)
             desconto = pedido_aberto_info.get('desconto', 0.0)
             valor_total = pedido_aberto_info.get('valor_total', 0.0)
+            # Se taxa não veio, tentar inferir pela diferença entre valor_total e subtotal (fallback rápido)
+            if (not taxa_entrega or taxa_entrega == 0.0) and valor_total and subtotal is not None:
+                try:
+                    inferred = float(valor_total) - float(subtotal) + float(desconto or 0.0)
+                    if inferred and inferred > 0:
+                        taxa_entrega = inferred
+                        import logging
+                        logging.getLogger(__name__).debug(f"[should_send_order_summary] taxa_entrega inferida por diferença: {taxa_entrega:.2f} (pedido_id={pedido_aberto_info.get('pedido_id')})")
+                except Exception:
+                    pass
             endereco = pedido_aberto_info.get('endereco')
             meio_pagamento = pedido_aberto_info.get('meio_pagamento')
             mesa_codigo = pedido_aberto_info.get('mesa_codigo')
