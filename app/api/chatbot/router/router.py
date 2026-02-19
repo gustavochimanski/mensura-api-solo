@@ -2797,11 +2797,78 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
             
             # Monta resposta com link do cardápio
             resposta_cardapio = _montar_mensagem_redirecionamento(db, empresa_id_int, config)
-            
-            # Envia resposta via WhatsApp
+
+            # Se o cliente NÃO estiver cadastrado, inicia fluxo de cadastro pedindo o nome
+            try:
+                from ..core.address_service import ChatbotAddressService
+                address_service = ChatbotAddressService(db, empresa_id_int)
+                cliente_local = address_service.get_cliente_by_telefone(phone_number)
+            except Exception:
+                cliente_local = None
+
+            if not cliente_local:
+                # Marca que é um cadastro rápido (durante o pedido/conversa)
+                try:
+                    from ..core.application.conversacao_service import ConversacaoService
+                    from datetime import datetime
+                    import logging
+
+                    logger = logging.getLogger(__name__)
+                    dados_cadastro = {"cadastro_rapido": True, "carrinho": [], "historico": []}
+
+                    # Garante que exista uma conversa para salvar histórico/ mensagens
+                    conversations_post = chatbot_db.get_conversations_by_user(db, user_id, empresa_id_int)
+                    if conversations_post:
+                        conversation_id = conversations_post[0]["id"]
+                    else:
+                        conversation_id = chatbot_db.create_conversation(
+                            db=db,
+                            session_id=f"whatsapp_{user_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                            user_id=user_id,
+                            prompt_key=prompt_key_sales,
+                            model="groq-sales",
+                            contact_name=contact_name,
+                            empresa_id=empresa_id_int,
+                        )
+
+                    # Salva estado de conversa para indicar que estamos aguardando o nome.
+                    logger.info(f"[router] Salvando estado cadastro_nome para phone={phone_number}, empresa_id={empresa_id_int} (conversation_id={conversation_id})")
+                    conversacao_service = ConversacaoService(db, empresa_id=empresa_id_int, prompt_key=prompt_key_sales)
+                    conversacao_service.salvar_estado(phone_number, "cadastro_nome", dados_cadastro)
+
+                    # Salva a mensagem do usuário no histórico
+                    try:
+                        chatbot_db.create_message(db, conversation_id, "user", message_text, whatsapp_message_id=message_id)
+                    except Exception as e:
+                        logger.error(f"[router] Erro ao salvar mensagem do usuário antes de pedir nome: {e}", exc_info=True)
+
+                    # Pergunta pelo nome via WhatsApp e salva a mensagem do assistente
+                    pergunta_nome = "Olá! Para continuar, qual o seu *nome completo* (nome e sobrenome)? 😊"
+                    notifier = OrderNotification()
+                    logger.info(f"[router] Enviando pergunta pelo nome para {phone_number}")
+                    result_send = await notifier.send_whatsapp_message(phone_number, pergunta_nome, empresa_id=empresa_id)
+                    whatsapp_msg_id = result_send.get("message_id") if isinstance(result_send, dict) else None
+                    try:
+                        chatbot_db.create_message(db, conversation_id, "assistant", pergunta_nome, whatsapp_message_id=whatsapp_msg_id)
+                    except Exception:
+                        logger.warning(f"[router] Não foi possível salvar a mensagem do assistente (pergunta nome) no chat para conversation_id={conversation_id}")
+                except Exception as e:
+                    # Se algo falhar, faz fallback e envia o link (não bloquear atendimento)
+                    logger = __import__("logging").getLogger(__name__)
+                    logger.error(f"[router] Erro ao iniciar fluxo de cadastro (fallback para enviar link): {e}", exc_info=True)
+                    notifier = OrderNotification()
+                    result = await notifier.send_whatsapp_message(phone_number, resposta_cardapio, empresa_id=empresa_id)
+                    if isinstance(result, dict) and result.get("success"):
+                        whatsapp_message_id = result.get("message_id")
+                        chatbot_db.create_message(db, conversation_id, "assistant", resposta_cardapio, whatsapp_message_id=whatsapp_message_id)
+                        db.commit()
+
+                return
+
+            # Envia resposta via WhatsApp (cliente cadastrado)
             notifier = OrderNotification()
             result = await notifier.send_whatsapp_message(phone_number, resposta_cardapio, empresa_id=empresa_id)
-            
+
             # Salva a mensagem do assistente
             if isinstance(result, dict) and result.get("success"):
                 whatsapp_message_id = result.get("message_id")
