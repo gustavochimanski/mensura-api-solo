@@ -128,9 +128,11 @@ class AcompanharPedidoAgent(IntentionAgent):
         """
         if not mensagem_normalizada:
             return None
-
         padrao = r'(?:gostaria\s+de\s+|queria\s+|por\s+favor\s+)?acompanhar\s+(?:meu\s+)?pedido(?:\s+por\s+aqui)?'
-        if re.search(padrao, mensagem_normalizada, re.IGNORECASE):
+        # Também aceita pedidos de "receber atualizações" ou "receber atualizacoes" do pedido
+        padrao_receber_atualizacoes = r'(?:gostaria\s+de\s+|queria\s+|por\s+favor\s+)?(?:receber|querer\s+receber)\s+.*atualiz'
+
+        if re.search(padrao, mensagem_normalizada, re.IGNORECASE) or re.search(padrao_receber_atualizacoes, mensagem_normalizada, re.IGNORECASE):
             print(f"🔎 [Agente AcompanharPedido] Detectado: '{mensagem}'")
             return {
                 "intention": IntentionType.ACOMPANHAR_PEDIDO,

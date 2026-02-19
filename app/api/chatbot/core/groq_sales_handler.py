@@ -3455,7 +3455,11 @@ REGRA PARA COMPLEMENTOS:
                                     nome = add.get('nome', add) if isinstance(add, dict) else add
                                     preco = add.get('preco', 0) if isinstance(add, dict) else 0
                                     resumo += f"        ➕ {nome}" + (f" (+R$ {preco:.2f})" if preco > 0 else "") + "\n"
-                            resumo += f"\n💰 *Total: R$ {total:.2f}*"
+
+                            taxa_entrega = dados.get('taxa_entrega', 0.0)
+                            if taxa_entrega and taxa_entrega > 0:
+                                resumo += f"\nTaxa de entrega: R$ {taxa_entrega:.2f}"
+                            resumo += f"\n💰 *Total: R$ {(total + (taxa_entrega or 0.0)):.2f}*"
                             resposta_limpa += resumo
 
                             # Verifica se acabou de adicionar complementos (não mostrar de novo)
@@ -3675,7 +3679,11 @@ REGRA PARA COMPLEMENTOS:
                                 resp += f"        ➕ {nome} (+R$ {preco:.2f})\n"
                             else:
                                 resp += f"        ➕ {nome}\n"
-                resp += f"\n💰 *Total: R$ {total:.2f}*"
+
+                taxa_entrega = dados.get('taxa_entrega', 0.0)
+                if taxa_entrega and taxa_entrega > 0:
+                    resp += f"\nTaxa de entrega: R$ {taxa_entrega:.2f}"
+                resp += f"\n💰 *Total: R$ {(total + (taxa_entrega or 0.0)):.2f}*"
                 resp += "\n\nQuer mais alguma coisa? 😊"
                 return resp
 
@@ -3802,7 +3810,10 @@ REGRA PARA COMPLEMENTOS:
                                     resp += f"        ➕ {nome} (+R$ {preco:.2f})\n"
                                 else:
                                     resp += f"        ➕ {nome}\n"
-                    resp += f"\n💰 *Total: R$ {total:.2f}*"
+                    taxa_entrega = dados.get('taxa_entrega', 0.0)
+                    if taxa_entrega and taxa_entrega > 0:
+                        resp += f"\nTaxa de entrega: R$ {taxa_entrega:.2f}"
+                    resp += f"\n💰 *Total: R$ {(total + (taxa_entrega or 0.0)):.2f}*"
 
                     # Verifica se tem complementos obrigatórios
                     try:
