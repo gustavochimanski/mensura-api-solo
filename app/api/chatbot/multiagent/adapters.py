@@ -3,7 +3,7 @@ from typing import Any, Dict, Optional
 
 
 class MultiAgentAdapters:
-    \"\""Wrapper que expõe APIs mínimas usadas pelos agentes e reaproveita o código legacy quando disponível.\"\"\"
+    """Wrapper que expõe APIs mínimas usadas pelos agentes e reaproveita o código legacy quando disponível."""
 
     def __init__(self) -> None:
         # tentar importar módulos legacy (não obrigatório)
