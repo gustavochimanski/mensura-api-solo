@@ -562,7 +562,7 @@ class GroqSalesHandler:
                 try:
                     taxa_entrega = float(self._obter_taxa_entrega_por_pedido_id(pedido_aberto_info.get('pedido_id')))
                 except Exception:
-            taxa_entrega = pedido_aberto_info.get('taxa_entrega', 0.0)
+                    taxa_entrega = pedido_aberto_info.get('taxa_entrega', 0.0)
             desconto = pedido_aberto_info.get('desconto', 0.0)
             valor_total = pedido_aberto_info.get('valor_total', 0.0)
             # Se taxa não veio, tentar inferir pela diferença entre valor_total e subtotal (fallback rápido)
