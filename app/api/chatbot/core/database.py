@@ -50,6 +50,7 @@ _pass_through_names = [
     "create_message",
     "get_conversations_by_user",
     "get_conversation_with_messages",
+    "get_messages",
     "get_stats",
     "seed_default_prompts",
     "is_bot_active_for_phone",
