@@ -1382,7 +1382,11 @@ async def enviar_resumo_pedido_whatsapp(
             # Linha em branco entre itens para leitura rápida
             mensagem += "\n"
 
-        # Enviar apenas total e status de pagamento (sem subtotal/desconto/taxa)
+        # Se for delivery, mostrar taxa de entrega explicitamente (formato padronizado)
+        if str(tipo_entrega) == "DELIVERY" and taxa_entrega and taxa_entrega > 0:
+            mensagem += f"\nTaxa de entrega: {taxa_entrega:.2f}\n"
+
+        # Enviar total e status de pagamento
         mensagem += f"*Total:* R$ {valor_total:.2f}\n*Pagamento:* {pagamento_str}"
 
         if observacoes:
