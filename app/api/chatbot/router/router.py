@@ -2498,6 +2498,82 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
             logger.error(f"Erro ao verificar se é entregador: {e}", exc_info=True)
             # Em caso de erro, continua o processamento normal (não bloqueia)
         
+        # VERIFICA SE A LOJA ESTÁ ABERTA (prioridade máxima: sempre verificar antes de processar intenções)
+        try:
+            from app.api.empresas.repositories.empresa_repo import EmpresaRepository
+            from app.utils.horarios_funcionamento import (
+                empresa_esta_aberta_agora,
+                montar_mensagem_status_funcionamento,
+            )
+            from datetime import datetime
+
+            empresa_repo = EmpresaRepository(db)
+            empresa_obj = empresa_repo.get_empresa_by_id(empresa_id_int)
+            timezone_empresa = (empresa_obj.timezone if empresa_obj and getattr(empresa_obj, "timezone", None) else None) or "America/Sao_Paulo"
+            esta_aberta_early = None
+            if empresa_obj and getattr(empresa_obj, "horarios_funcionamento", None):
+                esta_aberta_early = empresa_esta_aberta_agora(
+                    horarios_funcionamento=empresa_obj.horarios_funcionamento,
+                    timezone=timezone_empresa,
+                )
+
+            # Se a loja estiver explicitamente fechada, envia mensagem de "loja fechada" e retorna.
+            # Exceção: se o usuário pediu explicitamente para "chamar atendente" (botão), permitimos notificar.
+            mensagem_lower = (message_text or "").lower()
+            chamou_atendente_early = (
+                button_id == "chamar_atendente"
+                or "chamar_atendente" in mensagem_lower
+                or "chamar atendente" in mensagem_lower
+                or mensagem_lower.strip() == "chamar_atendente"
+            )
+
+            if esta_aberta_early is False and not chamou_atendente_early:
+                # Garante conversa para histórico
+                if conversations:
+                    conv_id = conversations[0]["id"]
+                else:
+                    conv_id = chatbot_db.create_conversation(
+                        db=db,
+                        session_id=f"whatsapp_{user_id}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                        user_id=user_id,
+                        prompt_key=prompt_key_support,
+                        model=DEFAULT_MODEL,
+                        contact_name=contact_name,
+                        empresa_id=empresa_id_int,
+                    )
+
+                chatbot_db.create_message(
+                    db=db,
+                    conversation_id=conv_id,
+                    role="user",
+                    content=message_text,
+                    whatsapp_message_id=message_id,
+                )
+
+                msg_fechado_early = montar_mensagem_status_funcionamento(
+                    nome_empresa=(empresa_obj.nome if empresa_obj and empresa_obj.nome else "[Nome da Empresa]"),
+                    esta_aberta=False,
+                    horarios_funcionamento=getattr(empresa_obj, "horarios_funcionamento", None),
+                    timezone=timezone_empresa,
+                    now=datetime.now(),
+                    incluir_horarios=True,
+                )
+
+                notifier = OrderNotification()
+                result = await notifier.send_whatsapp_message(phone_number, msg_fechado_early, empresa_id=empresa_id)
+                whatsapp_message_id = result.get("message_id") if isinstance(result, dict) and result.get("success") else None
+                chatbot_db.create_message(
+                    db=db,
+                    conversation_id=conv_id,
+                    role="assistant",
+                    content=msg_fechado_early,
+                    whatsapp_message_id=whatsapp_message_id,
+                )
+                return
+        except Exception as e_early:
+            logger = __import__("logging").getLogger(__name__)
+            logger.debug(f"Erro ao verificar horário de funcionamento (early): {e_early}")
+
         # VERIFICA SE O BOT ESTÁ ATIVO PARA ESTE NÚMERO (ANTES de qualquer resposta/cadastro)
         # Motivo: quando o cliente NÃO tem cadastro, o fluxo de "cadastro rápido" retornava antes
         # da checagem de pausa e o bot acabava respondendo mesmo com o número pausado.
