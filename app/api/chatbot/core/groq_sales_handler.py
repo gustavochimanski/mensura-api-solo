@@ -39,31 +39,33 @@ async def processar_mensagem_groq(*args, **kwargs) -> Optional[str]:
         if is_name:
             # Normalize phone and try to find or create cliente
             try:
-                from app.utils.telefone import normalizar_telefone_para_armazenar, variantes_telefone_para_busca
+                # Use the Mensura ClienteService to create the cliente (keeps business rules)
+                from app.api.cadastros.services.service_cliente import ClienteService
+                from app.api.cadastros.schemas.schema_cliente import ClienteCreate
+                from app.utils.telefone import normalizar_telefone_para_armazenar
                 from sqlalchemy import text
 
-                phone_canon = normalizar_telefone_para_armazenar(user_id) or "".join(filter(str.isdigit, str(user_id)))
-                candidatos = variantes_telefone_para_busca(user_id) or [phone_canon]
-
-                query = text(
-                    "SELECT id, nome, telefone FROM cadastros.clientes WHERE telefone = ANY(:telefones) LIMIT 1"
+                phone_canon = normalizar_telefone_para_armazenar(user_id) or "".join(
+                    filter(str.isdigit, str(user_id))
                 )
-                row = db.execute(query, {"telefones": candidatos}).fetchone()
-                if not row:
-                    insert = text("""
-                        INSERT INTO cadastros.clientes (nome, telefone, created_at, updated_at)
-                        VALUES (:nome, :telefone, NOW(), NOW())
-                        RETURNING id, nome, telefone
-                    """)
-                    result = db.execute(insert, {"nome": mensagem, "telefone": phone_canon})
-                    cliente = result.fetchone()
-                    db.commit()
-                else:
-                    cliente = row
+
+                service = ClienteService(db)
+                cliente_payload = ClienteCreate(nome=mensagem, telefone=phone_canon)
+                try:
+                    cliente_obj = service.create(cliente_payload)
+                except Exception as e_service:
+                    # If service raises HTTPException for duplicate phone, try to fetch existing
+                    try:
+                        q = text("SELECT id, nome, telefone FROM cadastros.clientes WHERE telefone = :telefone LIMIT 1")
+                        row = db.execute(q, {"telefone": phone_canon}).fetchone()
+                        cliente_obj = row
+                    except Exception:
+                        cliente_obj = None
 
                 # Update conversation: set contact_name and remove sales_state/sales_data from metadata
                 try:
-                    update_conv = text("""
+                    update_conv = text(
+                        """
                         UPDATE chatbot.conversations
                         SET contact_name = :contact_name,
                             metadata = (COALESCE(metadata, '{}'::jsonb) - 'sales_state') - 'sales_data',
@@ -71,7 +73,8 @@ async def processar_mensagem_groq(*args, **kwargs) -> Optional[str]:
                         WHERE user_id = :user_id
                           AND (empresa_id = :empresa_id OR :empresa_id IS NULL)
                         RETURNING id
-                    """)
+                        """
+                    )
                     db.execute(update_conv, {"contact_name": mensagem, "user_id": phone_canon, "empresa_id": empresa_id})
                     db.commit()
                 except Exception:
