@@ -47,8 +47,8 @@ class Router:
         """
         # Detect intenção explicitamente
         intent = self.intent_agent.handle_intent({"text": text})
-        if intent.intent != \"ver_cardapio\" and intent.intent != \"create_order\":
-            return {\"ok\": False, \"reason\": \"no_menu_intent\"}
+        if intent.intent != "ver_cardapio" and intent.intent != "create_order":
+            return {"ok": False, "reason": "no_menu_intent"}
 
         # normalize phone and check existing customer
         try:
@@ -57,7 +57,7 @@ class Router:
             from sqlalchemy import text as sql_text
         except Exception:
             # dependencies missing - abort gracefully
-            return {\"ok\": False, \"reason\": \"missing_dependencies\"}
+            return {"ok": False, "reason": "missing_dependencies"}
 
         cliente_svc = ClienteService(db)
         cliente = cliente_svc.repo.get_by_telefone(phone_number)
@@ -65,7 +65,7 @@ class Router:
         if not cliente:
             # criar cadastro rápido com heurística de nome
             name_guess = None
-            parts = (text or \"\").split()
+            parts = (text or "").split()
             # pega primeira palavra com >2 caracteres como possível nome
             for p in parts:
                 if p.isalpha() and len(p) > 2:
@@ -74,7 +74,7 @@ class Router:
             if not name_guess:
                 # fallback para sufixo do telefone
                 phone_clean = ''.join(ch for ch in phone_number if ch.isdigit())
-                name_guess = f\"Cliente {phone_clean[-4:]}\" if phone_clean else \"Cliente WhatsApp\"
+                name_guess = f"Cliente {phone_clean[-4:]}" if phone_clean else "Cliente WhatsApp"
 
             customer_creator = CustomerService(db)
             try:
@@ -87,8 +87,8 @@ class Router:
         # busca link do cardápio da empresa
         cardapio_link = None
         try:
-            q = sql_text(\"\"\"SELECT cardapio_link FROM cadastros.empresas WHERE id = :empresa_id LIMIT 1\"\"\")
-            r = db.execute(q, {\"empresa_id\": int(empresa_id)}).fetchone()
+            q = sql_text("""SELECT cardapio_link FROM cadastros.empresas WHERE id = :empresa_id LIMIT 1""")
+            r = db.execute(q, {"empresa_id": int(empresa_id)}).fetchone()
             if r and r[0]:
                 cardapio_link = r[0]
         except Exception:
@@ -100,9 +100,9 @@ class Router:
                 from app.api.chatbot.legacy.core.utils.config_loader import LINK_CARDAPIO
                 cardapio_link = LINK_CARDAPIO
             except Exception:
-                cardapio_link = \"https://chatbot.mensuraapi.com.br\"
+                cardapio_link = "https://chatbot.mensuraapi.com.br"
 
-        return {\"ok\": True, \"action\": \"send_menu_link\", \"link\": cardapio_link, \"cliente_id\": getattr(cliente, \"id\", None)}
+        return {"ok": True, "action": "send_menu_link", "link": cardapio_link, "cliente_id": getattr(cliente, "id", None)}
 
     def register_intent_agent(self, agent: IntentAgent) -> None:
         """Substitui o agente de intenção (útil para testes ou hot-swap)."""
