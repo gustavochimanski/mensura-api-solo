@@ -266,11 +266,33 @@ class PedidoNotificationService:
                 return 0
             
             # Envia notificação em tempo real via WebSocket apenas para clientes na rota /pedidos
+            # Tenta obter taxa_entrega diretamente do banco pelo pedido_id, se disponível
+            try:
+                from app.database.db_connection import SessionLocal
+                from sqlalchemy import text
+                db_sess = SessionLocal()
+                q = text("SELECT taxa_entrega FROM pedidos.pedidos WHERE id = :pedido_id LIMIT 1")
+                r = db_sess.execute(q, {"pedido_id": int(pedido_id)}).fetchone()
+                taxa_entrega = float(r[0]) if r and r[0] is not None else 0.0
+            except Exception as e:
+                logger.debug(f"Não foi possível obter taxa_entrega do DB para pedido {pedido_id}: {e}")
+                taxa_entrega = 0.0
+            finally:
+                try:
+                    db_sess.close()
+                except Exception:
+                    pass
+
+            # Inclui taxa_entrega no payload/ mensagem
+            message_text = f"Pedido #{pedido_id} impresso - Valor: R$ {valor_total:.2f}"
+            if taxa_entrega and taxa_entrega > 0:
+                message_text += f"\n\ntaxa de entrega: {taxa_entrega:.2f}"
+
             sent_count = await self._send_realtime_notification(
                 empresa_id=empresa_id,
                 notification_type="kanban",
                 title="Novo Pedido Recebido",
-                message=f"Pedido #{pedido_id} impresso - Valor: R$ {valor_total:.2f}",
+                message=message_text,
                 data={
                     "pedido_id": pedido_id,
                     "cliente": cliente_data,
@@ -279,6 +301,7 @@ class PedidoNotificationService:
                     "tipo_entrega": tipo_entrega,
                     "numero_pedido": numero_pedido,
                     "status": status_atual,
+                    "taxa_entrega": taxa_entrega,
                     "timestamp": datetime.utcnow().isoformat()
                 },
                 required_route="/pedidos"

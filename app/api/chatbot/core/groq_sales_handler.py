@@ -510,6 +510,23 @@ class GroqSalesHandler:
         msg = re.sub(r"\s+", " ", msg).strip()
         return msg
 
+    def _obter_taxa_entrega_por_pedido_id(self, pedido_id: int) -> float:
+        """
+        Busca a taxa_entrega diretamente na tabela pedidos.pedidos pelo ID do pedido.
+        Retorna 0.0 se não encontrar ou em caso de erro.
+        """
+        try:
+            if not pedido_id:
+                return 0.0
+            from sqlalchemy import text
+            q = text("SELECT taxa_entrega FROM pedidos.pedidos WHERE id = :pedido_id LIMIT 1")
+            row = self.db.execute(q, {"pedido_id": int(pedido_id)}).fetchone()
+            if row and row[0] is not None:
+                return float(row[0])
+        except Exception as e:
+            print(f"Erro ao buscar taxa_entrega por pedido_id {pedido_id}: {e}")
+        return 0.0
+
     async def should_send_order_summary(self, message_text: str, pedido_aberto_info: dict, phone_number: str | None = None) -> str | None:
         """
         Decide se, dada uma mensagem do cliente, devemos retornar o resumo
@@ -540,6 +557,12 @@ class GroqSalesHandler:
             itens = pedido_aberto_info.get('itens', [])
             subtotal = pedido_aberto_info.get('subtotal', 0.0)
             taxa_entrega = pedido_aberto_info.get('taxa_entrega', 0.0)
+            # Se a taxa não foi passada no objeto pedido_aberto_info, tentar buscar pelo pedido_id diretamente
+            if (not taxa_entrega or taxa_entrega == 0.0) and pedido_aberto_info.get('pedido_id'):
+                try:
+                    taxa_entrega = float(self._obter_taxa_entrega_por_pedido_id(pedido_aberto_info.get('pedido_id')))
+                except Exception:
+                    taxa_entrega = pedido_aberto_info.get('taxa_entrega', 0.0)
             desconto = pedido_aberto_info.get('desconto', 0.0)
             valor_total = pedido_aberto_info.get('valor_total', 0.0)
             endereco = pedido_aberto_info.get('endereco')
@@ -620,6 +643,10 @@ class GroqSalesHandler:
 
             if meio_pagamento:
                 mensagem_pedido += f"\n\n💳 *Pagamento:* {meio_pagamento}"
+
+            # Adiciona linha explícita da taxa conforme padrão: "taxa de entrega: valor"
+            if taxa_entrega and taxa_entrega > 0:
+                mensagem_pedido += f"\n\ntaxa de entrega: {taxa_entrega:.2f}"
 
             mensagem_pedido += "\n\nComo posso te ajudar? 😊"
 
