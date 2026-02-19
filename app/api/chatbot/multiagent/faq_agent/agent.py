@@ -3,7 +3,7 @@ from ..base import AgentBase, FAQResult
 from ..adapters import MultiAgentAdapters
 
 class FaqAgent(AgentBase):
-    \"\"\"Agente para responder dúvidas frequentes (horário, preço, taxa).\"\"\"
+    """Agente para responder dúvidas frequentes (horário, preço, taxa)."""
 
     def __init__(self, adapters: Optional[MultiAgentAdapters] = None):
         self.adapters = adapters or MultiAgentAdapters()

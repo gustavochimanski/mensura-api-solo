@@ -745,105 +745,6 @@ _Obrigado pela preferência!_"""
             OrderNotification.send_notification_async(db, phone, message, order_type)
         )
 
-    @classmethod
-    async def notify_order_confirmed_async(cls, db: Session, order_data: Dict, order_type: str) -> Dict:
-        """
-        Processa e envia notificação de pedido confirmado (versão async)
-
-        Args:
-            db: Sessão do banco de dados
-            order_data: Dados do pedido
-            order_type: Tipo do pedido (cardapio, mesa, balcao)
-
-        Returns:
-            Dict com resultado do envio
-        """
-        from .config_whatsapp import load_whatsapp_config
-
-        # Formata mensagem baseada no tipo de pedido
-        if order_type == "cardapio":
-            message = cls.format_cardapio_notification(order_data)
-        elif order_type == "mesa":
-            message = cls.format_mesa_notification(order_data)
-        elif order_type == "balcao":
-            message = cls.format_balcao_notification(order_data)
-        else:
-            return {
-                "success": False,
-                "error": "Tipo de pedido inválido"
-            }
-
-        # Valida telefone
-        phone = order_data.get('client_phone')
-        if not phone:
-            return {
-                "success": False,
-                "error": "Telefone do cliente não fornecido"
-            }
-
-        results = {
-            "whatsapp_api": None,
-            "chat_interno": None,
-            "success": False
-        }
-
-        # Obtém empresa_id dos dados do pedido
-        empresa_id = order_data.get("empresa_id")
-        # Converte para int se for string
-        if empresa_id and isinstance(empresa_id, str):
-            try:
-                empresa_id = int(empresa_id)
-            except (ValueError, TypeError):
-                empresa_id = None
-
-        # Sempre salva no chat interno (para histórico) - usa versão async
-        chat_result = await cls.send_notification_async(db, phone, message, order_type, empresa_id=empresa_id)
-        results["chat_interno"] = chat_result
-
-        # Envia via WhatsApp API
-        empresa_id_str = str(empresa_id) if empresa_id else None
-        whatsapp_result = await cls.send_whatsapp_message(phone, message, empresa_id=empresa_id_str)
-        results["whatsapp_api"] = whatsapp_result
-
-        # Considera sucesso se WhatsApp API funcionou
-        if whatsapp_result.get("success"):
-            results["success"] = True
-            results["provider"] = "WhatsApp API + Chat Interno"
-            results["message"] = "Notificação enviada via WhatsApp e salva no chat"
-        else:
-            results["success"] = False
-            results["error"] = whatsapp_result.get("error")
-            results["message"] = (
-                whatsapp_result.get("coexistence_hint")
-                or "Erro ao enviar via WhatsApp, mas salvo no chat"
-            )
-            results["provider"] = "Chat Interno"
-            results["message"] = "Notificação salva no chat interno"
-
-        return results
-
-    @classmethod
-    def notify_order_confirmed(cls, db: Session, order_data: Dict, order_type: str) -> Dict:
-        """
-        Processa e envia notificação de pedido confirmado (versão síncrona)
-
-        Args:
-            db: Sessão do banco de dados
-            order_data: Dados do pedido
-            order_type: Tipo do pedido (cardapio, mesa, balcao)
-
-        Returns:
-            Dict com resultado do envio
-        """
-        # Executa a versão async de forma síncrona
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
-        return loop.run_until_complete(cls.notify_order_confirmed_async(db, order_data, order_type))
-
 
 # ==================== NOTIFICAÇÕES WEBSOCKET PARA CHATBOT ====================
 
@@ -920,56 +821,6 @@ async def send_chatbot_websocket_notification(
         )
         return 0
 
-
-# ==================== HELPER PARA ENVIAR RESUMO DE PEDIDO ====================
-
-ORDER_STATUS_TEMPLATES = {
-    "P": {
-        "name": "Pendente",
-        "emoji": "🕐",
-        "message": "Seu pedido #{numero_pedido} foi recebido e está aguardando confirmação."
-    },
-    "I": {
-        "name": "Em Impressão",
-        "emoji": "🖨️",
-        "message": "Seu pedido #{numero_pedido} está sendo processado!"
-    },
-    "R": {
-        "name": "Preparando",
-        "emoji": "👨‍🍳",
-        "message": "Boa notícia! Seu pedido #{numero_pedido} está sendo preparado com todo carinho!"
-    },
-    "S": {
-        "name": "Saiu para Entrega",
-        "emoji": "🛵",
-        "message": "Seu pedido #{numero_pedido} saiu para entrega! Em breve estará com você!"
-    },
-    "E": {
-        "name": "Entregue",
-        "emoji": "✅",
-        "message": "Seu pedido #{numero_pedido} foi entregue! Obrigado pela preferência!"
-    },
-    "C": {
-        "name": "Cancelado",
-        "emoji": "❌",
-        "message": "Seu pedido #{numero_pedido} foi cancelado."
-    },
-    "A": {
-        "name": "Aguardando Pagamento",
-        "emoji": "💳",
-        "message": "Seu pedido #{numero_pedido} está aguardando confirmação do pagamento."
-    },
-    "D": {
-        "name": "Editado",
-        "emoji": "📝",
-        "message": "Seu pedido #{numero_pedido} foi atualizado."
-    },
-    "X": {
-        "name": "Em Edição",
-        "emoji": "✏️",
-        "message": "Seu pedido #{numero_pedido} está sendo editado."
-    }
-}
 
 
 def _formatar_tempo_minutos(tempo_min: int) -> str:
@@ -1552,7 +1403,7 @@ async def enviar_resumo_pedido_whatsapp(
         saved_in_chat = False
         conversation_id = None
         chatbot_message_id = None
-        try:
+        try:''
             from . import database as chatbot_db
             from sqlalchemy import text as sql_text
             from datetime import datetime as _dt

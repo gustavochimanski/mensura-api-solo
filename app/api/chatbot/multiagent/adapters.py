@@ -26,16 +26,16 @@ class MultiAgentAdapters:
             return {}
         # expor apenas elementos seguros/necessários
         return {
-            \"d360_base_url\": getattr(self._config, \"D360_BASE_URL\", None),
-            \"d360_api_key\": getattr(self._config, \"D360_API_KEY\", None),
+            "d360_base_url": getattr(self._config, "D360_BASE_URL", None),
+            "d360_api_key": getattr(self._config, "D360_API_KEY", None),
         }
 
     def get_product_price(self, product_identifier: str) -> Optional[float]:
-        \"\"\"Tenta obter preço do produto via código legacy (se disponível).\"\"\"
+        """Tenta obter preço do produto via código legacy (se disponível)."""
         if not self._produto:
             return None
         # função legacy pode ter outro nome; proteger com hasattr
-        if hasattr(self._produto, \"get_price_by_identifier\"):
+        if hasattr(self._produto, "get_price_by_identifier"):
             try:
                 return float(self._produto.get_price_by_identifier(product_identifier))
             except Exception:
