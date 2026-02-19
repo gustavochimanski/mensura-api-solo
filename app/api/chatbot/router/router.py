@@ -495,9 +495,7 @@ router.include_router(
     dependencies=[Depends(require_admin), Depends(require_permissions(["route:/chatbot"]))],
 )
 
-# Incluir router do carrinho
-from .router_carrinho import router as router_carrinho
-router.include_router(router_carrinho)
+# Nota: O sub-router de carrinho foi removido do códigobase.
 
 
 # ==================== ENDPOINTS BÁSICOS ====================
