@@ -41,10 +41,10 @@ class Router:
 
     # ----- helpers para fluxo de ver cardápio / cadastro rápido -----
     def handle_view_menu_flow(self, db, phone_number: str, text: str, empresa_id: int = 1) -> Dict[str, Any]:
-        \"\"\"When user asks for menu: if registered -> return menu link;
+        """When user asks for menu: if registered -> return menu link;
         otherwise create a quick customer (best-effort) and return the link.
         Returns a dict describing action to be taken by caller (e.g., send message).
-        \"\"\"
+        """
         # Detect intenção explicitamente
         intent = self.intent_agent.handle_intent({"text": text})
         if intent.intent != \"ver_cardapio\" and intent.intent != \"create_order\":
