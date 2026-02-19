@@ -6,20 +6,15 @@ class MultiAgentAdapters:
     """Wrapper que expõe APIs mínimas usadas pelos agentes e reaproveita o código legacy quando disponível."""
 
     def __init__(self) -> None:
-        # tentar importar módulos legacy (não obrigatório)
+        # tentar importar módulo de configuração do WhatsApp (compat shim)
         try:
-            from app.api.chatbot.legacy.core import config_whatsapp  # type: ignore
-
+            from app.api.chatbot.core import config_whatsapp  # type: ignore
             self._config = config_whatsapp
         except Exception:
             self._config = None
 
-        try:
-            from app.api.chatbot.legacy.core import produto_service  # type: ignore
-
-            self._produto = produto_service
-        except Exception:
-            self._produto = None
+        # Produto/serviço legacy não está mais presente; deixamos _produto como None.
+        self._produto = None
 
     def get_config(self) -> Dict[str, Any]:
         if self._config is None:

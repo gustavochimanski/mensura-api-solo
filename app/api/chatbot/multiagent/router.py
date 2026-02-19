@@ -53,7 +53,6 @@ class Router:
         # normalize phone and check existing customer
         try:
             from app.api.cadastros.services.service_cliente import ClienteService
-            from app.api.chatbot.legacy.services import CustomerService
             from sqlalchemy import text as sql_text
         except Exception:
             # dependencies missing - abort gracefully
@@ -76,10 +75,9 @@ class Router:
                 phone_clean = ''.join(ch for ch in phone_number if ch.isdigit())
                 name_guess = f"Cliente {phone_clean[-4:]}" if phone_clean else "Cliente WhatsApp"
 
-            customer_creator = CustomerService(db)
+            # Cria cliente direto no repositório com os campos mínimos
             try:
-                created = customer_creator.cadastrar_rapido(name_guess, phone_number)
-                cliente = created
+                cliente = cliente_svc.repo.create(nome=name_guess, telefone=phone_number)
             except Exception:
                 # se falhar, continuamos sem cliente (fallback)
                 cliente = None
