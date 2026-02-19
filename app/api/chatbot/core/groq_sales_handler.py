@@ -655,8 +655,7 @@ class GroqSalesHandler:
                 mensagem_pedido += f"\n\n💳 *Pagamento:* {meio_pagamento}"
 
             # Adiciona linha explícita da taxa conforme padrão: "taxa de entrega: valor"
-            if taxa_entrega and taxa_entrega > 0:
-                mensagem_pedido += f"\n\ntaxa de entrega: {taxa_entrega:.2f}"
+            mensagem_pedido += f"\n\ntaxa de entrega: {taxa_entrega:.2f}"
 
             mensagem_pedido += "\n\nComo posso te ajudar? 😊"
 
