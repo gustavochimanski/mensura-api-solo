@@ -54,6 +54,8 @@ _pass_through_names = [
     "seed_default_prompts",
     "is_bot_active_for_phone",
     "is_bot_globally_active",
+    "get_auto_pause_until",
+    "get_all_bot_statuses",
 ]
 
 for _name in _pass_through_names:
