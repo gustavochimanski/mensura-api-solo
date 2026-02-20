@@ -890,7 +890,14 @@ def create_message(
                 {"conversation_id": conversation_id, "message_id": str(whatsapp_message_id)},
             ).fetchone()
             if row:
-                logger.info(f"[DB:create_message] existing message found by whatsapp_message_id - conversation_id={conversation_id}, whatsapp_message_id={whatsapp_message_id}, existing_id={row[0]}")
+                try:
+                    import traceback
+                    stack = "".join(traceback.format_stack(limit=8)[:-1])
+                except Exception:
+                    stack = None
+                logger.info(
+                    f"[DB:create_message] existing message found by whatsapp_message_id - conversation_id={conversation_id}, whatsapp_message_id={whatsapp_message_id}, existing_id={row[0]}\ncaller_stack:\n{stack}"
+                )
                 return row[0]
     except Exception:
         # Não bloqueia criação caso a verificação falhe por qualquer motivo.
@@ -964,7 +971,14 @@ def create_message(
 
     row = result.fetchone()
     inserted_id = row[0] if row else None
-    logger.info(f"[DB:create_message] inserted message - id={inserted_id}, conversation_id={conversation_id}, role={role}, whatsapp_message_id={whatsapp_message_id}")
+    try:
+        import traceback
+        stack = "".join(traceback.format_stack(limit=8)[:-1])
+    except Exception:
+        stack = None
+    logger.info(
+        f"[DB:create_message] inserted message - id={inserted_id}, conversation_id={conversation_id}, role={role}, whatsapp_message_id={whatsapp_message_id}\ncaller_stack:\n{stack}"
+    )
     return inserted_id
 
 
