@@ -4439,6 +4439,7 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                     ai_response = _montar_mensagem_redirecionamento(db, empresa_id_int, config)
 
             if not ai_response or not str(ai_response).strip():
+                logger.warning(f"[chatbot] AI respondeu vazio — não irá enviar. phone={phone_number}, conversation_id={conversation_id}, empresa_id={empresa_id_int}, message_text_preview={str(message_text)[:120]!r}")
                 return
 
             # 6. Envia resposta via WhatsApp
@@ -4483,6 +4484,7 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
         # 6. Envia resposta via WhatsApp
         notifier = OrderNotification()
         result = await notifier.send_whatsapp_message(phone_number, ai_response, empresa_id=empresa_id)
+        logger.info(f"[chatbot] Resultado do envio WhatsApp: phone={phone_number}, empresa_id={empresa_id}, success={result.get('success')}, provider={result.get('provider')}, status_code={result.get('status_code') if result else None}, error={result.get('error') if result else None}")
 
         # 6.1. Vincula o whatsapp_message_id à última resposta do bot salva no banco
         # Observação: `processar_mensagem_groq` já salva a resposta do assistente, porém sem o ID
