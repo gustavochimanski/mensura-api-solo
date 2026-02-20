@@ -2902,6 +2902,27 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
             else:
                 conversation_id = conversations[0]['id']
             
+            # Verifica duplicata pelo message_id antes de salvar (evita criar e depois ser detectada como duplicata)
+            try:
+                if message_id:
+                    from sqlalchemy import text
+                    qdup_before = text("""
+                        SELECT id
+                        FROM chatbot.messages
+                        WHERE conversation_id = :conversation_id
+                          AND role = 'user'
+                          AND metadata->>'whatsapp_message_id' = :message_id
+                        ORDER BY created_at DESC
+                        LIMIT 1
+                    """)
+                    rdup_before = db.execute(qdup_before, {"conversation_id": conversation_id, "message_id": message_id}).fetchone()
+                    if rdup_before:
+                        logger.info(f"[chatbot] Mensagem já registrada anteriormente (pré-check) - phone={phone_number}, conversation_id={conversation_id}, message_id={message_id}")
+                        return
+            except Exception:
+                # Se a checagem prévia falhar, segue com o fluxo normal (não bloquear)
+                pass
+
             # Salva mensagem do usuário
             chatbot_db.create_message(db, conversation_id, "user", message_text, whatsapp_message_id=message_id)
             
