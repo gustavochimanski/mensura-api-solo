@@ -1272,13 +1272,13 @@ async def send_notification(request: Request, db: Session = Depends(get_db)):
             # Cancela a tentativa de pause se já estiver pausado
             if chatbot_db.is_bot_active_for_phone(db, phone_normalized):
                 # Se a conversa estiver no fluxo cadastro_nome, NÃO pausar
-                    try:
-                        from app.config.settings import STATE_CADASTRO_NOME
-                        estado_tmp = STATE_CADASTRO_NOME if _conversation_in_cadastro_nome(db, phone_normalized, empresa_id) else None
-                    except Exception:
-                        estado_tmp = None
+                try:
+                    from app.config.settings import STATE_CADASTRO_NOME
+                    estado_tmp = STATE_CADASTRO_NOME if _conversation_in_cadastro_nome(db, phone_normalized, empresa_id) else None
+                except Exception:
+                    estado_tmp = None
 
-                    if estado_tmp != STATE_CADASTRO_NOME:
+                if estado_tmp != STATE_CADASTRO_NOME:
                     pause_result = chatbot_db.set_bot_status(
                         db=db,
                         phone_number=phone_normalized,
