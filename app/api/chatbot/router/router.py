@@ -2554,6 +2554,7 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
         import logging as py_logging
         logger = py_logging.getLogger(__name__)
 
+        logger.info(f"[chatbot] process_whatsapp_message start - phone={phone_number}, message_id={message_id}, button_id={button_id}, empresa_id={empresa_id}")
         empresa_id_int = int(empresa_id) if empresa_id else 1
         user_id = phone_number
         # Variáveis de prompt usadas em vários pontos — inicializa cedo para evitar UnboundLocalError
@@ -3419,7 +3420,7 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 status_info = chatbot_db.get_bot_status(db, phone_number) or {}
             except Exception:
                 status_info = {}
-            logger.debug(
+            logger.info(
                 f"Bot pausado para o número - phone={phone_number}, empresa_id={empresa_id_int}, status={status_info}"
             )
             # IMPORTANTE: Mesmo pausado, ainda queremos capturar a intenção "chamar atendente"
@@ -3510,6 +3511,7 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                     role="user",
                     content=message_text
                 )
+            logger.info(f"[chatbot] Mensagem registrada mas não respondida (bot pausado) - phone={phone_number}, empresa_id={empresa_id_int}, conversation_id={conversation_id if 'conversation_id' in locals() else None}")
             return  # Não responde, apenas registra
 
         # OPÇÃO: Usar SalesHandler para conversas de vendas
