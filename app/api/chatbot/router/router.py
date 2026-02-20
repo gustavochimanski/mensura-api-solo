@@ -2927,6 +2927,8 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
 
             # Salva mensagem do usuário
             chatbot_db.create_message(db, conversation_id, "user", message_text, whatsapp_message_id=message_id)
+            # Marca que gravamos a mensagem durante este processamento (evita o duplicate-check posterior interromper a resposta)
+            message_saved_in_request = True
             
             # Busca configuração do chatbot para usar mensagem personalizada se existir
             config = None
@@ -3118,8 +3120,11 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 duplicate = result.fetchone()
 
                 if duplicate:
-                    logger.info(f"[chatbot] Ignorando mensagem duplicada por message_id - phone={phone_number}, conversation_id={conversations[0]['id']}, message_id={message_id}")
-                    return  # Ignora mensagem duplicada
+                    if message_saved_in_request:
+                        logger.info(f"[chatbot] Duplicate detected but message was saved earlier in this request - skipping return - phone={phone_number}, conversation_id={conversations[0]['id']}, message_id={message_id}")
+                    else:
+                        logger.info(f"[chatbot] Ignorando mensagem duplicada por message_id - phone={phone_number}, conversation_id={conversations[0]['id']}, message_id={message_id}")
+                        return  # Ignora mensagem duplicada
 
             # Se não tiver message_id E a mensagem for longa (>3 caracteres), verifica por conteúdo
             # Mensagens curtas como "1", "sim", "ok" podem ser respostas legítimas repetidas
