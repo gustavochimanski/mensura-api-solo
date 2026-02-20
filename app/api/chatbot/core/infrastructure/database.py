@@ -890,6 +890,7 @@ def create_message(
                 {"conversation_id": conversation_id, "message_id": str(whatsapp_message_id)},
             ).fetchone()
             if row:
+                logger.info(f"[DB:create_message] existing message found by whatsapp_message_id - conversation_id={conversation_id}, whatsapp_message_id={whatsapp_message_id}, existing_id={row[0]}")
                 return row[0]
     except Exception:
         # Não bloqueia criação caso a verificação falhe por qualquer motivo.
@@ -962,7 +963,9 @@ def create_message(
         db.rollback()
 
     row = result.fetchone()
-    return row[0] if row else None
+    inserted_id = row[0] if row else None
+    logger.info(f"[DB:create_message] inserted message - id={inserted_id}, conversation_id={conversation_id}, role={role}, whatsapp_message_id={whatsapp_message_id}")
+    return inserted_id
 
 
 def get_messages(db: Session, conversation_id: int) -> List[Dict]:
