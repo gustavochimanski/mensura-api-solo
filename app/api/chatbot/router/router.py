@@ -285,6 +285,77 @@ def _montar_mensagem_redirecionamento(db: Session, empresa_id: int, config) -> s
     )
 
 
+def _conversation_in_cadastro_nome(db: Session, phone: str, empresa_id: Optional[int] = None) -> bool:
+    """
+    Verifica se existe qualquer conversa associada ao telefone (com variantes)
+    cujo metadata->>'sales_state' seja igual ao STATE_CADASTRO_NOME.
+    Retorna True se encontrar, False caso contrário.
+    """
+    try:
+        from app.utils.telefone import variantes_telefone_para_busca, normalizar_telefone_para_armazenar
+        from sqlalchemy import text
+        from app.config.settings import STATE_CADASTRO_NOME
+
+        candidates = variantes_telefone_para_busca(phone) or []
+        canon = normalizar_telefone_para_armazenar(phone)
+        if canon and canon not in candidates:
+            candidates.insert(0, canon)
+        if not candidates:
+            candidates = [phone]
+
+        # Busca por user_id IN candidates (match exato) ou por sufixo (últimos 9 dígitos)
+        params = {"uids": candidates, "state": STATE_CADASTRO_NOME}
+        if empresa_id is not None:
+            q = text(
+                """
+                SELECT 1 FROM chatbot.conversations c
+                WHERE c.user_id = ANY(:uids)
+                  AND (c.empresa_id = :empresa_id OR c.empresa_id IS NULL)
+                  AND COALESCE(c.metadata->>'sales_state','') = :state
+                LIMIT 1
+                """
+            )
+            params["empresa_id"] = empresa_id
+            row = db.execute(q, params).fetchone()
+            if row:
+                return True
+        else:
+            q = text(
+                """
+                SELECT 1 FROM chatbot.conversations c
+                WHERE c.user_id = ANY(:uids)
+                  AND COALESCE(c.metadata->>'sales_state','') = :state
+                LIMIT 1
+                """
+            )
+            row = db.execute(q, params).fetchone()
+            if row:
+                return True
+
+        # Fallback por sufixo (últimos 9 dígitos)
+        try:
+            sufixo = "".join(filter(str.isdigit, phone))[-9:]
+            if sufixo:
+                q2 = text(
+                    """
+                    SELECT 1 FROM chatbot.conversations c
+                    WHERE c.user_id LIKE :pattern
+                      AND COALESCE(c.metadata->>'sales_state','') = :state
+                    LIMIT 1
+                    """
+                )
+                row2 = db.execute(q2, {"pattern": f"%{sufixo}", "state": STATE_CADASTRO_NOME}).fetchone()
+                if row2:
+                    return True
+        except Exception:
+            pass
+
+    except Exception:
+        # Não falhar o processamento por causa dessa checagem
+        return False
+    return False
+
+
 def _compact_json_line(value) -> str:
     """Compacta dict/list para log em uma única linha."""
     try:
@@ -1201,14 +1272,13 @@ async def send_notification(request: Request, db: Session = Depends(get_db)):
             # Cancela a tentativa de pause se já estiver pausado
             if chatbot_db.is_bot_active_for_phone(db, phone_normalized):
                 # Se a conversa estiver no fluxo cadastro_nome, NÃO pausar
-                try:
-                    from app.config.settings import STATE_CADASTRO_NOME
-                    from app.api.chatbot.core.application.conversacao_service import ConversacaoService
-                    estado_tmp, _ = ConversacaoService(db, empresa_id=empresa_id, prompt_key=prompt_key_sales).obter_estado(phone_normalized)
-                except Exception:
-                    estado_tmp = None
+                    try:
+                        from app.config.settings import STATE_CADASTRO_NOME
+                        estado_tmp = STATE_CADASTRO_NOME if _conversation_in_cadastro_nome(db, phone_normalized, empresa_id) else None
+                    except Exception:
+                        estado_tmp = None
 
-                if estado_tmp != STATE_CADASTRO_NOME:
+                    if estado_tmp != STATE_CADASTRO_NOME:
                     pause_result = chatbot_db.set_bot_status(
                         db=db,
                         phone_number=phone_normalized,
@@ -1363,8 +1433,7 @@ async def send_media(request: Request, db: Session = Depends(get_db)):
                         # Se a conversa estiver no fluxo cadastro_nome, NÃO pausar
                         try:
                             from app.config.settings import STATE_CADASTRO_NOME
-                            from app.api.chatbot.core.application.conversacao_service import ConversacaoService
-                            estado_tmp, _ = ConversacaoService(db, empresa_id=empresa_id, prompt_key=prompt_key_sales).obter_estado(phone_clean_media)
+                            estado_tmp = STATE_CADASTRO_NOME if _conversation_in_cadastro_nome(db, phone_clean_media, empresa_id) else None
                         except Exception:
                             estado_tmp = None
 
@@ -2026,8 +2095,7 @@ async def process_webhook_background(body: dict, headers_info: Optional[dict] = 
                                             # Se a conversa estiver no fluxo cadastro_nome, NÃO pausar
                                             try:
                                                 from app.config.settings import STATE_CADASTRO_NOME
-                                                from app.api.chatbot.core.application.conversacao_service import ConversacaoService
-                                                estado_tmp, _ = ConversacaoService(db, empresa_id=empresa_id_int, prompt_key=prompt_key_sales).obter_estado(cliente_phone)
+                                                estado_tmp = STATE_CADASTRO_NOME if _conversation_in_cadastro_nome(db, cliente_phone, empresa_id_int) else None
                                             except Exception:
                                                 estado_tmp = None
 
@@ -2238,14 +2306,13 @@ async def process_webhook_background(body: dict, headers_info: Optional[dict] = 
                                 if chatbot_db.is_bot_active_for_phone(db, cliente_phone):
                                     destrava_em = chatbot_db.get_auto_pause_until()
                                     # Se a conversa estiver no fluxo cadastro_nome, NÃO pausar
-                                    try:
-                                        from app.config.settings import STATE_CADASTRO_NOME
-                                        from app.api.chatbot.core.application.conversacao_service import ConversacaoService
-                                        estado_tmp, _ = ConversacaoService(db, empresa_id=empresa_id_int, prompt_key=prompt_key_sales).obter_estado(cliente_phone)
-                                    except Exception:
-                                        estado_tmp = None
+                                        try:
+                                            from app.config.settings import STATE_CADASTRO_NOME
+                                            estado_tmp = STATE_CADASTRO_NOME if _conversation_in_cadastro_nome(db, cliente_phone, empresa_id_int) else None
+                                        except Exception:
+                                            estado_tmp = None
 
-                                    if estado_tmp != STATE_CADASTRO_NOME:
+                                        if estado_tmp != STATE_CADASTRO_NOME:
                                         pause_result = chatbot_db.set_bot_status(
                                             db=db,
                                             phone_number=cliente_phone,
