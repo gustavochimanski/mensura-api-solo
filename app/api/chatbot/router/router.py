@@ -3095,6 +3095,7 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 duplicate = result.fetchone()
 
                 if duplicate:
+                    logger.info(f"[chatbot] Ignorando mensagem duplicada por message_id - phone={phone_number}, conversation_id={conversations[0]['id']}, message_id={message_id}")
                     return  # Ignora mensagem duplicada
 
             # Se não tiver message_id E a mensagem for longa (>3 caracteres), verifica por conteúdo
@@ -3117,6 +3118,7 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 duplicate = result.fetchone()
 
                 if duplicate:
+                    logger.info(f"[chatbot] Ignorando mensagem duplicada por conteúdo - phone={phone_number}, conversation_id={conversations[0]['id']}, preview={str(message_text)[:120]!r}")
                     return  # Ignora mensagem duplicada
 
         # CARREGA CONFIGURAÇÃO DO CHATBOT (para separar agentes)
