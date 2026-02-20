@@ -2306,13 +2306,13 @@ async def process_webhook_background(body: dict, headers_info: Optional[dict] = 
                                 if chatbot_db.is_bot_active_for_phone(db, cliente_phone):
                                     destrava_em = chatbot_db.get_auto_pause_until()
                                     # Se a conversa estiver no fluxo cadastro_nome, NÃO pausar
-                                        try:
-                                            from app.config.settings import STATE_CADASTRO_NOME
-                                            estado_tmp = STATE_CADASTRO_NOME if _conversation_in_cadastro_nome(db, cliente_phone, empresa_id_int) else None
-                                        except Exception:
-                                            estado_tmp = None
+                                    try:
+                                        from app.config.settings import STATE_CADASTRO_NOME
+                                        estado_tmp = STATE_CADASTRO_NOME if _conversation_in_cadastro_nome(db, cliente_phone, empresa_id_int) else None
+                                    except Exception:
+                                        estado_tmp = None
 
-                                        if estado_tmp != STATE_CADASTRO_NOME:
+                                    if estado_tmp != STATE_CADASTRO_NOME:
                                         pause_result = chatbot_db.set_bot_status(
                                             db=db,
                                             phone_number=cliente_phone,
