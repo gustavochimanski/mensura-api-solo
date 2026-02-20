@@ -2558,6 +2558,29 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
         empresa_id_int = int(empresa_id) if empresa_id else 1
         # Flag para indicar que a mensagem foi gravada DURANTE este processamento
         message_saved_in_request = False
+
+        # Helper local para centralizar salvamento de mensagens do usuário e manter o
+        # flag `message_saved_in_request` consistente em todos os ramos do fluxo.
+        def _save_user_message(conversation_id, content, whatsapp_message_id=None, extra_metadata=None):
+            nonlocal message_saved_in_request
+            try:
+                chatbot_db.create_message(
+                    db=db,
+                    conversation_id=conversation_id,
+                    role="user",
+                    content=content,
+                    whatsapp_message_id=whatsapp_message_id,
+                    extra_metadata=extra_metadata,
+                )
+                message_saved_in_request = True
+                return True
+            except Exception as e:
+                # Já havia um logger acima; usa-se warning para não poluir logs de erro
+                try:
+                    logger.warning(f"⚠️ Mensagem do usuário pode já ter sido salva: {e}")
+                except Exception:
+                    pass
+                return False
         user_id = phone_number
         # Variáveis de prompt usadas em vários pontos — inicializa cedo para evitar UnboundLocalError
         prompt_key_sales = PROMPT_ATENDIMENTO_PEDIDO_WHATSAPP
@@ -2649,13 +2672,7 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                         empresa_id=empresa_id_int,
                     )
 
-                chatbot_db.create_message(
-                    db=db,
-                    conversation_id=conv_id,
-                    role="user",
-                    content=message_text,
-                    whatsapp_message_id=message_id,
-                )
+                _save_user_message(conv_id, message_text, whatsapp_message_id=message_id)
 
                 msg_fechado_early = montar_mensagem_status_funcionamento(
                     nome_empresa=(empresa_obj.nome if empresa_obj and empresa_obj.nome else "[Nome da Empresa]"),
@@ -2780,13 +2797,7 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                     contact_name=contact_name,
                     empresa_id=empresa_id_int,
                 )
-                chatbot_db.create_message(
-                    db=db,
-                    conversation_id=conversation_id,
-                    role="user",
-                    content=message_text,
-                    whatsapp_message_id=message_id,
-                )
+                _save_user_message(conversation_id, message_text, whatsapp_message_id=message_id)
         except Exception as e_hist:
             logger.warning(f"⚠️ Falha ao salvar histórico com bot pausado: {e_hist}", exc_info=True)
 
@@ -3399,7 +3410,7 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
 
                 # Salva a mensagem do usuário no histórico
                 try:
-                    chatbot_db.create_message(db, conversation_id, "user", message_text, whatsapp_message_id=message_id)
+                    _save_user_message(conversation_id, message_text, whatsapp_message_id=message_id)
                 except Exception as e:
                     logger.error(f"[router] Erro ao salvar mensagem do usuário antes de pedir nome: {e}", exc_info=True)
 
@@ -3723,7 +3734,7 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
             should_suppress_welcome = no_conversations_for_empresa and has_any_conversation_for_phone
             if is_new_session and esta_aberta is not False and not should_suppress_welcome and is_saudacao:
                 # IMPORTANTE: Salva a mensagem do usuário ANTES de enviar boas-vindas
-                chatbot_db.create_message(db, conversation_id, "user", message_text, whatsapp_message_id=message_id)
+                _save_user_message(conversation_id, message_text, whatsapp_message_id=message_id)
                 
                 # Mensagem "antiga" de boas-vindas (com nome/link) + botões
                 handler = GroqSalesHandler(db, empresa_id_int, prompt_key=prompt_key_sales)
@@ -3856,13 +3867,7 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
                 # Motivo: se o envio falhar (ex.: janela de 24h / re-engagement), ainda assim queremos
                 # registrar o inbound no histórico.
                 try:
-                    chatbot_db.create_message(
-                        db=db,
-                        conversation_id=conversation_id,
-                        role="user",
-                        content=message_text,
-                        whatsapp_message_id=message_id,
-                    )
+                    _save_user_message(conversation_id, message_text, whatsapp_message_id=message_id)
                 except Exception as e:
                     # Se já foi salva (duplicata), ignora e continua.
                     logger.warning(f"⚠️ Mensagem do usuário pode já ter sido salva (botão): {e}")
