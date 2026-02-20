@@ -2556,6 +2556,8 @@ async def process_whatsapp_message(db: Session, phone_number: str, message_text:
 
         logger.info(f"[chatbot] process_whatsapp_message start - phone={phone_number}, message_id={message_id}, button_id={button_id}, empresa_id={empresa_id}")
         empresa_id_int = int(empresa_id) if empresa_id else 1
+        # Flag para indicar que a mensagem foi gravada DURANTE este processamento
+        message_saved_in_request = False
         user_id = phone_number
         # Variáveis de prompt usadas em vários pontos — inicializa cedo para evitar UnboundLocalError
         prompt_key_sales = PROMPT_ATENDIMENTO_PEDIDO_WHATSAPP
